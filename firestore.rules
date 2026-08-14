@@ -1,0 +1,103 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(businessId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid;
+    }
+
+    function memberDoc(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+    }
+
+    function isMember(businessId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+    }
+
+    function hasRole(businessId, allowedRoles) {
+      return isMember(businessId) &&
+        memberDoc(businessId).data.role in allowedRoles;
+    }
+
+    function canManage(businessId) {
+      return isOwner(businessId) ||
+        hasRole(businessId, ['owner', 'admin', 'manager']);
+    }
+
+    function canOperate(businessId) {
+      return isOwner(businessId) ||
+        hasRole(businessId, ['owner', 'admin', 'manager', 'staff']);
+    }
+
+    match /users/{uid} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /businesses/{businessId} {
+      allow read: if resource.data.isPublished == true || isMember(businessId);
+      allow create: if signedIn() &&
+        request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isOwner(businessId);
+
+      match /members/{uid} {
+        allow read: if isMember(businessId);
+        allow create, update, delete: if canManage(businessId);
+      }
+
+      match /branches/{documentId} {
+        allow read: if isMember(businessId) ||
+          get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
+        allow write: if canManage(businessId);
+      }
+
+      match /staff/{documentId} {
+        allow read: if isMember(businessId) ||
+          get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
+        allow write: if canManage(businessId);
+      }
+
+      match /services/{documentId} {
+        allow read: if resource.data.isActive == true || isMember(businessId);
+        allow write: if canManage(businessId);
+      }
+
+      match /workingHours/{documentId} {
+        allow read: if isMember(businessId) ||
+          get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
+        allow write: if canManage(businessId);
+      }
+
+      match /customers/{documentId} {
+        allow read, write: if canOperate(businessId);
+      }
+
+      match /appointments/{appointmentId} {
+        allow read: if canOperate(businessId);
+
+        // Müşteri tarafı doğrudan randevu oluşturmaz.
+        // Çakışma kontrolü ve doğrulama Cloud Function üzerinden yapılır.
+        allow create: if false;
+
+        allow update: if canOperate(businessId);
+        allow delete: if canManage(businessId);
+      }
+
+      match /notifications/{documentId} {
+        allow read: if canOperate(businessId);
+        allow write: if canManage(businessId);
+      }
+
+      match /auditLogs/{documentId} {
+        allow read: if canManage(businessId);
+        allow write: if false;
+      }
+    }
+  }
+}
