@@ -7,17 +7,34 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function imageUpload() {
+      return request.resource != null &&
+        request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function isBusinessMember(businessId) {
+      return signedIn() &&
+        firestore.exists(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+    }
+
     match /users/{uid}/{allPaths=**} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid && imageUpload();
     }
 
     match /businesses/{businessId}/public/{allPaths=**} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isBusinessMember(businessId) && imageUpload();
     }
 
     match /businesses/{businessId}/private/{allPaths=**} {
-      allow read, write: if signedIn();
+      allow read: if isBusinessMember(businessId);
+      allow write: if isBusinessMember(businessId) && imageUpload();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
