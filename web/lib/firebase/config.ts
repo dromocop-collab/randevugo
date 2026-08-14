@@ -1,5 +1,14 @@
 import type { FirebaseOptions } from "firebase/app";
 
+const FALLBACK_FIREBASE_CONFIG: FirebaseOptions = {
+  apiKey: "AIzaSyDNVqEA7LxLwDR_8wqcDD2Ah5AQerOgTpk",
+  authDomain: "randevugo-d1d2e.firebaseapp.com",
+  projectId: "randevugo-d1d2e",
+  storageBucket: "randevugo-d1d2e.firebasestorage.app",
+  messagingSenderId: "575970652443",
+  appId: "1:575970652443:web:41e944be411b347194a3be",
+};
+
 type WindowWithFirebaseConfig = Window & {
   __FIREBASE_CONFIG__?: string | FirebaseOptions;
   FIREBASE_WEBAPP_CONFIG?: string | FirebaseOptions;
@@ -57,9 +66,7 @@ export function getFirebaseConfig(): FirebaseOptions {
   };
 
   if (!fromVars.apiKey || !fromVars.appId || !fromVars.projectId) {
-    throw new Error(
-      "Firebase istemci konfigurasyonu eksik. NEXT_PUBLIC_FIREBASE_CONFIG veya NEXT_PUBLIC_FIREBASE_* degiskenlerini tanimlayin."
-    );
+    return FALLBACK_FIREBASE_CONFIG;
   }
 
   return fromVars;
