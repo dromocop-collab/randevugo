@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { getFirebaseAuth } from "@/features/auth/auth-service";
@@ -19,7 +20,17 @@ interface AuthContextValue {
   status: AuthStatus;
 }
 
-const PUBLIC_PATHS = ["/", "/giris", "/kayit", "/sifremi-unuttum"];
+const PUBLIC_PATHS = ["/", "/giris", "/kayit", "/sifremi-unuttum", "/kesfet", "/fiyatlandirma"];
+
+const PUBLIC_PATH_PREFIXES = ["/randevu/", "/isletme/"];
+
+const PROTECTED_PATH_PREFIXES = [
+  "/admin",
+  "/super-admin",
+  "/dashboard",
+  "/onboarding",
+  "/hesabim",
+];
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
@@ -31,21 +42,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const pathname = usePathname();
   const router = useRouter();
+  // Track if auth state has been resolved at least once
+  const authResolved = useRef(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setStatus(nextUser ? "authenticated" : "unauthenticated");
+      authResolved.current = true;
     });
 
     return unsubscribe;
   }, []);
 
+  // Redirect only after auth has been fully resolved
   useEffect(() => {
-    if (status !== "unauthenticated") return;
+    // Don't redirect while loading or before auth has resolved
+    if (status !== "unauthenticated" || !authResolved.current) return;
+
+    // Don't redirect on public paths
     if (PUBLIC_PATHS.includes(pathname)) return;
-    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding")) {
+    if (PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p))) return;
+
+    // Only redirect on protected paths
+    if (PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p))) {
       router.replace("/giris");
     }
   }, [pathname, router, status]);

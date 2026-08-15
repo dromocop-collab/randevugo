@@ -10,8 +10,8 @@ export const onboardingSchema = z.object({
   address: z.string().trim().min(5, "Adres en az 5 karakter olmalidir."),
   city: z.string().trim().min(2, "Sehir bilgisi zorunludur."),
   district: z.string().trim().min(2, "Ilce bilgisi zorunludur."),
-  logoUrl: z.string().trim().url("Logo URL gecersiz.").optional().or(z.literal("")),
-  coverUrl: z.string().trim().url("Kapak URL gecersiz.").optional().or(z.literal("")),
+  logoUrl: z.string().trim().optional().or(z.literal("")),
+  coverUrl: z.string().trim().optional().or(z.literal("")),
   slug: z
     .string()
     .trim()

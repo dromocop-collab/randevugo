@@ -67,12 +67,13 @@ export function PublicBookingFlow(props: Props) {
   const selectedStaff = useMemo(() => staff.find((item) => item.id === staffId), [staff, staffId]);
 
   const availableSlots = useMemo(() => {
-    if (!selectedService || !selectedStaff) return [];
+    if (!selectedService) return [];
+    const effectiveStaffHours = selectedStaff?.workingHours ?? [];
 
     return buildAvailableSlots({
       date: new Date(appointmentsDate),
       businessHours: props.businessHours,
-      staffHours: selectedStaff.workingHours,
+      staffHours: effectiveStaffHours,
       appointments: booked.map((startAt) => ({
         id: startAt,
         businessId: props.businessId,

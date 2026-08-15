@@ -9,6 +9,8 @@ export type AppointmentStatus =
 
 export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
+export type AppointmentSource = "online" | "dashboard" | "phone" | "walk_in";
+
 export interface Appointment extends EntityBase {
   businessId: string;
   staffId: string;
@@ -22,6 +24,12 @@ export interface Appointment extends EntityBase {
   status: AppointmentStatus;
   paymentStatus: PaymentStatus;
   notes?: string;
+  publicToken?: string;
+  serviceName?: string;
+  staffName?: string;
+  servicePrice?: number;
+  serviceDurationMinutes?: number;
+  source?: AppointmentSource;
 }
 
 export interface AppointmentCreateInput {

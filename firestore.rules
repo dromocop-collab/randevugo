@@ -1,189 +1,291 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
+    // ────────────────────────────────────────────────
+    // Helper functions
+    // ────────────────────────────────────────────────
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isPrimaryAdminEmail() {
-      return signedIn() &&
-        request.auth.token.email is string &&
-        request.auth.token.email.matches('(?i)^cihatwin@gmail\\.com$');
+    function uid() {
+      return request.auth.uid;
     }
 
     function isPlatformAdmin() {
-      return isPrimaryAdminEmail() ||
-        (signedIn() &&
-          exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)));
+      return isAuthenticated() &&
+        (request.auth.token.email == "cihatwin@gmail.com" ||
+         exists(/databases/$(database)/documents/platformAdmins/$(uid())));
     }
 
-    function businessDoc(businessId) {
-      return get(/databases/$(database)/documents/businesses/$(businessId));
-    }
-
-    function businessExists(businessId) {
-      return exists(/databases/$(database)/documents/businesses/$(businessId));
-    }
-
-    function businessActive(businessId) {
-      return businessExists(businessId) &&
-        businessDoc(businessId).data.isSuspended != true;
-    }
-
-    function businessPublished(businessId) {
-      return businessExists(businessId) &&
-        businessDoc(businessId).data.isPublished == true;
-    }
-
-    function isBootstrapOwner(businessId) {
-      return signedIn() &&
-        existsAfter(/databases/$(database)/documents/businesses/$(businessId)) &&
-        getAfter(/databases/$(database)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid;
-    }
-
-    function isOwner(businessId) {
-      return signedIn() &&
-        businessExists(businessId) &&
-        businessDoc(businessId).data.ownerUid == request.auth.uid;
-    }
-
-    function memberDoc(businessId) {
-      return get(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+    // Check ownerUid on the business document itself (works in transactions)
+    function isBusinessOwner(businessId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerUid == uid();
     }
 
     function isMember(businessId) {
-      return signedIn() &&
-        businessActive(businessId) &&
-        exists(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/members/$(uid()));
     }
 
-    function hasRole(businessId, allowedRoles) {
+    function getMember(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)/members/$(uid()));
+    }
+
+    function isOwner(businessId) {
       return isMember(businessId) &&
-        memberDoc(businessId).data.uid == request.auth.uid &&
-        memberDoc(businessId).data.role in allowedRoles;
+        getMember(businessId).data.role == "owner";
     }
 
     function canManage(businessId) {
-      return isOwner(businessId) ||
-        hasRole(businessId, ['owner', 'admin', 'manager']);
+      return isMember(businessId) &&
+        getMember(businessId).data.role in ["owner", "admin", "manager"];
     }
 
     function canOperate(businessId) {
-      return isOwner(businessId) ||
-        hasRole(businessId, ['owner', 'admin', 'manager', 'staff']);
+      return isMember(businessId) &&
+        getMember(businessId).data.role in ["owner", "admin", "manager", "staff"];
     }
 
-    match /users/{uid} {
-      allow read: if (signedIn() && request.auth.uid == uid) || isPlatformAdmin();
-      allow create, update, delete: if signedIn() && request.auth.uid == uid;
+    // Protect fields that should only be changed by server/admin
+    function protectedFieldsUnchanged() {
+      return (!request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(["rating", "reviewCount", "isVerified", "status", "isSuspended"]));
     }
 
-    match /platformAdmins/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+    // ────────────────────────────────────────────────
+    // Platform Admin Collections
+    // ────────────────────────────────────────────────
+    match /platformAdmins/{adminId} {
+      allow read: if isPlatformAdmin();
+      allow write: if isPlatformAdmin();
+    }
+
+    match /platformSettings/{doc} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    match /platformAuditLogs/{docId} {
+      allow read: if isPlatformAdmin();
       allow write: if false;
     }
 
-    match /businessSlugs/{slug} {
+    // ────────────────────────────────────────────────
+    // Categories (platform-managed)
+    // ────────────────────────────────────────────────
+    match /categories/{categoryId} {
       allow read: if true;
-      allow create: if signedIn() &&
-        request.resource.data.ownerUid == request.auth.uid &&
-        request.resource.data.businessId is string;
-      allow update, delete: if false;
+      allow write: if isPlatformAdmin();
     }
 
-    match /subscriptions/{subscriptionId} {
-      allow read: if signedIn() && (
-        isOwner(resource.data.businessId) ||
-        hasRole(resource.data.businessId, ['owner', 'admin', 'manager'])
-      );
+    // ────────────────────────────────────────────────
+    // Appointment Tokens (Public Access)
+    // ────────────────────────────────────────────────
+    match /appointmentTokens/{token} {
+      allow read: if true;
+      allow write: if false;
+    }
 
-      allow create: if signedIn() &&
-        request.resource.data.businessId is string &&
-        isOwner(request.resource.data.businessId);
+    // ────────────────────────────────────────────────
+    // Users Collection
+    // ────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (uid() == userId || isPlatformAdmin());
+      allow create: if isAuthenticated() && uid() == userId;
+      allow update: if isAuthenticated() && uid() == userId;
+      allow delete: if false;
 
-      allow update: if signedIn() &&
-        resource.data.businessId is string &&
-        isOwner(resource.data.businessId);
+      match /favorites/{businessId} {
+        allow read, write: if isAuthenticated() && uid() == userId;
+      }
+    }
 
+    // ────────────────────────────────────────────────
+    // Subscriptions
+    // ────────────────────────────────────────────────
+    match /subscriptions/{businessId} {
+      allow read: if isAuthenticated() &&
+        (isMember(businessId) || isPlatformAdmin());
+      // Only server / admin can write subscription data
+      allow create: if isAuthenticated();
+      allow update: if isPlatformAdmin();
       allow delete: if false;
     }
 
+    // ────────────────────────────────────────────────
+    // Support Tickets
+    // ────────────────────────────────────────────────
+    match /supportTickets/{ticketId} {
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == uid() || isPlatformAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+        (resource.data.userId == uid() || isPlatformAdmin());
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() &&
+          (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
+           isPlatformAdmin());
+        allow create: if isAuthenticated();
+      }
+    }
+
+    // ────────────────────────────────────────────────
+    // Notification Logs (platform-level)
+    // ────────────────────────────────────────────────
+    match /notificationLogs/{logId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
+    // ────────────────────────────────────────────────
+    // Business Slugs (URL slugs → businessId mapping)
+    // ────────────────────────────────────────────────
+    match /businessSlugs/{slug} {
+      // Public read — storefront resolves slug to businessId
+      allow read: if true;
+      // Authenticated users can create during onboarding (transaction)
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerUid == uid();
+      // Only the owner or platform admin can update/delete
+      allow update, delete: if isPlatformAdmin() ||
+        (isAuthenticated() && resource.data.ownerUid == uid());
+    }
+
+    // ────────────────────────────────────────────────
+    // Category Requests (custom category approval flow)
+    // ────────────────────────────────────────────────
+    match /categoryRequests/{requestId} {
+      // Platform admins can read all; businesses can read their own
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && resource.data.businessId != null);
+      // Authenticated users can create requests
+      allow create: if isAuthenticated();
+      // Only platform admins can approve/reject
+      allow update: if isPlatformAdmin();
+      allow delete: if isPlatformAdmin();
+    }
+
+    // ────────────────────────────────────────────────
+    // Businesses
+    // ────────────────────────────────────────────────
     match /businesses/{businessId} {
-      allow read: if businessPublished(businessId) || isOwner(businessId) || isMember(businessId) || isPlatformAdmin();
-      allow create: if signedIn() &&
-        request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isOwner(businessId) || isPlatformAdmin();
+      // Public read for published businesses, members, owner, or admin
+      allow read: if resource.data.isPublished == true ||
+        resource.data.ownerUid == uid() ||
+        isMember(businessId) ||
+        isPlatformAdmin();
+      allow create: if isAuthenticated();
+      // Owner or manager can update but cannot change protected fields
+      allow update: if isPlatformAdmin() ||
+        (isBusinessOwner(businessId) && protectedFieldsUnchanged()) ||
+        (canManage(businessId) && protectedFieldsUnchanged());
+      allow delete: if isPlatformAdmin();
 
-      match /members/{uid} {
-        allow read: if (signedIn() && uid == request.auth.uid) || isMember(businessId) || isPlatformAdmin();
-        allow create: if canManage(businessId) ||
-          isPlatformAdmin() ||
-          (isBootstrapOwner(businessId) &&
-            uid == request.auth.uid &&
-            request.resource.data.uid == request.auth.uid &&
-            request.resource.data.role == 'owner');
-        allow update, delete: if canManage(businessId) || isPlatformAdmin();
+      // Members
+      match /members/{memberId} {
+        allow read: if isMember(businessId) || isPlatformAdmin();
+        // Allow initial member creation during onboarding:
+        // The creator sets themselves as owner with their own uid
+        allow create: if isAuthenticated() &&
+          (isOwner(businessId) || isPlatformAdmin() ||
+           (memberId == uid() &&
+            request.resource.data.uid == uid() &&
+            request.resource.data.role == "owner"));
+        allow update, delete: if isOwner(businessId) || isPlatformAdmin();
       }
 
-      match /branches/{documentId} {
-        allow read: if isMember(businessId) ||
-          businessPublished(businessId) ||
-          isPlatformAdmin();
-        allow write: if canManage(businessId);
+      // Services (public read for storefront)
+      match /services/{serviceId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
-      match /staff/{documentId} {
-        allow read: if isMember(businessId) ||
-          businessPublished(businessId) ||
-          isPlatformAdmin();
-        allow write: if canManage(businessId);
+      // Staff (public read for storefront)
+      match /staff/{staffId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
-      match /services/{documentId} {
-        allow read: if resource.data.isActive == true || isMember(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId);
+      // Working Hours (public read for availability)
+      match /workingHours/{hourId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
       }
 
-      match /workingHours/{documentId} {
-        allow read: if isMember(businessId) ||
-          businessPublished(businessId) ||
-          isPlatformAdmin();
-        allow create: if canManage(businessId) || isBootstrapOwner(businessId);
-        allow update, delete: if canManage(businessId);
+      // Special Days (holidays, leaves, custom)
+      match /specialDays/{dayId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
-      match /specialDays/{documentId} {
-        allow read: if isMember(businessId) || businessPublished(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId);
-      }
-
-      match /customers/{documentId} {
-        allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow write: if canOperate(businessId);
-      }
-
+      // Appointments — created via Cloud Function only
       match /appointments/{appointmentId} {
-        allow read: if canOperate(businessId) || isPlatformAdmin();
-
-        // Müşteri tarafı doğrudan randevu oluşturmaz.
-        // Çakışma kontrolü ve doğrulama Cloud Function üzerinden yapılır.
-        allow create: if false;
-
-        allow update: if canOperate(businessId);
-        allow delete: if canManage(businessId);
+        allow read: if canOperate(businessId) ||
+          isPlatformAdmin() ||
+          (isAuthenticated() && resource.data.customerId == uid());
+        allow create: if false; // Only via Cloud Function
+        allow update: if canOperate(businessId) || isPlatformAdmin();
+        allow delete: if false;
       }
 
-      match /notifications/{documentId} {
+      // Customers (private CRM data)
+      match /customers/{customerId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId);
+        allow write: if canOperate(businessId) || isPlatformAdmin();
       }
 
-      match /auditLogs/{documentId} {
+      // Reviews — created via Cloud Function only
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if false; // Only via Cloud Function (submitReview)
+        allow update: if canManage(businessId) || isPlatformAdmin();
+        allow delete: if isPlatformAdmin();
+      }
+
+      // Notifications
+      match /notifications/{notifId} {
+        allow read: if isMember(businessId);
+        allow write: if isMember(businessId) || isPlatformAdmin();
+      }
+
+      // Audit Logs (business-level, server-write only)
+      match /auditLogs/{logId} {
         allow read: if canManage(businessId) || isPlatformAdmin();
         allow write: if false;
       }
+
+      // Branches
+      match /branches/{branchId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isPlatformAdmin();
+      }
+    }
+
+    // ────────────────────────────────────────────────
+    // Dynamic Categories (approved custom categories)
+    // ────────────────────────────────────────────────
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    // ────────────────────────────────────────────────
+    // Verification Codes (server-only via Admin SDK)
+    // ────────────────────────────────────────────────
+    match /verificationCodes/{phone} {
+      allow read, write: if false; // Only Cloud Functions can access
+    }
+
+    // ────────────────────────────────────────────────
+    // Collection Group queries
+    // ────────────────────────────────────────────────
+    match /{path=**}/members/{memberId} {
+      allow read: if isAuthenticated() && resource.data.uid == uid();
     }
   }
 }

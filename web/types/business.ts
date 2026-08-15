@@ -1,5 +1,5 @@
 import type { EntityBase } from "@/types/common";
-import type { PlanType } from "@/constants/plans";
+import type { AnyPlanType } from "@/constants/plans";
 
 export type BusinessCategory =
   | "kuafor"
@@ -10,7 +10,28 @@ export type BusinessCategory =
   | "danismanlik"
   | "veteriner"
   | "servis"
-  | "diger";
+  | "saglik"
+  | "egitim"
+  | "diger"
+  | (string & {}); // Allow dynamic categories from Firestore
+
+export type BusinessStatus =
+  | "draft"
+  | "pending_review"
+  | "active"
+  | "suspended"
+  | "rejected";
+
+export type BusinessType = "kadin" | "erkek" | "unisex";
+
+export interface SocialMediaLinks {
+  instagram?: string;
+  facebook?: string;
+  twitter?: string;
+  tiktok?: string;
+  youtube?: string;
+  whatsapp?: string;
+}
 
 export interface DaySchedule {
   day: number;
@@ -27,24 +48,41 @@ export interface SpecialDay extends EntityBase {
   start?: string;
   end?: string;
   description?: string;
+  staffId?: string;
 }
 
 export interface Business extends EntityBase {
   ownerUid: string;
   slug: string;
   name: string;
+  description?: string;
   category: BusinessCategory;
+  businessType?: BusinessType;
   phone: string;
   email: string;
+  website?: string;
   address: string;
   city: string;
   district: string;
   logoUrl?: string;
   coverUrl?: string;
+  galleryUrls?: string[];
+  socialMedia?: SocialMediaLinks;
   isPublished: boolean;
+  status: BusinessStatus;
   isSuspended?: boolean;
   minimumBookingNoticeMinutes: number;
   maximumBookingDaysAhead: number;
   appointmentBufferMinutes: number;
-  plan: PlanType;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  slotIntervalMinutes: number;
+  allowCancellation?: boolean;
+  allowReschedule?: boolean;
+  cancellationDeadlineMinutes?: number;
+  rating: number;
+  reviewCount: number;
+  plan: AnyPlanType;
+  isVerified?: boolean;
+  adminNote?: string;
 }

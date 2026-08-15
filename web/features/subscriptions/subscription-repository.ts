@@ -1,6 +1,7 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 import type { Subscription } from "@/types/subscription";
+import { PLAN_PRICE } from "@/constants/plans";
 
 export async function getBusinessSubscription(
   businessId: string
@@ -15,16 +16,32 @@ export async function getBusinessSubscription(
   };
 }
 
-export async function ensureFreePlan(businessId: string): Promise<void> {
+/** Create a trial subscription for a new business */
+export async function createTrialSubscription(businessId: string): Promise<void> {
   const db = getDb();
-  await setDoc(doc(db, "subscriptions", businessId), {
-    businessId,
-    plan: "FREE",
-    status: "active",
-    provider: "manual",
-    currentPeriodStart: new Date().toISOString(),
-    currentPeriodEnd: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+  const now = new Date();
+  const trialEnd = new Date(now.getTime() + PLAN_PRICE.trialDays * 24 * 60 * 60 * 1000);
+
+  await setDoc(
+    doc(db, "subscriptions", businessId),
+    {
+      businessId,
+      plan: "RANDEVUGO",
+      status: "trialing",
+      trialStartedAt: now.toISOString(),
+      trialEndsAt: trialEnd.toISOString(),
+      renewalEnabled: false,
+      paymentProvider: "manual",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * @deprecated Use createTrialSubscription for new businesses
+ */
+export async function ensureFreePlan(businessId: string): Promise<void> {
+  return createTrialSubscription(businessId);
 }

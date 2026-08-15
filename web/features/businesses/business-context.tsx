@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessesForUser } from "@/features/businesses/business-repository";
@@ -10,6 +10,7 @@ interface BusinessContextValue {
   businesses: Business[];
   businessId: string | null;
   setBusinessId: (id: string) => void;
+  refreshBusinesses: () => void;
   loading: boolean;
 }
 
@@ -19,6 +20,7 @@ const BusinessContext = createContext<BusinessContextValue>({
   businesses: [],
   businessId: null,
   setBusinessId: () => undefined,
+  refreshBusinesses: () => undefined,
   loading: true,
 });
 
@@ -32,6 +34,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessIdState] = useState<string | null>(getStoredBusinessId);
   const [loading, setLoading] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
@@ -53,6 +56,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       .catch((error) => {
         if (!alive) return;
         setBusinesses([]);
+        const code = (error as { code?: string })?.code;
+        if (code === "permission-denied" || code === "PERMISSION_DENIED") {
+          console.warn("BusinessContext: permission-denied (normal for new users)");
+          return;
+        }
         const message = (error as Error | undefined)?.message ?? "Isletme listesi alinirken hata olustu.";
         toast.error(message);
       })
@@ -64,12 +72,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [status, user]);
+  }, [status, user, refreshCounter]);
 
-  const setBusinessId = (id: string) => {
+  const setBusinessId = useCallback((id: string) => {
     window.localStorage.setItem(STORAGE_KEY, id);
     setBusinessIdState(id);
-  };
+    // Trigger a refetch so businesses array is populated
+    setRefreshCounter((c) => c + 1);
+  }, []);
+
+  const refreshBusinesses = useCallback(() => {
+    setRefreshCounter((c) => c + 1);
+  }, []);
 
   const value = useMemo(
     (): BusinessContextValue => {
@@ -79,10 +93,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         businesses: isAuthenticated ? businesses : [],
         businessId: isAuthenticated ? businessId : null,
         setBusinessId,
+        refreshBusinesses,
         loading: status === "loading" || (isAuthenticated && loading),
       };
     },
-    [businessId, businesses, loading, status, user]
+    [businessId, businesses, loading, refreshBusinesses, setBusinessId, status, user]
   );
 
   return <BusinessContext.Provider value={value}>{children}</BusinessContext.Provider>;
