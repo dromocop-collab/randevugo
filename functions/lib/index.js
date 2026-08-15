@@ -159,6 +159,47 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
         staffName: appointment.staffName ?? null,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
+    // ── CRM: Auto-upsert customer ──
+    const phone = typeof appointment.customerPhone === "string"
+        ? appointment.customerPhone.trim()
+        : null;
+    const customerName = typeof appointment.customerName === "string"
+        ? appointment.customerName.trim()
+        : "Müşteri";
+    const customerEmail = typeof appointment.customerEmail === "string"
+        ? appointment.customerEmail.trim().toLowerCase()
+        : null;
+    if (phone) {
+        const customersRef = db.collection(`businesses/${businessId}/customers`);
+        const existing = await customersRef.where("phone", "==", phone).limit(1).get();
+        if (!existing.empty) {
+            // Update existing customer
+            const customerDoc = existing.docs[0];
+            await customerDoc.ref.update({
+                fullName: customerName,
+                ...(customerEmail ? { email: customerEmail } : {}),
+                totalAppointments: firestore_1.FieldValue.increment(1),
+                lastVisitAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        }
+        else {
+            // Create new customer
+            await customersRef.add({
+                fullName: customerName,
+                phone,
+                email: customerEmail,
+                totalAppointments: 1,
+                completedAppointments: 0,
+                cancelledAppointments: 0,
+                noShowAppointments: 0,
+                totalSpent: 0,
+                lastVisitAt: firestore_1.FieldValue.serverTimestamp(),
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        }
+    }
 });
 exports.submitReview = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const data = request.data ?? {};

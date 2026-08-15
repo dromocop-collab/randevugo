@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ReactNode } from "react";
 
 interface AuthShellProps {
@@ -19,7 +20,7 @@ const TESTIMONIALS = [
   {
     name: "Ayşe K.",
     role: "Güzellik Merkezi Sahibi",
-    quote: "RandevuGo ile müşterilerimiz artık 7/24 randevu alabiliyor. No-show oranımız %40 düştü!",
+    quote: "SeninRandevun ile müşterilerimiz artık 7/24 randevu alabiliyor. No-show oranımız %40 düştü!",
   },
   {
     name: "Mehmet T.",
@@ -41,11 +42,9 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
         <div className="relative">
           {/* Logo */}
           <Link href="/" className="inline-flex items-center gap-2.5 group">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition group-hover:shadow-xl group-hover:scale-105">
-              R
-            </span>
+            <Image src="/logo.png" alt="SeninRandevun" width={40} height={40} className="rounded-xl shadow-lg transition group-hover:scale-105" />
             <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
-              Randevu<span className="text-[var(--accent)]">Go</span>
+              Senin<span className="text-[var(--accent)]">Randevun</span>
             </span>
           </Link>
 

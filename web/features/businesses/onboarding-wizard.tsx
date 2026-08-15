@@ -339,7 +339,7 @@ export function OnboardingWizard() {
                   <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-3">
                     <p className="text-xs text-[var(--text-3)]">Profil URL&apos;niz:</p>
                     <p className="mt-0.5 text-sm font-medium text-[var(--accent)]">
-                      randevugo.com/isletme/<span className="font-bold">{computedSlug || "..."}</span>
+                      seninrandevun.com/isletme/<span className="font-bold">{computedSlug || "..."}</span>
                     </p>
                   </div>
                 )}
@@ -513,7 +513,7 @@ export function OnboardingWizard() {
                     placeholder="isletmeniz"
                   />
                   <p className="mt-1 text-xs text-[var(--text-3)]">
-                    randevugo.com/isletme/<strong>{finalSlug || "..."}</strong>
+                    seninrandevun.com/isletme/<strong>{finalSlug || "..."}</strong>
                   </p>
                 </div>
               </div>

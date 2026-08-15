@@ -227,25 +227,129 @@ export default function DashboardHomePage() {
         </div>
       )}
 
-      {/* All Complete Banner */}
+      {/* All Complete Banner — Ultra Premium */}
       {allComplete && setupItems.length > 0 && (
         <div
-          className="flex items-center gap-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-50 to-green-50 px-6 py-5 shadow-sm"
+          className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-[var(--surface-1)] shadow-xl"
           style={{
             opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
             transition: "opacity 0.5s ease, transform 0.5s ease",
           }}
         >
-          <span className="text-4xl animate-bounce">🎉</span>
-          <div>
-            <p className="text-lg font-bold text-emerald-700">Harika! Profiliniz tamamlandı!</p>
-            <p className="text-sm text-emerald-600/80">
-              İşletmeniz aktif ve müşterileriniz online randevu oluşturabiliyor.
-              {business?.slug && (
-                <>{" "}<Link href={`/isletme/${business.slug}`} className="font-semibold underline underline-offset-2">Profili Görüntüle →</Link></>
-              )}
-            </p>
+          {/* Animated gradient top border */}
+          <div className="absolute left-0 right-0 top-0 h-1 bg-[linear-gradient(90deg,#10b981,#06b6d4,#8b5cf6,#10b981)] bg-[length:200%_100%]" style={{ animation: "shimmer 3s linear infinite" }} />
+          
+          {/* Background particles */}
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+          <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="absolute right-1/3 top-1/2 h-20 w-20 rounded-full bg-violet-500/5 blur-2xl" />
+
+          <div className="relative p-6 sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+              {/* Left side */}
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25">
+                  <span className="text-2xl">🎉</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-[var(--text-1)]">
+                    Profiliniz hazır!
+                  </h3>
+                  <p className="mt-1 text-sm text-[var(--text-3)]">
+                    İşletmeniz aktif — müşterileriniz online randevu alabiliyor.
+                  </p>
+                  
+                  {/* Store URL display */}
+                  {business?.slug && (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2">
+                      <span className="text-xs text-[var(--text-3)]">🔗</span>
+                      <code className="text-xs font-medium text-[var(--text-2)]">
+                        seninrandevun.com/isletme/{business.slug}
+                      </code>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right side — Action buttons */}
+              <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
+                {business?.slug && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/isletme/${business.slug}`;
+                        navigator.clipboard.writeText(url).then(() => {
+                          toast.success("Mağaza linki kopyalandı! 🔗");
+                        }).catch(() => {
+                          toast.error("Kopyalama başarısız");
+                        });
+                      }}
+                      className="group inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition-all hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
+                    >
+                      <svg className="h-4 w-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      Linki Kopyala
+                    </button>
+                    <Link
+                      href={`/isletme/${business.slug}`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-600 transition-all hover:bg-emerald-500/20 hover:shadow-md active:scale-[0.97]"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Profili Gör
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Completion badges */}
+            <div className="mt-5 flex flex-wrap gap-2">
+              {setupItems.map((item) => (
+                <span
+                  key={item.label}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600"
+                >
+                  ✓ {item.label}
+                </span>
+              ))}
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Store Link Quick Copy — shows even when profile incomplete */}
+      {!allComplete && business?.slug && setupItems.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-5 py-3.5"
+          style={{
+            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(8px)",
+            transition: "opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s",
+          }}
+        >
+          <span className="text-sm">🔗</span>
+          <code className="text-xs font-medium text-[var(--text-2)]">
+            seninrandevun.com/isletme/{business.slug}
+          </code>
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/isletme/${business.slug}`;
+              navigator.clipboard.writeText(url).then(() => {
+                toast.success("Mağaza linki kopyalandı! 🔗");
+              }).catch(() => {
+                toast.error("Kopyalama başarısız");
+              });
+            }}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 active:scale-[0.97]"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            Kopyala
+          </button>
         </div>
       )}
 

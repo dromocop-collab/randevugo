@@ -7,8 +7,8 @@ export default function SuperAdminSettingsPage() {
     <div className="space-y-4">
       <Card title="Platform Ayarları" description="Genel platform konfigürasyonu">
         <div className="space-y-4">
-          <SettingRow label="Platform Adı" value="RandevuGo" />
-          <SettingRow label="Destek E-posta" value="destek@randevugo.com" />
+          <SettingRow label="Platform Adı" value="SeninRandevun" />
+          <SettingRow label="Destek E-posta" value="destek@seninrandevun.com" />
           <SettingRow label="Varsayılan Zaman Dilimi" value="Europe/Istanbul" />
           <SettingRow label="Varsayılan Para Birimi" value="TRY" />
           <SettingRow label="Varsayılan Plan" value="FREE" />

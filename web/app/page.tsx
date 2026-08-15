@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { SearchBar } from "@/components/discovery/search-bar";
 import { BusinessCard } from "@/components/discovery/business-card";
 import {
@@ -174,11 +175,9 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-[var(--border)]/50 bg-[var(--bg-1)]/70 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition group-hover:shadow-xl group-hover:shadow-sky-500/40 group-hover:scale-105">
-              R
-            </span>
+            <Image src="/logo.png" alt="SeninRandevun" width={36} height={36} className="rounded-xl shadow-lg transition group-hover:scale-105" />
             <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
-              Randevu<span className="text-[var(--accent)]">Go</span>
+              Senin<span className="text-[var(--accent)]">Randevun</span>
             </span>
           </Link>
 
@@ -381,7 +380,7 @@ export default function HomePage() {
             <div className="mb-20">
               <div className="text-center">
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-                  Neden RandevuGo?
+                  Neden SeninRandevun?
                 </p>
                 <h2 className="mt-3 text-2xl font-bold text-[var(--text-1)] sm:text-3xl">
                   İşletmeniz için her şey tek panelde
@@ -478,11 +477,9 @@ export default function HomePage() {
             {/* Brand */}
             <div className="lg:col-span-2">
               <Link href="/" className="flex items-center gap-2.5">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-sm font-bold text-white shadow-lg shadow-sky-500/25">
-                  R
-                </span>
+                <Image src="/logo.png" alt="SeninRandevun" width={36} height={36} className="rounded-xl shadow-lg" />
                 <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
-                  Randevu<span className="text-[var(--accent)]">Go</span>
+                  Senin<span className="text-[var(--accent)]">Randevun</span>
                 </span>
               </Link>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-[var(--text-3)]">
@@ -531,7 +528,7 @@ export default function HomePage() {
                 Destek
               </h4>
               <ul className="mt-4 space-y-3">
-                <li><span className="text-sm text-[var(--text-2)]">destek@randevugo.com</span></li>
+                <li><span className="text-sm text-[var(--text-2)]">destek@seninrandevun.com</span></li>
                 <li><span className="text-sm text-[var(--text-2)]">0850 XXX XX XX</span></li>
               </ul>
             </div>
@@ -540,7 +537,7 @@ export default function HomePage() {
           {/* Bottom */}
           <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border)] pt-8">
             <p className="text-xs text-[var(--text-3)]">
-              © {new Date().getFullYear()} RandevuGo. Tüm hakları saklıdır.
+              © {new Date().getFullYear()} SeninRandevun. Tüm hakları saklıdır.
             </p>
             <div className="flex gap-6 text-xs">
               <Link href="/" className="text-[var(--text-3)] transition hover:text-[var(--accent)]">

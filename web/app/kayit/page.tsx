@@ -3,8 +3,8 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { RegisterForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Kayit | RandevuGo",
-  description: "RandevuGo ile isletmeniz icin online randevu sistemi kurun.",
+  title: "Kayit | SeninRandevun",
+  description: "SeninRandevun ile isletmeniz icin online randevu sistemi kurun.",
 };
 
 export default function RegisterPage() {

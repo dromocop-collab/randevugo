@@ -73,7 +73,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 Platform Admin
               </p>
               <h1 className="mt-0.5 text-lg font-semibold text-[var(--text-1)]">
-                RandevuGo Kontrol Merkezi
+                SeninRandevun Kontrol Merkezi
               </h1>
             </div>
             <div className="flex items-center gap-2">

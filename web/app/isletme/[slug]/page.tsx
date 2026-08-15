@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { StorefrontHeader } from "@/components/storefront/storefront-header";
 import { StorefrontServices } from "@/components/storefront/storefront-services";
@@ -137,11 +138,9 @@ export default function BusinessProfilePage() {
       <header className="sticky top-0 z-50 border-b border-[var(--border)]/50 bg-[var(--bg-1)]/70 backdrop-blur-2xl">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition group-hover:scale-105">
-              R
-            </span>
+            <Image src="/logo.png" alt="SeninRandevun" width={36} height={36} className="rounded-xl shadow-lg transition group-hover:scale-105" />
             <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
-              Randevu<span className="text-[var(--accent)]">Go</span>
+              Senin<span className="text-[var(--accent)]">Randevun</span>
             </span>
           </Link>
           <div className="flex items-center gap-3">

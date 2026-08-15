@@ -15,10 +15,10 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://randevugo.com"),
+  metadataBase: new URL("https://seninrandevun.com"),
   title: {
-    default: "RandevuGo | Multi-tenant Randevu SaaS",
-    template: "%s | RandevuGo",
+    default: "SeninRandevun | Multi-tenant Randevu SaaS",
+    template: "%s | SeninRandevun",
   },
   description:
     "Isletmeler icin profesyonel online randevu, calisan, hizmet ve musteri yonetim platformu.",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     "isletme paneli",
   ],
   openGraph: {
-    title: "RandevuGo",
+    title: "SeninRandevun",
     description:
       "Isletmenizin randevularini tek panelden yonetin. Hizmet, ekip ve musteri sureclerini dijitallestirin.",
     type: "website",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "RandevuGo",
+    title: "SeninRandevun",
     description:
       "Online randevu, calisan yonetimi, CRM ve analizleri tek panelde sunan premium SaaS.",
   },

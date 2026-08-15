@@ -3,8 +3,8 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { ForgotPasswordForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Sifremi Unuttum | RandevuGo",
-  description: "RandevuGo sifrenizi guvenli sekilde sifirlayin.",
+  title: "Sifremi Unuttum | SeninRandevun",
+  description: "SeninRandevun sifrenizi guvenli sekilde sifirlayin.",
 };
 
 export default function ForgotPasswordPage() {

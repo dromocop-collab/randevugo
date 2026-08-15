@@ -3,8 +3,8 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { LoginForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Giris | RandevuGo",
-  description: "RandevuGo isletme paneline giris yapin.",
+  title: "Giris | SeninRandevun",
+  description: "SeninRandevun isletme paneline giris yapin.",
 };
 
 export default function LoginPage() {

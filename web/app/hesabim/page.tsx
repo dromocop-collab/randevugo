@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   collectionGroup,
@@ -122,11 +123,9 @@ export default function CustomerAccountPage() {
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-1)]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-xs font-bold text-white">
-              R
-            </span>
+            <Image src="/logo.png" alt="SeninRandevun" width={28} height={28} className="rounded-lg" />
             <span className="text-sm font-bold text-[var(--text-1)]">
-              RandevuGo
+              SeninRandevun
             </span>
           </Link>
           <div className="flex items-center gap-2">

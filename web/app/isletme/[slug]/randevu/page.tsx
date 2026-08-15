@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import {
@@ -98,10 +99,8 @@ export default function BookingPage() {
             href="/"
             className="flex items-center gap-2 text-sm font-semibold text-[var(--text-1)]"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-xs text-white">
-              R
-            </span>
-            RandevuGo
+            <Image src="/logo.png" alt="SeninRandevun" width={28} height={28} className="rounded-lg" />
+            SeninRandevun
           </Link>
           <Link
             href={`/isletme/${params.slug}`}

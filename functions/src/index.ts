@@ -211,6 +211,49 @@ export const appointmentCreated = onDocumentCreated(
         staffName: appointment.staffName ?? null,
         createdAt: FieldValue.serverTimestamp(),
       });
+
+    // ── CRM: Auto-upsert customer ──
+    const phone = typeof appointment.customerPhone === "string"
+      ? appointment.customerPhone.trim()
+      : null;
+    const customerName = typeof appointment.customerName === "string"
+      ? appointment.customerName.trim()
+      : "Müşteri";
+    const customerEmail = typeof appointment.customerEmail === "string"
+      ? appointment.customerEmail.trim().toLowerCase()
+      : null;
+
+    if (phone) {
+      const customersRef = db.collection(`businesses/${businessId}/customers`);
+      const existing = await customersRef.where("phone", "==", phone).limit(1).get();
+
+      if (!existing.empty) {
+        // Update existing customer
+        const customerDoc = existing.docs[0];
+        await customerDoc.ref.update({
+          fullName: customerName,
+          ...(customerEmail ? { email: customerEmail } : {}),
+          totalAppointments: FieldValue.increment(1),
+          lastVisitAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Create new customer
+        await customersRef.add({
+          fullName: customerName,
+          phone,
+          email: customerEmail,
+          totalAppointments: 1,
+          completedAppointments: 0,
+          cancelledAppointments: 0,
+          noShowAppointments: 0,
+          totalSpent: 0,
+          lastVisitAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
   }
 );
 

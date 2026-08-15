@@ -1,7 +1,7 @@
 /**
- * RandevuGo — Tek Abonelik Modeli
+ * SeninRandevun — Tek Abonelik Modeli
  *
- * Tek plan: "RandevuGo" — 1.490 TL/yıl (≈124 TL/ay)
+ * Tek plan: "SeninRandevun" — 1.490 TL/yıl (≈124 TL/ay)
  * Trial: 14 gün, kredi kartı gerekmez
  * Tüm özellikler açık — feature kilidi yok
  */
@@ -66,7 +66,7 @@ export const PLAN_PRICE = {
   trialDays: 14,
 } as const;
 
-export const PLAN_LABEL = "RandevuGo";
+export const PLAN_LABEL = "SeninRandevun";
 
 export const PLAN_FEATURE_LIST = [
   "Online randevu",
@@ -100,8 +100,8 @@ export const PLAN_PRICES: Record<AnyPlanType, { monthly: number; yearly: number;
  * @deprecated Eski plan label'ları — yeni kodda PLAN_LABEL kullanın
  */
 export const PLAN_LABELS: Record<AnyPlanType, string> = {
-  RANDEVUGO: "RandevuGo",
-  FREE: "RandevuGo",
-  PRO: "RandevuGo",
-  BUSINESS: "RandevuGo",
+  RANDEVUGO: "SeninRandevun",
+  FREE: "SeninRandevun",
+  PRO: "SeninRandevun",
+  BUSINESS: "SeninRandevun",
 };

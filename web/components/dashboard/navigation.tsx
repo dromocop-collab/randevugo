@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,12 +29,10 @@ export function DashboardSidebar() {
     <aside className="hidden w-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-xl shadow-[var(--shadow-hard)] backdrop-blur-xl lg:block">
       <div className="mb-6 px-2">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-sm font-bold text-white shadow-md">
-            R
-          </span>
+          <Image src="/logo.png" alt="SeninRandevun" width={32} height={32} className="rounded-lg shadow-md" />
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-3)]">
-              RandevuGo
+              SeninRandevun
             </p>
             <p className="text-sm font-semibold text-[var(--text-1)]">
               İşletme Paneli
