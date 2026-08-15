@@ -17,7 +17,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL("https://seninrandevun.com"),
   title: {
-    default: "SeninRandevun | Multi-tenant Randevu SaaS",
+    default: "SeninRandevun | Online Randevu Sistemi",
     template: "%s | SeninRandevun",
   },
   description:
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "randevu yazilimi",
     "kuafor randevu",
     "online booking",
-    "multi tenant saas",
+    "online randevu al",
     "isletme paneli",
   ],
   openGraph: {

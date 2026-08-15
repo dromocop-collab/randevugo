@@ -281,6 +281,21 @@ service cloud.firestore {
       allow read, write: if false; // Only Cloud Functions can access
     }
 
+    match /emailVerificationCodes/{email} {
+      allow read, write: if false; // Only Cloud Functions can access
+    }
+
+    match /passwordResetCodes/{email} {
+      allow read, write: if false; // Only Cloud Functions can access
+    }
+
+    // ────────────────────────────────────────────────
+    // Trigger Email Extension (server-only)
+    // ────────────────────────────────────────────────
+    match /mail/{mailId} {
+      allow read, write: if false; // Only Cloud Functions / Extensions can access
+    }
+
     // ────────────────────────────────────────────────
     // Collection Group queries
     // ────────────────────────────────────────────────

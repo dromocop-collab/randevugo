@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = void 0;
+exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
@@ -344,5 +344,229 @@ exports.verifyPhoneCode = (0, https_1.onCall)({ region: "europe-west1" }, async 
         verifiedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     return { success: true, verified: true };
+});
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EMAIL VERIFICATION & PASSWORD RESET (6-digit code)
+   Uses Firebase Trigger Email extension via "mail" collection
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function buildEmailTemplate(code, type) {
+    const isVerify = type === "verify";
+    const title = isVerify ? "E-posta Doğrulama" : "Şifre Sıfırlama";
+    const heading = isVerify
+        ? "E-posta adresinizi doğrulayın"
+        : "Şifrenizi sıfırlayın";
+    const description = isVerify
+        ? "Hesabınızı aktif etmek için aşağıdaki 6 haneli kodu kullanın."
+        : "Şifrenizi sıfırlamak için aşağıdaki 6 haneli kodu kullanın.";
+    const digits = code.split("");
+    return `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title} — SeninRandevun</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:40px 20px;">
+<tr><td align="center">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.08);">
+
+  <!-- Header gradient -->
+  <tr><td style="background:linear-gradient(135deg,#0284c7,#06b6d4,#8b5cf6);padding:40px 40px 30px;text-align:center;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+    <tr><td style="background:rgba(255,255,255,0.2);border-radius:16px;padding:10px 20px;">
+      <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Senin<span style="opacity:0.9;">Randevun</span></span>
+    </td></tr></table>
+    <p style="margin:20px 0 0;color:rgba(255,255,255,0.9);font-size:14px;font-weight:500;">${title}</p>
+  </td></tr>
+
+  <!-- Body -->
+  <tr><td style="padding:40px;">
+    <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;color:#0f172a;text-align:center;">${heading}</h1>
+    <p style="margin:0 0 32px;font-size:15px;color:#64748b;text-align:center;line-height:1.6;">${description}</p>
+
+    <!-- Code digits -->
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+    <tr>
+      ${digits.map((d) => `<td style="padding:0 4px;"><div style="width:48px;height:56px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:2px solid #0284c7;border-radius:14px;text-align:center;line-height:56px;font-size:28px;font-weight:800;color:#0284c7;letter-spacing:2px;">${d}</div></td>`).join("")}
+    </tr>
+    </table>
+
+    <!-- Timer warning -->
+    <div style="margin:28px auto 0;max-width:340px;background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;padding:14px 18px;text-align:center;">
+      <span style="font-size:13px;color:#92400e;">⏱️ Bu kod <strong>5 dakika</strong> içinde geçerliliğini yitirecektir.</span>
+    </div>
+
+    <!-- Security note -->
+    <div style="margin:24px 0 0;padding:16px;background:#f8fafc;border-radius:12px;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
+        🔒 Bu kodu kimseyle paylaşmayın. SeninRandevun ekibi sizden asla doğrulama kodu istemez.
+      </p>
+    </div>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center;">
+    <p style="margin:0 0 4px;font-size:12px;color:#94a3b8;">Bu e-postayı siz talep ettiyseniz herhangi bir işlem yapmanıza gerek yok.</p>
+    <p style="margin:0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} SeninRandevun — Zamanın değerli, randevun bizde.</p>
+    <p style="margin:8px 0 0;font-size:11px;color:#cbd5e1;">seninrandevun.com</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+// ── Send Email Verification Code ──
+exports.sendEmailVerificationCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const data = request.data ?? {};
+    const email = requireString(data.email, "email").toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
+    }
+    const codeDocRef = db.doc(`emailVerificationCodes/${email}`);
+    const existing = await codeDocRef.get();
+    // Rate limit: 60 seconds
+    if (existing.exists) {
+        const lastSent = existing.data()?.sentAt;
+        if (lastSent) {
+            const secondsAgo = (Date.now() - lastSent.toMillis()) / 1000;
+            if (secondsAgo < 60) {
+                throw new https_1.HttpsError("resource-exhausted", `Lütfen ${Math.ceil(60 - secondsAgo)} saniye bekleyin.`);
+            }
+        }
+    }
+    const code = String((0, crypto_1.randomInt)(100000, 999999));
+    // Store the code
+    await codeDocRef.set({
+        code,
+        email,
+        type: "email_verification",
+        attempts: 0,
+        verified: false,
+        sentAt: firestore_1.FieldValue.serverTimestamp(),
+        expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+    });
+    // Write to "mail" collection — Trigger Email extension picks this up
+    await db.collection("mail").add({
+        to: email,
+        message: {
+            subject: "SeninRandevun — E-posta Doğrulama Kodu: " + code,
+            html: buildEmailTemplate(code, "verify"),
+        },
+    });
+    return { success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." };
+});
+// ── Verify Email Code ──
+exports.verifyEmailCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const data = request.data ?? {};
+    const email = requireString(data.email, "email").toLowerCase();
+    const inputCode = requireString(data.code, "code");
+    const codeDocRef = db.doc(`emailVerificationCodes/${email}`);
+    const codeSnap = await codeDocRef.get();
+    if (!codeSnap.exists) {
+        throw new https_1.HttpsError("not-found", "Doğrulama kodu bulunamadı. Lütfen tekrar kod gönderin.");
+    }
+    const codeData = codeSnap.data();
+    const expiresAt = codeData.expiresAt;
+    if (expiresAt && expiresAt.toMillis() < Date.now()) {
+        await codeDocRef.delete();
+        throw new https_1.HttpsError("deadline-exceeded", "Kodun süresi doldu. Lütfen yeni kod gönderin.");
+    }
+    const attempts = Number(codeData.attempts ?? 0);
+    if (attempts >= 5) {
+        await codeDocRef.delete();
+        throw new https_1.HttpsError("permission-denied", "Çok fazla hatalı deneme. Yeni kod gönderin.");
+    }
+    if (codeData.code !== inputCode.trim()) {
+        await codeDocRef.update({ attempts: firestore_1.FieldValue.increment(1) });
+        throw new https_1.HttpsError("invalid-argument", `Yanlış kod. ${4 - attempts} deneme hakkınız kaldı.`);
+    }
+    await codeDocRef.update({
+        verified: true,
+        verifiedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true, verified: true };
+});
+// ── Send Password Reset Code ──
+exports.sendPasswordResetCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const data = request.data ?? {};
+    const email = requireString(data.email, "email").toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
+    }
+    const codeDocRef = db.doc(`passwordResetCodes/${email}`);
+    const existing = await codeDocRef.get();
+    if (existing.exists) {
+        const lastSent = existing.data()?.sentAt;
+        if (lastSent) {
+            const secondsAgo = (Date.now() - lastSent.toMillis()) / 1000;
+            if (secondsAgo < 60) {
+                throw new https_1.HttpsError("resource-exhausted", `Lütfen ${Math.ceil(60 - secondsAgo)} saniye bekleyin.`);
+            }
+        }
+    }
+    const code = String((0, crypto_1.randomInt)(100000, 999999));
+    await codeDocRef.set({
+        code,
+        email,
+        type: "password_reset",
+        attempts: 0,
+        verified: false,
+        sentAt: firestore_1.FieldValue.serverTimestamp(),
+        expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+    });
+    await db.collection("mail").add({
+        to: email,
+        message: {
+            subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
+            html: buildEmailTemplate(code, "reset"),
+        },
+    });
+    return { success: true, message: "Şifre sıfırlama kodu e-posta adresinize gönderildi." };
+});
+// ── Reset Password with Code ──
+exports.resetPasswordWithCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const data = request.data ?? {};
+    const email = requireString(data.email, "email").toLowerCase();
+    const inputCode = requireString(data.code, "code");
+    const newPassword = requireString(data.newPassword, "newPassword");
+    if (newPassword.length < 8) {
+        throw new https_1.HttpsError("invalid-argument", "Şifre en az 8 karakter olmalıdır.");
+    }
+    const codeDocRef = db.doc(`passwordResetCodes/${email}`);
+    const codeSnap = await codeDocRef.get();
+    if (!codeSnap.exists) {
+        throw new https_1.HttpsError("not-found", "Sıfırlama kodu bulunamadı. Lütfen tekrar kod gönderin.");
+    }
+    const codeData = codeSnap.data();
+    const expiresAt = codeData.expiresAt;
+    if (expiresAt && expiresAt.toMillis() < Date.now()) {
+        await codeDocRef.delete();
+        throw new https_1.HttpsError("deadline-exceeded", "Kodun süresi doldu. Lütfen yeni kod gönderin.");
+    }
+    const attempts = Number(codeData.attempts ?? 0);
+    if (attempts >= 5) {
+        await codeDocRef.delete();
+        throw new https_1.HttpsError("permission-denied", "Çok fazla hatalı deneme. Yeni kod gönderin.");
+    }
+    if (codeData.code !== inputCode.trim()) {
+        await codeDocRef.update({ attempts: firestore_1.FieldValue.increment(1) });
+        throw new https_1.HttpsError("invalid-argument", `Yanlış kod. ${4 - attempts} deneme hakkınız kaldı.`);
+    }
+    // Code is correct — update password via Admin SDK
+    const { getAuth } = await import("firebase-admin/auth");
+    const auth = getAuth();
+    try {
+        const userRecord = await auth.getUserByEmail(email);
+        await auth.updateUser(userRecord.uid, { password: newPassword });
+    }
+    catch {
+        throw new https_1.HttpsError("not-found", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+    }
+    // Clean up the code
+    await codeDocRef.delete();
+    return { success: true, message: "Şifreniz başarıyla güncellendi." };
 });
 //# sourceMappingURL=index.js.map
