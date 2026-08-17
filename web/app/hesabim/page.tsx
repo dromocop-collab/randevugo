@@ -21,6 +21,7 @@ import { logout } from "@/features/auth/auth-service";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingState, EmptyState } from "@/components/ui/states";
+import { ReviewForm } from "@/components/storefront/review-form";
 
 interface SimpleAppointment {
   id: string;
@@ -39,6 +40,7 @@ export default function CustomerAccountPage() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<SimpleAppointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewingApt, setReviewingApt] = useState<SimpleAppointment | null>(null);
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !user) return;
@@ -263,9 +265,19 @@ export default function CustomerAccountPage() {
                         {new Date(apt.startAt).toLocaleDateString("tr-TR")}
                       </p>
                     </div>
-                    <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${info.color}`}>
-                      {info.label}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${info.color}`}>
+                        {info.label}
+                      </span>
+                      {(apt.status === "completed" || (apt.status === "confirmed" && new Date(apt.startAt) <= new Date())) && (
+                        <button
+                          onClick={() => setReviewingApt(apt)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                        >
+                          ⭐ Yorum Yap
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -273,6 +285,35 @@ export default function CustomerAccountPage() {
           )}
         </Card>
       </main>
+
+      {/* ━━━ REVIEW MODAL ━━━ */}
+      {reviewingApt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-white">{reviewingApt.businessName}</p>
+                <p className="text-xs text-white/60">
+                  {reviewingApt.serviceName} · {new Date(reviewingApt.startAt).toLocaleDateString("tr-TR")}
+                </p>
+              </div>
+              <button
+                onClick={() => setReviewingApt(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+              >
+                ✕
+              </button>
+            </div>
+            <ReviewForm
+              businessId={reviewingApt.businessId}
+              appointmentId={reviewingApt.id}
+              serviceName={reviewingApt.serviceName}
+              staffName={reviewingApt.staffName}
+              onSuccess={() => setReviewingApt(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

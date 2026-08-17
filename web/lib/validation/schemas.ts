@@ -21,6 +21,8 @@ export const onboardingSchema = z.object({
 
 export const serviceCreateSchema = z.object({
   name: z.string().trim().min(2, "Hizmet adi en az 2 karakter olmalidir."),
+  category: z.string().trim().min(1, "Kategori secmelisiniz."),
+  description: z.string().trim().optional().or(z.literal("")),
   price: z.coerce.number().positive("Fiyat sifirdan buyuk olmalidir."),
   duration: z.coerce
     .number()

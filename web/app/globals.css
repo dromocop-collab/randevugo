@@ -20,6 +20,8 @@
   --accent-2: #0ea5e9;
   --accent-3: #2563eb;
   --ring: rgba(14, 165, 233, 0.3);
+  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @theme inline {
@@ -61,6 +63,10 @@ body {
   font-family: var(--font-jakarta), sans-serif;
 }
 
+/* ──────────────────────────────────────────────
+   PANEL SHELL
+   ────────────────────────────────────────────── */
+
 .panel-shell {
   position: relative;
 }
@@ -88,9 +94,19 @@ body {
   background: linear-gradient(145deg, var(--surface-2), transparent 70%);
 }
 
+/* ──────────────────────────────────────────────
+   PREMIUM CARD (BASE)
+   ────────────────────────────────────────────── */
+
 .premium-card {
   position: relative;
   overflow: hidden;
+  transition: transform 0.4s var(--transition-smooth), box-shadow 0.4s var(--transition-smooth);
+}
+
+.premium-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -12px var(--shadow-hard), 0 0 0 1px var(--border);
 }
 
 .premium-card::before {
@@ -112,12 +128,61 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
+/* ──────────────────────────────────────────────
+   3D TILT CARD
+   ────────────────────────────────────────────── */
+
+.card-3d {
+  perspective: 800px;
+  transform-style: preserve-3d;
+}
+
+.card-3d-inner {
+  transition: transform 0.5s var(--transition-smooth), box-shadow 0.5s var(--transition-smooth);
+  will-change: transform;
+}
+
+.card-3d-inner:hover {
+  box-shadow:
+    0 25px 50px -12px var(--shadow-hard),
+    0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.card-3d-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.06) 55%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.card-3d-inner:hover .card-3d-shine {
+  opacity: 1;
+}
+
+/* ──────────────────────────────────────────────
+   DASHBOARD HERO
+   ────────────────────────────────────────────── */
+
 .dashboard-hero {
   background:
     radial-gradient(340px 140px at 6% 0%, color-mix(in srgb, var(--accent-2) 26%, transparent), transparent 74%),
     radial-gradient(360px 150px at 96% 100%, color-mix(in srgb, var(--accent-3) 20%, transparent), transparent 74%),
     var(--surface-1);
 }
+
+/* ──────────────────────────────────────────────
+   NAV CHIP
+   ────────────────────────────────────────────── */
 
 .nav-chip {
   position: relative;
@@ -135,18 +200,32 @@ body {
   background: linear-gradient(180deg, var(--accent-2), var(--accent-3));
 }
 
+/* ──────────────────────────────────────────────
+   BODY GRID OVERLAY
+   ────────────────────────────────────────────── */
+
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.2;
+  opacity: 0.15;
   background-image:
-    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: radial-gradient(circle at center, black 30%, transparent 85%);
+    linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 80%);
+  animation: gridFloat 20s ease-in-out infinite;
 }
+
+@keyframes gridFloat {
+  0%, 100% { background-position: 0 0; }
+  50% { background-position: 8px 8px; }
+}
+
+/* ──────────────────────────────────────────────
+   BASE STYLES
+   ────────────────────────────────────────────── */
 
 a {
   color: inherit;
@@ -156,10 +235,27 @@ a {
   background: var(--ring);
 }
 
+/* ──────────────────────────────────────────────
+   GLASS MORPHISM
+   ────────────────────────────────────────────── */
+
 .glass {
   background: var(--surface-2);
   backdrop-filter: blur(14px);
 }
+
+.glass-premium {
+  background: var(--surface-1);
+  backdrop-filter: blur(24px) saturate(1.8);
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
+  box-shadow:
+    0 8px 32px var(--shadow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* ──────────────────────────────────────────────
+   AUTH STAGE
+   ────────────────────────────────────────────── */
 
 .auth-stage {
   position: relative;
@@ -175,6 +271,10 @@ a {
     radial-gradient(circle at 80% 80%, rgba(56, 189, 248, 0.2), transparent 45%);
   filter: blur(30px);
 }
+
+/* ──────────────────────────────────────────────
+   FLOATING ORBS
+   ────────────────────────────────────────────── */
 
 .orb {
   position: absolute;
@@ -211,6 +311,10 @@ a {
   animation-delay: -6s;
 }
 
+/* ──────────────────────────────────────────────
+   STAGGER ANIMATIONS
+   ────────────────────────────────────────────── */
+
 .stagger-in {
   animation: riseIn 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
@@ -218,6 +322,10 @@ a {
 .stagger-item {
   animation: riseIn 820ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+
+/* ──────────────────────────────────────────────
+   MARQUEE
+   ────────────────────────────────────────────── */
 
 .marquee-wrap {
   overflow: hidden;
@@ -229,6 +337,308 @@ a {
   white-space: nowrap;
   animation: marquee 22s linear infinite;
 }
+
+/* ──────────────────────────────────────────────
+   SCROLL REVEAL SYSTEM
+   ────────────────────────────────────────────── */
+
+.scroll-reveal {
+  opacity: 0;
+  will-change: transform, opacity;
+  transition:
+    opacity 0.7s var(--transition-smooth),
+    transform 0.7s var(--transition-smooth);
+}
+
+.scroll-reveal.reveal-up {
+  transform: translateY(40px) scale(0.98);
+}
+
+.scroll-reveal.reveal-down {
+  transform: translateY(-40px) scale(0.98);
+}
+
+.scroll-reveal.reveal-left {
+  transform: translateX(-50px) scale(0.98);
+}
+
+.scroll-reveal.reveal-right {
+  transform: translateX(50px) scale(0.98);
+}
+
+.scroll-reveal.reveal-fade {
+  transform: scale(0.96);
+}
+
+.scroll-reveal.revealed {
+  opacity: 1;
+  transform: translateY(0) translateX(0) scale(1);
+}
+
+/* ──────────────────────────────────────────────
+   PREMIUM BUTTON SYSTEM
+   ────────────────────────────────────────────── */
+
+.btn-premium {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.btn-premium::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.btn-premium:hover::before {
+  left: 120%;
+}
+
+.btn-premium::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Ripple effect container */
+.btn-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-ripple .ripple-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(0);
+  animation: rippleExpand 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Pulse glow for CTA buttons */
+.btn-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* ──────────────────────────────────────────────
+   FEATURE CARD HOVER
+   ────────────────────────────────────────────── */
+
+.feature-card {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 0.4s var(--transition-smooth),
+    box-shadow 0.4s var(--transition-smooth),
+    border-color 0.4s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 20px 60px -15px var(--shadow-hard),
+    0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.feature-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 8%, transparent),
+    transparent 60%
+  );
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.feature-card:hover::after {
+  opacity: 1;
+}
+
+/* ──────────────────────────────────────────────
+   STEP CARD
+   ────────────────────────────────────────────── */
+
+.step-icon-wrap {
+  transition: transform 0.4s var(--transition-spring), box-shadow 0.4s ease;
+}
+
+.step-icon-wrap:hover {
+  transform: scale(1.08) rotate(-2deg);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ──────────────────────────────────────────────
+   COUNTER ANIMATION
+   ────────────────────────────────────────────── */
+
+.stat-number {
+  display: inline-block;
+  transition: transform 0.3s var(--transition-spring);
+}
+
+.stat-number:hover {
+  transform: scale(1.1);
+}
+
+/* ──────────────────────────────────────────────
+   SUPPORT BUBBLE
+   ────────────────────────────────────────────── */
+
+.support-bubble-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-3));
+  color: white;
+  box-shadow:
+    0 8px 32px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent);
+  transition:
+    transform 0.3s var(--transition-spring),
+    box-shadow 0.3s ease;
+  animation: supportPulse 3s ease-in-out infinite;
+}
+
+.support-bubble-btn:hover {
+  transform: scale(1.1);
+  box-shadow:
+    0 12px 40px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 0 0 6px color-mix(in srgb, var(--accent) 20%, transparent);
+  animation: none;
+}
+
+.support-bubble-btn.open {
+  animation: none;
+  transform: rotate(45deg) scale(1.05);
+}
+
+.support-popup {
+  position: fixed;
+  bottom: 6.5rem;
+  right: 1.5rem;
+  z-index: 9998;
+  width: 320px;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  transform-origin: bottom right;
+  animation: popupReveal 0.35s var(--transition-spring) forwards;
+}
+
+.support-popup.closing {
+  animation: popupHide 0.25s ease-in forwards;
+}
+
+.support-popup-item {
+  transition:
+    background 0.2s ease,
+    padding-left 0.25s var(--transition-spring);
+}
+
+.support-popup-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding-left: 1.25rem;
+}
+
+@keyframes supportPulse {
+  0%, 100% { box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+  50% { box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 0 8px color-mix(in srgb, var(--accent) 8%, transparent); }
+}
+
+@keyframes popupReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes popupHide {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85) translateY(12px);
+  }
+}
+
+/* ──────────────────────────────────────────────
+   CATEGORY CHIP
+   ────────────────────────────────────────────── */
+
+.category-chip {
+  transition:
+    all 0.3s var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.category-chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--accent), var(--accent-3));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.category-chip:hover::before {
+  opacity: 0.06;
+}
+
+.category-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.category-chip.active {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+/* ──────────────────────────────────────────────
+   KEYFRAMES
+   ────────────────────────────────────────────── */
 
 @keyframes riseIn {
   from {
@@ -253,24 +663,56 @@ a {
   }
 }
 
-@media (min-width: 1024px) {
-  .panel-shell {
-    animation: riseIn 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-}
-
 @keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+@keyframes rippleExpand {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow:
+      0 8px 32px color-mix(in srgb, var(--accent) 30%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 8px 40px color-mix(in srgb, var(--accent) 45%, transparent),
+      0 0 0 6px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+@keyframes floatParticle {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+  25% { transform: translateY(-20px) rotate(90deg); opacity: 1; }
+  50% { transform: translateY(-10px) rotate(180deg); opacity: 0.8; }
+  75% { transform: translateY(-25px) rotate(270deg); opacity: 0.5; }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ──────────────────────────────────────────────
+   RESPONSIVE
+   ────────────────────────────────────────────── */
+
+@media (min-width: 1024px) {
+  .panel-shell {
+    animation: riseIn 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
 }
 
 @media (max-width: 768px) {
@@ -284,13 +726,37 @@ a {
   .marquee-track {
     animation-duration: 28s;
   }
+
+  .support-popup {
+    right: 0.75rem;
+    bottom: 5.5rem;
+    width: calc(100vw - 1.5rem);
+    max-width: 360px;
+  }
+
+  .support-bubble-btn {
+    bottom: 1rem;
+    right: 1rem;
+    width: 54px;
+    height: 54px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .orb,
   .stagger-in,
   .stagger-item,
-  .marquee-track {
+  .marquee-track,
+  .scroll-reveal,
+  .btn-premium::before,
+  .support-bubble-btn,
+  .btn-glow {
     animation: none !important;
+    transition: none !important;
+  }
+
+  .scroll-reveal {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

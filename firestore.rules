@@ -205,6 +205,12 @@ service cloud.firestore {
         allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
+      // Service Categories (public read, owner/manager write)
+      match /serviceCategories/{categoryId} {
+        allow read: if true;
+        allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
+      }
+
       // Staff (public read for storefront)
       match /staff/{staffId} {
         allow read: if true;
@@ -239,10 +245,11 @@ service cloud.firestore {
         allow write: if canOperate(businessId) || isPlatformAdmin();
       }
 
-      // Reviews — created via Cloud Function only
+      // Reviews — customers can create their own; owners can update (reply)
       match /reviews/{reviewId} {
         allow read: if true;
-        allow create: if false; // Only via Cloud Function (submitReview)
+        allow create: if isAuthenticated() &&
+          request.resource.data.customerId == uid();
         allow update: if canManage(businessId) || isPlatformAdmin();
         allow delete: if isPlatformAdmin();
       }

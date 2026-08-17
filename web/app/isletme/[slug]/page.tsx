@@ -19,10 +19,12 @@ import {
 import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessReviews } from "@/features/reviews/review-repository";
+import { listServiceCategories } from "@/features/services/service-category-repository";
 import type { Business, DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import type { Review } from "@/types/review";
+import type { ServiceCategory } from "@/types/service-category";
 
 type Tab = "hizmetler" | "ekip" | "galeri" | "yorumlar" | "iletisim";
 
@@ -42,6 +44,7 @@ export default function BusinessProfilePage() {
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("hizmetler");
@@ -66,12 +69,13 @@ export default function BusinessProfilePage() {
 
         setBusiness(row);
 
-        const [schedules, serviceRows, staffRows, reviewRows] =
+        const [schedules, serviceRows, staffRows, reviewRows, catRows] =
           await Promise.all([
             listBusinessWorkingHours(row.id),
             listServices(row.id, true),
             listStaff(row.id, true),
             listBusinessReviews(row.id).catch(() => [] as Review[]),
+            listServiceCategories(row.id).catch(() => [] as ServiceCategory[]),
           ]);
 
         if (cancelled) return;
@@ -79,6 +83,7 @@ export default function BusinessProfilePage() {
         setServices(serviceRows);
         setStaff(staffRows);
         setReviews(reviewRows);
+        setServiceCategories(catRows);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -204,6 +209,7 @@ export default function BusinessProfilePage() {
             {activeTab === "hizmetler" && (
               <StorefrontServices
                 services={services}
+                categories={serviceCategories}
                 onSelectService={(serviceId) => {
                   router.push(`/isletme/${params.slug}/randevu?service=${serviceId}`);
                 }}
@@ -228,6 +234,15 @@ export default function BusinessProfilePage() {
                 reviews={reviews}
                 averageRating={business.rating ?? 0}
                 totalReviews={business.reviewCount ?? 0}
+                businessId={business.id}
+                onReviewSubmitted={async () => {
+                  const [updatedReviews, updatedBiz] = await Promise.all([
+                    listBusinessReviews(business.id).catch(() => [] as Review[]),
+                    getBusinessBySlug(params.slug!).catch(() => null),
+                  ]);
+                  setReviews(updatedReviews);
+                  if (updatedBiz) setBusiness(updatedBiz);
+                }}
               />
             )}
             {activeTab === "iletisim" && (

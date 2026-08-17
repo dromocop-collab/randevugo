@@ -32,6 +32,19 @@ export async function uploadBusinessImage(
 }
 
 /**
+ * Upload a review image (customer review photo).
+ */
+export async function uploadReviewImage(
+  businessId: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const fileName = `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `businesses/${businessId}/public/reviews/${fileName}`;
+  return uploadFile(path, file);
+}
+
+/**
  * Delete a file from Firebase Storage by its download URL.
  */
 export async function deleteStorageFile(downloadUrl: string): Promise<void> {
