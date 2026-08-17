@@ -18,20 +18,6 @@ export function AnalyticsScripts() {
 
   return (
     <>
-      {analytics.googleAnalyticsId && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${analytics.googleAnalyticsId}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga4-init" strategy="afterInteractive">
-            {`window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${analytics.googleAnalyticsId}');`}
-          </Script>
-        </>
-      )}
       {analytics.googleTagManagerId && (
         <Script id="gtm-init" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
+import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
 import "./globals.css";
 
@@ -18,6 +19,7 @@ const spaceGrotesk = Space_Grotesk({
 
 const SITE_URL = "https://seninrandevun.com";
 const SITE_NAME = "SeninRandevun";
+const GOOGLE_ANALYTICS_ID = "G-REDQN2FVRD";
 const SITE_DESCRIPTION =
   "Türkiye'nin #1 akıllı online randevu platformu. Kuaför, güzellik merkezi, berber, sağlık, spor ve daha fazlası için hızlı randevu alın. İşletmeniz için profesyonel randevu yönetimi, çalışan takibi, müşteri CRM ve gelişmiş analitik.";
 
@@ -268,6 +270,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr" dir="ltr" className={`${jakarta.variable} ${spaceGrotesk.variable} h-full antialiased`}>
       <head>
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
+          strategy="beforeInteractive"
+        />
+        <Script id="google-analytics" strategy="beforeInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GOOGLE_ANALYTICS_ID}');`}
+        </Script>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
