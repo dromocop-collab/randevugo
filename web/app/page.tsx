@@ -21,6 +21,7 @@ const DEFAULT_CATEGORIES = [
   { slug: "kuafor", label: "Kuaför", emoji: "💇" },
   { slug: "berber", label: "Berber", emoji: "✂️" },
   { slug: "guzellik", label: "Güzellik Merkezi", emoji: "💅" },
+  { slug: "spa", label: "Spa", emoji: "🧖" },
   { slug: "nail", label: "Nail Studio", emoji: "💎" },
   { slug: "spor", label: "Spor", emoji: "🏋️" },
   { slug: "saglik", label: "Sağlık", emoji: "🩺" },
@@ -282,6 +283,7 @@ export default function HomePage() {
           <nav className="hidden items-center gap-1 md:flex">
             {[
               { href: "/kesfet", label: "Keşfet", icon: "🔍" },
+              { href: "/online-randevu", label: "Online Randevu", icon: "📅" },
               { href: "/fiyatlar", label: "Fiyatlar", icon: "💎" },
             ].map((l) => (
               <Link
@@ -698,6 +700,9 @@ export default function HomePage() {
               <ul className="mt-5 space-y-3">
                 {[
                   { href: "/kesfet", label: "İşletme Keşfet", icon: "🔍" },
+                  { href: "/online-randevu", label: "Online Randevu", icon: "📅" },
+                  { href: "/kuafor-randevu", label: "Kuaför Randevu", icon: "💇" },
+                  { href: "/berber-randevu", label: "Berber Randevu", icon: "✂️" },
                   { href: "/hesabim", label: "Hesabım", icon: "👤" },
                   { href: "/giris", label: "Giriş Yap", icon: "🔑" },
                   { href: "/kayit", label: "Ücretsiz Üye Ol", icon: "✨" },
@@ -743,15 +748,16 @@ export default function HomePage() {
               </h4>
               <ul className="mt-5 space-y-3">
                 {[
-                  { slug: "kuafor", label: "Kuaför Randevu", emoji: "💇" },
-                  { slug: "berber", label: "Berber Randevu", emoji: "✂️" },
-                  { slug: "guzellik", label: "Güzellik Merkezi", emoji: "💅" },
-                  { slug: "saglik", label: "Sağlık Randevu", emoji: "🩺" },
-                  { slug: "spor", label: "Spor & Fitness", emoji: "🏋️" },
-                  { slug: "veteriner", label: "Veteriner", emoji: "🐾" },
+                  { slug: "kuafor", label: "Kuaför Randevu", emoji: "💇", href: "/kuafor-randevu" },
+                  { slug: "berber", label: "Berber Randevu", emoji: "✂️", href: "/berber-randevu" },
+                  { slug: "guzellik", label: "Güzellik Merkezi", emoji: "💅", href: "/guzellik-merkezi-randevu" },
+                  { slug: "spa", label: "Spa Randevu", emoji: "🧖", href: "/spa-randevu" },
+                  { slug: "saglik", label: "Sağlık Randevu", emoji: "🩺", href: "/saglik-randevu" },
+                  { slug: "spor", label: "Spor & Fitness", emoji: "🏋️", href: "/spor-randevu" },
+                  { slug: "veteriner", label: "Veteriner", emoji: "🐾", href: "/veteriner-randevu" },
                 ].map((cat) => (
                   <li key={cat.slug}>
-                    <Link href={`/kesfet?category=${cat.slug}`} className="group flex items-center gap-2 text-sm text-[var(--text-2)] transition-all duration-300 hover:text-[var(--accent)] hover:translate-x-1">
+                    <Link href={cat.href} className="group flex items-center gap-2 text-sm text-[var(--text-2)] transition-all duration-300 hover:text-[var(--accent)] hover:translate-x-1">
                       <span className="text-xs opacity-60 transition-opacity group-hover:opacity-100">{cat.emoji}</span>
                       {cat.label}
                     </Link>

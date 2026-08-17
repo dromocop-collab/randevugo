@@ -14,6 +14,7 @@ const DEFAULT_CATEGORIES = [
   { value: "kuafor", label: "Kuaför", icon: "💇" },
   { value: "berber", label: "Berber", icon: "💈" },
   { value: "guzellik", label: "Güzellik Merkezi", icon: "💅" },
+  { value: "spa", label: "Spa", icon: "🧖" },
   { value: "nail", label: "Nail Studio", icon: "💎" },
   { value: "spor", label: "Spor / PT", icon: "🏋️" },
   { value: "saglik", label: "Sağlık", icon: "🩺" },

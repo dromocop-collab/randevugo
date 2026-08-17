@@ -20,6 +20,7 @@ const spaceGrotesk = Space_Grotesk({
 const SITE_URL = "https://seninrandevun.com";
 const SITE_NAME = "SeninRandevun";
 const GOOGLE_ANALYTICS_ID = "G-REDQN2FVRD";
+const GOOGLE_TAG_MANAGER_ID = "GTM-KH38NV3L";
 const SITE_DESCRIPTION =
   "Türkiye'nin #1 akıllı online randevu platformu. Kuaför, güzellik merkezi, berber, sağlık, spor ve daha fazlası için hızlı randevu alın. İşletmeniz için profesyonel randevu yönetimi, çalışan takibi, müşteri CRM ve gelişmiş analitik.";
 
@@ -280,6 +281,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             gtag('js', new Date());
             gtag('config', '${GOOGLE_ANALYTICS_ID}');`}
         </Script>
+        <Script id="google-tag-manager" strategy="beforeInteractive">
+          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','${GOOGLE_TAG_MANAGER_ID}');`}
+        </Script>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -289,6 +297,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>
       <body className="min-h-full">
+        <noscript>
+          <iframe
+            src={`https://www.googletagmanager.com/ns.html?id=${GOOGLE_TAG_MANAGER_ID}`}
+            height="0"
+            width="0"
+            style={{ display: "none", visibility: "hidden" }}
+          />
+        </noscript>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
