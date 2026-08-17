@@ -1,8 +1,10 @@
 import type { EntityBase } from "@/types/common";
 
+export type ReviewStatus = "pending" | "approved" | "rejected";
+
 export interface Review extends EntityBase {
   businessId: string;
-  customerId: string;
+  customerId?: string;
   customerName: string;
   appointmentId: string;
   serviceId?: string;
@@ -14,6 +16,7 @@ export interface Review extends EntityBase {
   imageUrls?: string[];
   ownerReply?: string;
   ownerReplyAt?: string;
+  status: ReviewStatus;
   isVisible: boolean;
   isModerated?: boolean;
   moderationNote?: string;

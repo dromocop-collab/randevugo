@@ -2,10 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
 import { createReview, hasUserReviewed } from "@/features/reviews/review-repository";
 import { uploadReviewImage } from "@/lib/firebase/upload";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface ReviewFormProps {
   businessId: string;
@@ -23,7 +23,7 @@ export function ReviewForm({
   staffName,
   onSuccess,
 }: ReviewFormProps) {
-  const { user, status: authStatus } = useAuth();
+  const [customerName, setCustomerName] = useState("");
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -31,26 +31,6 @@ export function ReviewForm({
   const [previews, setPreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-
-  if (authStatus !== "authenticated" || !user) {
-    return (
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 text-center">
-        <span className="text-3xl">🔒</span>
-        <p className="mt-2 text-sm font-medium text-[var(--text-1)]">
-          Yorum yapmak için giriş yapın
-        </p>
-        <p className="mt-1 text-xs text-[var(--text-3)]">
-          Hesabınızla giriş yaptıktan sonra yorum bırakabilirsiniz.
-        </p>
-        <a
-          href="/giris"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
-        >
-          Giriş Yap
-        </a>
-      </div>
-    );
-  }
 
   if (submitted) {
     return (
@@ -62,7 +42,7 @@ export function ReviewForm({
           Yorumunuz gönderildi!
         </h3>
         <p className="mt-1 text-sm text-[var(--text-3)]">
-          Değerli geri bildiriminiz için teşekkürler.
+          Değerli geri bildiriminiz için teşekkürler. İşletme onayladıktan sonra yayınlanacak.
         </p>
       </div>
     );
@@ -93,6 +73,10 @@ export function ReviewForm({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!customerName.trim()) {
+      toast.error("Lütfen adınızı yazın.");
+      return;
+    }
     if (rating === 0) {
       toast.error("Lütfen bir puan verin.");
       return;
@@ -127,8 +111,7 @@ export function ReviewForm({
       }
 
       await createReview(businessId, {
-        customerId: user!.uid,
-        customerName: user!.displayName ?? user!.email ?? "Müşteri",
+        customerName: customerName.trim(),
         appointmentId: appointmentId ?? `direct_${Date.now()}`,
         serviceName: serviceName,
         staffName: staffName,
@@ -138,7 +121,7 @@ export function ReviewForm({
       });
 
       setSubmitted(true);
-      toast.success("Yorumunuz başarıyla gönderildi! ⭐");
+      toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak! ⭐");
       onSuccess?.();
     } catch (err) {
       toast.error("Yorum gönderilemedi. Lütfen tekrar deneyin.");
@@ -156,8 +139,19 @@ export function ReviewForm({
     >
       <h3 className="text-lg font-bold text-[var(--text-1)]">⭐ Yorum Yaz</h3>
       <p className="mt-1 text-xs text-[var(--text-3)]">
-        Deneyiminizi paylaşın, diğer müşterilere yardımcı olun.
+        Giriş yapmanıza gerek yok — adınızı yazıp deneyiminizi paylaşabilirsiniz.
       </p>
+
+      {/* Name */}
+      <div className="mt-4">
+        <Input
+          label="Adınız *"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Adınız Soyadınız"
+          required
+        />
+      </div>
 
       {/* Star Rating */}
       <div className="mt-5">

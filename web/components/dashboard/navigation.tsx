@@ -16,6 +16,7 @@ const navItems = [
   { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: "👥" },
   { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: "🕐" },
   { href: "/dashboard/musteriler", label: "Müşteriler", icon: "💼" },
+  { href: "/dashboard/yorumlar", label: "Yorumlar", icon: "⭐" },
   { href: "/dashboard/destek", label: "Destek", icon: "🎧" },
   { href: "/dashboard/ayarlar", label: "Ayarlar", icon: "⚙️" },
 ];

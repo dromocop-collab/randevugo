@@ -13,6 +13,11 @@ import {
   addCategoryManually,
   type CategoryRequest,
 } from "@/features/categories/category-request-repository";
+import {
+  listPendingReviewsAcrossPlatform,
+  updateReviewStatus,
+} from "@/features/reviews/review-repository";
+import type { Review } from "@/types/review";
 
 type StatusFilter = "pending" | "approved" | "rejected" | "all";
 
@@ -307,12 +312,93 @@ export default function SuperAdminModerationPage() {
         />
       </Card>
 
-      <Card title="Yorum Moderasyon" description="İncelenmesi gereken müşteri yorumları">
+      <ReviewModerationCard />
+    </div>
+  );
+}
+
+/* ─────────────── GLOBAL REVIEW MODERATION ─────────────── */
+function ReviewModerationCard() {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  async function loadReviews() {
+    setLoading(true);
+    try {
+      const rows = await listPendingReviewsAcrossPlatform();
+      setReviews(rows);
+    } catch {
+      toast.error("Yorumlar yüklenemedi.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDecision(review: Review, status: "approved" | "rejected") {
+    setProcessing(review.id);
+    try {
+      await updateReviewStatus(review.businessId, review.id, status);
+      setReviews((prev) => prev.filter((r) => r.id !== review.id));
+      toast.success(status === "approved" ? "Yorum onaylandı." : "Yorum reddedildi.");
+    } catch {
+      toast.error("İşlem başarısız oldu.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  return (
+    <Card
+      title="Yorum Moderasyon"
+      description="Tüm işletmelerdeki onay bekleyen müşteri yorumları (girişsiz, isim ile bırakılan yorumlar dahil)"
+    >
+      {loading ? (
+        <LoadingState title="Yükleniyor" description="Yorumlar çekiliyor..." />
+      ) : reviews.length === 0 ? (
         <EmptyState
           title="Moderasyon gerektiren yorum yok"
-          description="Raporlanan yorumlar burada görünecek."
+          description="Onay bekleyen yorumlar burada görünecek."
         />
-      </Card>
-    </div>
+      ) : (
+        <div className="space-y-3">
+          {reviews.map((review) => (
+            <div
+              key={`${review.businessId}-${review.id}`}
+              className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-[var(--text-1)]">{review.customerName}</p>
+                  <p className="text-[10px] text-[var(--text-3)]">
+                    İşletme ID: <span className="font-mono">{review.businessId}</span> ·{" "}
+                    {new Date(review.createdAt).toLocaleDateString("tr-TR")}
+                  </p>
+                  {review.comment && (
+                    <p className="mt-2 text-sm text-[var(--text-2)]">{review.comment}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button onClick={() => handleDecision(review, "approved")} disabled={processing === review.id}>
+                    ✅ Onayla
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => handleDecision(review, "rejected")}
+                    disabled={processing === review.id}
+                  >
+                    ❌ Reddet
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

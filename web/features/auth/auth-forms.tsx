@@ -12,6 +12,7 @@ import {
   loginWithEmailPassword,
   registerWithEmailPassword,
 } from "@/features/auth/auth-service";
+import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -234,8 +235,15 @@ export function RegisterForm() {
   const [step, setStep] = useState<"form" | "verify">("form");
   const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
   const router = useRouter();
   const countdown = useCountdown(60);
+
+  useEffect(() => {
+    getPlatformSettings()
+      .then((settings) => setRegistrationOpen(settings.registrationOpen))
+      .catch(() => setRegistrationOpen(true));
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -299,6 +307,18 @@ export function RegisterForm() {
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 8 ? 2 : /(?=.*[A-Z])(?=.*[0-9])/.test(password) ? 4 : 3;
   const strengthLabel = ["", "Çok zayıf", "Zayıf", "Orta", "Güçlü"];
   const strengthColor = ["", "bg-rose-500", "bg-amber-500", "bg-yellow-500", "bg-emerald-500"];
+
+  if (!registrationOpen) {
+    return (
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-8 text-center shadow-xl shadow-[var(--shadow-hard)]">
+        <span className="text-4xl">🚧</span>
+        <h2 className="mt-3 text-lg font-bold text-[var(--text-1)]">Yeni kayıtlar geçici olarak kapalı</h2>
+        <p className="mt-2 text-sm text-[var(--text-3)]">
+          Platform şu anda yeni işletme kaydı almıyor. Lütfen daha sonra tekrar deneyin.
+        </p>
+      </div>
+    );
+  }
 
   if (step === "verify") {
     return (
