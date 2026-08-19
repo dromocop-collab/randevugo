@@ -9,6 +9,7 @@ import { SupportBubble } from "@/components/ui/support-bubble";
 import { MaintenanceGate } from "@/components/layout/maintenance-gate";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { AnalyticsScripts } from "@/components/layout/analytics-scripts";
+import { BrandCursor } from "@/components/ui/brand-cursor";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
@@ -22,9 +23,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
           </MaintenanceGate>
           <ToastProvider />
           <SupportBubble />
+          <BrandCursor />
         </BusinessProvider>
       </AuthProvider>
     </ThemeProvider>
   );
 }
-

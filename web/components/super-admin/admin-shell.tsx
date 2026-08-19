@@ -87,7 +87,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 variant="ghost"
                 onClick={async () => {
                   await logout();
-                  router.push("/giris");
+                  router.push("/isletmeler/giris");
                 }}
               >
                 Çıkış

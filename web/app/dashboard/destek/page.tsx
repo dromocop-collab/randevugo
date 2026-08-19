@@ -25,6 +25,10 @@ interface TicketRow {
   category: string;
   status: string;
   createdAt: string;
+  message: string;
+  requesterName: string;
+  requesterPhone: string;
+  source: string;
 }
 
 const CATEGORY_OPTIONS = [
@@ -34,6 +38,8 @@ const CATEGORY_OPTIONS = [
   { value: "feature_request", label: "Özellik Talebi" },
   { value: "bug_report", label: "Hata Bildirimi" },
   { value: "other", label: "Diğer" },
+  { value: "customer_message", label: "Müşteri Mesajı" },
+  { value: "public_support", label: "Web Destek Mesajı" },
 ];
 
 export default function DashboardSupportPage() {
@@ -71,6 +77,10 @@ export default function DashboardSupportPage() {
             createdAt: d.createdAt?.toDate?.()
               ? d.createdAt.toDate().toLocaleDateString("tr-TR")
               : "—",
+            message: String(d.message ?? ""),
+            requesterName: String(d.requesterName ?? d.userEmail ?? ""),
+            requesterPhone: String(d.requesterPhone ?? ""),
+            source: String(d.source ?? "dashboard"),
           };
         })
       );
@@ -96,9 +106,10 @@ export default function DashboardSupportPage() {
           )
         );
         if (cancelled) return;
-        setTickets(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TicketRow, "id">) }))
-        );
+        setTickets(snap.docs.map((item) => {
+          const data = item.data();
+          return { id:item.id, title:String(data.title??""), category:String(data.category??"other"), status:String(data.status??"open"), createdAt:data.createdAt?.toDate?.()?data.createdAt.toDate().toLocaleDateString("tr-TR"):"—", message:String(data.message??""), requesterName:String(data.requesterName??data.userEmail??""), requesterPhone:String(data.requesterPhone??""), source:String(data.source??"dashboard") };
+        }));
       } catch {
         if (!cancelled) setTickets([]);
       } finally {
@@ -238,6 +249,8 @@ export default function DashboardSupportPage() {
                       }{" "}
                       · {ticket.createdAt}
                     </p>
+                    {ticket.requesterName && <p className="mt-1 text-xs font-semibold text-[var(--text-2)]">{ticket.requesterName}{ticket.requesterPhone ? ` · ${ticket.requesterPhone}` : ""}</p>}
+                    {ticket.message && <p className="mt-2 max-w-2xl text-xs leading-relaxed text-[var(--text-3)]">{ticket.message}</p>}
                   </div>
                   <span
                     className={`rounded-lg px-2.5 py-1 text-xs font-medium ${info.color}`}

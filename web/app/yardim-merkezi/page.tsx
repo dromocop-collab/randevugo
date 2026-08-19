@@ -1,3 +1,7 @@
-import type { Metadata } from "next"; import { ContentPage } from "@/components/marketing/content-page";
-export const metadata:Metadata={title:"Yardım Merkezi",description:"SeninRandevun mağaza kurulumu, hizmet, çalışan, çalışma saati ve randevu yönetimi rehberi.",alternates:{canonical:"/yardim-merkezi"}};
-export default function Page(){return <ContentPage eyebrow="YARDIM MERKEZİ" title="İlk randevunuza birlikte hazırlanalım." intro="Mağazanızı yayınlamak ve günlük operasyonunuzu yönetmek için ihtiyaç duyacağınız temel adımlar." sections={[{title:"Mağazanızı kurun",body:"Kayıttan sonra işletme adınızı, kategorinizi, iletişim bilgilerinizi, konumunuzu, logo ve kapak görselinizi ekleyin."},{title:"Hizmet ve çalışan ekleyin",body:"Hizmet süresi ile fiyatını tanımlayın; ardından hangi çalışanın hangi hizmeti sunduğunu belirleyin."},{title:"Çalışma saatlerini ayarlayın",body:"Haftalık çalışma planınızı, molaları ve kapalı günleri girin. Sistem uygun saatleri otomatik oluşturur."},{title:"Linkinizi paylaşın",body:"Profiliniz hazır olduğunda size özel mağaza bağlantısını sosyal medya, WhatsApp ve web sitenizde paylaşın."},{title:"Randevuları yönetin",body:"Yeni talepleri onaylayın; bekleyen, tamamlanan, iptal ve gelmedi durumlarını panelden güncelleyin."}]}/>} 
+import type { Metadata } from "next";
+import { HelpCenter } from "@/components/marketing/help-center";
+import { MarketingPage } from "@/components/marketing/marketing-shell";
+
+export const metadata: Metadata = { title: "Müşteri Yardım Merkezi", description: "Mağaza keşfi, online randevu, değişiklik, iptal, hesap ve güvenlik sorularınız için SeninRandevun müşteri yardım merkezi.", alternates: { canonical: "/yardim-merkezi" } };
+
+export default function Page() { return <MarketingPage><HelpCenter mode="customer" /></MarketingPage>; }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { useBusinessContext } from "@/features/businesses/business-context";
+import { Compass, ExternalLink, LogOut, MoonStar, Store, SunMedium, UserRound } from "lucide-react";
 
 export function DashboardTopBar() {
   const { theme, toggleTheme } = useTheme();
@@ -16,27 +17,28 @@ export function DashboardTopBar() {
   const router = useRouter();
 
   return (
-    <header className="dashboard-topbar dashboard-hero rounded-[1.6rem] border border-[var(--border)] p-4 shadow-lg shadow-[var(--shadow-hard)] backdrop-blur-xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--accent)]">Çalışma alanınız</p>
-          <h1 className="mt-1 text-xl font-extrabold tracking-tight text-[var(--text-1)]">Bugünün akışını birlikte yönetin.</h1>
+    <header className="dashboard-topbar dashboard-command-bar">
+      <div className="dashboard-command-inner">
+        <div className="dashboard-command-copy">
+          <p><span /> İŞLETME MERKEZİ</p>
+          <h1>Bugünün akışını birlikte yönetin.</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/kesfet" className="hidden rounded-xl px-3 py-2 text-xs font-bold text-[var(--text-2)] hover:bg-[var(--surface-2)] md:inline-flex">Keşfet</Link>
-          {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="hidden rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs font-bold text-[var(--text-1)] sm:inline-flex">Mağazamı gör ↗</Link>}
-          <span className="hidden max-w-44 truncate rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-xs text-[var(--text-3)] xl:inline">{user?.email ?? ""}</span>
-          <Button variant="secondary" onClick={toggleTheme}>
-            {theme === "light" ? "◐" : "◑"}
+        <div className="dashboard-command-actions">
+          <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
+          {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="command-link command-link-store"><Store size={17} /><span>Mağazamı gör</span><ExternalLink size={14} /></Link>}
+          <span className="command-account"><i><UserRound size={15} /></i><span><small>Aktif hesap</small><b>{user?.email ?? ""}</b></span></span>
+          <Button variant="secondary" className="command-icon" onClick={toggleTheme} aria-label={theme === "light" ? "Karanlık temayı aç" : "Açık temayı aç"}>
+            {theme === "light" ? <MoonStar size={17} /> : <SunMedium size={17} />}
           </Button>
           <Button
             variant="ghost"
+            className="command-logout"
             onClick={async () => {
               await logout();
-              router.push("/giris");
+              router.push("/isletmeler/giris");
             }}
           >
-            Çıkış
+            <LogOut size={16} /><span>Çıkış</span>
           </Button>
         </div>
       </div>

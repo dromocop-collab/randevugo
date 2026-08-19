@@ -1,6 +1,7 @@
 "use client";
 
 import type { Staff } from "@/types/staff";
+import { BadgeCheck, UserRound } from "lucide-react";
 
 interface Props {
   staff: Staff[];
@@ -10,15 +11,15 @@ export function StorefrontStaff({ staff }: Props) {
   if (staff.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-lg shadow-[var(--shadow-soft)] backdrop-blur-xl">
-      <h2 className="text-lg font-semibold text-[var(--text-1)]">Ekibimiz</h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    <section className="storefront-staff-section">
+      <header><span><UserRound size={18}/></span><div><small>UZMAN KADRO</small><h2>Sizinle ilgilenecek ekip.</h2></div><b>{staff.length} uzman</b></header>
+      <div className="storefront-staff-grid">
         {staff.map((member) => (
           <div
             key={member.id}
-            className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 transition hover:bg-[var(--field-bg-hover)]"
+            className="storefront-staff-card"
           >
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl">
+            <div className="storefront-staff-photo">
               {member.photoUrl ? (
                 <img
                   src={member.photoUrl}
@@ -26,7 +27,7 @@ export function StorefrontStaff({ staff }: Props) {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)]">
+                <div>
                   <span className="text-sm font-bold text-white">
                     {member.fullName
                       .split(" ")
@@ -37,12 +38,11 @@ export function StorefrontStaff({ staff }: Props) {
                 </div>
               )}
             </div>
-            <div>
-              <p className="text-sm font-medium text-[var(--text-1)]">
-                {member.fullName}
-              </p>
+            <div className="storefront-staff-info">
+              <small><BadgeCheck size={12}/> ONAYLI UZMAN</small>
+              <p>{member.fullName}</p>
               {member.position && (
-                <p className="text-xs text-[var(--text-3)]">{member.position}</p>
+                <span>{member.position}</span>
               )}
             </div>
           </div>

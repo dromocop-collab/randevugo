@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Review } from "@/types/review";
 import { ReviewForm } from "./review-form";
+import { MessageCircleMore, PenLine, Scissors } from "lucide-react";
 
 interface Props {
   reviews: Review[];
@@ -97,7 +98,7 @@ export function StorefrontReviews({
             onClick={() => setShowForm(!showForm)}
             className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
           >
-            ✏️ {showForm ? "Formu Kapat" : "Yorum Yaz"}
+            <PenLine size={15}/> {showForm ? "Formu Kapat" : "Yorum Yaz"}
           </button>
         </div>
 
@@ -157,7 +158,7 @@ export function StorefrontReviews({
       {/* ━━━ REVIEW LIST ━━━ */}
       {reviews.length === 0 ? (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-10 text-center">
-          <span className="text-4xl">💬</span>
+          <MessageCircleMore className="mx-auto text-[var(--accent)]" size={37}/>
           <p className="mt-3 text-sm font-medium text-[var(--text-1)]">
             Henüz değerlendirme yapılmamış
           </p>
@@ -194,7 +195,7 @@ export function StorefrontReviews({
                       </p>
                       {review.serviceName && (
                         <span className="inline-flex items-center gap-1 rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--text-3)]">
-                          ✂️ {review.serviceName}
+                          <Scissors size={11}/> {review.serviceName}
                         </span>
                       )}
                     </div>
@@ -248,7 +249,7 @@ export function StorefrontReviews({
               {review.ownerReply && (
                 <div className="mt-3 rounded-xl border border-[var(--accent)]/15 bg-[var(--accent)]/5 p-3.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs">💬</span>
+                    <MessageCircleMore size={14}/>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent)]">
                       İşletme Yanıtı
                     </p>

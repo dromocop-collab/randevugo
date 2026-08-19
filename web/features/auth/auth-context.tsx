@@ -20,9 +20,9 @@ interface AuthContextValue {
   status: AuthStatus;
 }
 
-const PUBLIC_PATHS = ["/", "/giris", "/kayit", "/sifremi-unuttum", "/kesfet", "/fiyatlandirma"];
+const PUBLIC_PATHS = ["/", "/giris", "/kayit", "/sifremi-unuttum", "/kesfet", "/fiyatlandirma", "/isletmeler", "/ozellikler", "/fiyatlar", "/yardim-merkezi"];
 
-const PUBLIC_PATH_PREFIXES = ["/randevu/", "/isletme/"];
+const PUBLIC_PATH_PREFIXES = ["/randevu/", "/isletme/", "/musteri/", "/isletmeler/"];
 
 const PROTECTED_PATH_PREFIXES = [
   "/admin",
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Only redirect on protected paths
     if (PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p))) {
-      router.replace("/giris");
+      router.replace(pathname.startsWith("/hesabim") ? "/musteri/giris" : "/isletmeler/giris");
     }
   }, [pathname, router, status]);
 

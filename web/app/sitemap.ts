@@ -23,6 +23,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${baseUrl}/isletmeler`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
       url: `${baseUrl}/online-randevu`,
       lastModified: new Date(),
       changeFrequency: "weekly",
@@ -33,6 +39,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       ["hakkimizda", 0.6],
       ["iletisim", 0.6],
       ["yardim-merkezi", 0.7],
+      ["isletmeler/yardim", 0.75],
       ["guvenlik", 0.6],
       ["kvkk", 0.4],
       ["gizlilik", 0.4],
@@ -75,17 +82,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly" as const,
       priority: 0.75,
     })),
-    {
-      url: `${baseUrl}/giris`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/kayit`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
   ];
 }

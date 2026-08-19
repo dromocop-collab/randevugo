@@ -6,7 +6,7 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { randomUUID, randomInt } from "crypto";
+import { createHash, randomUUID, randomInt } from "crypto";
 
 initializeApp();
 
@@ -18,6 +18,154 @@ function requireString(value: unknown, name: string): string {
   }
   return value.trim();
 }
+
+export const submitPublicSupportRequest = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const data = request.data ?? {};
+    const name = requireString(data.name, "İsim");
+    const phone = requireString(data.phone, "Telefon").replace(/\s+/g, " ");
+    const message = requireString(data.message, "Mesaj");
+    const audience = ["customer", "business", "storefront"].includes(String(data.audience))
+      ? String(data.audience)
+      : "customer";
+    const businessId = typeof data.businessId === "string" && data.businessId.trim()
+      ? data.businessId.trim()
+      : null;
+
+    if (typeof data.website === "string" && data.website.trim()) {
+      throw new HttpsError("invalid-argument", "Form doğrulanamadı.");
+    }
+    if (name.length < 2 || name.length > 80) {
+      throw new HttpsError("invalid-argument", "İsim 2–80 karakter olmalıdır.");
+    }
+    if (!/^\+?[0-9()\s-]{10,22}$/.test(phone)) {
+      throw new HttpsError("invalid-argument", "Geçerli bir telefon numarası girin.");
+    }
+    if (message.length < 10 || message.length > 2000) {
+      throw new HttpsError("invalid-argument", "Mesaj 10–2000 karakter olmalıdır.");
+    }
+    if (audience === "storefront" && !businessId) {
+      throw new HttpsError("invalid-argument", "İşletme bilgisi eksik.");
+    }
+
+    let businessName: string | null = null;
+    if (businessId) {
+      const businessSnap = await db.doc(`businesses/${businessId}`).get();
+      if (!businessSnap.exists || businessSnap.data()?.isPublished !== true) {
+        throw new HttpsError("not-found", "İşletme bulunamadı veya mesaj kabul etmiyor.");
+      }
+      businessName = String(businessSnap.data()?.name ?? "İşletme");
+    }
+
+    const ip = request.rawRequest.ip || "unknown";
+    const rateKey = createHash("sha256").update(`${ip}|${phone}`).digest("hex").slice(0, 32);
+    const rateRef = db.doc(`publicSupportRateLimits/${rateKey}`);
+    await db.runTransaction(async (tx) => {
+      const previous = await tx.get(rateRef);
+      const lastAt = previous.data()?.lastAt as Timestamp | undefined;
+      if (lastAt && Date.now() - lastAt.toMillis() < 60_000) {
+        throw new HttpsError("resource-exhausted", "Yeni mesaj göndermek için lütfen bir dakika bekleyin.");
+      }
+      tx.set(rateRef, { lastAt: Timestamp.now() }, { merge: true });
+    });
+
+    const ticketRef = db.collection("supportTickets").doc();
+    const target = businessId ? "business" : "platform";
+    const title = businessId
+      ? `${businessName} için müşteri mesajı`
+      : audience === "business" ? "İşletme destek mesajı" : "Müşteri destek mesajı";
+
+    const batch = db.batch();
+    batch.set(ticketRef, {
+      title,
+      category: businessId ? "customer_message" : "public_support",
+      source: audience,
+      target,
+      requesterName: name,
+      requesterPhone: phone,
+      message,
+      businessId,
+      businessName,
+      userId: request.auth?.uid ?? null,
+      status: "open",
+      priority: "medium",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (businessId) {
+      const notificationRef = db.collection(`businesses/${businessId}/notifications`).doc();
+      batch.set(notificationRef, {
+        type: "customer_message",
+        title: "Yeni müşteri mesajı",
+        body: `${name} mağaza profilinizden bir mesaj gönderdi.`,
+        ticketId: ticketRef.id,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    return { success: true, ticketId: ticketRef.id };
+  }
+);
+
+export const cancelCustomerAppointment = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Randevuyu iptal etmek için giriş yapmalısınız.");
+    }
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    const businessRef = db.doc(`businesses/${businessId}`);
+
+    await db.runTransaction(async (tx) => {
+      const [appointmentSnap, businessSnap] = await Promise.all([tx.get(appointmentRef), tx.get(businessRef)]);
+      if (!appointmentSnap.exists || !businessSnap.exists) {
+        throw new HttpsError("not-found", "Randevu bulunamadı.");
+      }
+      const appointment = appointmentSnap.data()!;
+      const business = businessSnap.data()!;
+      if (appointment.customerId !== request.auth!.uid) {
+        throw new HttpsError("permission-denied", "Bu randevu üzerinde işlem yetkiniz yok.");
+      }
+      if (!["pending", "confirmed"].includes(String(appointment.status))) {
+        throw new HttpsError("failed-precondition", "Bu randevu artık iptal edilemez.");
+      }
+      if (business.allowCancellation === false) {
+        throw new HttpsError("failed-precondition", "İşletme online iptal kabul etmiyor. Lütfen işletmeyle iletişime geçin.");
+      }
+      const startAt = appointment.startAt as Timestamp | undefined;
+      if (!startAt || startAt.toMillis() <= Date.now()) {
+        throw new HttpsError("failed-precondition", "Geçmiş randevu iptal edilemez.");
+      }
+      const deadlineMinutes = Number(business.cancellationDeadlineMinutes ?? 120);
+      if (startAt.toMillis() - Date.now() < deadlineMinutes * 60_000) {
+        throw new HttpsError("failed-precondition", `Randevuya ${deadlineMinutes} dakikadan az kaldığı için online iptal yapılamaz.`);
+      }
+      tx.update(appointmentRef, {
+        status: "cancelled",
+        cancelledBy: "customer",
+        cancelledAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const notificationRef = db.collection(`businesses/${businessId}/notifications`).doc();
+      tx.set(notificationRef, {
+        type: "appointment_cancelled",
+        title: "Randevu müşteri tarafından iptal edildi",
+        body: `${String(appointment.customerName ?? "Müşteri")} randevusunu iptal etti.`,
+        appointmentId,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    return { success: true };
+  }
+);
 
 export const createAppointment = onCall(
   { region: "europe-west1" },

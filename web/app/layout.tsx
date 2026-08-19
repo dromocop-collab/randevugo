@@ -22,22 +22,22 @@ const SITE_NAME = "SeninRandevun";
 const GOOGLE_ANALYTICS_ID = "G-REDQN2FVRD";
 const GOOGLE_TAG_MANAGER_ID = "GTM-KH38NV3L";
 const SITE_DESCRIPTION =
-  "Türkiye'nin #1 akıllı online randevu platformu. Kuaför, güzellik merkezi, berber, sağlık, spor ve daha fazlası için hızlı randevu alın. İşletmeniz için profesyonel randevu yönetimi, çalışan takibi, müşteri CRM ve gelişmiş analitik.";
+  "Yakınınızdaki kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; müsait saatleri karşılaştırıp saniyeler içinde online randevu alın.";
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eef3f9" },
-    { media: "(prefers-color-scheme: dark)", color: "#09101a" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f4ec" },
+    { media: "(prefers-color-scheme: dark)", color: "#081b13" },
   ],
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "SeninRandevun — Online Randevu Sistemi | Türkiye'nin #1 Randevu Platformu",
+    default: "SeninRandevun — Yakınındaki İşletmeyi Keşfet, Online Randevu Al",
     template: "%s — SeninRandevun | Online Randevu Sistemi",
   },
   description: SITE_DESCRIPTION,
@@ -88,9 +88,9 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "SeninRandevun — Türkiye'nin #1 Akıllı Online Randevu Platformu",
+    title: "SeninRandevun — Yakınındaki İşletmeyi Keşfet",
     description:
-      "Binlerce işletme arasından aradığınızı bulun, müsait saatleri görün ve anında online randevu oluşturun. İşletmeniz için profesyonel randevu, çalışan ve müşteri yönetimi.",
+      "Binlerce işletme arasından aradığınızı bulun, müsait saatleri görün ve anında online randevu oluşturun.",
     type: "website",
     locale: "tr_TR",
     url: SITE_URL,
@@ -100,16 +100,16 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1729,
         height: 910,
-        alt: "SeninRandevun — İşletmenizin zamanını büyütün",
+        alt: "SeninRandevun ile yakındaki işletmeleri keşfedin",
         type: "image/png",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeninRandevun — Online Randevu Sistemi",
+    title: "SeninRandevun — İşletme Keşfet ve Randevu Al",
     description:
-      "Online randevu, çalışan yönetimi, CRM ve gelişmiş analizleri tek panelde sunan premium SaaS. 14 gün ücretsiz deneyin!",
+      "Yakınınızdaki en iyi işletmeleri keşfedin, uygun saati seçin ve online randevunuzu anında oluşturun.",
     images: ["/og.png"],
     creator: "@seninrandevun",
     site: "@seninrandevun",
@@ -140,7 +140,7 @@ export const metadata: Metadata = {
     // yandex: "your-yandex-verification-code",
   },
   other: {
-    "msapplication-TileColor": "#0284c7",
+    "msapplication-TileColor": "#0b6b45",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "default",
     "apple-mobile-web-app-title": SITE_NAME,
@@ -158,14 +158,7 @@ const jsonLd = {
       name: SITE_NAME,
       description: SITE_DESCRIPTION,
       inLanguage: "tr-TR",
-      potentialAction: {
-        "@type": "SearchAction",
-        target: {
-          "@type": "EntryPoint",
-          urlTemplate: `${SITE_URL}/kesfet?q={search_term_string}`,
-        },
-        "query-input": "required name=search_term_string",
-      },
+      publisher: { "@id": `${SITE_URL}/#organization` },
     },
     {
       "@type": "Organization",
@@ -200,18 +193,13 @@ const jsonLd = {
       name: SITE_NAME,
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
+      url: `${SITE_URL}/isletmeler`,
+      inLanguage: "tr-TR",
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "TRY",
         description: "14 gün ücretsiz deneme",
-      },
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: "4.9",
-        ratingCount: "1200",
-        bestRating: "5",
-        worstRating: "1",
       },
       featureList: [
         "Online Randevu Yönetimi",
@@ -221,6 +209,29 @@ const jsonLd = {
         "SMS ve E-posta Hatırlatmaları",
         "7/24 Online Randevu Sayfası",
       ],
+    },
+    {
+      "@type": "CollectionPage",
+      "@id": `${SITE_URL}/#homepage`,
+      url: SITE_URL,
+      name: "Yakınındaki İşletmeleri Keşfet ve Online Randevu Al",
+      description: SITE_DESCRIPTION,
+      inLanguage: "tr-TR",
+      isPartOf: { "@id": `${SITE_URL}/#website` },
+      about: ["Online randevu", "Yerel işletme keşfi", "Hizmet rezervasyonu"],
+    },
+    {
+      "@type": "Service",
+      "@id": `${SITE_URL}/#booking-service`,
+      name: "SeninRandevun Online Randevu ve İşletme Keşif Hizmeti",
+      serviceType: "Online appointment booking marketplace",
+      provider: { "@id": `${SITE_URL}/#organization` },
+      areaServed: { "@type": "Country", name: "Türkiye" },
+      availableChannel: {
+        "@type": "ServiceChannel",
+        serviceUrl: `${SITE_URL}/kesfet`,
+        availableLanguage: "Turkish",
+      },
     },
     {
       "@type": "BreadcrumbList",
@@ -240,26 +251,26 @@ const jsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "SeninRandevun nedir?",
+          name: "Randevu almak ücretli mi?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "SeninRandevun, işletmelerin online randevu almasını, çalışan yönetimini, müşteri takibini ve gelişmiş analizleri tek bir panelden yapmasını sağlayan Türkiye'nin akıllı randevu platformudur.",
+            text: "Hayır. İşletme keşfetmek ve online randevu oluşturmak müşteriler için tamamen ücretsizdir.",
           },
         },
         {
           "@type": "Question",
-          name: "SeninRandevun ücretsiz mi?",
+          name: "Üye olmadan randevu alabilir miyim?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Evet, 14 gün boyunca tüm özellikleri ücretsiz deneyebilirsiniz. Kredi kartı gerekmez.",
+            text: "İşletmenin sunduğu akışa göre temel iletişim bilgileriyle hızlıca randevu oluşturabilirsiniz.",
           },
         },
         {
           "@type": "Question",
-          name: "Hangi sektörler için uygundur?",
+          name: "Randevumu değiştirebilir miyim?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Kuaför, berber, güzellik merkezi, spa, spor salonu, sağlık hizmetleri, veteriner, danışmanlık, eğitim ve daha birçok randevu bazlı sektör için uygundur.",
+            text: "İşletmenin iptal ve değişiklik kuralları doğrultusunda randevunuzu kolayca yönetebilirsiniz.",
           },
         },
       ],
@@ -271,23 +282,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr" dir="ltr" className={`${jakarta.variable} ${spaceGrotesk.variable} h-full antialiased`}>
       <head>
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
-          strategy="beforeInteractive"
-        />
-        <Script id="google-analytics" strategy="beforeInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '${GOOGLE_ANALYTICS_ID}');`}
-        </Script>
-        <Script id="google-tag-manager" strategy="beforeInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-            })(window,document,'script','dataLayer','${GOOGLE_TAG_MANAGER_ID}');`}
-        </Script>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -297,6 +291,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>
       <body className="min-h-full">
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GOOGLE_ANALYTICS_ID}', { anonymize_ip: true });`}
+        </Script>
+        <Script id="google-tag-manager" strategy="afterInteractive">
+          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','${GOOGLE_TAG_MANAGER_ID}');`}
+        </Script>
         <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${GOOGLE_TAG_MANAGER_ID}`}

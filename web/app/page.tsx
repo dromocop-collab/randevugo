@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2, Check, Clock3, Heart, MapPin, Search, ShieldCheck, Sparkles, Star, WandSparkles } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { SearchBar } from "@/components/discovery/search-bar";
 import { BusinessCard } from "@/components/discovery/business-card";
@@ -9,34 +11,31 @@ import { listDynamicCategories, type DynamicCategory } from "@/features/categori
 import { getBusinessCities, getPopularBusinesses, searchBusinesses } from "@/features/discovery/search-repository";
 import type { Business } from "@/types/business";
 
-const DEFAULT_CATEGORIES = [
-  { slug: "kuafor", label: "Kuaför", emoji: "✦" }, { slug: "berber", label: "Berber", emoji: "✂" },
-  { slug: "guzellik", label: "Güzellik", emoji: "◇" }, { slug: "spa", label: "Spa", emoji: "◌" },
-  { slug: "nail", label: "Nail Studio", emoji: "◆" }, { slug: "spor", label: "Spor", emoji: "↗" },
-  { slug: "saglik", label: "Sağlık", emoji: "+" }, { slug: "danismanlik", label: "Danışmanlık", emoji: "◎" },
-  { slug: "veteriner", label: "Veteriner", emoji: "♥" },
+type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
+
+const DEFAULT_CATEGORIES: HomeCategory[] = [
+  { slug: "kuafor", label: "Kuaför", emoji: "✦", tone: "mint", image: "/images/categories/kuafor.png", description: "Kesim, renklendirme ve bakım" },
+  { slug: "berber", label: "Berber", emoji: "✂", tone: "blue", image: "/images/categories/berber.png", description: "Saç, sakal ve modern bakım" },
+  { slug: "guzellik", label: "Güzellik", emoji: "◇", tone: "rose", image: "/images/categories/guzellik.png", description: "Cilt bakımı ve güzellik ritüelleri" },
+  { slug: "spa", label: "Spa & Masaj", emoji: "◌", tone: "sand", image: "/images/categories/spa.png", description: "Rahatlama ve yenilenme" },
+  { slug: "nail", label: "Nail Studio", emoji: "◆", tone: "violet", image: "/images/categories/nail.png", description: "Manikür, pedikür ve nail art" },
+  { slug: "spor", label: "Spor & PT", emoji: "↗", tone: "lime", image: "/images/categories/spor.png", description: "Sana özel antrenman planları" },
+  { slug: "saglik", label: "Sağlık", emoji: "+", tone: "cyan", image: "/images/categories/saglik.png", description: "Uzman sağlık hizmetleri" },
+  { slug: "danismanlik", label: "Danışmanlık", emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.png", description: "Doğru uzmanla yeni bir adım" },
+  { slug: "veteriner", label: "Veteriner", emoji: "♥", tone: "coral", image: "/images/categories/veteriner.png", description: "Dostların için güvenilir bakım" },
 ];
 
-const OWNER_FEATURES = [
-  { number: "01", title: "Akıllı randevu motoru", text: "Çalışan, hizmet süresi, mola ve izinleri aynı anda hesaplar. Çakışmaya izin vermez." },
-  { number: "02", title: "Müşteri hafızası", text: "Ziyaret geçmişi, notlar, tercihler ve harcama özetiyle her müşteriyi tanırsınız." },
-  { number: "03", title: "Canlı iş zekâsı", text: "Doluluk, gelir, iptal ve ekip performansını tek bakışta görürsünüz." },
-  { number: "04", title: "Kendi dijital mağazanız", text: "Markanıza özel profil, hizmet vitrini, yorumlar ve 7/24 randevu sayfası." },
-];
-
-const FAQ = [
-  ["14 günlük denemede hangi özellikler açık?", "Tamamı. Kredi kartı istemeden mağazanızı, hizmetlerinizi, çalışanlarınızı ve çalışma saatlerinizi ekleyebilir; online randevu almaya başlayabilirsiniz."],
-  ["Müşteriler uygulama indirmek zorunda mı?", "Hayır. Size özel bağlantıdan mobil veya masaüstü tarayıcıyla saniyeler içinde randevu alabilirler."],
-  ["Her çalışan için ayrı müsaitlik tanımlanabilir mi?", "Evet. Her çalışan için hizmet, vardiya, mola ve izin tanımlayabilir; uygun saatleri otomatik oluşturabilirsiniz."],
-  ["Verilerim ve müşteri bilgilerim güvende mi?", "Rol bazlı erişim, güvenli bulut altyapısı ve KVKK odaklı veri süreçleriyle korunur."],
+const CUSTOMER_FAQ = [
+  ["Randevu almak ücretli mi?", "Hayır. İşletme keşfetmek ve online randevu oluşturmak müşteriler için tamamen ücretsizdir."],
+  ["Üye olmadan randevu alabilir miyim?", "İşletmenin sunduğu akışa göre temel iletişim bilgilerinle hızlıca randevu oluşturabilirsin."],
+  ["Randevumu değiştirebilir miyim?", "İşletmenin iptal ve değişiklik kuralları doğrultusunda randevunu kolayca yönetebilirsin."],
 ];
 
 export default function HomePage() {
-  const [mode, setMode] = useState<"owner" | "customer">("owner");
   const [popular, setPopular] = useState<Business[]>([]);
   const [results, setResults] = useState<Business[]>([]);
   const [cities, setCities] = useState<string[]>([]);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<HomeCategory[]>(DEFAULT_CATEGORIES);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState("");
@@ -44,17 +43,19 @@ export default function HomePage() {
   useEffect(() => {
     Promise.all([getPopularBusinesses(8), getBusinessCities(), listDynamicCategories()])
       .then(([businesses, cityList, dynamic]) => {
-        setPopular(businesses); setCities(cityList);
+        setPopular(businesses);
+        setCities(cityList);
         const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
-        const additions = dynamic.filter((item: DynamicCategory) => !known.has(item.slug)).map((item: DynamicCategory) => ({ slug: item.slug, label: item.label, emoji: item.emoji || "•" }));
+        const additions = dynamic.filter((item: DynamicCategory) => !known.has(item.slug)).map((item: DynamicCategory) => ({ slug: item.slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }));
         setCategories([...DEFAULT_CATEGORIES, ...additions]);
       }).catch(() => undefined);
   }, []);
 
   async function runSearch(params: { searchText: string; category: string; city: string }) {
-    setLoading(true); setSearched(true);
+    setLoading(true); setSearched(true); setActiveCategory(params.category);
     try { setResults(await searchBusinesses({ searchText: params.searchText, category: params.category || undefined, city: params.city || undefined })); }
     catch { setResults([]); } finally { setLoading(false); }
+    requestAnimationFrame(() => document.querySelector("#magazalar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   async function selectCategory(category: string) {
@@ -63,54 +64,57 @@ export default function HomePage() {
     if (!next) { setSearched(false); setResults([]); return; }
     setLoading(true); setSearched(true);
     try { setResults(await searchBusinesses({ category: next })); } catch { setResults([]); } finally { setLoading(false); }
+    requestAnimationFrame(() => document.querySelector("#magazalar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   const visibleBusinesses = useMemo(() => searched ? results : popular, [searched, results, popular]);
 
-  return (
-    <div className="marketing-page home-v2">
-      <MarketingHeader />
-      <main>
-        <section className="home-hero">
-          <div className="hero-noise" /><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" />
-          <div className="hero-layout">
-            <div className="hero-copy">
-              <div className="eyebrow"><span /> 14 gün ücretsiz · Kart bilgisi gerekmez</div>
-              <h1>İşletmenizin<br /><em>zamanını büyütün.</em></h1>
-              <p>Randevular, müşteriler, ekip ve mağazanız tek bir akıllı sistemde. Siz işinize odaklanın, kalanını SeninRandevun yönetsin.</p>
-              <div className="hero-actions"><Link href="/kayit" className="hero-primary">Ücretsiz mağazanı aç <span>↗</span></Link><a href="#canli-demo" className="hero-secondary"><i>▶</i> Sistemi keşfet</a></div>
-              <div className="hero-proof"><div className="proof-avatars"><b>A</b><b>E</b><b>M</b><b>+</b></div><p><strong>1.000+ işletme</strong><br />zamanını bizimle yönetiyor</p></div>
-            </div>
-            <DashboardPreview />
+  return <div className="marketing-page customer-home">
+    <MarketingHeader />
+    <main>
+      <section className="customer-home-hero">
+        <div className="customer-hero-grid" /><div className="customer-hero-orb orb-a" /><div className="customer-hero-orb orb-b" />
+        <div className="customer-hero-inner">
+          <div className="customer-hero-copy">
+            <div className="customer-eyebrow"><Sparkles size={14} /> Şehrindeki iyi hizmetleri keşfet</div>
+            <h1>Aradığın hizmet,<br /><em>sana uygun zamanda.</em></h1>
+            <p>Yakınındaki güvenilir işletmeleri keşfet, gerçek yorumları incele ve müsait saatten saniyeler içinde randevunu al.</p>
+            <div className="customer-hero-trust"><span><BadgeCheck size={15} /> Doğrulanmış işletmeler</span><span><ShieldCheck size={15} /> Güvenli randevu</span><span><Clock3 size={15} /> 7/24 online</span></div>
           </div>
-          <div className="trust-strip"><span>AKILLI TAKVİM</span><i /><span>MÜŞTERİ CRM</span><i /><span>7/24 RANDEVU</span><i /><span>GELİR ANALİZİ</span><i /><span>EKİP YÖNETİMİ</span></div>
-        </section>
+          <div className="customer-hero-art" aria-hidden="true">
+            <div className="customer-art-image" />
+            <div className="customer-art-card art-card-a"><span><Check size={15} /></span><div><b>Randevun hazır</b><small>Bugün · 15:30</small></div></div>
+            <div className="customer-art-card art-card-b"><span><Star size={15} /></span><div><b>4.9 müşteri puanı</b><small>Gerçek değerlendirmeler</small></div></div>
+            <div className="customer-art-pin"><MapPin size={18} /></div>
+          </div>
+        </div>
+        <div className="customer-search-wrap">
+          <div className="customer-search-title"><span><Search size={16} /></span><div><strong>Randevuna buradan başla</strong><small>Hizmet, işletme veya şehir ara</small></div></div>
+          <SearchBar onSearch={runSearch} cities={cities} dynamicCategories={categories.slice(DEFAULT_CATEGORIES.length).map(item => ({ value: item.slug, label: item.label }))} className="customer-home-search" />
+          <div className="customer-search-note"><span><WandSparkles size={13} /> Popüler aramalar:</span><button onClick={() => selectCategory("kuafor")}>Kuaför</button><button onClick={() => selectCategory("guzellik")}>Cilt bakımı</button><button onClick={() => selectCategory("nail")}>Nail studio</button></div>
+        </div>
+      </section>
 
-        <section className="audience-switch-section" id="canli-demo">
-          <div className="section-kicker">İKİ TARAF, TEK KUSURSUZ DENEYİM</div>
-          <div className="audience-toggle" role="tablist"><button className={mode === "owner" ? "active" : ""} onClick={() => setMode("owner")}>İşletmem için</button><button className={mode === "customer" ? "active" : ""} onClick={() => setMode("customer")}>Randevu almak için</button></div>
-          {mode === "owner" ? <div className="owner-experience"><SectionHeading title={<>Bir panel değil,<br /><em>büyüme sistemi.</em></>} text="Günün karmaşasını sadeleştiren, müşterinizi tanıyan ve size neyin işe yaradığını söyleyen dijital çalışma arkadaşınız." /><div className="feature-ledger">{OWNER_FEATURES.map((feature) => <article key={feature.number}><span>{feature.number}</span><div><h3>{feature.title}</h3><p>{feature.text}</p></div><b>↗</b></article>)}</div></div> : <div className="customer-experience"><SectionHeading title={<>Aradığın hizmete,<br /><em>tam zamanında.</em></>} text="Telefon trafiği yok, beklemek yok. Yakınındaki işletmelerin gerçek müsaitliğini gör ve saniyeler içinde yerini ayır." /><div className="customer-steps">{[["01","İşletmeni bul","Konum, kategori veya hizmetle keşfet."],["02","Canlı saatleri gör","Gerçek müsaitlikten sana uygun olanı seç."],["03","Randevunu yönet","Onayını al, gerektiğinde değiştir."]].map(([no,title,text]) => <article key={no}><span>{no}</span><h3>{title}</h3><p>{text}</p></article>)}</div></div>}
-        </section>
+      <section className="customer-category-section" id="kategoriler">
+        <div className="customer-section-heading"><div><span>KATEGORİLER</span><h2>Bugün neye ihtiyacın var?</h2></div><Link href="/kesfet">Tümünü keşfet <ArrowRight size={15} /></Link></div>
+        <div className="customer-category-grid">{categories.slice(0, 9).map((category, index) => <button key={category.slug} className={`customer-category-card tone-${category.tone} ${activeCategory === category.slug ? "active" : ""}`} onClick={() => selectCategory(category.slug)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}>
+          <span className="customer-category-media">{category.image ? <Image src={category.image} alt={`${category.label} hizmetleri`} fill sizes="(max-width: 760px) 100vw, (max-width: 1050px) 50vw, 33vw" /> : <b>{category.emoji}</b>}<i>{String(index + 1).padStart(2, "0")}</i></span>
+          <span className="customer-category-body"><small><b>{category.emoji}</b> HEMEN KEŞFET</small><strong>{category.label}</strong><em>{category.description || "Yakınındaki uzmanları keşfet"}</em></span>
+          <span className="customer-category-action" aria-hidden="true"><span>İncele</span><ArrowUpRight size={18} /></span>
+        </button>)}</div>
+      </section>
 
-        <section className="discovery-section">
-          <div className="discovery-head"><div><div className="section-kicker">HEMEN RANDEVU AL</div><h2>Şehrindeki iyi işleri keşfet.</h2></div><Link href="/kesfet">Tüm işletmeler <span>→</span></Link></div>
-          <SearchBar onSearch={runSearch} cities={cities} dynamicCategories={categories.slice(DEFAULT_CATEGORIES.length).map(item => ({ value: item.slug, label: item.label }))} className="home-search" />
-          <div className="category-rail">{categories.map(category => <button key={category.slug} className={activeCategory === category.slug ? "active" : ""} onClick={() => selectCategory(category.slug)}><span>{category.emoji}</span>{category.label}</button>)}</div>
-          {loading ? <div className="business-skeletons">{[1,2,3,4].map(item => <div key={item} />)}</div> : visibleBusinesses.length > 0 ? <div className="business-grid">{visibleBusinesses.slice(0,8).map(business => <BusinessCard key={business.id} business={business} />)}</div> : searched ? <div className="empty-results"><span>⌕</span><h3>Henüz eşleşme bulamadık.</h3><p>Farklı bir kategori, şehir veya hizmet deneyin.</p><button onClick={() => { setSearched(false); setActiveCategory(""); }}>Aramayı temizle</button></div> : <div className="discovery-placeholder"><div><strong>81</strong><span>şehirde keşfet</span></div><p>Yeni işletmeler eklendikçe burada sana en yakın ve en çok sevilen yerler görünecek.</p><Link href="/kesfet">Keşfetmeye başla →</Link></div>}
-        </section>
+      <section className="customer-business-section" id="magazalar">
+        <div className="customer-section-heading"><div><span>{searched ? "ARAMA SONUÇLARI" : "ÖNE ÇIKAN MAĞAZALAR"}</span><h2>{searched ? `${visibleBusinesses.length} eşleşme bulundu` : "Sevilen yerleri keşfet."}</h2></div>{searched ? <button className="clear-home-search" onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Aramayı temizle</button> : <Link href="/kesfet">Tüm mağazalar <ArrowRight size={15} /></Link>}</div>
+        {loading ? <div className="business-skeletons">{[1,2,3,4].map(item => <div key={item} />)}</div> : visibleBusinesses.length > 0 ? <div className="business-grid">{visibleBusinesses.slice(0,8).map(business => <BusinessCard key={business.id} business={business} />)}</div> : <div className="customer-empty"><Search size={28} /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button onClick={() => { setSearched(false); setActiveCategory(""); }}>Popüler mağazalara dön</button></div>}
+      </section>
 
-        <section className="metrics-section"><div><strong>50K+</strong><span>Yönetilen randevu</span></div><div><strong>%37</strong><span>Daha az telefon trafiği</span></div><div><strong>4.9/5</strong><span>İşletme memnuniyeti</span></div><div><strong>7/24</strong><span>Online rezervasyon</span></div></section>
-        <section className="trial-section"><div className="trial-orbit orbit-one" /><div className="trial-orbit orbit-two" /><div className="trial-content"><div className="section-kicker light">BUGÜN BAŞLA</div><h2>14 gün sonra işlerin<br />neden daha <em>hafif</em>?</h2><p>Mağazanı dakikalar içinde kur. Tüm özellikleri ücretsiz dene. Kredi kartı yok, sürpriz ücret yok.</p><div><Link href="/kayit">Ücretsiz denemeyi başlat <span>↗</span></Link><small>Kurulum desteği dahil · İstediğin zaman ayrıl</small></div></div><div className="trial-checklist">{["Mağazanı ve hizmetlerini yayınla","Çalışan ve müsaitliklerini tanımla","Müşterilerine özel linkini paylaş","İlk online randevunu al"].map((item,index) => <div key={item}><span>0{index+1}</span><p>{item}</p><b>✓</b></div>)}</div></section>
-        <section className="faq-section"><div><div className="section-kicker">AKLINA TAKILANLAR</div><h2>Başlamadan önce.</h2><p>Başka sorun varsa ekibimiz gerçek bir insanla yardımcı olur.</p><Link href="/iletisim">Bize ulaş →</Link></div><div className="faq-list">{FAQ.map(([q,a]) => <details key={q}><summary>{q}<span>+</span></summary><p>{a}</p></details>)}</div></section>
-      </main>
-      <MarketingFooter />
-    </div>
-  );
-}
+      <section className="customer-how-section"><div className="customer-how-copy"><span>3 KOLAY ADIM</span><h2>Planın hazırsa,<br />randevun da hazır.</h2><p>Telefon trafiği ve bekleme olmadan gerçek müsaitlik üzerinden randevunu oluştur.</p><Link href="/kesfet">Şimdi keşfet <ArrowRight size={15} /></Link></div><div className="customer-how-steps">{[["01","Ara ve keşfet","Hizmet, kategori veya konumla sana uygun işletmeyi bul."],["02","Saatini seç","Canlı müsaitlik arasından programına uyan saati seç."],["03","Randevunu al","Bilgilerini onayla; randevun anında oluşsun."]].map(([no,title,text]) => <article key={no}><span>{no}</span><div><h3>{title}</h3><p>{text}</p></div><CalendarCheck2 size={20} /></article>)}</div></section>
 
-function SectionHeading({ title, text }: { title: ReactNode; text: string }) { return <div className="section-heading"><h2>{title}</h2><p>{text}</p></div>; }
+      <section className="customer-confidence"><div><Heart size={22} /><strong>İyi hissettiren seçimler</strong><p>Gerçek yorumlar ve detaylı işletme profilleriyle kararını güvenle ver.</p></div><div><ShieldCheck size={22} /><strong>Kontrol sende</strong><p>Randevu bilgilerine kolayca ulaş, işletmenin kurallarıyla değiştir veya yönet.</p></div><div><Clock3 size={22} /><strong>Zamanın sana kalsın</strong><p>Aramak, beklemek ve tekrar tekrar saat sormak yok. Dilediğin an planla.</p></div></section>
 
-function DashboardPreview() {
-  const appointments = [["09:30","Selin A.","Saç kesimi","EA"],["11:00","Merve K.","Manikür","MK"],["13:30","Deniz T.","Cilt bakımı","DT"],["15:00","Aylin S.","Fön & şekil","AS"]];
-  return <div className="product-stage" aria-label="SeninRandevun panel önizlemesi"><div className="stage-glow" /><div className="product-window"><div className="window-bar"><div><i /><i /><i /></div><span>seninrandevun.com/dashboard</span><b>•••</b></div><div className="demo-body"><aside className="demo-sidebar"><div className="demo-logo">S</div>{["⌂","▦","◫","♧","◎"].map((icon,index) => <span key={icon} className={index === 0 ? "active" : ""}>{icon}</span>)}</aside><div className="demo-main"><div className="demo-head"><div><small>19 Ağustos, Çarşamba</small><h2>Günaydın, Elif 👋</h2></div><button>+ Yeni randevu</button></div><div className="demo-stats"><article><small>Bugünkü randevu</small><strong>12</strong><i>+18%</i></article><article><small>Doluluk oranı</small><strong>%84</strong><i>+9%</i></article><article><small>Bugünkü gelir</small><strong>₺8.450</strong><i>+24%</i></article></div><div className="demo-grid"><article className="agenda-card"><div className="card-title"><b>Bugünün akışı</b><span>Tümünü gör</span></div>{appointments.map((row,i) => <div className="agenda-row" key={row[0]}><time>{row[0]}</time><b style={{"--row": i} as CSSProperties}>{row[3]}</b><p><strong>{row[1]}</strong><small>{row[2]}</small></p><span>{i === 2 ? "Bekliyor" : "Onaylı"}</span></div>)}</article><article className="chart-card"><div className="card-title"><b>Haftalık doluluk</b><span>Bu hafta</span></div><div className="chart-bars">{[42,67,54,82,91,76,48].map((height,i) => <div key={i}><i style={{height: `${height}%`}} /><small>{["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"][i]}</small></div>)}</div></article></div></div></div></div><div className="floating-note note-one"><span>✓</span><p><b>Yeni randevu</b><small>Merve · 11:00</small></p></div><div className="floating-note note-two"><span>↗</span><p><b>%24 büyüme</b><small>Bu ay</small></p></div></div>;
+      <section className="customer-faq-section"><div><span>MERAK ETTİKLERİN</span><h2>Randevu almadan önce.</h2><p>SeninRandevun müşteriler için kolay, hızlı ve ücretsiz bir keşif deneyimidir.</p></div><div>{CUSTOMER_FAQ.map(([question,answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div></section>
+    </main>
+    <MarketingFooter />
+  </div>;
 }

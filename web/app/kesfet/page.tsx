@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import Link from "next/link";
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ChevronLeft, ChevronRight, MapPin, Search, ShieldCheck, Sparkles, Star, UsersRound } from "lucide-react";
 
 const DEFAULT_CATEGORIES = [
   { value: "", label: "Tümü", icon: "🏢" },
@@ -93,23 +94,26 @@ export default function DiscoverPage() {
       <main className="discover-main mx-auto w-full max-w-7xl px-4 py-12 lg:px-8">
         {/* Hero */}
         <div className="discover-hero mb-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-4 py-1.5 text-xs font-semibold text-[var(--accent)]">
-            🔍 Keşfet
+          <div className="discover-hero-copy">
+            <div className="discover-eyebrow"><Sparkles size={14} /> Sana özel keşif</div>
+            <h1>İyi hissettiren<br /><em>hizmeti keşfet.</em></h1>
+            <p>Yakınındaki güvenilir işletmeleri, gerçek müşteri puanlarını ve sana uygun hizmetleri tek yerde bul. Kararını ver, randevunu saniyeler içinde al.</p>
+            <div className="discover-trust-row"><span><ShieldCheck size={15} /> Güvenilir işletmeler</span><span><Star size={15} /> Gerçek yorumlar</span><span><CalendarCheck2 size={15} /> 7/24 randevu</span></div>
           </div>
-          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[var(--text-1)] md:text-4xl">
-            İşletme & Hizmet Keşfet
-          </h1>
-          <p className="mt-2 max-w-lg text-sm text-[var(--text-3)]">
-            Binlerce işletme arasından size en uygun olanı bulun ve anında randevu alın.
-          </p>
+          <aside className="discover-business-portal">
+            <div className="business-portal-icon"><BriefcaseBusiness size={23} /></div>
+            <span>İŞLETME SAHİPLERİ İÇİN</span>
+            <h2>Takviminizi değil,<br />işletmenizi büyütün.</h2>
+            <p>Randevu, ekip, müşteri ve gelirinizi tek profesyonel çalışma alanında yönetin.</p>
+            <Link href="/ozellikler">İşletme çözümlerini keşfet <ArrowUpRight size={16} /></Link>
+            <small><BadgeCheck size={13} /> 14 gün ücretsiz · Kart gerekmez</small>
+          </aside>
         </div>
 
         {/* Search */}
         <div className="discover-search-panel mb-8 space-y-4">
           <div className="relative">
-            <svg className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-3)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-3)]" />
             <input
               type="search"
               placeholder="Berber, kuaför, güzellik merkezi veya hizmet ara..."
@@ -120,25 +124,10 @@ export default function DiscoverPage() {
           </div>
 
           {/* Category Pills */}
-          <div className="discover-category-rail flex gap-2 overflow-x-auto pb-1">
-            {categories.map((cat) => (
-              <button
-                key={cat.value}
-                onClick={() => setCategory(cat.value)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-xs font-medium transition-all duration-200 ${
-                  category === cat.value
-                    ? "border-[var(--accent)] bg-[var(--accent)] text-white shadow-lg shadow-sky-500/20 scale-105"
-                    : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:border-[var(--accent)]/50 hover:shadow-md"
-                }`}
-              >
-                <span>{cat.icon}</span>
-                {cat.label}
-              </button>
-            ))}
-          </div>
+          <CategoryRail categories={categories} value={category} onChange={setCategory} />
 
           {/* City + Info */}
-          <div className="flex items-center gap-3">
+          <div className="discover-filter-footer flex items-center gap-3">
             <select
               value={city}
               onChange={(e) => setCity(e.target.value)}
@@ -149,11 +138,14 @@ export default function DiscoverPage() {
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            <p className="text-sm text-[var(--text-3)]">
+            <p className="discover-result-count text-sm text-[var(--text-3)]">
               {loading ? "Aranıyor..." : `${results.length} işletme bulundu`}
             </p>
+            <span className="discover-filter-hint"><MapPin size={14} /> Şehrindeki en iyi seçenekleri gösteriyoruz</span>
           </div>
         </div>
+
+        <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> Gerçek işletmeler, kolay randevu deneyimi</p></div>
 
         {/* Results */}
         {loading ? (
@@ -206,7 +198,7 @@ export default function DiscoverPage() {
                     </div>
                     {(biz.rating ?? 0) > 0 && (
                       <div className="flex items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1">
-                        <span className="text-xs">⭐</span>
+                    <Star className="fill-current" size={12} />
                         <span className="text-xs font-bold text-amber-600">
                           {(biz.rating ?? 0).toFixed(1)}
                         </span>
@@ -233,4 +225,64 @@ export default function DiscoverPage() {
       <MarketingFooter />
     </div>
   );
+}
+
+function CategoryRail({ categories, value, onChange }: { categories: typeof DEFAULT_CATEGORIES; value: string; onChange: (value: string) => void }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ active: false, moved: false, startX: 0, scrollLeft: 0, pointerId: -1 });
+  const [edges, setEdges] = useState({ left: false, right: true });
+  const [isDragging, setIsDragging] = useState(false);
+
+  const updateEdges = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    setEdges({ left: rail.scrollLeft > 4, right: rail.scrollLeft < rail.scrollWidth - rail.clientWidth - 4 });
+  }, []);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    updateEdges();
+    const observer = new ResizeObserver(updateEdges);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [categories, updateEdges]);
+
+  function scroll(direction: -1 | 1) { railRef.current?.scrollBy({ left: direction * Math.max(280, railRef.current.clientWidth * .72), behavior: "smooth" }); }
+  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
+    const rail = railRef.current;
+    if (!rail || event.pointerType !== "mouse" || event.button !== 0) return;
+    drag.current = { active: true, moved: false, startX: event.clientX, scrollLeft: rail.scrollLeft, pointerId: event.pointerId };
+  }
+  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const rail = railRef.current;
+    if (!drag.current.active || !rail || drag.current.pointerId !== event.pointerId) return;
+    const distance = event.clientX - drag.current.startX;
+    if (!drag.current.moved && Math.abs(distance) > 7) {
+      drag.current.moved = true;
+      setIsDragging(true);
+      rail.setPointerCapture(event.pointerId);
+    }
+    if (!drag.current.moved) return;
+    event.preventDefault();
+    rail.scrollLeft = drag.current.scrollLeft - distance;
+  }
+  function stopDrag(event: PointerEvent<HTMLDivElement>) {
+    const rail = railRef.current;
+    if (drag.current.pointerId !== event.pointerId) return;
+    drag.current.active = false;
+    setIsDragging(false);
+    if (rail?.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId);
+    window.setTimeout(() => { drag.current.moved = false; }, 0);
+  }
+  function onWheel(event: WheelEvent<HTMLDivElement>) { if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) { event.preventDefault(); event.currentTarget.scrollLeft += event.deltaY; } }
+
+  return <div className={`category-carousel ${edges.left ? "can-left" : ""} ${edges.right ? "can-right" : ""}`}>
+    <button type="button" className="category-arrow category-arrow--left" onClick={() => scroll(-1)} disabled={!edges.left} aria-label="Önceki kategoriler"><ChevronLeft size={20} /></button>
+    <div ref={railRef} className={`discover-category-rail ${isDragging ? "is-dragging" : ""}`} onScroll={updateEdges} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
+      {categories.map((cat) => <button key={cat.value} type="button" aria-pressed={value === cat.value} onClick={() => { if (!drag.current.moved) onChange(cat.value); }} className={value === cat.value ? "active" : ""}><span>{cat.icon}</span>{cat.label}</button>)}
+    </div>
+    <button type="button" className="category-arrow category-arrow--right" onClick={() => scroll(1)} disabled={!edges.right} aria-label="Sonraki kategoriler"><ChevronRight size={20} /></button>
+    <div className="category-drag-hint"><ArrowLeft size={11} /> sürükle <ArrowRight size={11} /></div>
+  </div>;
 }

@@ -12,8 +12,8 @@ import { listStaff } from "@/features/staff/staff-repository";
 import type { Appointment } from "@/types/appointments";
 import type { Business } from "@/types/business";
 import {
-  Building2, CalendarCheck2, CalendarDays, CheckCircle2,
-  CircleDollarSign, Clock3, Copy, FileText, FolderOpen, ImageIcon,
+  ArrowUpRight, Building2, CalendarCheck2, CalendarDays, CheckCircle2,
+  CircleDollarSign, Clock3, Copy, Eye, FileText, FolderOpen, ImageIcon,
   Inbox, ListChecks, PartyPopper, Scissors, Settings2,
   UserRound, UsersRound, XCircle, Zap, type LucideIcon,
 } from "lucide-react";
@@ -155,13 +155,14 @@ export default function DashboardHomePage() {
   const allComplete = completedSteps === totalSteps;
 
   const statCards = [
-    { label: "Bugünkü Randevular", value: data.todayCount, icon: CalendarDays, textColor: "text-sky-600", bg: "bg-sky-500/5" },
-    { label: "Bekleyen", value: data.pending, icon: Clock3, textColor: "text-amber-600", bg: "bg-amber-500/5" },
-    { label: "Tamamlanan", value: data.completed, icon: CheckCircle2, textColor: "text-emerald-600", bg: "bg-emerald-500/5" },
-    { label: "İptaller", value: data.cancelled, icon: XCircle, textColor: "text-rose-600", bg: "bg-rose-500/5" },
-    { label: "Toplam Müşteri", value: data.customerCount, icon: UsersRound, textColor: "text-violet-600", bg: "bg-violet-500/5" },
-    { label: "Toplam Hizmet", value: data.serviceCount, icon: Scissors, textColor: "text-pink-600", bg: "bg-pink-500/5" },
-    { label: "Toplam Çalışan", value: data.staffCount, icon: UserRound, textColor: "text-indigo-600", bg: "bg-indigo-500/5" },
+    { label: "Bugünkü Randevular", value: data.todayCount, icon: CalendarDays, tone: "ocean", note: "Günlük program" },
+    { label: "Bekleyen", value: data.pending, icon: Clock3, tone: "amber", note: "Aksiyon bekliyor" },
+    { label: "Tamamlanan", value: data.completed, icon: CheckCircle2, tone: "emerald", note: "Başarıyla tamamlandı" },
+    { label: "İptaller", value: data.cancelled, icon: XCircle, tone: "rose", note: "Toplam iptal" },
+    { label: "Toplam Müşteri", value: data.customerCount, icon: UsersRound, tone: "violet", note: "CRM büyüklüğü" },
+    { label: "Toplam Hizmet", value: data.serviceCount, icon: Scissors, tone: "magenta", note: "Aktif portföy" },
+    { label: "Toplam Çalışan", value: data.staffCount, icon: UserRound, tone: "indigo", note: "Ekip kapasitesi" },
+    { label: "Bugünkü Gelir", value: data.todayRevenue, icon: CircleDollarSign, tone: "gold", note: "Tamamlanan işlemler", currency: true },
   ];
 
   return (
@@ -239,7 +240,7 @@ export default function DashboardHomePage() {
       {/* All Complete Banner — Ultra Premium */}
       {allComplete && setupItems.length > 0 && (
         <div
-          className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-[var(--surface-1)] shadow-xl"
+          className="dashboard-profile-ready"
           style={{
             opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
             transition: "opacity 0.5s ease, transform 0.5s ease",
@@ -253,11 +254,11 @@ export default function DashboardHomePage() {
           <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-cyan-500/10 blur-3xl" />
           <div className="absolute right-1/3 top-1/2 h-20 w-20 rounded-full bg-violet-500/5 blur-2xl" />
 
-          <div className="relative p-6 sm:p-8">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="dashboard-profile-ready__inner">
+            <div className="dashboard-profile-ready__main">
               {/* Left side */}
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25">
+              <div className="dashboard-profile-ready__identity">
+                <div className="dashboard-profile-ready__icon">
                   <PartyPopper size={25} strokeWidth={1.8} />
                 </div>
                 <div>
@@ -270,7 +271,7 @@ export default function DashboardHomePage() {
                   
                   {/* Store URL display */}
                   {business?.slug && (
-                    <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2">
+                    <div className="dashboard-profile-ready__url">
                       <Copy size={14} className="text-[var(--text-3)]" />
                       <code className="text-xs font-medium text-[var(--text-2)]">
                         seninrandevun.com/isletme/{business.slug}
@@ -281,34 +282,28 @@ export default function DashboardHomePage() {
               </div>
 
               {/* Right side — Action buttons */}
-              <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
+              <div className="dashboard-profile-ready__actions">
                 {business?.slug && (
                   <>
                     <button
                       onClick={() => {
                         const url = `${window.location.origin}/isletme/${business.slug}`;
                         navigator.clipboard.writeText(url).then(() => {
-                          toast.success("Mağaza linki kopyalandı! 🔗");
+                          toast.success("Mağaza linki kopyalandı.");
                         }).catch(() => {
                           toast.error("Kopyalama başarısız");
                         });
                       }}
-                      className="group inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition-all hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
+                      className="profile-ready-copy"
                     >
-                      <svg className="h-4 w-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                      </svg>
+                      <Copy size={17} />
                       Linki Kopyala
                     </button>
                     <Link
                       href={`/isletme/${business.slug}`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-600 transition-all hover:bg-emerald-500/20 hover:shadow-md active:scale-[0.97]"
+                      className="profile-ready-view"
                     >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      Profili Gör
+                      <Eye size={17} /> Profili Gör <ArrowUpRight size={15} />
                     </Link>
                   </>
                 )}
@@ -316,14 +311,9 @@ export default function DashboardHomePage() {
             </div>
 
             {/* Completion badges */}
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="dashboard-profile-ready__checks">
               {setupItems.map((item) => (
-                <span
-                  key={item.label}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600"
-                >
-                  ✓ {item.label}
-                </span>
+                <span key={item.label}>{(() => { const SetupIcon = item.icon; return <SetupIcon size={14} />; })()}<b>{item.label}</b><CheckCircle2 size={13} /></span>
               ))}
             </div>
           </div>
@@ -347,7 +337,7 @@ export default function DashboardHomePage() {
             onClick={() => {
               const url = `${window.location.origin}/isletme/${business.slug}`;
               navigator.clipboard.writeText(url).then(() => {
-                toast.success("Mağaza linki kopyalandı! 🔗");
+                toast.success("Mağaza linki kopyalandı.");
               }).catch(() => {
                 toast.error("Kopyalama başarısız");
               });
@@ -363,46 +353,27 @@ export default function DashboardHomePage() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="dashboard-kpi-grid">
         {statCards.map((stat, i) => (
           (() => {
             const StatIcon = stat.icon;
             return (
-          <div
+          <Link
             key={stat.label}
-            className={`group relative overflow-hidden rounded-2xl border border-[var(--border)] ${stat.bg} p-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]`}
+            href={stat.label.includes("Müşteri") ? "/dashboard/musteriler" : stat.label.includes("Hizmet") ? "/dashboard/hizmetler" : stat.label.includes("Çalışan") ? "/dashboard/calisanlar" : "/dashboard/randevular"}
+            className={`dashboard-kpi-card kpi-${stat.tone}`}
             style={{
-              opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(16px)",
+              opacity: ready ? 1 : 0, transform: ready ? undefined : "translateY(16px)",
               transition: `opacity 0.4s ease ${i * 0.05 + 0.2}s, transform 0.4s ease ${i * 0.05 + 0.2}s`,
             }}
           >
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)]">{stat.label}</p>
-              <span className={`dashboard-stat-icon ${stat.textColor}`}><StatIcon size={19} strokeWidth={1.8} /></span>
-            </div>
-            <p className={`mt-2 text-3xl font-black ${stat.textColor}`}>
-              <AnimatedNumber value={stat.value} />
-            </p>
-          </div>
+            <div className="dashboard-kpi-head"><p>{stat.label}</p><span><StatIcon size={21} strokeWidth={1.8} /></span></div>
+            <strong><AnimatedNumber value={stat.value} suffix={stat.currency ? " ₺" : undefined} /></strong>
+            <small>{stat.note}<ArrowUpRight size={13} /></small>
+          </Link>
             );
           })()
         ))}
-        {/* Revenue Card */}
-        <div
-          className="group relative overflow-hidden rounded-2xl border border-[var(--border)] bg-yellow-500/5 p-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(16px)",
-            transition: `opacity 0.4s ease 0.55s, transform 0.4s ease 0.55s`,
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)]">Bugünkü Gelir</p>
-            <span className="dashboard-stat-icon text-yellow-600"><CircleDollarSign size={19} strokeWidth={1.8} /></span>
-          </div>
-          <p className="mt-2 text-3xl font-black text-yellow-600">
-            {data.todayRevenue > 0 ? <><AnimatedNumber value={data.todayRevenue} /> ₺</> : "—"}
-          </p>
-        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -445,7 +416,7 @@ export default function DashboardHomePage() {
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                       item.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
                     }`}>
-                      {item.status === "confirmed" ? "✓ Onaylı" : "⏳ Bekliyor"}
+                      {item.status === "confirmed" ? <><CheckCircle2 size={12} /> Onaylı</> : <><Clock3 size={12} /> Bekliyor</>}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-[var(--text-3)]">

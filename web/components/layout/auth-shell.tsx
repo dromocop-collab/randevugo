@@ -10,6 +10,7 @@ interface AuthShellProps {
   title: string;
   subtitle: string;
   children: ReactNode;
+  variant?: "business" | "customer";
 }
 
 const TRUST_ITEMS = [
@@ -32,11 +33,18 @@ const TESTIMONIALS = [
   },
 ];
 
-export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps) {
+export function AuthShell({ eyebrow, title, subtitle, children, variant = "business" }: AuthShellProps) {
   const { user, status } = useAuth();
+  const customer = variant === "customer";
+  const trustItems = customer ? [
+    { icon: "✓", label: "Ücretsiz Hesap", desc: "Müşteriler için daima ücretsiz" },
+    { icon: "♡", label: "Favori Mağazalar", desc: "Sevdiğiniz yerler tek listede" },
+    { icon: "◷", label: "Randevu Geçmişi", desc: "Geçmiş ve yaklaşan planlarınız" },
+    { icon: "⚡", label: "Hızlı Randevu", desc: "Saniyeler içinde yerinizi ayırın" },
+  ] : TRUST_ITEMS;
   return (
     <main className="auth-v2 relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
-      {status === "authenticated" && user && <Link href="/dashboard" className="auth-session-pill"><span>✓</span><div><b>Oturumunuz açık</b><small>Panele devam et →</small></div></Link>}
+      {status === "authenticated" && user && <Link href={customer ? "/hesabim" : "/dashboard"} className="auth-session-pill"><span>✓</span><div><b>Oturumunuz açık</b><small>{customer ? "Hesabıma" : "Panele"} devam et →</small></div></Link>}
       {/* Left — Branding Panel */}
       <section className="auth-story relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] p-8 shadow-2xl backdrop-blur-xl lg:p-12">
         {/* Glow orbs */}
@@ -74,7 +82,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
 
           {/* Trust Grid */}
           <div className="auth-trust-grid mt-10 grid grid-cols-2 gap-3">
-            {TRUST_ITEMS.map((item) => (
+            {trustItems.map((item) => (
               <div
                 key={item.label}
                 className="group rounded-xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-3.5 backdrop-blur transition hover:border-[var(--accent)]/30 hover:shadow-md"
@@ -91,7 +99,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
           </div>
 
           {/* Testimonials */}
-          <div className="auth-testimonials mt-8 grid gap-3 sm:grid-cols-2">
+          {!customer && <div className="auth-testimonials mt-8 grid gap-3 sm:grid-cols-2">
             {TESTIMONIALS.map((t) => (
               <div
                 key={t.name}
@@ -111,13 +119,13 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
 
           {/* Bottom stats */}
           <div className="mt-6 flex items-center gap-6 border-t border-[var(--border)] pt-6">
             <div>
-              <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">1000+</p>
-              <p className="text-[10px] text-[var(--text-3)]">Aktif İşletme</p>
+              <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">{customer ? "81" : "1000+"}</p>
+              <p className="text-[10px] text-[var(--text-3)]">{customer ? "Şehirde Keşif" : "Aktif İşletme"}</p>
             </div>
             <div>
               <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">50K+</p>
@@ -132,7 +140,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
       </section>
 
       {/* Right — Form */}
-      <section className="auth-form-stage w-full max-w-xl justify-self-center"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">İşletmenize kaldığınız yerden devam edin.</h2></div>{children}</section>
+      <section className="auth-form-stage w-full max-w-xl justify-self-center"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">{customer ? "Randevularınıza kaldığınız yerden devam edin." : "İşletmenize kaldığınız yerden devam edin."}</h2></div>{children}</section>
     </main>
   );
 }

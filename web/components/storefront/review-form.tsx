@@ -6,6 +6,7 @@ import { createReview, hasUserReviewed } from "@/features/reviews/review-reposit
 import { uploadReviewImage } from "@/lib/firebase/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CheckCircle2, PenLine } from "lucide-react";
 
 interface ReviewFormProps {
   businessId: string;
@@ -36,7 +37,7 @@ export function ReviewForm({
     return (
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
-          <span className="text-3xl">🎉</span>
+          <CheckCircle2 size={30}/>
         </div>
         <h3 className="mt-4 text-lg font-bold text-[var(--text-1)]">
           Yorumunuz gönderildi!
@@ -121,7 +122,7 @@ export function ReviewForm({
       });
 
       setSubmitted(true);
-      toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak! ⭐");
+      toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak!");
       onSuccess?.();
     } catch {
       toast.error("Yorum gönderilemedi. Lütfen tekrar deneyin.");
@@ -137,7 +138,7 @@ export function ReviewForm({
       onSubmit={handleSubmit}
       className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-lg"
     >
-      <h3 className="text-lg font-bold text-[var(--text-1)]">⭐ Yorum Yaz</h3>
+      <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><PenLine size={18}/> Yorum Yaz</h3>
       <p className="mt-1 text-xs text-[var(--text-3)]">
         Giriş yapmanıza gerek yok — adınızı yazıp deneyiminizi paylaşabilirsiniz.
       </p>
@@ -271,7 +272,7 @@ export function ReviewForm({
               Gönderiliyor...
             </span>
           ) : (
-            "⭐ Yorum Gönder"
+            "Yorum Gönder"
           )}
         </Button>
       </div>

@@ -25,6 +25,7 @@ import type { Staff } from "@/types/staff";
 import type { Review } from "@/types/review";
 import type { ServiceCategory } from "@/types/service-category";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
+import { SupportRequestModal } from "@/components/support/support-request-modal";
 import {
   ArrowRight, CalendarCheck2, GalleryHorizontalEnd,
   Globe2, Mail, MapPin, MessageCircleMore, Phone, Star,
@@ -148,10 +149,17 @@ export default function BusinessProfilePage() {
 
       <main className="storefront-main mx-auto w-full max-w-7xl px-4 pb-20 pt-0 lg:px-8">
         {/* ━━━ HERO HEADER ━━━ */}
-        <StorefrontHeader business={business} workingHours={workingHours} />
+        <StorefrontHeader
+          business={business}
+          workingHours={workingHours}
+          serviceCount={services.length}
+          staffCount={staff.length}
+          galleryCount={(business.galleryUrls ?? []).length}
+          bookingHref={`/isletme/${params.slug}/randevu`}
+        />
 
         {/* ━━━ TAB NAVIGATION ━━━ */}
-        <nav className="storefront-tabs mt-6 flex gap-1 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-1.5 shadow-sm">
+        <nav className="storefront-tabs" aria-label="Mağaza bölümleri">
           {TAB_CONFIG.map((tab) => {
             const Icon = tab.icon;
             const count = tabCounts[tab.key];
@@ -160,24 +168,12 @@ export default function BusinessProfilePage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/20"
-                    : "text-[var(--text-3)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
-                }`}
+                className={`storefront-tab-button${isActive ? " active" : ""}`}
               >
                 <Icon aria-hidden="true" size={16} strokeWidth={1.9} />
                 <span className="hidden sm:inline">{tab.label}</span>
                 {count !== undefined && count > 0 && (
-                  <span
-                    className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-[var(--surface-3)] text-[var(--text-3)]"
-                    }`}
-                  >
-                    {count}
-                  </span>
+                  <b>{count}</b>
                 )}
               </button>
             );
@@ -185,7 +181,7 @@ export default function BusinessProfilePage() {
         </nav>
 
         {/* ━━━ CONTENT GRID ━━━ */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="storefront-layout">
           {/* Main Content */}
           <div key={activeTab} className="storefront-tab-panel min-w-0">
             {activeTab === "hizmetler" && (
@@ -233,25 +229,23 @@ export default function BusinessProfilePage() {
           </div>
 
           {/* ━━━ SIDEBAR ━━━ */}
-          <div className="space-y-5">
-            <div className="sticky top-20 space-y-5">
+          <aside className="storefront-sidebar">
+            <div className="storefront-sidebar-sticky">
               {/* Booking CTA */}
-              <section className="storefront-booking-card relative overflow-hidden rounded-2xl border border-[var(--accent)]/20 bg-[linear-gradient(135deg,var(--accent)/5,var(--accent-3)/5)] p-6 shadow-xl">
-                <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[var(--accent)]/10 blur-2xl" />
-                <div className="relative">
-                  <div className="text-center">
-                    <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)] text-white shadow-lg"><CalendarCheck2 size={23} strokeWidth={1.8} /></span>
-                    <p className="mt-2 text-sm font-bold text-[var(--text-1)]">Online Randevu Alın</p>
-                    <p className="mt-1 text-xs text-[var(--text-3)]">7/24 hızlı ve kolay</p>
+              <section className="storefront-booking-card">
+                <div>
+                  <div className="storefront-booking-head">
+                    <span><CalendarCheck2 size={23} strokeWidth={1.8} /></span>
+                    <div><small>SANİYELER İÇİNDE</small><p>Online randevunuzu oluşturun.</p></div>
                   </div>
                   <Link
                     href={`/isletme/${params.slug}/randevu`}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] py-3.5 text-sm font-bold text-white shadow-xl shadow-sky-500/25 transition hover:shadow-2xl hover:brightness-110 active:scale-[0.97]"
+                    className="storefront-booking-cta"
                   >
                     Randevu Al <ArrowRight size={16} />
                   </Link>
                   {services.length > 0 && (
-                    <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-3">
+                    <div className="storefront-booking-meta">
                       <div>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-3)]">Hizmet</p>
                         <p className="text-xs font-bold text-[var(--text-1)]">{services.length} adet</p>
@@ -271,9 +265,10 @@ export default function BusinessProfilePage() {
               <StorefrontHours workingHours={workingHours} />
 
               {/* Quick Contact */}
-              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5">
+              <section className="storefront-quick-contact">
                 <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]"><MessageCircleMore size={15} /> Hızlı İletişim</h3>
                 <div className="mt-3 space-y-2.5">
+                  <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerClassName="storefront-message-trigger" />
                   {business.phone && (
                     <a href={`tel:${business.phone}`} className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs font-medium text-[var(--text-1)] transition hover:border-[var(--accent)]/30">
                       <Phone size={15} /> {business.phone}
@@ -292,13 +287,14 @@ export default function BusinessProfilePage() {
                 </div>
               </section>
             </div>
-          </div>
+          </aside>
         </div>
       </main>
       <MarketingFooter />
 
       {/* ━━━ MOBILE BOTTOM BAR ━━━ */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)] bg-[var(--bg-1)]/90 p-3 backdrop-blur-2xl lg:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-[auto_1fr] gap-2 border-t border-[var(--border)] bg-[var(--bg-1)]/90 p-3 backdrop-blur-2xl lg:hidden">
+        <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel="Mesaj" triggerClassName="storefront-message-mobile" />
         <Link
           href={`/isletme/${params.slug}/randevu`}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] py-3.5 text-sm font-bold text-white shadow-xl shadow-sky-500/25 transition active:scale-[0.97]"

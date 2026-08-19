@@ -5,11 +5,11 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "SeninRandevun",
     short_name: "SeninRandevun",
     description:
-      "Türkiye'nin akıllı online randevu platformu. İşletmenizi dijitale taşıyın.",
+      "Yakınınızdaki güvenilir işletmeleri keşfedin, uygun saati seçin ve online randevunuzu saniyeler içinde oluşturun.",
     start_url: "/",
     display: "standalone",
-    background_color: "#eef3f9",
-    theme_color: "#0284c7",
+    background_color: "#f6f4ec",
+    theme_color: "#0b6b45",
     icons: [
       {
         src: "/icon-192.png",

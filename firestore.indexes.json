@@ -115,6 +115,14 @@
       ]
     },
     {
+      "collectionGroup": "supportTickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "platformAuditLogs",
       "queryScope": "COLLECTION",
       "fields": [

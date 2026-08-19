@@ -121,7 +121,7 @@ function useCountdown(initialSeconds: number) {
 }
 
 /* ─────────────────── LOGIN ─────────────────── */
-export function LoginForm() {
+export function LoginForm({ accountType = "business" }: { accountType?: "business" | "customer" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -136,7 +136,7 @@ export function LoginForm() {
       await loginWithEmailPassword(email, password);
       toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
       const normalizedEmail = email.trim().toLowerCase();
-      router.push(normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : "/dashboard");
+      router.push(normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : accountType === "customer" ? "/hesabim" : "/dashboard");
     } catch (error) {
       toast.error(mapAuthError(error));
     } finally {
@@ -150,7 +150,7 @@ export function LoginForm() {
       <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
         <div className="mb-6 text-center">
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">Tekrar hoş geldiniz.</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">Güvenli oturumunuz tüm cihazlarınızda açık kalır.</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınıza ve favori mağazalarınıza ulaşın." : "İşletme çalışma alanınıza güvenle devam edin."}</p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
@@ -205,7 +205,7 @@ export function LoginForm() {
         <div className="mt-6 text-center">
           <p className="text-sm text-[var(--text-3)]">
             Hesabın yok mu?{" "}
-            <Link href="/kayit" className="font-semibold text-[var(--accent)] hover:underline">
+            <Link href={accountType === "customer" ? "/musteri/kayit" : "/isletmeler/kayit"} className="font-semibold text-[var(--accent)] hover:underline">
               Ücretsiz başla →
             </Link>
           </p>
@@ -225,7 +225,7 @@ export function LoginForm() {
 }
 
 /* ─────────────────── REGISTER ─────────────────── */
-export function RegisterForm() {
+export function RegisterForm({ accountType = "business" }: { accountType?: "business" | "customer" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -240,10 +240,13 @@ export function RegisterForm() {
   const countdown = useCountdown(60);
 
   useEffect(() => {
+    // Paneldeki kayıt anahtarı sadece yeni işletme çalışma alanlarını kontrol eder.
+    // Müşteriler keşif ve randevu hesabını her zaman oluşturabilmelidir.
+    if (accountType === "customer") return;
     getPlatformSettings()
       .then((settings) => setRegistrationOpen(settings.registrationOpen))
       .catch(() => setRegistrationOpen(true));
-  }, []);
+  }, [accountType]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -281,7 +284,7 @@ export function RegisterForm() {
       const fn = httpsCallable(getCloudFunctions(), "verifyEmailCode");
       await fn({ email, code });
       toast.success("E-posta doğrulandı! Yönlendiriliyorsunuz... ✅");
-      router.push("/onboarding");
+      router.push(accountType === "customer" ? "/hesabim" : "/onboarding");
     } catch (error) {
       const msg = (error as { message?: string })?.message || "Doğrulama başarısız.";
       toast.error(msg);
@@ -313,9 +316,7 @@ export function RegisterForm() {
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-8 text-center shadow-xl shadow-[var(--shadow-hard)]">
         <span className="text-4xl">🚧</span>
         <h2 className="mt-3 text-lg font-bold text-[var(--text-1)]">Yeni kayıtlar geçici olarak kapalı</h2>
-        <p className="mt-2 text-sm text-[var(--text-3)]">
-          Platform şu anda yeni işletme kaydı almıyor. Lütfen daha sonra tekrar deneyin.
-        </p>
+        <p className="mt-2 text-sm text-[var(--text-3)]">Platform şu anda yeni kayıt almıyor. Lütfen daha sonra tekrar deneyin.</p>
       </div>
     );
   }
@@ -391,8 +392,8 @@ export function RegisterForm() {
       {/* Form Card */}
       <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">Ücretsiz çalışma alanınızı açın.</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">Kart bilgisi yok · Tüm özellikler 14 gün açık</p>
+          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Kart bilgisi yok · Tüm özellikler 14 gün açık"}</p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
@@ -472,7 +473,7 @@ export function RegisterForm() {
                 Hesap oluşturuluyor...
               </span>
             ) : (
-              "14 Gün Ücretsiz Başla →"
+              accountType === "customer" ? "Ücretsiz Hesap Oluştur →" : "14 Gün Ücretsiz Başla →"
             )}
           </Button>
         </form>
@@ -480,7 +481,7 @@ export function RegisterForm() {
         <div className="mt-6 text-center">
           <p className="text-sm text-[var(--text-3)]">
             Zaten hesabın var mı?{" "}
-            <Link href="/giris" className="font-semibold text-[var(--accent)] hover:underline">
+            <Link href={accountType === "customer" ? "/musteri/giris" : "/isletmeler/giris"} className="font-semibold text-[var(--accent)] hover:underline">
               Giriş Yap →
             </Link>
           </p>
@@ -489,12 +490,11 @@ export function RegisterForm() {
 
       {/* Benefits */}
       <div className="grid grid-cols-2 gap-3">
-        {[
-          { icon: "💳", text: "14 gün ücretsiz" },
-          { icon: "⚡", text: "2 dk kurulum" },
-          { icon: "🚫", text: "Kredi kartı yok" },
-          { icon: "📱", text: "Tüm cihazlar" },
-        ].map((b) => (
+        {(accountType === "customer" ? [
+          { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
+        ] : [
+          { icon: "💳", text: "14 gün ücretsiz" }, { icon: "⚡", text: "2 dk kurulum" }, { icon: "🚫", text: "Kredi kartı yok" }, { icon: "📱", text: "Tüm cihazlar" },
+        ]).map((b) => (
           <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">
             <span>{b.icon}</span>
             {b.text}

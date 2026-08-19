@@ -16,9 +16,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 const STORAGE_KEY = "randevugo-theme";
 
-function resolveInitialTheme(): Theme {
-  if (typeof window === "undefined") return "light";
-
+function resolveBrowserTheme(): Theme {
   const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
   if (stored === "light" || stored === "dark") return stored;
 
@@ -26,7 +24,14 @@ function resolveInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
+  // The server and the first client render must be identical. Browser-only
+  // preferences are applied after hydration to avoid changing button labels.
+  const [theme, setTheme] = useState<Theme>("light");
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setTheme(resolveBrowserTheme()));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
