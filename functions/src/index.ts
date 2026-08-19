@@ -12,6 +12,17 @@ initializeApp();
 
 const db = getFirestore();
 
+const publicCallableOptions = {
+  region: "europe-west1",
+  cors: [
+    /^http:\/\/localhost(?::\d+)?$/,
+    /^https:\/\/(?:www\.)?seninrandevun\.com$/,
+    /^https:\/\/.*\.web\.app$/,
+    /^https:\/\/.*\.firebaseapp\.com$/,
+    /^https:\/\/.*\.hosted\.app$/,
+  ],
+};
+
 function requireString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new HttpsError("invalid-argument", `${name} alanı zorunludur.`);
@@ -20,7 +31,7 @@ function requireString(value: unknown, name: string): string {
 }
 
 export const submitPublicSupportRequest = onCall(
-  { region: "europe-west1" },
+  publicCallableOptions,
   async (request) => {
     const data = request.data ?? {};
     const name = requireString(data.name, "İsim");

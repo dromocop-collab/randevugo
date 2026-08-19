@@ -8,6 +8,28 @@ import { getFirebaseApp } from "@/lib/firebase/client";
 
 type SupportAudience = "customer" | "business" | "storefront";
 
+function getSupportErrorMessage(reason: unknown) {
+  const error = reason as { code?: string; message?: string };
+  const code = String(error?.code ?? "").toLowerCase();
+  const message = String(error?.message ?? "").replace(/^Firebase:\s*/i, "").trim();
+
+  if (code === "functions/resource-exhausted") {
+    return "Çok hızlı mesaj gönderildi. Lütfen bir dakika sonra tekrar deneyin.";
+  }
+  if (code === "functions/invalid-argument" || code === "functions/not-found") {
+    return message || "Mesaj bilgileri doğrulanamadı. Lütfen alanları kontrol edin.";
+  }
+  if (
+    code === "functions/internal" ||
+    code === "functions/unavailable" ||
+    code === "functions/deadline-exceeded" ||
+    /internal|failed to fetch|network|cors/i.test(message)
+  ) {
+    return "Mesaj servisine şu anda ulaşılamıyor. Lütfen kısa süre sonra yeniden deneyin.";
+  }
+  return message || "Mesaj gönderilemedi. Lütfen tekrar deneyin.";
+}
+
 export function SupportRequestModal({ audience, businessId, businessName, triggerLabel, triggerClassName = "support-modal-trigger" }: { audience: SupportAudience; businessId?: string; businessName?: string; triggerLabel?: string; triggerClassName?: string }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -49,8 +71,7 @@ export function SupportRequestModal({ audience, businessId, businessName, trigge
       setSuccess(true);
       setName(""); setPhone(""); setMessage(""); setWebsite("");
     } catch (reason) {
-      const raw = reason as { code?: string; message?: string };
-      setError(raw.code === "functions/resource-exhausted" ? "Çok hızlı mesaj gönderildi. Lütfen bir dakika sonra tekrar deneyin." : raw.message?.replace(/^Firebase:\s*/i, "") || "Mesaj gönderilemedi. Lütfen tekrar deneyin.");
+      setError(getSupportErrorMessage(reason));
     } finally { setLoading(false); }
   }
 

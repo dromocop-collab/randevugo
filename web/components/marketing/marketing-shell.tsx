@@ -54,9 +54,9 @@ export function MarketingFooter() {
           <div className="footer-status"><i /> Sistemler aktif · 7/24 online</div>
           <a href="mailto:info@seninrandevun.com" className="footer-email"><Mail size={14} /> info@seninrandevun.com</a>
         </div>
-        <FooterColumn title="Keşfet" links={[["Tüm mağazalar", "/kesfet"], ["Kuaförler", "/kuafor-randevu"], ["Berberler", "/berber-randevu"], ["Güzellik merkezleri", "/guzellik-merkezi-randevu"], ["Online randevu", "/online-randevu"]]} />
+        <FooterColumn title="Meslekler" links={[["Tüm mağazalar", "/kesfet"], ["Kuaför", "/kuafor-randevu"], ["Berber", "/berber-randevu"], ["Güzellik merkezi", "/guzellik-merkezi-randevu"], ["Spa & Masaj", "/spa-randevu"], ["Nail Studio", "/nail-studio-randevu"], ["Spor & PT", "/spor-randevu"], ["Sağlık", "/saglik-randevu"], ["Danışmanlık", "/danismanlik-randevu"], ["Veteriner", "/veteriner-randevu"]]} />
         <FooterColumn title="İşletmeler" links={[["İşletmeler için", "/isletmeler"], ["Özellikler", "/ozellikler"], ["Fiyatlar", "/fiyatlar"], ["Ücretsiz kayıt", "/isletmeler/kayit"], ["İşletme yardımı", "/isletmeler/yardim"]]} />
-        <FooterColumn title="SeninRandevun" links={[["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Güvenlik", "/guvenlik"]]} />
+        <FooterColumn title="SeninRandevun" links={[["Online randevu", "/online-randevu"], ["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Güvenlik", "/guvenlik"]]} />
         <FooterColumn title="Yasal" links={[["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Çerez politikası", "/cerez-politikasi"]]} />
       </div>
       <div className="footer-bottom"><span>© {new Date().getFullYear()} SeninRandevun · Tüm hakları saklıdır.</span><a className="footer-dromocob" href="https://dromocob.tr" target="_blank" rel="noopener noreferrer" aria-label="DROMOCOB web sitesini ziyaret et"><i>D</i><span><small>TASARIM &amp; TEKNOLOJİ</small><strong>DROMOCOB</strong></span><ArrowUpRight size={15} /></a></div>

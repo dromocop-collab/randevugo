@@ -183,6 +183,13 @@ service cloud.firestore {
       allow delete: if isPlatformAdmin();
     }
 
+    // Customer account uses a collection-group query across every business.
+    // Keep this narrowly scoped: a signed-in customer can only read rows whose
+    // customerId is their own Firebase Auth uid.
+    match /{path=**}/appointments/{appointmentId} {
+      allow read: if isAuthenticated() && resource.data.customerId == uid();
+    }
+
     // ────────────────────────────────────────────────
     // Businesses
     // ────────────────────────────────────────────────

@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { seoCategoryContent } from "@/lib/seo-category-content";
+import { createProfessionMetadata } from "@/lib/profession-seo";
 
 const content = seoCategoryContent.spor;
-export const metadata: Metadata = { title: content.title, description: content.description, alternates: { canonical: "https://seninrandevun.com/spor-randevu" }, openGraph: { title: content.title, description: content.description, url: "https://seninrandevun.com/spor-randevu", type: "website" } };
+export const metadata = createProfessionMetadata(content);
 export default function SporRandevuPage() { return <SeoLandingPage {...content} />; }

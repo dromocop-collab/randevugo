@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
+import { createProfessionMetadata } from "@/lib/profession-seo";
 
-export const metadata: Metadata = {
+export const metadata = createProfessionMetadata({
   title: "Berber Randevusu Al | Online Berber Randevu",
   description: "Yakınınızdaki berberleri keşfedin, saç ve sakal hizmetlerini inceleyin, size uygun saati seçerek online berber randevusu alın.",
-  alternates: { canonical: "https://seninrandevun.com/berber-randevu" },
-  openGraph: { title: "Berber Randevusu Al | SeninRandevun", description: "Saç ve sakal hizmetleri için berberleri karşılaştırın, online randevunuzu kolayca oluşturun.", url: "https://seninrandevun.com/berber-randevu", type: "website" },
-};
+  pathname: "/berber-randevu",
+  category: "berber",
+});
 
 export default function BerberRandevuPage() {
   return (

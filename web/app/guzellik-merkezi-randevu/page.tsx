@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
+import { createProfessionMetadata } from "@/lib/profession-seo";
 
-export const metadata: Metadata = {
+export const metadata = createProfessionMetadata({
   title: "Güzellik Merkezi Randevusu Al | Online Güzellik Randevu",
   description: "Güzellik merkezlerini keşfedin; cilt bakımı, epilasyon, manikür ve diğer hizmetler için uygun günü ve saati seçerek online randevu alın.",
-  alternates: { canonical: "https://seninrandevun.com/guzellik-merkezi-randevu" },
-  openGraph: { title: "Güzellik Merkezi Randevusu Al | SeninRandevun", description: "Güzellik hizmetleri için işletmeleri karşılaştırın ve online randevunuzu oluşturun.", url: "https://seninrandevun.com/guzellik-merkezi-randevu", type: "website" },
-};
+  pathname: "/guzellik-merkezi-randevu",
+  category: "guzellik",
+});
 
 export default function GuzellikMerkeziRandevuPage() {
   return (

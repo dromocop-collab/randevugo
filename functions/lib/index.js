@@ -8,13 +8,23 @@ const firestore_2 = require("firebase-functions/v2/firestore");
 const crypto_1 = require("crypto");
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
+const publicCallableOptions = {
+    region: "europe-west1",
+    cors: [
+        /^http:\/\/localhost(?::\d+)?$/,
+        /^https:\/\/(?:www\.)?seninrandevun\.com$/,
+        /^https:\/\/.*\.web\.app$/,
+        /^https:\/\/.*\.firebaseapp\.com$/,
+        /^https:\/\/.*\.hosted\.app$/,
+    ],
+};
 function requireString(value, name) {
     if (typeof value !== "string" || value.trim().length === 0) {
         throw new https_1.HttpsError("invalid-argument", `${name} alanı zorunludur.`);
     }
     return value.trim();
 }
-exports.submitPublicSupportRequest = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+exports.submitPublicSupportRequest = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
     const name = requireString(data.name, "İsim");
     const phone = requireString(data.phone, "Telefon").replace(/\s+/g, " ");

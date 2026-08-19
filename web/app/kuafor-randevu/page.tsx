@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
+import { createProfessionMetadata } from "@/lib/profession-seo";
 
-export const metadata: Metadata = {
+export const metadata = createProfessionMetadata({
   title: "Kuaför Randevusu Al | Online Kuaför Randevu",
   description: "Yakınınızdaki kuaförleri keşfedin, saç kesimi ve bakım hizmetlerini inceleyin, uygun saati seçerek online kuaför randevunuzu hemen alın.",
-  alternates: { canonical: "https://seninrandevun.com/kuafor-randevu" },
-  openGraph: { title: "Kuaför Randevusu Al | SeninRandevun", description: "Kuaför hizmetleri için uygun işletmeyi ve saati online seçin.", url: "https://seninrandevun.com/kuafor-randevu", type: "website" },
-};
+  pathname: "/kuafor-randevu",
+  category: "kuafor",
+});
 
 export default function KuaforRandevuPage() {
   return (
