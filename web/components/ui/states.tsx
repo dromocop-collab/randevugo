@@ -1,11 +1,13 @@
 import { ReactNode } from "react";
+import { LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 
 export function LoadingState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-10 text-center">
-      <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-sky-500" />
-      <h2 className="mt-4 text-lg font-semibold text-[var(--text-1)]">{title}</h2>
-      {description ? <p className="mt-1 text-sm text-[var(--text-3)]">{description}</p> : null}
+    <div className="premium-loading-state" role="status" aria-live="polite">
+      <div className="premium-loading-orbit"><span/><span/><LoaderCircle/></div>
+      <div className="premium-loading-copy"><small><Sparkles size={13}/> SENİNRANDEVUN</small><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
+      <div className="premium-loading-progress"><i/><i/><i/></div>
+      <span className="premium-loading-trust"><ShieldCheck size={13}/> Güvenli bağlantı kuruluyor</span>
     </div>
   );
 }
