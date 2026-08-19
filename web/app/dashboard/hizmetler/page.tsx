@@ -227,9 +227,6 @@ export default function ServicesPage() {
     ? services
     : services.filter((s) => s.category === activeCategory);
 
-  const getCategoryName = (catId: string) =>
-    categories.find((c) => c.id === catId)?.name ?? catId;
-
   const getCategoryMeta = (catId: string) =>
     categories.find((c) => c.id === catId);
 

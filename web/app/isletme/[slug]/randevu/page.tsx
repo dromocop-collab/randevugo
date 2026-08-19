@@ -11,6 +11,7 @@ import {
   listBusinessWorkingHours,
 } from "@/features/businesses/business-repository";
 import type { Business, DaySchedule } from "@/types/business";
+import { ArrowLeft, Clock3, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function BookingPage() {
   const params = useParams<{ slug: string }>();
@@ -91,9 +92,9 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="booking-page min-h-screen">
       {/* Compact Header */}
-      <header className="border-b border-[var(--border)] bg-[var(--bg-1)]/80 backdrop-blur-xl">
+      <header className="booking-header sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg-1)]/80 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
           <Link
             href="/"
@@ -106,22 +107,22 @@ export default function BookingPage() {
             href={`/isletme/${params.slug}`}
             className="inline-flex items-center gap-1.5 text-sm text-[var(--text-3)] hover:text-[var(--text-1)] transition"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
+            <ArrowLeft size={17} />
             İşletme Sayfasına Dön
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[var(--text-1)]">
+      <main className="booking-main mx-auto w-full max-w-5xl px-4 py-10">
+        <div className="booking-intro mx-auto mb-7 max-w-2xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/15 bg-[var(--accent)]/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.15em] text-[var(--accent)]"><Sparkles size={13} /> Kolay randevu</span>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-[var(--text-1)] sm:text-4xl">
             {business.name}
           </h1>
-          <p className="mt-1 text-sm text-[var(--text-3)]">
-            Online randevu oluşturun
+          <p className="mt-2 text-sm text-[var(--text-3)]">
+            Hizmetinizi seçin, uygun saati bulun; kalanını biz kolaylaştıralım.
           </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-[10px] font-semibold text-[var(--text-3)]"><span><Clock3 size={13} /> Yaklaşık 2 dakika</span><span><ShieldCheck size={13} /> Güvenli doğrulama</span></div>
         </div>
 
         <BookingWizard

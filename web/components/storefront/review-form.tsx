@@ -123,7 +123,7 @@ export function ReviewForm({
       setSubmitted(true);
       toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak! ⭐");
       onSuccess?.();
-    } catch (err) {
+    } catch {
       toast.error("Yorum gönderilemedi. Lütfen tekrar deneyin.");
     } finally {
       setSubmitting(false);

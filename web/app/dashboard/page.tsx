@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { EmptyState } from "@/components/ui/states";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessById, listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { listAppointments } from "@/features/appointments/appointment-repository";
@@ -12,6 +11,12 @@ import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import type { Appointment } from "@/types/appointments";
 import type { Business } from "@/types/business";
+import {
+  Building2, CalendarCheck2, CalendarDays, CheckCircle2,
+  CircleDollarSign, Clock3, Copy, FileText, FolderOpen, ImageIcon,
+  Inbox, ListChecks, PartyPopper, Scissors, Settings2,
+  UserRound, UsersRound, XCircle, Zap, type LucideIcon,
+} from "lucide-react";
 
 interface DashboardData {
   todayCount: number;
@@ -29,7 +34,7 @@ interface SetupItem {
   label: string;
   done: boolean;
   href: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 const EMPTY_DATA: DashboardData = {
@@ -40,7 +45,6 @@ const EMPTY_DATA: DashboardData = {
 function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
   const [display, setDisplay] = useState(0);
   useEffect(() => {
-    if (value === 0) { setDisplay(0); return; }
     const duration = 600;
     const start = performance.now();
     function tick(now: number) {
@@ -103,32 +107,32 @@ export default function DashboardHomePage() {
             label: biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district
               ? "İşletme bilgileri tamamlandı" : "İşletme bilgilerini tamamla",
             done: !!(biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district),
-            href: "/dashboard/ayarlar", icon: "🏢",
+            href: "/dashboard/ayarlar", icon: Building2,
           },
           {
             label: biz?.category && biz.category !== "diger" ? `Kategori: ${biz.category}` : "Kategori seçilmedi",
             done: !!(biz?.category && biz.category !== "diger"),
-            href: "/dashboard/ayarlar", icon: "📂",
+            href: "/dashboard/ayarlar", icon: FolderOpen,
           },
           {
             label: workingHours.length > 0 ? "Çalışma saatleri ayarlandı" : "Çalışma saatlerini ayarla",
-            done: workingHours.length > 0, href: "/dashboard/calisma-saatleri", icon: "🕐",
+            done: workingHours.length > 0, href: "/dashboard/calisma-saatleri", icon: Clock3,
           },
           {
             label: services.length > 0 ? `${services.length} hizmet eklendi` : "Henüz hizmet eklenmedi",
-            done: services.length > 0, href: "/dashboard/hizmetler", icon: "💇",
+            done: services.length > 0, href: "/dashboard/hizmetler", icon: Scissors,
           },
           {
             label: staff.length > 0 ? `${staff.length} çalışan eklendi` : "Henüz çalışan eklenmedi",
-            done: staff.length > 0, href: "/dashboard/calisanlar", icon: "👤",
+            done: staff.length > 0, href: "/dashboard/calisanlar", icon: UserRound,
           },
           {
             label: biz?.logoUrl ? "Logo yüklendi" : "Logo yükle",
-            done: !!biz?.logoUrl, href: "/dashboard/ayarlar", icon: "🖼️",
+            done: !!biz?.logoUrl, href: "/dashboard/ayarlar", icon: ImageIcon,
           },
           {
             label: biz?.description && biz.description.length > 10 ? "Açıklama eklendi" : "Açıklama ekle",
-            done: !!(biz?.description && biz.description.length > 10), href: "/dashboard/ayarlar", icon: "📝",
+            done: !!(biz?.description && biz.description.length > 10), href: "/dashboard/ayarlar", icon: FileText,
           },
         ];
         setSetupItems(items);
@@ -151,13 +155,13 @@ export default function DashboardHomePage() {
   const allComplete = completedSteps === totalSteps;
 
   const statCards = [
-    { label: "Bugünkü Randevular", value: data.todayCount, icon: "📅", textColor: "text-sky-600", bg: "bg-sky-500/5" },
-    { label: "Bekleyen", value: data.pending, icon: "⏳", textColor: "text-amber-600", bg: "bg-amber-500/5" },
-    { label: "Tamamlanan", value: data.completed, icon: "✅", textColor: "text-emerald-600", bg: "bg-emerald-500/5" },
-    { label: "İptaller", value: data.cancelled, icon: "❌", textColor: "text-rose-600", bg: "bg-rose-500/5" },
-    { label: "Toplam Müşteri", value: data.customerCount, icon: "👥", textColor: "text-violet-600", bg: "bg-violet-500/5" },
-    { label: "Toplam Hizmet", value: data.serviceCount, icon: "💇", textColor: "text-pink-600", bg: "bg-pink-500/5" },
-    { label: "Toplam Çalışan", value: data.staffCount, icon: "🧑‍💼", textColor: "text-indigo-600", bg: "bg-indigo-500/5" },
+    { label: "Bugünkü Randevular", value: data.todayCount, icon: CalendarDays, textColor: "text-sky-600", bg: "bg-sky-500/5" },
+    { label: "Bekleyen", value: data.pending, icon: Clock3, textColor: "text-amber-600", bg: "bg-amber-500/5" },
+    { label: "Tamamlanan", value: data.completed, icon: CheckCircle2, textColor: "text-emerald-600", bg: "bg-emerald-500/5" },
+    { label: "İptaller", value: data.cancelled, icon: XCircle, textColor: "text-rose-600", bg: "bg-rose-500/5" },
+    { label: "Toplam Müşteri", value: data.customerCount, icon: UsersRound, textColor: "text-violet-600", bg: "bg-violet-500/5" },
+    { label: "Toplam Hizmet", value: data.serviceCount, icon: Scissors, textColor: "text-pink-600", bg: "bg-pink-500/5" },
+    { label: "Toplam Çalışan", value: data.staffCount, icon: UserRound, textColor: "text-indigo-600", bg: "bg-indigo-500/5" },
   ];
 
   return (
@@ -179,7 +183,7 @@ export default function DashboardHomePage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-bold text-[var(--text-1)]">🎯 Profil Durumu</h3>
+              <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><ListChecks size={20} /> Profil Durumu</h3>
               <p className="mt-0.5 text-sm text-[var(--text-3)]">
                 {completedSteps}/{totalSteps} adım tamamlandı
               </p>
@@ -201,6 +205,9 @@ export default function DashboardHomePage() {
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {setupItems.map((item, i) => (
+              (() => {
+                const ItemIcon = item.icon;
+                return (
               <Link
                 key={item.label}
                 href={item.href}
@@ -214,7 +221,7 @@ export default function DashboardHomePage() {
                   transition: `opacity 0.4s ease ${i * 0.06}s, transform 0.4s ease ${i * 0.06}s`,
                 }}
               >
-                <span className="text-base">{item.done ? "✅" : item.icon}</span>
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/50">{item.done ? <CheckCircle2 size={16} /> : <ItemIcon size={16} />}</span>
                 <span className={item.done ? "line-through opacity-60" : ""}>{item.label}</span>
                 {!item.done && (
                   <svg className="ml-auto h-4 w-4 text-[var(--text-3)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -222,6 +229,8 @@ export default function DashboardHomePage() {
                   </svg>
                 )}
               </Link>
+                );
+              })()
             ))}
           </div>
         </div>
@@ -249,7 +258,7 @@ export default function DashboardHomePage() {
               {/* Left side */}
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25">
-                  <span className="text-2xl">🎉</span>
+                  <PartyPopper size={25} strokeWidth={1.8} />
                 </div>
                 <div>
                   <h3 className="text-xl font-extrabold text-[var(--text-1)]">
@@ -262,7 +271,7 @@ export default function DashboardHomePage() {
                   {/* Store URL display */}
                   {business?.slug && (
                     <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2">
-                      <span className="text-xs text-[var(--text-3)]">🔗</span>
+                      <Copy size={14} className="text-[var(--text-3)]" />
                       <code className="text-xs font-medium text-[var(--text-2)]">
                         seninrandevun.com/isletme/{business.slug}
                       </code>
@@ -330,7 +339,7 @@ export default function DashboardHomePage() {
             transition: "opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s",
           }}
         >
-          <span className="text-sm">🔗</span>
+          <Copy size={15} />
           <code className="text-xs font-medium text-[var(--text-2)]">
             seninrandevun.com/isletme/{business.slug}
           </code>
@@ -356,6 +365,9 @@ export default function DashboardHomePage() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {statCards.map((stat, i) => (
+          (() => {
+            const StatIcon = stat.icon;
+            return (
           <div
             key={stat.label}
             className={`group relative overflow-hidden rounded-2xl border border-[var(--border)] ${stat.bg} p-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]`}
@@ -366,12 +378,14 @@ export default function DashboardHomePage() {
           >
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)]">{stat.label}</p>
-              <span className="text-lg opacity-60 transition-transform duration-300 group-hover:scale-125">{stat.icon}</span>
+              <span className={`dashboard-stat-icon ${stat.textColor}`}><StatIcon size={19} strokeWidth={1.8} /></span>
             </div>
             <p className={`mt-2 text-3xl font-black ${stat.textColor}`}>
               <AnimatedNumber value={stat.value} />
             </p>
           </div>
+            );
+          })()
         ))}
         {/* Revenue Card */}
         <div
@@ -383,7 +397,7 @@ export default function DashboardHomePage() {
         >
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)]">Bugünkü Gelir</p>
-            <span className="text-lg opacity-60 transition-transform duration-300 group-hover:scale-125">💰</span>
+            <span className="dashboard-stat-icon text-yellow-600"><CircleDollarSign size={19} strokeWidth={1.8} /></span>
           </div>
           <p className="mt-2 text-3xl font-black text-yellow-600">
             {data.todayRevenue > 0 ? <><AnimatedNumber value={data.todayRevenue} /> ₺</> : "—"}
@@ -402,7 +416,7 @@ export default function DashboardHomePage() {
         >
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-[var(--text-1)]">📋 Yaklaşan Randevular</h3>
+              <h3 className="flex items-center gap-2 font-bold text-[var(--text-1)]"><CalendarCheck2 size={19} /> Yaklaşan Randevular</h3>
               <p className="text-xs text-[var(--text-3)]">Sıradaki operasyon akışı</p>
             </div>
             {data.upcoming.length > 0 && (
@@ -411,7 +425,7 @@ export default function DashboardHomePage() {
           </div>
           {data.upcoming.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] p-8 text-center">
-              <span className="text-3xl">📭</span>
+              <Inbox className="mx-auto text-[var(--text-3)]" size={31} strokeWidth={1.5} />
               <p className="mt-2 text-sm font-medium text-[var(--text-2)]">Yaklaşan randevu yok</p>
               <p className="mt-1 text-xs text-[var(--text-3)]">Yeni randevular burada görünecek</p>
             </div>
@@ -453,16 +467,19 @@ export default function DashboardHomePage() {
             transition: "opacity 0.5s ease 0.7s, transform 0.5s ease 0.7s",
           }}
         >
-          <h3 className="mb-4 font-bold text-[var(--text-1)]">⚡ Hızlı Erişim</h3>
+          <h3 className="mb-4 flex items-center gap-2 font-bold text-[var(--text-1)]"><Zap size={19} /> Hızlı Erişim</h3>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {[
-              { href: "/dashboard/hizmetler", label: "Hizmetler", icon: "💇", desc: "Hizmet ekle/düzenle", hoverColor: "hover:border-pink-400/40" },
-              { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: "👥", desc: "Ekip yönetimi", hoverColor: "hover:border-indigo-400/40" },
-              { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: "🕐", desc: "Saat ayarları", hoverColor: "hover:border-amber-400/40" },
-              { href: "/dashboard/ayarlar", label: "Ayarlar", icon: "⚙️", desc: "İşletme bilgileri", hoverColor: "hover:border-sky-400/40" },
-              { href: "/dashboard/musteriler", label: "Müşteriler", icon: "👤", desc: "Müşteri listesi", hoverColor: "hover:border-violet-400/40" },
-              { href: "/dashboard/randevular", label: "Randevular", icon: "📅", desc: "Tüm randevular", hoverColor: "hover:border-emerald-400/40" },
+              { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors, desc: "Hizmet ekle/düzenle", hoverColor: "hover:border-pink-400/40" },
+              { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: UsersRound, desc: "Ekip yönetimi", hoverColor: "hover:border-indigo-400/40" },
+              { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: Clock3, desc: "Saat ayarları", hoverColor: "hover:border-amber-400/40" },
+              { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2, desc: "İşletme bilgileri", hoverColor: "hover:border-sky-400/40" },
+              { href: "/dashboard/musteriler", label: "Müşteriler", icon: UserRound, desc: "Müşteri listesi", hoverColor: "hover:border-violet-400/40" },
+              { href: "/dashboard/randevular", label: "Randevular", icon: CalendarDays, desc: "Tüm randevular", hoverColor: "hover:border-emerald-400/40" },
             ].map((link, i) => (
+              (() => {
+                const LinkIcon = link.icon;
+                return (
               <Link
                 key={link.href}
                 href={link.href}
@@ -472,12 +489,14 @@ export default function DashboardHomePage() {
                   transition: `opacity 0.3s ease ${i * 0.05 + 0.8}s, transform 0.3s ease ${i * 0.05 + 0.8}s`,
                 }}
               >
-                <span className="text-2xl">{link.icon}</span>
+                <span className="quick-link-icon"><LinkIcon size={20} strokeWidth={1.8} /></span>
                 <div>
                   <p className="text-sm font-semibold text-[var(--text-1)]">{link.label}</p>
                   <p className="text-[10px] text-[var(--text-3)]">{link.desc}</p>
                 </div>
               </Link>
+                );
+              })()
             ))}
           </div>
         </div>

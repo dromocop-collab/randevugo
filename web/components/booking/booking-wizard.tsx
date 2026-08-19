@@ -15,6 +15,11 @@ import { listStaff } from "@/features/staff/staff-repository";
 import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
+import {
+  ArrowLeft, ArrowRight, Building2, CalendarDays, CheckCircle2,
+  CircleDollarSign, Clock3, FileCheck2, Mail, MessageSquareText, Phone,
+  Send, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
+} from "lucide-react";
 
 interface Props {
   businessId: string;
@@ -439,70 +444,29 @@ export function BookingWizard(props: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      {/* ━━━ Premium Progress Stepper ━━━ */}
-      <div className="relative rounded-2xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-4 shadow-lg backdrop-blur-xl">
-        {/* Progress line background */}
-        <div className="absolute left-0 right-0 top-1/2 mx-12 hidden h-0.5 -translate-y-1/2 rounded-full bg-[var(--border)] sm:block" />
-        {/* Active progress line */}
-        <div
-          className="absolute left-0 top-1/2 mx-12 hidden h-0.5 -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-3))] transition-all duration-700 ease-out sm:block"
-          style={{ width: `${(currentStepIndex / (STEPS.length - 1)) * (100 - 12)}%` }}
-        />
-        <div className="relative flex items-center justify-between">
-          {STEPS.map((s, i) => {
-            const done = i < currentStepIndex;
-            const active = i === currentStepIndex;
-            return (
-              <div key={s} className="flex flex-col items-center gap-1.5">
-                <div
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-all duration-500 ${
-                    done
-                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-100"
-                      : active
-                      ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/30 scale-110 ring-4 ring-[var(--accent)]/20"
-                      : "border-2 border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-3)] scale-90"
-                  }`}
-                >
-                  {done ? (
-                    <svg className="h-4 w-4 animate-[scaleIn_0.3s_ease]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    i + 1
-                  )}
-                  {active && (
-                    <span className="absolute inset-0 animate-ping rounded-full bg-[var(--accent)] opacity-20" />
-                  )}
-                </div>
-                <span
-                  className={`hidden text-[10px] font-semibold uppercase tracking-wider sm:block transition-colors duration-300 ${
-                    active
-                      ? "text-[var(--accent)]"
-                      : done
-                      ? "text-emerald-600"
-                      : "text-[var(--text-3)]"
-                  }`}
-                >
-                  {STEP_LABELS[s]}
-                </span>
-              </div>
-            );
-          })}
+    <div className="booking-wizard mx-auto max-w-2xl space-y-4">
+      <div className="booking-progress rounded-2xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-4 shadow-lg backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent)] text-white"><Sparkles size={18} /></span>
+            <div><small className="font-bold uppercase tracking-[.16em] text-[var(--accent)]">Adım {currentStepIndex + 1} / {STEPS.length}</small><p className="text-sm font-bold text-[var(--text-1)]">{STEP_LABELS[step]}</p></div>
+          </div>
+          <span className="text-xs font-bold text-[var(--text-3)]">%{Math.round(((currentStepIndex + 1) / STEPS.length) * 100)}</span>
         </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]"><i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),#79d8a6)] transition-all duration-500" style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }} /></div>
       </div>
 
       {/* ━━━ Step Content ━━━ */}
       <div
         key={step}
-        className="animate-[fadeSlideIn_0.4s_ease] rounded-2xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-6 shadow-lg backdrop-blur-xl"
+        className="booking-step-panel animate-[fadeSlideIn_0.35s_ease] rounded-2xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-6 shadow-lg backdrop-blur-xl"
       >
         {/* ── Service Step ── */}
         {step === "service" && (
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] shadow-md shadow-sky-500/20">
-                <span className="text-lg">💼</span>
+                <WandSparkles size={20} className="text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Hizmet Seçin</h2>
@@ -563,7 +527,7 @@ export function BookingWizard(props: Props) {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#8b5cf6,#7c3aed)] shadow-md shadow-purple-500/20">
-                <span className="text-lg">👤</span>
+                <UsersRound size={20} className="text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Çalışan Seçin</h2>
@@ -628,7 +592,7 @@ export function BookingWizard(props: Props) {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f59e0b,#d97706)] shadow-md shadow-amber-500/20">
-                <span className="text-lg">📅</span>
+                <CalendarDays size={20} className="text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Tarih ve Saat Seçin</h2>
@@ -790,7 +754,7 @@ export function BookingWizard(props: Props) {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#10b981,#059669)] shadow-md shadow-emerald-500/20">
-                <span className="text-lg">📝</span>
+                <FileCheck2 size={20} className="text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">İletişim Bilgileriniz</h2>
@@ -800,7 +764,7 @@ export function BookingWizard(props: Props) {
             <div className="mt-5 space-y-4">
               <div className="animate-[fadeSlideIn_0.3s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
-                  👤 Ad Soyad <span className="text-red-400">*</span>
+                  <UserRound size={14} /> Ad Soyad <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -813,7 +777,7 @@ export function BookingWizard(props: Props) {
               </div>
               <div className="animate-[fadeSlideIn_0.35s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
-                  📞 Telefon <span className="text-red-400">*</span>
+                  <Phone size={14} /> Telefon <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="tel"
@@ -826,7 +790,7 @@ export function BookingWizard(props: Props) {
               </div>
               <div className="animate-[fadeSlideIn_0.4s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
-                  📧 E-posta
+                  <Mail size={14} /> E-posta
                 </label>
                 <input
                   type="email"
@@ -838,7 +802,7 @@ export function BookingWizard(props: Props) {
               </div>
               <div className="animate-[fadeSlideIn_0.45s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
-                  💬 Not
+                  <MessageSquareText size={14} /> Not
                 </label>
                 <textarea
                   value={notes}
@@ -950,7 +914,7 @@ export function BookingWizard(props: Props) {
                       disabled={sendingCode}
                       className="text-sm font-semibold text-[var(--accent)] transition hover:underline disabled:opacity-50"
                     >
-                      {sendingCode ? "Gönderiliyor..." : "📲 Kodu Tekrar Gönder"}
+                      {sendingCode ? "Gönderiliyor..." : <span className="inline-flex items-center gap-2"><Send size={14} /> Kodu Tekrar Gönder</span>}
                     </button>
                   )}
                 </div>
@@ -972,7 +936,7 @@ export function BookingWizard(props: Props) {
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#6366f1,#4f46e5)] shadow-md shadow-indigo-500/20">
-                <span className="text-lg">📋</span>
+                <FileCheck2 size={20} className="text-white" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Randevu Özeti</h2>
@@ -980,23 +944,23 @@ export function BookingWizard(props: Props) {
               </div>
             </div>
             <div className="mt-5 space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/40 p-5">
-              <SummaryRow icon="🏢" label="İşletme" value={props.businessName} delay={0} />
+              <SummaryRow icon={Building2} label="İşletme" value={props.businessName} delay={0} />
               <SummaryRow
-                icon="💼" label="Hizmet" delay={50}
+                icon={WandSparkles} label="Hizmet" delay={50}
                 value={selectedService ? `${selectedService.name} (${selectedService.durationMinutes} dk)` : ""}
               />
-              <SummaryRow icon="👤" label="Çalışan" value={selectedStaff?.fullName ?? ""} delay={100} />
-              <SummaryRow icon="📅" label="Tarih" value={format(new Date(appointmentsDate), "dd.MM.yyyy")} delay={150} />
-              <SummaryRow icon="🕐" label="Saat" value={slot} delay={200} />
+              <SummaryRow icon={UserRound} label="Çalışan" value={selectedStaff?.fullName ?? ""} delay={100} />
+              <SummaryRow icon={CalendarDays} label="Tarih" value={format(new Date(appointmentsDate), "dd.MM.yyyy")} delay={150} />
+              <SummaryRow icon={Clock3} label="Saat" value={slot} delay={200} />
               <SummaryRow
-                icon="💰" label="Fiyat" delay={250}
+                icon={CircleDollarSign} label="Fiyat" delay={250}
                 value={selectedService ? `${selectedService.price.toLocaleString("tr-TR")} ₺` : ""}
               />
               <hr className="border-[var(--border)]" />
-              <SummaryRow icon="🙋" label="Ad Soyad" value={customerName} delay={300} />
-              <SummaryRow icon="📞" label="Telefon" value={customerPhone} delay={350} />
-              {customerEmail && <SummaryRow icon="📧" label="E-posta" value={customerEmail} delay={400} />}
-              {notes && <SummaryRow icon="💬" label="Not" value={notes} delay={450} />}
+              <SummaryRow icon={UserRound} label="Ad Soyad" value={customerName} delay={300} />
+              <SummaryRow icon={Phone} label="Telefon" value={customerPhone} delay={350} />
+              {customerEmail && <SummaryRow icon={Mail} label="E-posta" value={customerEmail} delay={400} />}
+              {notes && <SummaryRow icon={MessageSquareText} label="Not" value={notes} delay={450} />}
             </div>
           </div>
         )}
@@ -1011,9 +975,7 @@ export function BookingWizard(props: Props) {
             disabled={currentStepIndex === 0}
             className="group flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-5 py-3 text-sm font-semibold text-[var(--text-2)] shadow-sm transition-all duration-300 hover:bg-[var(--field-bg-hover)] hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <svg className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
+            <ArrowLeft size={16} />
             Geri
           </button>
 
@@ -1034,10 +996,7 @@ export function BookingWizard(props: Props) {
                 </>
               ) : (
                 <>
-                  🎉 Randevuyu Onayla
-                  <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+                  <CheckCircle2 size={17} /> Randevuyu Onayla
                 </>
               )}
             </button>
@@ -1056,9 +1015,7 @@ export function BookingWizard(props: Props) {
               className="group flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-7 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition-all duration-300 hover:shadow-xl hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Devam Et
-              <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ArrowRight size={16} />
             </button>
           )}
         </div>
@@ -1084,14 +1041,14 @@ export function BookingWizard(props: Props) {
   );
 }
 
-function SummaryRow({ icon, label, value, delay = 0 }: { icon: string; label: string; value: string; delay?: number }) {
+function SummaryRow({ icon: Icon, label, value, delay = 0 }: { icon: LucideIcon; label: string; value: string; delay?: number }) {
   return (
     <div
       style={{ animationDelay: `${delay}ms` }}
       className="flex items-center justify-between animate-[fadeSlideIn_0.3s_ease_forwards] opacity-0 py-1"
     >
       <span className="flex items-center gap-2 text-sm text-[var(--text-3)]">
-        <span>{icon}</span> {label}
+        <Icon size={15} /> {label}
       </span>
       <span className="text-right text-sm font-semibold text-[var(--text-1)]">
         {value}
@@ -1099,4 +1056,3 @@ function SummaryRow({ icon, label, value, delay = 0 }: { icon: string; label: st
     </div>
   );
 }
-

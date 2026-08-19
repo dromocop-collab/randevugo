@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
-import { useAuth } from "@/hooks/use-auth";
+import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 
 const DEFAULT_CATEGORIES = [
   { value: "", label: "Tümü", icon: "🏢" },
@@ -41,8 +40,6 @@ const ALL_CITIES = [
 ];
 
 export default function DiscoverPage() {
-  const { user, status: authStatus } = useAuth();
-  const isLoggedIn = authStatus === "authenticated" && !!user;
   const [results, setResults] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
@@ -68,7 +65,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    queueMicrotask(() => { if (!cancelled) setLoading(true); });
 
     searchBusinesses({
       searchText: keyword.trim() || undefined,
@@ -90,47 +87,12 @@ export default function DiscoverPage() {
   }, [keyword, category, city]);
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-[var(--border)]/50 bg-[var(--bg-1)]/70 backdrop-blur-2xl">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <Image src="/logo.png" alt="SeninRandevun" width={36} height={36} className="rounded-xl shadow-lg transition group-hover:scale-105" />
-            <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
-              Senin<span className="text-[var(--accent)]">Randevun</span>
-            </span>
-          </Link>
-          <div className="flex items-center gap-3">
-            {isLoggedIn ? (
-              <Link
-                href="/dashboard"
-                className="rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition hover:brightness-110 active:scale-[0.97] flex items-center gap-2"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Panelim
-              </Link>
-            ) : (
-              <>
-                <Link href="/giris" className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[var(--text-2)] transition hover:bg-[var(--surface-2)] sm:inline-flex">
-                  Giriş Yap
-                </Link>
-                <Link
-                  href="/kayit"
-                  className="rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition hover:brightness-110 active:scale-[0.97]"
-                >
-                  İşletme Aç
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="marketing-page discover-v2 min-h-screen">
+      <MarketingHeader />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 lg:px-8">
+      <main className="discover-main mx-auto w-full max-w-7xl px-4 py-12 lg:px-8">
         {/* Hero */}
-        <div className="mb-8">
+        <div className="discover-hero mb-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-4 py-1.5 text-xs font-semibold text-[var(--accent)]">
             🔍 Keşfet
           </div>
@@ -143,7 +105,7 @@ export default function DiscoverPage() {
         </div>
 
         {/* Search */}
-        <div className="mb-6 space-y-4">
+        <div className="discover-search-panel mb-8 space-y-4">
           <div className="relative">
             <svg className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-3)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -158,7 +120,7 @@ export default function DiscoverPage() {
           </div>
 
           {/* Category Pills */}
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="discover-category-rail flex gap-2 overflow-x-auto pb-1">
             {categories.map((cat) => (
               <button
                 key={cat.value}
@@ -202,12 +164,12 @@ export default function DiscoverPage() {
             description="Filtrelerinizi değiştirip tekrar deneyin."
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="discover-results grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {results.map((biz) => (
               <Link
                 key={biz.id}
                 href={`/isletme/${biz.slug}`}
-                className="group rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-md shadow-[var(--shadow-soft)] transition hover:shadow-xl hover:border-[var(--accent)]/30 hover:-translate-y-0.5"
+                className="discover-card group rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-md shadow-[var(--shadow-soft)] transition hover:shadow-xl hover:border-[var(--accent)]/30 hover:-translate-y-0.5"
               >
                 {/* Cover */}
                 <div className="relative h-40 w-full overflow-hidden rounded-t-2xl bg-[var(--surface-3)]">
@@ -268,6 +230,7 @@ export default function DiscoverPage() {
           </div>
         )}
       </main>
+      <MarketingFooter />
     </div>
   );
 }

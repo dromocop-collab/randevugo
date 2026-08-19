@@ -16,6 +16,8 @@ import {
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
+import { Building2, CalendarCog, Images, Share2, type LucideIcon } from "lucide-react";
+import { useBusinessContext } from "@/features/businesses/business-context";
 
 const DEFAULT_CATEGORY_OPTIONS = [
   { value: "kuafor", label: "Kuaför" },
@@ -42,6 +44,7 @@ type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu";
 
 export default function SettingsPage() {
   const { businessId } = useBusiness();
+  const { refreshBusinesses } = useBusinessContext();
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -205,31 +208,34 @@ export default function SettingsPage() {
     return <LoadingState title="Ayarlar yükleniyor" description="İşletme bilgileri getiriliyor..." />;
   }
 
-  const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: "bilgiler", label: "İşletme Bilgileri", icon: "🏢" },
-    { id: "gorseller", label: "Görseller", icon: "🖼️" },
-    { id: "sosyal", label: "Sosyal Medya", icon: "📱" },
-    { id: "randevu", label: "Randevu Ayarları", icon: "⚙️" },
+  const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+    { id: "bilgiler", label: "İşletme Bilgileri", icon: Building2 },
+    { id: "gorseller", label: "Görseller", icon: Images },
+    { id: "sosyal", label: "Sosyal Medya", icon: Share2 },
+    { id: "randevu", label: "Randevu Ayarları", icon: CalendarCog },
   ];
 
   return (
     <div className="space-y-4">
       {/* Tab Navigation */}
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition ${
-              activeTab === tab.id
-                ? "bg-[var(--accent)] text-white shadow-md"
-                : "text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
-            }`}
-          >
-            <span>{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+                activeTab === tab.id
+                  ? "bg-[var(--accent)] text-white shadow-md"
+                  : "text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
+              }`}
+            >
+              <Icon aria-hidden="true" size={17} strokeWidth={1.9} />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab 1: İşletme Bilgileri */}
@@ -411,6 +417,7 @@ export default function SettingsPage() {
               onUpload={async (url) => {
                 await updateBusiness(businessId!, { logoUrl: url });
                 setBusiness((prev) => prev ? { ...prev, logoUrl: url } : prev);
+                refreshBusinesses();
               }}
             />
             <ImageUploader
@@ -421,6 +428,7 @@ export default function SettingsPage() {
               onUpload={async (url) => {
                 await updateBusiness(businessId!, { coverUrl: url });
                 setBusiness((prev) => prev ? { ...prev, coverUrl: url } : prev);
+                refreshBusinesses();
               }}
             />
           </div>
@@ -444,6 +452,7 @@ export default function SettingsPage() {
                   const updated = [...current, url];
                   await updateBusiness(businessId!, { galleryUrls: updated });
                   setBusiness((prev) => prev ? { ...prev, galleryUrls: updated } : prev);
+                  refreshBusinesses();
                 }}
               />
             </div>

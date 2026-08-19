@@ -3,16 +3,16 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { LoginForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Giris | SeninRandevun",
-  description: "SeninRandevun isletme paneline giris yapin.",
+  title: "Giriş | SeninRandevun",
+  description: "SeninRandevun işletme paneline giriş yapın.",
 };
 
 export default function LoginPage() {
   return (
     <AuthShell
-      eyebrow="KURUMSAL GIRIS"
-      title="Operasyon panelinize guvenle baglanin"
-      subtitle="Isletmenizin tum randevu, ekip ve gelir akisina tek panelden ulasin. Guvenli oturum yonetimi ve tenant izolasyonu ile profesyonel deneyim."
+      eyebrow="YENİDEN HOŞ GELDİNİZ"
+      title="Günün kontrolü yeniden sizde."
+      subtitle="Randevu, ekip, müşteri ve büyüme verilerinize güvenli oturumunuzla her cihazdan ulaşın."
     >
       <LoginForm />
     </AuthShell>

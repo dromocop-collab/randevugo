@@ -26,7 +26,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (!businessId) return;
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     Promise.all([
       listCustomers(businessId),
       listAppointments(businessId),

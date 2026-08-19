@@ -1,6 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useState } from "react";
 import type { Business, DaySchedule } from "@/types/business";
+import { useAuth } from "@/hooks/use-auth";
+import { ArrowLeft, BadgeCheck, MapPin, Phone, Star } from "lucide-react";
 
 interface StorefrontHeaderProps {
   business: Business;
@@ -24,18 +28,22 @@ function getClosingTime(workingHours: DaySchedule[]): string | null {
 }
 
 export function StorefrontHeader({ business, workingHours }: StorefrontHeaderProps) {
+  const { user, status } = useAuth();
+  const [failedCoverUrl, setFailedCoverUrl] = useState<string | null>(null);
   const open = isOpenNow(workingHours);
   const closingTime = getClosingTime(workingHours);
+  const coverUrl = business.coverUrl || business.galleryUrls?.[0];
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] shadow-2xl shadow-[var(--shadow-hard)]">
+    <div className="storefront-hero relative overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface-1)] shadow-2xl shadow-[var(--shadow-hard)]">
       {/* Cover Image */}
       <div className="relative h-52 overflow-hidden sm:h-72 lg:h-80">
-        {business.coverUrl ? (
+        {coverUrl && failedCoverUrl !== coverUrl ? (
           <img
-            src={business.coverUrl}
+            src={coverUrl}
             alt={business.name}
-            className="h-full w-full object-cover transition hover:scale-105 duration-700"
+            onError={() => setFailedCoverUrl(coverUrl)}
+            className="h-full w-full object-cover transition duration-700 hover:scale-[1.025]"
           />
         ) : (
           <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,var(--accent)/15,var(--accent-3)/15)]">
@@ -49,9 +57,14 @@ export function StorefrontHeader({ business, workingHours }: StorefrontHeaderPro
 
         {/* Status badge on cover */}
         <div className="absolute right-4 top-4 flex items-center gap-2">
+          {status === "authenticated" && user && (
+            <Link href="/dashboard" className="storefront-owner-link">
+              <ArrowLeft size={14} /> İşletme paneline dön
+            </Link>
+          )}
           {business.isVerified && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur-sm shadow-lg">
-              ✓ Doğrulanmış
+              <BadgeCheck size={14} /> Doğrulanmış
             </span>
           )}
           <span
@@ -104,12 +117,12 @@ export function StorefrontHeader({ business, workingHours }: StorefrontHeaderPro
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
               <span className="flex items-center gap-1.5 text-sm text-[var(--text-2)]">
-                📍 {business.district}, {business.city}
+                <MapPin size={15} /> {business.district}, {business.city}
               </span>
               {(business.reviewCount ?? 0) > 0 && (
                 <span className="flex items-center gap-1.5 text-sm">
                   <span className="flex items-center gap-0.5 rounded-lg bg-amber-500/10 px-2 py-0.5">
-                    <span className="text-xs">⭐</span>
+                    <Star size={13} fill="currentColor" />
                     <span className="font-bold text-amber-600">
                       {(business.rating ?? 0).toFixed(1)}
                     </span>
@@ -121,7 +134,7 @@ export function StorefrontHeader({ business, workingHours }: StorefrontHeaderPro
               )}
               {business.phone && (
                 <a href={`tel:${business.phone}`} className="flex items-center gap-1 text-sm text-[var(--accent)] hover:underline">
-                  📞 {business.phone}
+                  <Phone size={14} /> {business.phone}
                 </a>
               )}
             </div>

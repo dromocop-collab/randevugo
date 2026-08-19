@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { EmptyState, LoadingState } from "@/components/ui/states";
@@ -18,12 +18,12 @@ import {
   updateReviewStatus,
 } from "@/features/reviews/review-repository";
 import type { Review } from "@/types/review";
+import { CheckCircle2, Clock3, FolderPlus, XCircle, type LucideIcon } from "lucide-react";
 
 type StatusFilter = "pending" | "approved" | "rejected" | "all";
 
 export default function SuperAdminModerationPage() {
   const { user } = useAuth();
-  const [requests, setRequests] = useState<CategoryRequest[]>([]);
   const [allRequests, setAllRequests] = useState<CategoryRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>("pending");
@@ -31,28 +31,15 @@ export default function SuperAdminModerationPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAll();
+    let active = true;
+    listCategoryRequests()
+      .then((data) => { if (active) setAllRequests(data); })
+      .catch(() => { if (active) toast.error("Kategori istekleri yüklenemedi."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    if (filter === "all") {
-      setRequests(allRequests);
-    } else {
-      setRequests(allRequests.filter((r) => r.status === filter));
-    }
-  }, [filter, allRequests]);
-
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const data = await listCategoryRequests();
-      setAllRequests(data);
-    } catch {
-      toast.error("Kategori istekleri yüklenemedi.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const requests = useMemo(() => filter === "all" ? allRequests : allRequests.filter((request) => request.status === filter), [filter, allRequests]);
 
   async function handleApprove(req: CategoryRequest) {
     if (!user) return;
@@ -91,10 +78,10 @@ export default function SuperAdminModerationPage() {
   const approvedCount = allRequests.filter((r) => r.status === "approved").length;
   const rejectedCount = allRequests.filter((r) => r.status === "rejected").length;
 
-  const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-    pending: { label: "Bekliyor", color: "text-amber-600", bg: "bg-amber-500/10", icon: "⏳" },
-    approved: { label: "Onaylandı", color: "text-emerald-600", bg: "bg-emerald-500/10", icon: "✅" },
-    rejected: { label: "Reddedildi", color: "text-rose-600", bg: "bg-rose-500/10", icon: "❌" },
+  const statusConfig: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
+    pending: { label: "Bekliyor", color: "text-amber-600", bg: "bg-amber-500/10", icon: Clock3 },
+    approved: { label: "Onaylandı", color: "text-emerald-600", bg: "bg-emerald-500/10", icon: CheckCircle2 },
+    rejected: { label: "Reddedildi", color: "text-rose-600", bg: "bg-rose-500/10", icon: XCircle },
   };
 
   const filterTabs = [
@@ -184,6 +171,7 @@ export default function SuperAdminModerationPage() {
           <div className="space-y-3">
             {requests.map((req) => {
               const config = statusConfig[req.status] ?? statusConfig.pending;
+              const StatusIcon = config.icon;
               const isExpanded = expandedId === req.id;
 
               return (
@@ -198,7 +186,7 @@ export default function SuperAdminModerationPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${config.bg} text-lg`}>
-                        {config.icon}
+                        <StatusIcon size={18} strokeWidth={1.9} />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -230,14 +218,14 @@ export default function SuperAdminModerationPage() {
                             onClick={(e) => { e.stopPropagation(); handleApprove(req); }}
                             disabled={processing === req.id}
                           >
-                            {processing === req.id ? "İşleniyor..." : "✅ Onayla"}
+                            {processing === req.id ? "İşleniyor..." : <span className="inline-flex items-center gap-2"><CheckCircle2 size={15} /> Onayla</span>}
                           </Button>
                           <Button
                             variant="danger"
                             onClick={(e) => { e.stopPropagation(); handleReject(req); }}
                             disabled={processing === req.id}
                           >
-                            ❌ Reddet
+                            <XCircle size={15} /> Reddet
                           </Button>
                         </>
                       )}
@@ -259,7 +247,7 @@ export default function SuperAdminModerationPage() {
                           }}
                           disabled={processing === req.id}
                         >
-                          {processing === req.id ? "Ekleniyor..." : "📂 Kategoriye Ekle"}
+                          {processing === req.id ? "Ekleniyor..." : <span className="inline-flex items-center gap-2"><FolderPlus size={15} /> Kategoriye Ekle</span>}
                         </Button>
                       )}
                       <span className={`text-[var(--text-3)] transition ${isExpanded ? "rotate-180" : ""}`}>
@@ -324,20 +312,13 @@ function ReviewModerationCard() {
   const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
-    loadReviews();
+    let active = true;
+    listPendingReviewsAcrossPlatform()
+      .then((rows) => { if (active) setReviews(rows); })
+      .catch(() => { if (active) toast.error("Yorumlar yüklenemedi."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
-
-  async function loadReviews() {
-    setLoading(true);
-    try {
-      const rows = await listPendingReviewsAcrossPlatform();
-      setReviews(rows);
-    } catch {
-      toast.error("Yorumlar yüklenemedi.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleDecision(review: Review, status: "approved" | "rejected") {
     setProcessing(review.id);

@@ -4,7 +4,6 @@ import {
   collectionGroup,
   doc,
   getDocs,
-  getDoc,
   query,
   where,
   orderBy,
@@ -55,15 +54,42 @@ export async function listBusinessReviewsForOwner(
  */
 export async function listPendingReviewsAcrossPlatform(maxCount = 200): Promise<Review[]> {
   const db = getDb();
-  const snap = await getDocs(
-    query(
-      collectionGroup(db, "reviews"),
-      where("status", "==", "pending"),
-      orderBy("createdAt", "desc"),
-      limit(maxCount)
-    )
-  );
-  return snap.docs.map((d) => mapDoc<Review>(d));
+  try {
+    const snap = await getDocs(
+      query(
+        collectionGroup(db, "reviews"),
+        where("status", "==", "pending"),
+        orderBy("createdAt", "desc"),
+        limit(maxCount)
+      )
+    );
+    return snap.docs.map((d) => mapDoc<Review>(d));
+  } catch (error) {
+    // Collection-group indexes can take time to become available after deploy.
+    // Platform admins still need a working moderation queue, so fall back to
+    // business-scoped queries that use only Firestore's automatic indexes.
+    console.warn("Review collection-group query unavailable; using scoped fallback.", error);
+    const businesses = await getDocs(collection(db, "businesses"));
+    const results = await Promise.allSettled(
+      businesses.docs.map(async (business) => {
+        const snap = await getDocs(
+          query(
+            collection(db, "businesses", business.id, "reviews"),
+            where("status", "==", "pending"),
+            limit(maxCount)
+          )
+        );
+        return snap.docs.map((review) => ({
+          ...mapDoc<Review>(review),
+          businessId: business.id,
+        }));
+      })
+    );
+    return results
+      .flatMap((result) => result.status === "fulfilled" ? result.value : [])
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, maxCount);
+  }
 }
 
 /**

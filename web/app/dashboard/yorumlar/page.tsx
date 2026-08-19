@@ -49,21 +49,21 @@ export default function ReviewsManagementPage() {
 
   useEffect(() => {
     if (!businessId) return;
-    load();
-  }, [businessId]);
-
-  async function load() {
-    if (!businessId) return;
-    setLoading(true);
-    try {
-      const rows = await listBusinessReviewsForOwner(businessId);
-      setReviews(rows);
-    } catch {
-      toast.error("Yorumlar yüklenemedi.");
-    } finally {
-      setLoading(false);
+    let active = true;
+    async function load() {
+      queueMicrotask(() => { if (active) setLoading(true); });
+      try {
+        const rows = await listBusinessReviewsForOwner(businessId!);
+        if (active) setReviews(rows);
+      } catch {
+        if (active) toast.error("Yorumlar yüklenemedi.");
+      } finally {
+        if (active) setLoading(false);
+      }
     }
-  }
+    void load();
+    return () => { active = false; };
+  }, [businessId]);
 
   async function handleStatus(review: Review, status: ReviewStatus) {
     if (!businessId) return;

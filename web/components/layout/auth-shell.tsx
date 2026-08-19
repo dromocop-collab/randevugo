@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { ReactNode } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 interface AuthShellProps {
   eyebrow: string;
@@ -30,10 +33,12 @@ const TESTIMONIALS = [
 ];
 
 export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps) {
+  const { user, status } = useAuth();
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-7xl items-center gap-8 px-4 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12 lg:px-8">
+    <main className="auth-v2 relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
+      {status === "authenticated" && user && <Link href="/dashboard" className="auth-session-pill"><span>✓</span><div><b>Oturumunuz açık</b><small>Panele devam et →</small></div></Link>}
       {/* Left — Branding Panel */}
-      <section className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[linear-gradient(160deg,rgba(2,132,199,0.08),rgba(15,23,42,0.03))] p-8 shadow-2xl backdrop-blur-xl lg:p-10">
+      <section className="auth-story relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] p-8 shadow-2xl backdrop-blur-xl lg:p-12">
         {/* Glow orbs */}
         <div className="absolute -top-20 right-10 h-64 w-64 rounded-full bg-sky-400/20 blur-3xl" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/15 blur-3xl" />
@@ -49,7 +54,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
           </Link>
 
           {/* Badge */}
-          <div className="mt-8">
+          <div className="mt-16">
             <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--accent)]">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-75" />
@@ -60,15 +65,15 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
           </div>
 
           {/* Title */}
-          <h1 className="mt-5 text-3xl font-extrabold leading-tight tracking-tight text-[var(--text-1)] lg:text-4xl">
+          <h1 className="mt-5 max-w-xl text-4xl font-extrabold leading-[1.05] tracking-[-.055em] text-[var(--text-1)] lg:text-6xl">
             {title}
           </h1>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-[var(--text-2)]">
+          <p className="mt-5 max-w-lg text-sm leading-7 text-[var(--text-2)]">
             {subtitle}
           </p>
 
           {/* Trust Grid */}
-          <div className="mt-8 grid grid-cols-2 gap-3">
+          <div className="auth-trust-grid mt-10 grid grid-cols-2 gap-3">
             {TRUST_ITEMS.map((item) => (
               <div
                 key={item.label}
@@ -86,7 +91,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
           </div>
 
           {/* Testimonials */}
-          <div className="mt-8 space-y-3">
+          <div className="auth-testimonials mt-8 grid gap-3 sm:grid-cols-2">
             {TESTIMONIALS.map((t) => (
               <div
                 key={t.name}
@@ -127,7 +132,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: AuthShellProps
       </section>
 
       {/* Right — Form */}
-      <section className="w-full max-w-lg justify-self-center">{children}</section>
+      <section className="auth-form-stage w-full max-w-xl justify-self-center"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">İşletmenize kaldığınız yerden devam edin.</h2></div>{children}</section>
     </main>
   );
 }

@@ -97,10 +97,10 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     images: [
       {
-        url: "/logo.png",
-        width: 1024,
-        height: 1024,
-        alt: "SeninRandevun — Online Randevu Sistemi Logo",
+        url: "/og.png",
+        width: 1729,
+        height: 910,
+        alt: "SeninRandevun — İşletmenizin zamanını büyütün",
         type: "image/png",
       },
     ],
@@ -110,7 +110,7 @@ export const metadata: Metadata = {
     title: "SeninRandevun — Online Randevu Sistemi",
     description:
       "Online randevu, çalışan yönetimi, CRM ve gelişmiş analizleri tek panelde sunan premium SaaS. 14 gün ücretsiz deneyin!",
-    images: ["/logo.png"],
+    images: ["/og.png"],
     creator: "@seninrandevun",
     site: "@seninrandevun",
   },

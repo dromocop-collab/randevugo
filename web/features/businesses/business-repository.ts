@@ -7,7 +7,6 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   setDoc,
   serverTimestamp,
   updateDoc,
@@ -100,9 +99,21 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
   const businessSnap = await getDoc(businessRef);
   if (!businessSnap.exists()) return null;
 
+  const data = businessSnap.data() as Omit<Business, "id"> & {
+    coverImageUrl?: string;
+    coverPhotoUrl?: string;
+  };
+
   return {
     id: businessSnap.id,
-    ...(businessSnap.data() as Omit<Business, "id">),
+    ...data,
+    // Preserve older records and ensure a strong storefront visual even when
+    // only a gallery image was uploaded before the cover field was introduced.
+    coverUrl:
+      data.coverUrl ||
+      data.coverImageUrl ||
+      data.coverPhotoUrl ||
+      data.galleryUrls?.[0],
   };
 }
 

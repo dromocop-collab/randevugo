@@ -28,6 +28,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.9,
     },
+    ...[
+      ["ozellikler", 0.9],
+      ["hakkimizda", 0.6],
+      ["iletisim", 0.6],
+      ["yardim-merkezi", 0.7],
+      ["guvenlik", 0.6],
+      ["kvkk", 0.4],
+      ["gizlilik", 0.4],
+      ["kullanim-kosullari", 0.4],
+      ["cerez-politikasi", 0.4],
+    ].map(([path, priority]) => ({
+      url: `${baseUrl}/${path}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly" as const,
+      priority: priority as number,
+    })),
     {
       url: `${baseUrl}/kuafor-randevu`,
       lastModified: new Date(),

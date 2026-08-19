@@ -147,10 +147,10 @@ export function LoginForm() {
   return (
     <div className="space-y-6">
       {/* Form Card */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
+      <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-bold text-[var(--text-1)]">Tekrar hoş geldiniz! 👋</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">Randevularınızı yönetmek için giriş yapın</p>
+          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">Tekrar hoş geldiniz.</h2>
+          <p className="mt-1 text-sm text-[var(--text-3)]">Güvenli oturumunuz tüm cihazlarınızda açık kalır.</p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
@@ -182,8 +182,8 @@ export function LoginForm() {
 
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center gap-2 text-[var(--text-3)]">
-              <input type="checkbox" className="rounded border-[var(--border)]" />
-              Beni hatırla
+              <input type="checkbox" checked readOnly className="rounded border-[var(--border)]" />
+              Oturumu açık tut
             </label>
             <Link href="/sifremi-unuttum" className="font-medium text-[var(--accent)] hover:underline">
               Şifremi unuttum
@@ -197,7 +197,7 @@ export function LoginForm() {
                 Giriş yapılıyor...
               </span>
             ) : (
-              "🔐 Giriş Yap"
+              "Güvenli Giriş Yap →"
             )}
           </Button>
         </form>
@@ -389,10 +389,10 @@ export function RegisterForm() {
   return (
     <div className="space-y-6">
       {/* Form Card */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
+      <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-bold text-[var(--text-1)]">İşletmenizi dijitale taşıyın 🚀</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">2 dakikada kayıt olun, hemen kullanmaya başlayın</p>
+          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">Ücretsiz çalışma alanınızı açın.</h2>
+          <p className="mt-1 text-sm text-[var(--text-3)]">Kart bilgisi yok · Tüm özellikler 14 gün açık</p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
@@ -458,9 +458,9 @@ export function RegisterForm() {
               className="mt-0.5 rounded border-[var(--border)]"
             />
             <span>
-              <Link href="/" className="text-[var(--accent)] hover:underline">Kullanım Şartları</Link>
+              <Link href="/kullanim-kosullari" className="text-[var(--accent)] hover:underline">Kullanım Şartları</Link>
               {" "}ve{" "}
-              <Link href="/" className="text-[var(--accent)] hover:underline">Gizlilik Politikası</Link>
+              <Link href="/gizlilik" className="text-[var(--accent)] hover:underline">Gizlilik Politikası</Link>
               &apos;nı okudum ve kabul ediyorum.
             </span>
           </label>
@@ -472,7 +472,7 @@ export function RegisterForm() {
                 Hesap oluşturuluyor...
               </span>
             ) : (
-              "🚀 Ücretsiz Başla"
+              "14 Gün Ücretsiz Başla →"
             )}
           </Button>
         </form>

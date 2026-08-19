@@ -62,18 +62,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl gap-6 px-4 py-6 lg:px-6">
+    <div className="admin-v2 mx-auto flex w-full max-w-[1500px] gap-5 px-3 py-4 lg:px-5">
       <AdminSidebar />
       <div className="min-w-0 flex-1 pb-6">
         {/* Admin Topbar */}
-        <header className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-lg shadow-[var(--shadow-hard)]">
+        <header className="admin-topbar mb-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-lg shadow-[var(--shadow-hard)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-rose-500">
-                Platform Admin
+                Canlı operasyon merkezi
               </p>
               <h1 className="mt-0.5 text-lg font-semibold text-[var(--text-1)]">
-                SeninRandevun Kontrol Merkezi
+                Platformun nabzı tek ekranda
               </h1>
             </div>
             <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 {user?.email ?? ""}
               </span>
               <Button variant="secondary" onClick={toggleTheme}>
-                {theme === "light" ? "Dark" : "Light"}
+                {theme === "light" ? "◐ Koyu" : "☀ Açık"}
               </Button>
               <Button
                 variant="ghost"

@@ -50,7 +50,13 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         setBusinesses(rows);
         if (rows.length > 0) {
-          setBusinessIdState((prev) => prev ?? rows[0]!.id);
+          setBusinessIdState((prev) => {
+            const next = prev && rows.some((business) => business.id === prev)
+              ? prev
+              : rows[0]!.id;
+            window.localStorage.setItem(STORAGE_KEY, next);
+            return next;
+          });
         }
       })
       .catch((error) => {

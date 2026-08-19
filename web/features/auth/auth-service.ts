@@ -1,9 +1,11 @@
 import {
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  setPersistence,
   updateProfile,
 } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
@@ -13,7 +15,9 @@ function getAuthInstance() {
 }
 
 export async function loginWithEmailPassword(email: string, password: string): Promise<void> {
-  await signInWithEmailAndPassword(getAuthInstance(), email, password);
+  const auth = getAuthInstance();
+  await setPersistence(auth, browserLocalPersistence);
+  await signInWithEmailAndPassword(auth, email, password);
 }
 
 export async function registerWithEmailPassword(
@@ -21,7 +25,9 @@ export async function registerWithEmailPassword(
   email: string,
   password: string
 ): Promise<void> {
-  const cred = await createUserWithEmailAndPassword(getAuthInstance(), email, password);
+  const auth = getAuthInstance();
+  await setPersistence(auth, browserLocalPersistence);
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName: fullName });
 }
 

@@ -135,13 +135,20 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="admin-dashboard space-y-5">
+      <section className="admin-health-strip">
+        <div>
+          <span className="admin-live-dot" /> Sistem durumu
+          <strong>Tüm ana servisler çalışıyor</strong>
+        </div>
+        <p>{stats.activeBusinesses.toLocaleString("tr-TR")} aktif işletme · {stats.totalAppointments.toLocaleString("tr-TR")} randevu</p>
+      </section>
       <Card title="Platform Metrikleri" description="Genel platform durumu">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {metrics.map((m) => (
             <div
               key={m.label}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
+              className="admin-metric rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
             >
               <p className="text-xs uppercase tracking-wide text-[var(--text-3)]">
                 {m.label}
@@ -159,7 +166,7 @@ export default function SuperAdminDashboard() {
           {revenueMetrics.map((m) => (
             <div
               key={m.label}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
+              className="admin-metric rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
             >
               <p className="text-xs uppercase tracking-wide text-[var(--text-3)]">
                 {m.label}

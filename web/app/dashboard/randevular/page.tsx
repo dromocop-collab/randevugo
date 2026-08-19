@@ -70,7 +70,7 @@ export default function AppointmentsPage() {
     if (!businessId) return;
     let cancelled = false;
 
-    setLoading(true);
+    queueMicrotask(() => { if (!cancelled) setLoading(true); });
     listAppointments(businessId).then((rows) => {
       if (cancelled) return;
       setAppointments(rows);

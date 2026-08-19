@@ -3,23 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
+import {
+  Building2, CircleGauge, ClipboardList, Headphones, Settings2,
+  ShieldCheck, UsersRound, WalletCards, type LucideIcon,
+} from "lucide-react";
 
-const navItems = [
-  { href: "/super-admin", label: "Platform", icon: "📊" },
-  { href: "/super-admin/isletmeler", label: "İşletmeler", icon: "🏢" },
-  { href: "/super-admin/kullanicilar", label: "Kullanıcılar", icon: "👥" },
-  { href: "/super-admin/abonelikler", label: "Abonelikler", icon: "💎" },
-  { href: "/super-admin/destek", label: "Destek", icon: "🎧" },
-  { href: "/super-admin/moderasyon", label: "Moderasyon", icon: "🛡️" },
-  { href: "/super-admin/audit-logs", label: "Audit Logs", icon: "📋" },
-  { href: "/super-admin/ayarlar", label: "Ayarlar", icon: "⚙️" },
+const navItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/super-admin", label: "Platform", icon: CircleGauge },
+  { href: "/super-admin/isletmeler", label: "İşletmeler", icon: Building2 },
+  { href: "/super-admin/kullanicilar", label: "Kullanıcılar", icon: UsersRound },
+  { href: "/super-admin/abonelikler", label: "Abonelikler", icon: WalletCards },
+  { href: "/super-admin/destek", label: "Destek", icon: Headphones },
+  { href: "/super-admin/moderasyon", label: "Moderasyon", icon: ShieldCheck },
+  { href: "/super-admin/audit-logs", label: "Audit Kayıtları", icon: ClipboardList },
+  { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2 },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-xl shadow-[var(--shadow-hard)] lg:block">
+    <aside className="admin-sidebar hidden w-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-xl shadow-[var(--shadow-hard)] lg:block">
       <div className="mb-6 px-2">
         <Link href="/super-admin" className="flex items-center gap-2">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600 text-sm font-bold text-white shadow-md">
@@ -37,6 +41,7 @@ export function AdminSidebar() {
       </div>
       <nav className="space-y-1">
         {navItems.map((item) => {
+          const Icon = item.icon;
           const active =
             item.href === "/super-admin"
               ? pathname === "/super-admin"
@@ -48,11 +53,11 @@ export function AdminSidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
                 active
-                  ? "bg-rose-600 font-medium text-white shadow-lg shadow-rose-500/25"
+                  ? "bg-[#13271d] font-medium text-white shadow-lg shadow-emerald-950/20"
                   : "text-[var(--text-2)] hover:bg-[var(--surface-2)]"
               )}
             >
-              <span className="text-base">{item.icon}</span>
+              <span className="admin-nav-icon"><Icon aria-hidden="true" size={17} strokeWidth={1.9} /></span>
               {item.label}
             </Link>
           );
