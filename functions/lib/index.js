@@ -28,6 +28,21 @@ function numberOr(value, fallback) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
+function normalizedBookingDuration(value) {
+    const raw = Math.round(numberOr(value, 0));
+    if (raw >= 5 && raw <= 480)
+        return raw;
+    // Older imports occasionally persisted localized values such as 30.000 as 30000.
+    if (raw >= 1_000 && raw % 1_000 === 0) {
+        const scaled = raw / 1_000;
+        if (scaled >= 5 && scaled <= 480)
+            return scaled;
+    }
+    // Project-style services can span days; booking slots still need a safe consultation window.
+    if (raw > 480)
+        return 60;
+    return Math.max(5, raw);
+}
 function timeToMinutes(value) {
     if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value))
         return null;
@@ -200,7 +215,7 @@ function buildSlots(context, dateKey, staffId, blocked) {
     const open = timeToMinutes(schedule.start);
     const close = timeToMinutes(schedule.end);
     const interval = Math.max(5, numberOr(context.business.slotIntervalMinutes, 15));
-    const duration = Math.max(1, numberOr(context.service.durationMinutes, 0));
+    const duration = normalizedBookingDuration(context.service.durationMinutes);
     const bufferBefore = Math.max(0, numberOr(context.business.bufferBeforeMinutes, 0));
     const bufferAfter = Math.max(0, numberOr(context.business.bufferAfterMinutes, numberOr(context.business.appointmentBufferMinutes, 0)));
     const notice = Math.max(0, numberOr(context.business.minimumBookingNoticeMinutes, 30));
@@ -463,10 +478,7 @@ exports.createAppointment = (0, https_1.onCall)({ region: "europe-west1" }, asyn
     }
     const context = await loadBookingContext(businessId, serviceId, staffId);
     const serviceData = context.service;
-    const durationMinutes = Number(serviceData.durationMinutes ?? 0);
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-        throw new https_1.HttpsError("failed-precondition", "Hizmet süresi geçersiz.");
-    }
+    const durationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
     const staffData = context.staff;
     const startAt = firestore_1.Timestamp.fromMillis(data.startAtMillis);
     const endAt = firestore_1.Timestamp.fromMillis(data.startAtMillis + durationMinutes * 60_000);
