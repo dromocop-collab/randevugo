@@ -1,10 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { parse } from "date-fns";
 import { toast } from "sonner";
-import { buildAvailableSlots } from "@/features/appointments/availability-engine";
-import { createAppointment, listAppointmentsByDateRange } from "@/features/appointments/appointment-repository";
+import { createAppointment, listAvailableSlots, type AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { Button } from "@/components/ui/button";
@@ -30,7 +28,7 @@ export function PublicBookingFlow(props: Props) {
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [appointmentsDate, setAppointmentsDate] = useState(new Date().toISOString().slice(0, 10));
-  const [booked, setBooked] = useState<string[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<AvailableAppointmentSlot[]>([]);
 
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
@@ -52,66 +50,39 @@ export function PublicBookingFlow(props: Props) {
   }, [props.businessId]);
 
   useEffect(() => {
-    if (!staffId) return;
-    const selectedDate = new Date(appointmentsDate);
-    const dayEnd = new Date(selectedDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    listAppointmentsByDateRange(props.businessId, selectedDate, dayEnd).then((rows) => {
-      const selectedStaff = rows.filter((item) => item.staffId === staffId);
-      setBooked(selectedStaff.map((item) => item.startAt));
-    });
-  }, [appointmentsDate, props.businessId, staffId]);
+    if (!serviceId) return;
+    let cancelled = false;
+    listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate })
+      .then((rows) => { if (!cancelled) setAvailableSlots(rows); })
+      .catch((error) => {
+        if (!cancelled) {
+          setAvailableSlots([]);
+          toast.error((error as Error).message || "Uygun saatler alınamadı.");
+        }
+      });
+    return () => { cancelled = true; };
+  }, [appointmentsDate, props.businessId, serviceId, staffId]);
 
   const selectedService = useMemo(() => services.find((item) => item.id === serviceId), [serviceId, services]);
   const selectedStaff = useMemo(() => staff.find((item) => item.id === staffId), [staff, staffId]);
 
-  const availableSlots = useMemo(() => {
-    if (!selectedService) return [];
-    const effectiveStaffHours = selectedStaff?.workingHours ?? [];
-
-    return buildAvailableSlots({
-      date: new Date(appointmentsDate),
-      businessHours: props.businessHours,
-      staffHours: effectiveStaffHours,
-      appointments: booked.map((startAt) => ({
-        id: startAt,
-        businessId: props.businessId,
-        staffId,
-        serviceId,
-        customerId: "",
-        customerName: "",
-        startAt,
-        endAt: new Date(new Date(startAt).getTime() + selectedService.durationMinutes * 60000).toISOString(),
-        status: "confirmed",
-        paymentStatus: "unpaid",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })),
-      serviceDurationMinutes: selectedService.durationMinutes,
-      breakBufferMinutes: props.appointmentBufferMinutes,
-      minimumNoticeMinutes: props.minimumBookingNoticeMinutes,
-      now: new Date(),
-    });
-  }, [appointmentsDate, booked, props, selectedService, selectedStaff, serviceId, staffId]);
-
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!selectedService || !selectedStaff || !slot) return;
+    if (!selectedService || !slot) return;
 
-    const dateBase = new Date(appointmentsDate);
-    const slotDate = parse(slot, "HH:mm", dateBase);
+    const selectedSlot = availableSlots.find((item) => item.label === slot);
+    if (!selectedSlot) return;
 
     try {
       await createAppointment({
         businessId: props.businessId,
-        staffId: selectedStaff.id,
+        staffId: selectedSlot.staffId ?? selectedStaff?.id ?? "",
         serviceId: selectedService.id,
         customerName,
         customerPhone,
         customerEmail,
         notes,
-        startAtMillis: slotDate.getTime(),
+        startAtMillis: selectedSlot.startAtMillis,
       });
       toast.success("Randevunuz olusturuldu");
       setCustomerName("");
@@ -135,7 +106,7 @@ export function PublicBookingFlow(props: Props) {
           <Select
             label="Hizmet"
             value={serviceId}
-            onChange={(e) => setServiceId(e.target.value)}
+            onChange={(e) => { setServiceId(e.target.value); setSlot(""); }}
             options={services.map((item) => ({ value: item.id, label: `${item.name} - ${item.durationMinutes} dk` }))}
           />
         </Card>
@@ -144,8 +115,11 @@ export function PublicBookingFlow(props: Props) {
           <Select
             label="Calisan"
             value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            options={staff.map((item) => ({ value: item.id, label: item.fullName }))}
+            onChange={(e) => { setStaffId(e.target.value); setSlot(""); }}
+            options={[
+              { value: "", label: "Uygun herhangi bir çalışan" },
+              ...staff.map((item) => ({ value: item.id, label: item.fullName })),
+            ]}
           />
         </Card>
 
@@ -155,7 +129,7 @@ export function PublicBookingFlow(props: Props) {
               label="Tarih"
               type="date"
               value={appointmentsDate}
-              onChange={(e) => setAppointmentsDate(e.target.value)}
+              onChange={(e) => { setAppointmentsDate(e.target.value); setSlot(""); }}
               required
             />
             <Select
@@ -164,7 +138,7 @@ export function PublicBookingFlow(props: Props) {
               onChange={(e) => setSlot(e.target.value)}
               options={[
                 { value: "", label: "Uygun saat secin" },
-                ...availableSlots.map((item) => ({ value: item, label: item })),
+                ...availableSlots.map((item) => ({ value: item.label, label: item.label })),
               ]}
             />
           </div>

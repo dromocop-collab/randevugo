@@ -82,3 +82,33 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
 
   return String((result.data as { appointmentId?: string }).appointmentId ?? "");
 }
+
+export interface AvailableAppointmentSlot {
+  startAtMillis: number;
+  label: string;
+  staffId?: string;
+}
+
+export async function listAvailableSlots(input: {
+  businessId: string;
+  serviceId: string;
+  staffId?: string;
+  date: string;
+}): Promise<AvailableAppointmentSlot[]> {
+  const functions = getFunctions(getFirebaseApp(), "europe-west1");
+  const callable = call(functions, "getAvailableSlots");
+  const result = await callable(input);
+  const slots = (result.data as { slots?: unknown }).slots;
+  if (!Array.isArray(slots)) return [];
+  return slots.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { startAtMillis?: unknown; label?: unknown; staffId?: unknown };
+    return typeof row.startAtMillis === "number" && typeof row.label === "string"
+      ? [{
+          startAtMillis: row.startAtMillis,
+          label: row.label,
+          ...(typeof row.staffId === "string" ? { staffId: row.staffId } : {}),
+        }]
+      : [];
+  });
+}

@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parse, format } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
-import { buildAvailableSlots } from "@/features/appointments/availability-engine";
 import {
   createAppointment,
-  listAppointmentsByDateRange,
+  listAvailableSlots,
+  type AvailableAppointmentSlot,
 } from "@/features/appointments/appointment-repository";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
@@ -68,7 +68,7 @@ export function BookingWizard(props: Props) {
   const [step, setStep] = useState<WizardStep>("service");
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [booked, setBooked] = useState<string[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<AvailableAppointmentSlot[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
@@ -122,20 +122,18 @@ export function BookingWizard(props: Props) {
   }, [props.businessId, props.preselectedServiceId]);
 
   useEffect(() => {
-    if (!staffId) return;
-    const selectedDate = new Date(appointmentsDate);
-    const dayEnd = new Date(selectedDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    listAppointmentsByDateRange(
-      props.businessId,
-      selectedDate,
-      dayEnd
-    ).then((rows) => {
-      const selectedStaff = rows.filter((item) => item.staffId === staffId);
-      setBooked(selectedStaff.map((item) => item.startAt));
-    });
-  }, [appointmentsDate, props.businessId, staffId]);
+    if (!serviceId) return;
+    let cancelled = false;
+    listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate })
+      .then((rows) => { if (!cancelled) setAvailableSlots(rows); })
+      .catch((error) => {
+        if (!cancelled) {
+          setAvailableSlots([]);
+          toast.error((error as Error).message || "Uygun saatler alınamadı.");
+        }
+      })
+    return () => { cancelled = true; };
+  }, [appointmentsDate, props.businessId, serviceId, staffId]);
 
   const selectedService = useMemo(
     () => services.find((item) => item.id === serviceId),
@@ -153,48 +151,6 @@ export function BookingWizard(props: Props) {
       (s) => s.serviceIds.length === 0 || s.serviceIds.includes(serviceId)
     );
   }, [staffList, serviceId]);
-
-  const availableSlots = useMemo(() => {
-    if (!selectedService) return [];
-    // If no staff exists, use business hours directly
-    const effectiveStaffHours = selectedStaff?.workingHours ?? [];
-
-    return buildAvailableSlots({
-      date: new Date(appointmentsDate),
-      businessHours: props.businessHours,
-      staffHours: effectiveStaffHours,
-      appointments: booked.map((startAt) => ({
-        id: startAt,
-        businessId: props.businessId,
-        staffId,
-        serviceId,
-        customerId: "",
-        customerName: "",
-        startAt,
-        endAt: new Date(
-          new Date(startAt).getTime() +
-            selectedService.durationMinutes * 60000
-        ).toISOString(),
-        status: "confirmed",
-        paymentStatus: "unpaid",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })),
-      serviceDurationMinutes: selectedService.durationMinutes,
-      breakBufferMinutes: props.appointmentBufferMinutes,
-      minimumNoticeMinutes: props.minimumBookingNoticeMinutes,
-      slotIntervalMinutes: props.slotIntervalMinutes,
-      now: new Date(),
-    });
-  }, [
-    appointmentsDate,
-    booked,
-    props,
-    selectedService,
-    selectedStaff,
-    serviceId,
-    staffId,
-  ]);
 
   const currentStepIndex = STEPS.indexOf(step);
 
@@ -330,19 +286,24 @@ export function BookingWizard(props: Props) {
     if (!selectedService || !slot) return;
     setSubmitting(true);
 
-    const dateBase = new Date(appointmentsDate);
-    const slotDate = parse(slot, "HH:mm", dateBase);
+    const dateBase = new Date(`${appointmentsDate}T12:00:00`);
+    const selectedSlot = availableSlots.find((item) => item.label === slot);
+    if (!selectedSlot) {
+      setSubmitting(false);
+      toast.error("Seçtiğiniz saat artık müsait değil. Lütfen yeni bir saat seçin.");
+      return;
+    }
 
     try {
       const appointmentId = await createAppointment({
         businessId: props.businessId,
-        staffId: selectedStaff?.id ?? "",
+        staffId: selectedSlot.staffId ?? selectedStaff?.id ?? "",
         serviceId: selectedService.id,
         customerName,
         customerPhone,
         customerEmail,
         notes,
-        startAtMillis: slotDate.getTime(),
+        startAtMillis: selectedSlot.startAtMillis,
       });
 
       setSuccessData({
@@ -489,7 +450,12 @@ export function BookingWizard(props: Props) {
                     name="service"
                     value={service.id}
                     checked={serviceId === service.id}
-                    onChange={() => setServiceId(service.id)}
+                    onChange={() => {
+                      setServiceId(service.id);
+                      const eligible = staffList.find((member) => member.serviceIds.length === 0 || member.serviceIds.includes(service.id));
+                      setStaffId(eligible?.id ?? "");
+                      setSlot("");
+                    }}
                     className="sr-only"
                   />
                   <div className="flex items-center gap-3">
@@ -550,7 +516,7 @@ export function BookingWizard(props: Props) {
                     name="staff"
                     value={member.id}
                     checked={staffId === member.id}
-                    onChange={() => setStaffId(member.id)}
+                    onChange={() => { setStaffId(member.id); setSlot(""); }}
                     className="sr-only"
                   />
                   <div
@@ -652,26 +618,26 @@ export function BookingWizard(props: Props) {
                 ) : (
                   <div className="mt-4 space-y-4">
                     {/* Morning */}
-                    {availableSlots.filter((t) => parseInt(t) < 12).length > 0 && (
+                    {availableSlots.filter((t) => parseInt(t.label) < 12).length > 0 && (
                       <div className="animate-[fadeSlideIn_0.3s_ease]">
                         <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600">
                           <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-100">☀️</span>
                           Sabah
                         </p>
                         <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-                          {availableSlots.filter((t) => parseInt(t) < 12).map((time, idx) => (
+                          {availableSlots.filter((t) => parseInt(t.label) < 12).map((time, idx) => (
                             <button
-                              key={time}
+                              key={time.startAtMillis}
                               type="button"
-                              onClick={() => setSlot(time)}
+                              onClick={() => setSlot(time.label)}
                               style={{ animationDelay: `${idx * 30}ms` }}
                               className={`animate-[scaleIn_0.25s_ease_forwards] rounded-xl border py-2.5 text-sm font-semibold opacity-0 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                slot === time
+                                slot === time.label
                                   ? "border-[var(--accent)] bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/25 scale-105"
                                   : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-1)] hover:border-[var(--accent)]/50 hover:shadow-md"
                               }`}
                             >
-                              {time}
+                              {time.label}
                             </button>
                           ))}
                         </div>
@@ -679,26 +645,26 @@ export function BookingWizard(props: Props) {
                     )}
 
                     {/* Afternoon */}
-                    {availableSlots.filter((t) => parseInt(t) >= 12 && parseInt(t) < 17).length > 0 && (
+                    {availableSlots.filter((t) => parseInt(t.label) >= 12 && parseInt(t.label) < 17).length > 0 && (
                       <div className="animate-[fadeSlideIn_0.4s_ease]">
                         <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-sky-600">
                           <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100">🌤️</span>
                           Öğleden Sonra
                         </p>
                         <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-                          {availableSlots.filter((t) => parseInt(t) >= 12 && parseInt(t) < 17).map((time, idx) => (
+                          {availableSlots.filter((t) => parseInt(t.label) >= 12 && parseInt(t.label) < 17).map((time, idx) => (
                             <button
-                              key={time}
+                              key={time.startAtMillis}
                               type="button"
-                              onClick={() => setSlot(time)}
+                              onClick={() => setSlot(time.label)}
                               style={{ animationDelay: `${idx * 30}ms` }}
                               className={`animate-[scaleIn_0.25s_ease_forwards] rounded-xl border py-2.5 text-sm font-semibold opacity-0 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                slot === time
+                                slot === time.label
                                   ? "border-[var(--accent)] bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/25 scale-105"
                                   : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-1)] hover:border-[var(--accent)]/50 hover:shadow-md"
                               }`}
                             >
-                              {time}
+                              {time.label}
                             </button>
                           ))}
                         </div>
@@ -706,26 +672,26 @@ export function BookingWizard(props: Props) {
                     )}
 
                     {/* Evening */}
-                    {availableSlots.filter((t) => parseInt(t) >= 17).length > 0 && (
+                    {availableSlots.filter((t) => parseInt(t.label) >= 17).length > 0 && (
                       <div className="animate-[fadeSlideIn_0.5s_ease]">
                         <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-purple-600">
                           <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-purple-100">🌙</span>
                           Akşam
                         </p>
                         <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-                          {availableSlots.filter((t) => parseInt(t) >= 17).map((time, idx) => (
+                          {availableSlots.filter((t) => parseInt(t.label) >= 17).map((time, idx) => (
                             <button
-                              key={time}
+                              key={time.startAtMillis}
                               type="button"
-                              onClick={() => setSlot(time)}
+                              onClick={() => setSlot(time.label)}
                               style={{ animationDelay: `${idx * 30}ms` }}
                               className={`animate-[scaleIn_0.25s_ease_forwards] rounded-xl border py-2.5 text-sm font-semibold opacity-0 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                slot === time
+                                slot === time.label
                                   ? "border-[var(--accent)] bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/25 scale-105"
                                   : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-1)] hover:border-[var(--accent)]/50 hover:shadow-md"
                               }`}
                             >
-                              {time}
+                              {time.label}
                             </button>
                           ))}
                         </div>
