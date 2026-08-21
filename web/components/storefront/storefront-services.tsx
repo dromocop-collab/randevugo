@@ -24,28 +24,47 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     );
   }
 
-  const getCategoryMeta = (catId: string) => categories.find((c) => c.id === catId);
+  const normalize = (value: string) => value
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("tr-TR").replace(/[^a-z0-9]/g, "");
+
+  const inferredKeywords = (category: ServiceCategory) => {
+    const key = normalize(`${category.id} ${category.name}`);
+    if (key.includes("app") || key.includes("mobil") || key.includes("uygulama")) return ["mobil", "uygulama", "app", "ios", "android"];
+    if (key.includes("web") || key.includes("site")) return ["web", "site", "eticaret", "ecommerce"];
+    const name = normalize(category.name);
+    return name.length >= 3 ? [name] : [];
+  };
+
+  const categoryMatches = (service: Service, category: ServiceCategory) => {
+    const serviceCategory = normalize(service.category ?? "");
+    return serviceCategory.length > 0 && [normalize(category.id), normalize(category.name)].includes(serviceCategory);
+  };
 
   // Group by category
   const grouped: { cat: ServiceCategory | null; items: Service[] }[] = [];
 
   if (categories.length > 0) {
+    let remaining = [...services];
     for (const cat of categories) {
-      const items = services.filter((s) => s.category === cat.id);
-      if (items.length > 0) grouped.push({ cat, items });
+      let items = remaining.filter((service) => categoryMatches(service, cat));
+      if (items.length === 0) {
+        const keywords = inferredKeywords(cat);
+        items = remaining.filter((service) => {
+          const searchable = normalize(`${service.name} ${service.description ?? ""} ${service.category ?? ""}`);
+          return keywords.some((keyword) => searchable.includes(keyword));
+        });
+      }
+      const ids = new Set(items.map((item) => item.id));
+      remaining = remaining.filter((item) => !ids.has(item.id));
+      grouped.push({ cat, items });
     }
-    const uncategorized = services.filter(
-      (s) => !s.category || !categories.some((c) => c.id === s.category)
-    );
-    if (uncategorized.length > 0) grouped.push({ cat: null, items: uncategorized });
+    if (remaining.length > 0) grouped.push({ cat: null, items: remaining });
   } else {
     grouped.push({ cat: null, items: services });
   }
 
-  const filteredServices =
-    activeCat === "all"
-      ? services
-      : services.filter((s) => s.category === activeCat);
+  const activeGroup = grouped.find((group) => group.cat?.id === activeCat);
+  const filteredServices = activeCat === "all" ? services : activeGroup?.items ?? [];
 
   const showCategoryFilter = categories.length > 0;
 
@@ -72,9 +91,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
           >
             Tümü
           </button>
-          {categories
-            .filter((c) => services.some((s) => s.category === c.id))
-            .map((cat) => {
+          {categories.map((cat) => {
               const isActive = activeCat === cat.id;
               return (
                 <button
@@ -117,11 +134,15 @@ export function StorefrontServices({ services, categories = [], onSelectService 
                 </span>
               </div>
               <div className="space-y-2">
-                {group.items.map((service) => (
+                {group.items.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-1)]/60 px-4 py-5 text-center text-xs text-[var(--text-3)]">
+                    Bu kategoride henüz aktif hizmet yok.
+                  </div>
+                ) : group.items.map((service) => (
                   <ServiceItem
                     key={service.id}
                     service={service}
-                    categoryMeta={getCategoryMeta(service.category)}
+                    categoryMeta={group.cat ?? undefined}
                     showCategoryBadge={false}
                     onSelect={onSelectService}
                   />
@@ -137,7 +158,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
             <ServiceItem
               key={service.id}
               service={service}
-              categoryMeta={getCategoryMeta(service.category)}
+              categoryMeta={activeGroup?.cat ?? undefined}
               showCategoryBadge={activeCat === "all"}
               onSelect={onSelectService}
             />

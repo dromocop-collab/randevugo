@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import {
   FieldValue,
   Timestamp,
@@ -11,6 +12,8 @@ import { createHash, randomUUID, randomInt } from "crypto";
 initializeApp();
 
 const db = getFirestore();
+const messaging = getMessaging();
+const GLOBAL_PUSH_TOPIC = "senin_randevun_all";
 
 const publicCallableOptions = {
   region: "europe-west1",
@@ -29,6 +32,158 @@ function requireString(value: unknown, name: string): string {
   }
   return value.trim();
 }
+
+async function requirePlatformAdmin(uid: string, email?: string | null) {
+  if (email?.trim().toLowerCase() === "cihatwin@gmail.com") return;
+  if ((await db.doc(`platformAdmins/${uid}`).get()).exists) return;
+  throw new HttpsError("permission-denied", "Bu işlem yalnızca süper admin tarafından yapılabilir.");
+}
+
+async function requireBusinessManager(uid: string, businessId: string) {
+  const [business, member] = await Promise.all([
+    db.doc(`businesses/${businessId}`).get(),
+    db.doc(`businesses/${businessId}/members/${uid}`).get(),
+  ]);
+  if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+  const role = String(member.data()?.role ?? "");
+  if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role)) return business.data()!;
+  throw new HttpsError("permission-denied", "Müşterilere bildirim gönderme yetkiniz yok.");
+}
+
+async function tokensForUsers(userIds: string[]) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))].slice(0, 2_000);
+  const snapshots = await Promise.all(uniqueIds.map((uid) => db.collection(`users/${uid}/devices`).get()));
+  return snapshots.flatMap((snapshot) => snapshot.docs.map((document) => ({
+    ref: document.ref,
+    token: String(document.data().fcmToken ?? ""),
+  }))).filter((item) => item.token.length > 20);
+}
+
+async function sendTokenBatches(
+  tokens: Awaited<ReturnType<typeof tokensForUsers>>,
+  title: string,
+  body: string,
+  data: Record<string, string>
+) {
+  let successCount = 0;
+  let failureCount = 0;
+  for (let offset = 0; offset < tokens.length; offset += 500) {
+    const batch = tokens.slice(offset, offset + 500);
+    const response = await messaging.sendEachForMulticast({
+      tokens: batch.map((item) => item.token),
+      notification: { title, body },
+      data,
+      apns: { payload: { aps: { sound: "default", badge: 1 } } },
+    });
+    successCount += response.successCount;
+    failureCount += response.failureCount;
+    const invalidRefs = response.responses.flatMap((result, index) => {
+      const code = result.error?.code ?? "";
+      return ["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(code)
+        ? [batch[index].ref]
+        : [];
+    });
+    await Promise.all(invalidRefs.map((ref) => ref.delete()));
+  }
+  return { successCount, failureCount };
+}
+
+export const registerPushToken = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Bildirimleri açmak için giriş yapmalısınız.");
+    const token = requireString(request.data?.token, "token");
+    const deviceId = requireString(request.data?.deviceId, "deviceId").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 128);
+    if (deviceId.length < 4 || token.length < 20) throw new HttpsError("invalid-argument", "Cihaz bildirimi doğrulanamadı.");
+    const deviceRef = db.doc(`users/${uid}/devices/${deviceId}`);
+    const [existingDevice, duplicateTokens] = await Promise.all([
+      deviceRef.get(),
+      db.collectionGroup("devices").where("fcmToken", "==", token).get(),
+    ]);
+    await Promise.all(duplicateTokens.docs
+      .filter((document) => document.ref.path !== deviceRef.path)
+      .map((document) => document.ref.delete()));
+    await deviceRef.set({
+      fcmToken: token,
+      platform: "ios",
+      appVersion: String(request.data?.appVersion ?? ""),
+      locale: String(request.data?.locale ?? "tr_TR"),
+      enabled: true,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(!existingDevice.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+    }, { merge: true });
+    await messaging.subscribeToTopic([token], GLOBAL_PUSH_TOPIC);
+    return { success: true };
+  }
+);
+
+export const unregisterPushToken = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const deviceId = requireString(request.data?.deviceId, "deviceId").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 128);
+    const ref = db.doc(`users/${uid}/devices/${deviceId}`);
+    const snapshot = await ref.get();
+    const token = String(snapshot.data()?.fcmToken ?? "");
+    if (token) await messaging.unsubscribeFromTopic([token], GLOBAL_PUSH_TOPIC);
+    await ref.delete();
+    return { success: true };
+  }
+);
+
+export const sendPlatformPush = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const title = requireString(request.data?.title, "Başlık").slice(0, 80);
+    const body = requireString(request.data?.body, "Mesaj").slice(0, 500);
+    const messageId = await messaging.send({
+      topic: GLOBAL_PUSH_TOPIC,
+      notification: { title, body },
+      data: { kind: "platform_announcement", destination: String(request.data?.destination ?? "discover") },
+      apns: { payload: { aps: { sound: "default", badge: 1 } } },
+    });
+    await db.collection("notificationLogs").add({
+      audience: "platform", title, body, messageId, senderUid: uid,
+      status: "sent", createdAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true, messageId };
+  }
+);
+
+export const sendBusinessPush = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const business = await requireBusinessManager(uid, businessId);
+    const title = requireString(request.data?.title, "Başlık").slice(0, 80);
+    const body = requireString(request.data?.body, "Mesaj").slice(0, 500);
+    const [customers, appointments] = await Promise.all([
+      db.collection(`businesses/${businessId}/customers`).limit(2_000).get(),
+      db.collection(`businesses/${businessId}/appointments`).limit(2_000).get(),
+    ]);
+    const userIds = [
+      ...customers.docs.map((item) => String(item.data().userId ?? item.data().customerId ?? "")),
+      ...appointments.docs.map((item) => String(item.data().customerId ?? "")),
+    ];
+    const tokens = await tokensForUsers(userIds);
+    const result = await sendTokenBatches(tokens, title, body, {
+      kind: "business_announcement", businessId,
+    });
+    await db.collection("notificationLogs").add({
+      audience: "business_customers", businessId, businessName: String(business.name ?? "İşletme"),
+      title, body, senderUid: uid, recipientDevices: tokens.length, ...result,
+      status: result.failureCount === 0 ? "sent" : "partial", createdAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true, recipients: tokens.length, ...result };
+  }
+);
 
 type Schedule = {
   day: number;
@@ -721,6 +876,7 @@ export const appointmentCreated = onDocumentCreated(
         await customerDoc.ref.update({
           fullName: customerName,
           ...(customerEmail ? { email: customerEmail } : {}),
+          ...(appointment.customerId ? { userId: appointment.customerId } : {}),
           totalAppointments: FieldValue.increment(1),
           lastVisitAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -731,6 +887,7 @@ export const appointmentCreated = onDocumentCreated(
           fullName: customerName,
           phone,
           email: customerEmail,
+          userId: appointment.customerId ?? null,
           totalAppointments: 1,
           completedAppointments: 0,
           cancelledAppointments: 0,

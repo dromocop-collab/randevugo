@@ -122,30 +122,31 @@ service cloud.firestore {
     // Support Tickets
     // ────────────────────────────────────────────────
     match /supportTickets/{ticketId} {
-      allow read: if isAuthenticated() &&
-        (resource.data.userId == uid() ||
-         (resource.data.businessId is string && isMember(resource.data.businessId)) ||
-         isPlatformAdmin());
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() &&
+          (resource.data.userId == uid() ||
+           (resource.data.businessId is string && isMember(resource.data.businessId))));
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() &&
-        (resource.data.userId == uid() ||
-         (resource.data.businessId is string && isMember(resource.data.businessId)) ||
-         isPlatformAdmin());
+      allow update: if isPlatformAdmin() ||
+        (isAuthenticated() &&
+          (resource.data.userId == uid() ||
+           (resource.data.businessId is string && isMember(resource.data.businessId))));
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() &&
-          (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
-           (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId is string &&
-            isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId)) ||
-           isPlatformAdmin());
-        allow create: if isAuthenticated() &&
-          (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
-           (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId is string &&
-            isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId)) ||
-           isPlatformAdmin());
+        allow read: if isPlatformAdmin() ||
+          (isAuthenticated() &&
+            (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
+             (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId is string &&
+              isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId))));
+        allow create: if isPlatformAdmin() ||
+          (isAuthenticated() &&
+            (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
+             (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId is string &&
+              isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId))));
       }
     }
+
 
     // ────────────────────────────────────────────────
     // Notification Logs (platform-level)
@@ -187,7 +188,8 @@ service cloud.firestore {
     // Keep this narrowly scoped: a signed-in customer can only read rows whose
     // customerId is their own Firebase Auth uid.
     match /{path=**}/appointments/{appointmentId} {
-      allow read: if isAuthenticated() && resource.data.customerId == uid();
+      allow read: if isAuthenticated() &&
+        (resource.data.customerId == uid() || isPlatformAdmin());
     }
 
     // ────────────────────────────────────────────────
@@ -334,6 +336,10 @@ service cloud.firestore {
     // ────────────────────────────────────────────────
     match /{path=**}/members/{memberId} {
       allow read: if isAuthenticated() && resource.data.uid == uid();
+    }
+
+    match /{path=**}/reviews/{reviewId} {
+      allow read: if isPlatformAdmin();
     }
   }
 }

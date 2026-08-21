@@ -50,7 +50,7 @@ function mapAuthError(error: unknown): string {
 /* ─── 6-DIGIT CODE INPUT ─── */
 function CodeInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const digits = value.padEnd(6, "").split("").slice(0, 6);
+  const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? "");
 
   const handleChange = useCallback((index: number, char: string) => {
     if (!/^\d?$/.test(char)) return;
@@ -72,7 +72,7 @@ function CodeInput({ value, onChange }: { value: string; onChange: (val: string)
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     if (pasted.length > 0) {
-      onChange(pasted.padEnd(6, "").slice(0, 6));
+      onChange(pasted);
       inputRefs.current[Math.min(pasted.length, 5)]?.focus();
     }
   }, [onChange]);
