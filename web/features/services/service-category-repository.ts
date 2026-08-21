@@ -83,24 +83,55 @@ export async function seedDefaultCategories(
   sector: string
 ): Promise<void> {
   const existing = await listServiceCategories(businessId);
-  if (existing.length > 0) return; // already has categories
-
   const templates = getCategoryTemplates(sector);
+
   const db = getDb();
   const batch = writeBatch(db);
-  const colRef = collection(db, "businesses", businessId, "serviceCategories");
+  const colRef = collection(
+    db,
+    "businesses",
+    businessId,
+    "serviceCategories"
+  );
 
-  templates.forEach((tpl, index) => {
+  const normalize = (value: string) =>
+    value
+      .trim()
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const existingNames = new Set(
+    existing.map((category) => normalize(category.name))
+  );
+
+  let sortOrder = existing.length;
+  let addedCount = 0;
+
+  templates.forEach((tpl) => {
+    // Aynı isimde kategori zaten varsa tekrar oluşturma
+    if (existingNames.has(normalize(tpl.name))) {
+      return;
+    }
+
     const docRef = doc(colRef);
+
     batch.set(docRef, {
       name: tpl.name,
       icon: tpl.icon,
       color: tpl.color,
-      sortOrder: index,
+      sortOrder,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    sortOrder++;
+    addedCount++;
   });
+
+  if (addedCount === 0) {
+    return;
+  }
 
   await batch.commit();
 }

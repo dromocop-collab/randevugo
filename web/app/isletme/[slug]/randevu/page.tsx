@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ErrorState, LoadingState } from "@/components/ui/states";
@@ -15,10 +15,8 @@ import { ArrowLeft, Clock3, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function BookingPage() {
   const params = useParams<{ slug: string }>();
-  const [preselectedServiceId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return new URLSearchParams(window.location.search).get("service");
-  });
+  const searchParams = useSearchParams();
+  const [preselectedServiceId] = useState<string | null>(searchParams.get("service"));
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [workingHours, setWorkingHours] = useState<DaySchedule[]>([]);

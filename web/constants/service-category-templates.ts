@@ -124,14 +124,33 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Temizlik", icon: "🧹", color: "#8b5cf6" },
     ],
   },
+  yazilim: {
+    label: "Yazılım / Web / Dijital",
+    categories: [
+      { name: "Web Sitesi", icon: "💻", color: "#0ea5e9" },
+      { name: "Mobil Uygulama", icon: "📱", color: "#8b5cf6" },
+      { name: "Özel Yazılım", icon: "⚙️", color: "#10b981" },
+      { name: "E-Ticaret", icon: "🛒", color: "#f59e0b" },
+      { name: "UI / UX Tasarım", icon: "🎨", color: "#ec4899" },
+      { name: "Bakım & Destek", icon: "🛠️", color: "#64748b" },
+      { name: "Video Prodüksiyon", icon: "🎬", color: "#ef4444" },
+      { name: "Sosyal Medya", icon: "📣", color: "#06b6d4" },
+    ],
+  },
 };
 
 /**
  * Get category templates for a given business sector.
  * Falls back to a generic set if sector is unknown.
  */
-export function getCategoryTemplates(sector: string): CategoryTemplate[] {
-  return SECTOR_TEMPLATES[sector]?.categories ?? [
+export function getCategoryTemplates(
+  sector: string
+): CategoryTemplate[] {
+  const normalizedSector = sector
+    .trim()
+    .toLocaleLowerCase("tr-TR");
+
+  return SECTOR_TEMPLATES[normalizedSector]?.categories ?? [
     { name: "Genel", icon: "📋", color: "#64748b" },
   ];
 }

@@ -81,9 +81,26 @@ export default function BusinessProfilePage() {
             listServices(row.id, true),
             listStaff(row.id, true),
             listBusinessReviews(row.id).catch(() => [] as Review[]),
-            listServiceCategories(row.id).catch(() => [] as ServiceCategory[]),
+            listServiceCategories(row.id).catch((error) => {
+              console.error("❌ KATEGORİLER YÜKLENEMEDİ:", error);
+              return [] as ServiceCategory[];
+            }),
           ]);
+        console.log("✅ SERVICES:", serviceRows);
+        console.log("✅ CATEGORIES:", catRows);
+        console.table(
+          services.map((s) => ({
+            name: s.name,
+            category: s.category,
+          }))
+        );
 
+        console.table(
+          serviceCategories.map((c) => ({
+            id: c.id,
+            name: c.name,
+          }))
+        );
         if (cancelled) return;
         setWorkingHours(schedules);
         setServices(serviceRows);

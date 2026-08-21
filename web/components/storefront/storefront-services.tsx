@@ -24,41 +24,20 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     );
   }
 
-  const normalize = (value: string) => value
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("tr-TR").replace(/[^a-z0-9]/g, "");
-
-  const inferredKeywords = (category: ServiceCategory) => {
-    const key = normalize(`${category.id} ${category.name}`);
-    if (key.includes("app") || key.includes("mobil") || key.includes("uygulama")) return ["mobil", "uygulama", "app", "ios", "android"];
-    if (key.includes("web") || key.includes("site")) return ["web", "site", "eticaret", "ecommerce"];
-    const name = normalize(category.name);
-    return name.length >= 3 ? [name] : [];
-  };
-
-  const categoryMatches = (service: Service, category: ServiceCategory) => {
-    const serviceCategory = normalize(service.category ?? "");
-    return serviceCategory.length > 0 && [normalize(category.id), normalize(category.name)].includes(serviceCategory);
-  };
-
   // Group by category
   const grouped: { cat: ServiceCategory | null; items: Service[] }[] = [];
 
   if (categories.length > 0) {
-    let remaining = [...services];
     for (const cat of categories) {
-      let items = remaining.filter((service) => categoryMatches(service, cat));
-      if (items.length === 0) {
-        const keywords = inferredKeywords(cat);
-        items = remaining.filter((service) => {
-          const searchable = normalize(`${service.name} ${service.description ?? ""} ${service.category ?? ""}`);
-          return keywords.some((keyword) => searchable.includes(keyword));
-        });
-      }
-      const ids = new Set(items.map((item) => item.id));
-      remaining = remaining.filter((item) => !ids.has(item.id));
+      const items = services.filter((service) => service.category === cat.id);
       grouped.push({ cat, items });
     }
-    if (remaining.length > 0) grouped.push({ cat: null, items: remaining });
+    const uncategorized = services.filter(
+      (s) => !s.category || !categories.some((c) => c.id === s.category)
+    );
+    if (uncategorized.length > 0) {
+      grouped.push({ cat: null, items: uncategorized });
+    }
   } else {
     grouped.push({ cat: null, items: services });
   }

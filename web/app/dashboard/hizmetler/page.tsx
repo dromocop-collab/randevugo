@@ -101,6 +101,9 @@ export default function ServicesPage() {
   async function handleSeedCategories() {
     if (!businessId) return;
     try {
+      console.log("🔥 BUSINESS ID:", businessId);
+      console.log("🔥 SECTOR:", businessSector);
+      console.log("🔥 TEMPLATE:", SECTOR_TEMPLATES[businessSector]);
       await seedDefaultCategories(businessId, businessSector);
       await reload();
       toast.success("Sektör şablonu yüklendi! 🎉");
@@ -256,10 +259,18 @@ export default function ServicesPage() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
+            onClick={handleSeedCategories}
+          >
+            🚀 Eksik Kategorileri Yükle
+          </Button>
+
+          <Button
+            variant="secondary"
             onClick={() => setShowCategoryForm(!showCategoryForm)}
           >
             {showCategoryForm ? "İptal" : "➕ Kategori"}
           </Button>
+
           <Button onClick={() => setShowForm(!showForm)}>
             {showForm ? "İptal" : "➕ Hizmet Ekle"}
           </Button>
@@ -312,11 +323,10 @@ export default function ServicesPage() {
                     key={icon}
                     type="button"
                     onClick={() => setCatIcon(icon)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg transition ${
-                      catIcon === icon
-                        ? "bg-[var(--accent)] text-white shadow-lg scale-110"
-                        : "bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
-                    }`}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg transition ${catIcon === icon
+                      ? "bg-[var(--accent)] text-white shadow-lg scale-110"
+                      : "bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
+                      }`}
                   >
                     {icon}
                   </button>
@@ -331,11 +341,10 @@ export default function ServicesPage() {
                     key={color}
                     type="button"
                     onClick={() => setCatColor(color)}
-                    className={`h-8 w-8 rounded-full border-2 transition hover:scale-110 ${
-                      catColor === color
-                        ? "border-[var(--text-1)] scale-110 shadow-lg"
-                        : "border-transparent"
-                    }`}
+                    className={`h-8 w-8 rounded-full border-2 transition hover:scale-110 ${catColor === color
+                      ? "border-[var(--text-1)] scale-110 shadow-lg"
+                      : "border-transparent"
+                      }`}
                     style={{ backgroundColor: color }}
                   />
                 ))}
@@ -363,16 +372,14 @@ export default function ServicesPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveCategory("all")}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition ${
-              activeCategory === "all"
-                ? "bg-[var(--accent)] text-white shadow-lg shadow-sky-500/20"
-                : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"
-            }`}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition ${activeCategory === "all"
+              ? "bg-[var(--accent)] text-white shadow-lg shadow-sky-500/20"
+              : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"
+              }`}
           >
             📋 Tümü
-            <span className={`ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
-              activeCategory === "all" ? "bg-white/20 text-white" : "bg-[var(--surface-3)] text-[var(--text-3)]"
-            }`}>
+            <span className={`ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${activeCategory === "all" ? "bg-white/20 text-white" : "bg-[var(--surface-3)] text-[var(--text-3)]"
+              }`}>
               {services.length}
             </span>
           </button>
@@ -383,19 +390,17 @@ export default function ServicesPage() {
               <div key={cat.id} className="group relative">
                 <button
                   onClick={() => setActiveCategory(isActive ? "all" : cat.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition ${
-                    isActive
-                      ? "text-white shadow-lg"
-                      : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:shadow-md"
-                  }`}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition ${isActive
+                    ? "text-white shadow-lg"
+                    : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:shadow-md"
+                    }`}
                   style={isActive ? { backgroundColor: cat.color } : undefined}
                 >
                   <span>{cat.icon}</span>
                   {cat.name}
                   {count > 0 && (
-                    <span className={`ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
-                      isActive ? "bg-white/20 text-white" : "bg-[var(--surface-3)] text-[var(--text-3)]"
-                    }`}>
+                    <span className={`ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${isActive ? "bg-white/20 text-white" : "bg-[var(--surface-3)] text-[var(--text-3)]"
+                      }`}>
                       {count}
                     </span>
                   )}
@@ -660,11 +665,10 @@ function ServiceCard({
 }) {
   return (
     <div
-      className={`group relative overflow-hidden rounded-2xl border bg-[var(--surface-1)] p-4 transition-all duration-200 hover:shadow-lg sm:p-5 ${
-        service.isActive
-          ? "border-[var(--border)] hover:border-[var(--accent)]/30"
-          : "border-rose-200/40 bg-rose-50/20 opacity-60"
-      }`}
+      className={`group relative overflow-hidden rounded-2xl border bg-[var(--surface-1)] p-4 transition-all duration-200 hover:shadow-lg sm:p-5 ${service.isActive
+        ? "border-[var(--border)] hover:border-[var(--accent)]/30"
+        : "border-rose-200/40 bg-rose-50/20 opacity-60"
+        }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -713,11 +717,10 @@ function ServiceCard({
           </button>
           <button
             onClick={onToggle}
-            className={`flex h-8 w-8 items-center justify-center rounded-xl border text-sm transition ${
-              service.isActive
-                ? "border-amber-200 bg-amber-50 hover:bg-amber-100"
-                : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
-            }`}
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border text-sm transition ${service.isActive
+              ? "border-amber-200 bg-amber-50 hover:bg-amber-100"
+              : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+              }`}
             title={service.isActive ? "Pasif Yap" : "Aktif Yap"}
           >
             {service.isActive ? "⏸" : "▶️"}
