@@ -32,7 +32,6 @@ export async function searchBusinesses(
         where("status", "==", "active"),
         where("category", "==", filters.category),
         where("city", "==", filters.city),
-        orderBy("rating", "desc"),
         limit(filters.maxResults ?? 50)
       )
     : filters.category
@@ -41,7 +40,6 @@ export async function searchBusinesses(
           where("isPublished", "==", true),
           where("status", "==", "active"),
           where("category", "==", filters.category),
-          orderBy("rating", "desc"),
           limit(filters.maxResults ?? 50)
         )
       : filters.city
@@ -50,14 +48,12 @@ export async function searchBusinesses(
             where("isPublished", "==", true),
             where("status", "==", "active"),
             where("city", "==", filters.city),
-            orderBy("rating", "desc"),
             limit(filters.maxResults ?? 50)
           )
         : query(
             ref,
             where("isPublished", "==", true),
             where("status", "==", "active"),
-            orderBy("rating", "desc"),
             limit(filters.maxResults ?? 50)
           );
 
@@ -78,6 +74,9 @@ export async function searchBusinesses(
     );
   }
 
+  // Sort by rating locally to avoid filtering out docs without the 'rating' field
+  results.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+
   return results;
 }
 
@@ -91,15 +90,19 @@ export async function getPopularBusinesses(
       ref,
       where("isPublished", "==", true),
       where("status", "==", "active"),
-      orderBy("reviewCount", "desc"),
-      limit(limitCount)
+      limit(50) // Fetch up to 50 active businesses
     )
   );
 
-  return snap.docs.map((doc) => ({
+  let results = snap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as Omit<Business, "id">),
   }));
+  
+  // Sort by reviewCount locally to avoid filtering out docs without the field
+  results.sort((a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
+  
+  return results.slice(0, limitCount);
 }
 
 export async function getBusinessCities(): Promise<string[]> {

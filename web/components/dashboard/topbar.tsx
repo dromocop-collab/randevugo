@@ -12,7 +12,7 @@ import { Compass, ExternalLink, LogOut, MoonStar, Store, SunMedium, UserRound } 
 export function DashboardTopBar() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
-  const { businesses, businessId } = useBusinessContext();
+  const { businesses, businessId, setBusinessId } = useBusinessContext();
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   const router = useRouter();
 
@@ -24,6 +24,20 @@ export function DashboardTopBar() {
           <h1>Bugünün akışını birlikte yönetin.</h1>
         </div>
         <div className="dashboard-command-actions">
+          {businesses.length > 1 && (
+            <select
+              value={activeBusiness?.id ?? ""}
+              onChange={(e) => setBusinessId(e.target.value)}
+              className="h-8 max-w-[150px] truncate rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text-1)] outline-none hover:bg-[var(--surface-3)] focus:border-[var(--accent)]"
+              aria-label="İşletme değiştir"
+            >
+              {businesses.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
           <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
           {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="command-link command-link-store"><Store size={17} /><span>Mağazamı gör</span><ExternalLink size={14} /></Link>}
           <span className="command-account"><i><UserRound size={15} /></i><span><small>Aktif hesap</small><b>{user?.email ?? ""}</b></span></span>

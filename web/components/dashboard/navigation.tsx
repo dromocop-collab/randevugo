@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
+import { useBusinessContext } from "@/features/businesses/business-context";
 import {
   CalendarDays, ChartNoAxesCombined, Clock3, Headphones,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
@@ -30,7 +31,10 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { businesses, businessId } = useBusinessContext();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  
+  const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
 
   return (
     <aside className="dashboard-sidebar hidden w-64 shrink-0 rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-xl shadow-[var(--shadow-hard)] backdrop-blur-xl lg:block">
@@ -41,8 +45,8 @@ export function DashboardSidebar() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--accent)]">
               İşletme çalışma alanı
             </p>
-            <p className="text-sm font-extrabold text-[var(--text-1)]">
-              SeninRandevun
+            <p className="text-sm font-extrabold text-[var(--text-1)] truncate max-w-[150px]">
+              {activeBusiness?.name ?? "SeninRandevun"}
             </p>
           </div>
         </Link>
