@@ -70,6 +70,8 @@ export interface Business extends EntityBase {
   socialMedia?: SocialMediaLinks;
   isPublished: boolean;
   status: BusinessStatus;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  storePosition?: number;
   isSuspended?: boolean;
   minimumBookingNoticeMinutes: number;
   maximumBookingDaysAhead: number;

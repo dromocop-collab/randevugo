@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.unregisterPushToken = exports.registerPushToken = void 0;
+exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
 const app_1 = require("firebase-admin/app");
 const messaging_1 = require("firebase-admin/messaging");
 const firestore_1 = require("firebase-admin/firestore");
@@ -77,6 +77,211 @@ async function sendTokenBatches(tokens, title, body, data) {
     }
     return { successCount, failureCount };
 }
+function normalizedPhoneKey(raw) {
+    const phone = normalizePhone(raw);
+    if (!/^\+90\d{10}$/.test(phone)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
+    }
+    return phone;
+}
+function customerDocumentId(phone) {
+    return (0, crypto_1.createHash)("sha256").update(phone).digest("hex").slice(0, 32);
+}
+async function upsertBusinessCustomer(input) {
+    const phone = normalizedPhoneKey(input.phone);
+    const customers = db.collection(`businesses/${input.businessId}/customers`);
+    const canonicalRef = customers.doc(customerDocumentId(phone));
+    const snapshot = await customers.limit(2_000).get();
+    const matches = snapshot.docs.filter((document) => {
+        const value = String(document.data().phoneKey ?? document.data().phone ?? "");
+        try {
+            return normalizedPhoneKey(value) === phone;
+        }
+        catch {
+            return false;
+        }
+    });
+    const numberTotal = (key) => matches.reduce((sum, document) => sum + Math.max(0, Number(document.data()[key] ?? 0)), 0);
+    const existingCanonical = matches.find((document) => document.ref.path === canonicalRef.path);
+    const fallback = existingCanonical?.data() ?? matches[0]?.data() ?? {};
+    const batch = db.batch();
+    batch.set(canonicalRef, {
+        fullName: input.fullName || String(fallback.fullName ?? "Müşteri"),
+        phone,
+        phoneKey: phone,
+        email: input.email || fallback.email || null,
+        userId: input.userId || fallback.userId || null,
+        totalAppointments: numberTotal("totalAppointments") + (input.incrementAppointments ? 1 : 0),
+        completedAppointments: numberTotal("completedAppointments"),
+        cancelledAppointments: numberTotal("cancelledAppointments"),
+        noShowAppointments: numberTotal("noShowAppointments"),
+        totalSpent: numberTotal("totalSpent"),
+        lastVisitAt: input.incrementAppointments ? firestore_1.FieldValue.serverTimestamp() : (fallback.lastVisitAt ?? null),
+        createdAt: fallback.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    matches.filter((document) => document.ref.path !== canonicalRef.path)
+        .forEach((document) => batch.delete(document.ref));
+    await batch.commit();
+    return { customerId: canonicalRef.id, phone, mergedRecords: Math.max(0, matches.length - 1) };
+}
+exports.upsertCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    return upsertBusinessCustomer({
+        businessId,
+        fullName: requireString(request.data?.fullName, "Ad soyad").slice(0, 80),
+        phone: requireString(request.data?.phone, "Telefon"),
+        email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
+        userId: typeof request.data?.userId === "string" ? request.data.userId : null,
+    });
+});
+exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "İşletme açmak için giriş yapmalısınız.");
+    const data = request.data ?? {};
+    const name = requireString(data.name, "İşletme adı").slice(0, 100);
+    const slug = requireString(data.slug, "Mağaza adresi").toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        throw new https_1.HttpsError("invalid-argument", "Mağaza adresi yalnızca harf, rakam ve tire içerebilir.");
+    }
+    const slugRef = db.doc(`businessSlugs/${slug}`);
+    const businessRef = db.collection("businesses").doc();
+    const accountRef = db.doc(`businessAccounts/${uid}`);
+    const workingHours = Array.isArray(data.workingHours) ? data.workingHours.slice(0, 7) : [];
+    let position = 0;
+    await db.runTransaction(async (transaction) => {
+        const ownedQuery = db.collection("businesses").where("ownerUid", "==", uid);
+        const [account, owned, slugSnapshot] = await Promise.all([
+            transaction.get(accountRef),
+            transaction.get(ownedQuery),
+            transaction.get(slugRef),
+        ]);
+        if (slugSnapshot.exists)
+            throw new https_1.HttpsError("already-exists", "Bu mağaza adresi zaten kullanılıyor.");
+        const reservedCount = Math.max(Number(account.data()?.storeCount ?? 0), owned.size);
+        if (reservedCount >= 3)
+            throw new https_1.HttpsError("resource-exhausted", "Bir hesap en fazla 3 mağaza açabilir.");
+        position = reservedCount + 1;
+        const needsApproval = position > 1;
+        transaction.set(accountRef, {
+            ownerUid: uid, storeCount: position, updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            createdAt: account.data()?.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        transaction.set(businessRef, {
+            ownerUid: uid,
+            name,
+            slug,
+            category: requireString(data.category, "Kategori").slice(0, 60),
+            phone: normalizedPhoneKey(requireString(data.phone, "Telefon")),
+            email: requireString(data.email, "E-posta").toLowerCase().slice(0, 160),
+            address: requireString(data.address, "Adres").slice(0, 300),
+            city: requireString(data.city, "Şehir").slice(0, 60),
+            district: requireString(data.district, "İlçe").slice(0, 80),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : null,
+            coverUrl: typeof data.coverUrl === "string" ? data.coverUrl : null,
+            description: typeof data.description === "string" ? data.description.slice(0, 600) : "",
+            isPublished: !needsApproval,
+            status: needsApproval ? "pending_review" : "active",
+            approvalStatus: needsApproval ? "pending" : "approved",
+            storePosition: position,
+            slotIntervalMinutes: 15,
+            rating: 0,
+            reviewCount: 0,
+            minimumBookingNoticeMinutes: 60,
+            maximumBookingDaysAhead: 45,
+            appointmentBufferMinutes: 10,
+            plan: "RANDEVUGO",
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        transaction.set(slugRef, { businessId: businessRef.id, ownerUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp() });
+        transaction.set(businessRef.collection("members").doc(uid), {
+            uid, role: "owner", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        workingHours.forEach((value) => {
+            transaction.set(businessRef.collection("workingHours").doc(), {
+                day: Math.max(0, Math.min(6, Number(value.day ?? 0))),
+                isOpen: value.isOpen === true,
+                start: String(value.start ?? "09:00"),
+                end: String(value.end ?? "18:00"),
+                breakStart: value.breakStart ?? null,
+                breakEnd: value.breakEnd ?? null,
+                staffId: null,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        });
+        if (needsApproval) {
+            transaction.set(db.collection("businessApprovalRequests").doc(businessRef.id), {
+                businessId: businessRef.id, ownerUid: uid, businessName: name, storePosition: position,
+                status: "pending", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        }
+        transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
+            businessId: businessRef.id, userId: uid, plan: "RANDEVUGO", status: "trialing",
+            trialDays: 14, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    });
+    const needsApproval = position > 1;
+    return { businessId: businessRef.id, status: needsApproval ? "pending_review" : "active", requiresApproval: needsApproval, storePosition: position };
+});
+exports.reviewBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const decision = requireString(request.data?.decision, "decision");
+    if (!["approved", "rejected"].includes(decision))
+        throw new https_1.HttpsError("invalid-argument", "Geçersiz onay kararı.");
+    const businessRef = db.doc(`businesses/${businessId}`);
+    const business = await businessRef.get();
+    if (!business.exists)
+        throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
+    const approved = decision === "approved";
+    const batch = db.batch();
+    batch.update(businessRef, {
+        status: approved ? "active" : "rejected",
+        approvalStatus: decision,
+        isPublished: approved,
+        reviewedBy: uid,
+        reviewedAt: firestore_1.FieldValue.serverTimestamp(),
+        adminNote: typeof request.data?.note === "string" ? request.data.note.slice(0, 500) : "",
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    batch.set(db.doc(`businessApprovalRequests/${businessId}`), {
+        status: decision, reviewedBy: uid, reviewedAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: `business.${decision}`, businessId, actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true, status: approved ? "active" : "rejected" };
+});
+exports.assignBusinessPlan = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const plan = requireString(request.data?.plan, "Paket").toUpperCase().slice(0, 40);
+    const batch = db.batch();
+    batch.update(db.doc(`businesses/${businessId}`), { plan, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+    batch.set(db.doc(`subscriptions/${businessId}`), {
+        businessId, plan, status: String(request.data?.status ?? "active"), assignedBy: uid,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: "subscription.plan_assigned", businessId, plan, actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true, plan };
+});
 exports.registerPushToken = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
@@ -125,17 +330,20 @@ exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async
     await requirePlatformAdmin(uid, request.auth?.token.email);
     const title = requireString(request.data?.title, "Başlık").slice(0, 80);
     const body = requireString(request.data?.body, "Mesaj").slice(0, 500);
-    const messageId = await messaging.send({
-        topic: GLOBAL_PUSH_TOPIC,
-        notification: { title, body },
-        data: { kind: "platform_announcement", destination: String(request.data?.destination ?? "discover") },
-        apns: { payload: { aps: { sound: "default", badge: 1 } } },
+    const devices = await db.collectionGroup("devices").get();
+    const tokens = devices.docs.map((document) => ({
+        ref: document.ref,
+        token: String(document.data().fcmToken ?? ""),
+    })).filter((item) => item.token.length > 20);
+    const result = await sendTokenBatches(tokens, title, body, {
+        kind: "platform_announcement", destination: String(request.data?.destination ?? "discover"),
     });
     await db.collection("notificationLogs").add({
-        audience: "platform", title, body, messageId, senderUid: uid,
-        status: "sent", createdAt: firestore_1.FieldValue.serverTimestamp(),
+        audience: "platform", title, body, senderUid: uid, recipientDevices: tokens.length, ...result,
+        status: tokens.length === 0 ? "no_recipients" : result.failureCount === 0 ? "sent" : "partial",
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
-    return { success: true, messageId };
+    return { success: result.successCount > 0, recipients: tokens.length, ...result };
 });
 exports.sendBusinessPush = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
@@ -752,7 +960,7 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
     });
     // ── CRM: Auto-upsert customer ──
     const phone = typeof appointment.customerPhone === "string"
-        ? appointment.customerPhone.trim()
+        ? appointment.customerPhone
         : null;
     const customerName = typeof appointment.customerName === "string"
         ? appointment.customerName.trim()
@@ -760,39 +968,15 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
     const customerEmail = typeof appointment.customerEmail === "string"
         ? appointment.customerEmail.trim().toLowerCase()
         : null;
-    if (phone) {
-        const customersRef = db.collection(`businesses/${businessId}/customers`);
-        const existing = await customersRef.where("phone", "==", phone).limit(1).get();
-        if (!existing.empty) {
-            // Update existing customer
-            const customerDoc = existing.docs[0];
-            await customerDoc.ref.update({
-                fullName: customerName,
-                ...(customerEmail ? { email: customerEmail } : {}),
-                ...(appointment.customerId ? { userId: appointment.customerId } : {}),
-                totalAppointments: firestore_1.FieldValue.increment(1),
-                lastVisitAt: firestore_1.FieldValue.serverTimestamp(),
-                updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            });
-        }
-        else {
-            // Create new customer
-            await customersRef.add({
-                fullName: customerName,
-                phone,
-                email: customerEmail,
-                userId: appointment.customerId ?? null,
-                totalAppointments: 1,
-                completedAppointments: 0,
-                cancelledAppointments: 0,
-                noShowAppointments: 0,
-                totalSpent: 0,
-                lastVisitAt: firestore_1.FieldValue.serverTimestamp(),
-                createdAt: firestore_1.FieldValue.serverTimestamp(),
-                updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            });
-        }
-    }
+    if (phone)
+        await upsertBusinessCustomer({
+            businessId,
+            fullName: customerName,
+            phone,
+            email: customerEmail,
+            userId: appointment.customerId ?? null,
+            incrementAppointments: true,
+        });
 });
 exports.submitReview = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const data = request.data ?? {};

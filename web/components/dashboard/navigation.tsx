@@ -92,19 +92,18 @@ export function DashboardSidebar() {
 
 export function DashboardBottomNav() {
   const pathname = usePathname();
-  const mobileItems = navItems.slice(0, 5);
 
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-30 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-2xl shadow-[var(--shadow-hard)] backdrop-blur lg:hidden">
-      <ul className="grid grid-cols-5 gap-1">
-        {mobileItems.map((item) => {
+    <nav className="fixed inset-x-4 bottom-4 z-30 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-2xl shadow-[var(--shadow-hard)] backdrop-blur lg:hidden">
+      <ul className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {navItems.map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"
               ? pathname === "/dashboard"
               : pathname.startsWith(item.href);
           return (
-            <li key={item.href}>
+            <li key={item.href} className="w-[74px] shrink-0 snap-start">
               <Link
                 href={item.href}
                 className={cn(

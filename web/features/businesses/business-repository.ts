@@ -13,6 +13,8 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Business, DaySchedule } from "@/types/business";
@@ -28,6 +30,7 @@ interface OnboardingInput {
   district: string;
   logoUrl?: string;
   coverUrl?: string;
+  description?: string;
   slug: string;
   workingHours: DaySchedule[];
 }
@@ -117,73 +120,24 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
   };
 }
 
-export async function createBusinessFromOnboarding(input: OnboardingInput): Promise<string> {
-  const db = getDb();
+export interface CreateBusinessResult {
+  businessId: string;
+  status: "active" | "pending_review";
+  requiresApproval: boolean;
+  storePosition: number;
+}
 
-  // Check slug uniqueness first
-  const slugRef = doc(db, "businessSlugs", input.slug);
-  const slugSnap = await getDoc(slugRef);
-  if (slugSnap.exists()) {
-    throw new Error("Bu slug zaten kullaniliyor.");
-  }
-
-  const businessRef = doc(collection(db, "businesses"));
-
-  // Step 1: Create business document (allow create: if isAuthenticated())
-  await setDoc(businessRef, {
-    ownerUid: input.ownerUid,
-    name: input.name,
-    slug: input.slug,
-    category: input.category,
-    phone: input.phone,
-    email: input.email,
-    address: input.address,
-    city: input.city,
-    district: input.district,
-    logoUrl: input.logoUrl ?? null,
-    coverUrl: input.coverUrl ?? null,
-    isPublished: true,
-    status: "active",
-    slotIntervalMinutes: 15,
-    rating: 0,
-    reviewCount: 0,
-    minimumBookingNoticeMinutes: 60,
-    maximumBookingDaysAhead: 45,
-    appointmentBufferMinutes: 10,
-    plan: "RANDEVUGO",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  // Step 2: Reserve slug (allow create: if isAuthenticated() && ownerUid == uid())
-  await setDoc(slugRef, {
-    businessId: businessRef.id,
-    ownerUid: input.ownerUid,
-    createdAt: serverTimestamp(),
-  });
-
-  // Step 3: Create owner member (allow create: memberId == uid() && role == "owner")
-  const memberRef = doc(db, "businesses", businessRef.id, "members", input.ownerUid);
-  await setDoc(memberRef, {
-    uid: input.ownerUid,
-    role: "owner",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  // Step 4: Create default working hours (now isBusinessOwner works because business exists)
-  const hourPromises = input.workingHours.map((schedule) => {
-    const scheduleRef = doc(collection(db, "businesses", businessRef.id, "workingHours"));
-    return setDoc(scheduleRef, {
-      ...schedule,
-      staffId: null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  });
-  await Promise.all(hourPromises);
-
-  return businessRef.id;
+export async function createBusinessFromOnboarding(input: OnboardingInput): Promise<CreateBusinessResult> {
+  const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "createBusiness");
+  const result = await callable(input);
+  const data = result.data as Partial<CreateBusinessResult>;
+  if (!data.businessId) throw new Error("İşletme oluşturulamadı.");
+  return {
+    businessId: data.businessId,
+    status: data.status === "pending_review" ? "pending_review" : "active",
+    requiresApproval: data.requiresApproval === true,
+    storePosition: Number(data.storePosition ?? 1),
+  };
 }
 
 export async function listBusinessWorkingHours(businessId: string) {

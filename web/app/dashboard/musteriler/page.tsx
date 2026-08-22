@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, ClipboardList, Clock3, ContactRound, Mail, Phone, RefreshCw, Search, Sparkles, TrendingUp, UsersRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { listAppointments } from "@/features/appointments/appointment-repository";
-import { createOrUpdateCustomer, listCustomers } from "@/features/customers/customer-repository";
+import { createOrUpdateCustomer, listCustomers, normalizeCustomerPhone } from "@/features/customers/customer-repository";
 import { useBusiness } from "@/hooks/use-business";
 import { formatMoney } from "@/lib/utils/date";
 import type { Appointment } from "@/types/appointments";
@@ -42,7 +42,7 @@ export default function CustomersPage() {
   const customerApptsMap = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
     appointments.forEach((appointment) => {
-      const phone = appointment.customerPhone?.trim();
+      const phone = normalizeCustomerPhone(appointment.customerPhone ?? "");
       if (!phone) return;
       if (!map[phone]) map[phone] = [];
       map[phone].push(appointment);
@@ -68,7 +68,7 @@ export default function CustomersPage() {
   }, [customers, search, sortDir, sortKey]);
 
   const selectedCustomer = selectedId ? customers.find((customer) => customer.id === selectedId) : null;
-  const selectedAppts = selectedCustomer ? [...(customerApptsMap[selectedCustomer.phone] || [])].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()) : [];
+  const selectedAppts = selectedCustomer ? [...(customerApptsMap[normalizeCustomerPhone(selectedCustomer.phone)] || [])].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()) : [];
   const totalCustomers = customers.length;
   const totalRevenue = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
   const avgAppointments = totalCustomers > 0 ? Math.round((customers.reduce((sum, customer) => sum + customer.totalAppointments, 0) / totalCustomers) * 10) / 10 : 0;
@@ -84,7 +84,7 @@ export default function CustomersPage() {
     try {
       const phones = new Map<string, { name: string; phone: string; email?: string }>();
       appointments.forEach((appointment) => {
-        const phone = appointment.customerPhone?.trim();
+        const phone = normalizeCustomerPhone(appointment.customerPhone ?? "");
         if (phone && !phones.has(phone)) phones.set(phone, { name: appointment.customerName || "Müşteri", phone, email: appointment.customerEmail || undefined });
       });
       for (const entry of phones.values()) await createOrUpdateCustomer(businessId, { fullName: entry.name, phone: entry.phone, email: entry.email });

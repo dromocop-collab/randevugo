@@ -9,7 +9,9 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,8 @@ interface BusinessItem {
   plan: string;
   city: string;
   category: string;
+  approvalStatus?: string;
+  storePosition?: number;
   createdAt?: string;
 }
 
@@ -54,6 +58,8 @@ export default function SuperAdminBusinessesPage() {
             plan: String(d.plan ?? "RANDEVUGO"),
             city: String(d.city ?? ""),
             category: String(d.category ?? ""),
+            approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
+            storePosition: Number(d.storePosition ?? 1),
             createdAt: d.createdAt?.toDate?.()
               ? d.createdAt.toDate().toLocaleDateString("tr-TR")
               : undefined,
@@ -85,6 +91,8 @@ export default function SuperAdminBusinessesPage() {
           plan: String(d.plan ?? "FREE"),
           city: String(d.city ?? ""),
           category: String(d.category ?? ""),
+          approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
+          storePosition: Number(d.storePosition ?? 1),
           createdAt: d.createdAt?.toDate?.()
             ? d.createdAt.toDate().toLocaleDateString("tr-TR")
             : undefined,
@@ -120,17 +128,28 @@ export default function SuperAdminBusinessesPage() {
   }
 
   async function changePlan(bizId: string, newPlan: string) {
-    const db = getDb();
     setBusyId(bizId);
     try {
-      await updateDoc(doc(db, "businesses", bizId), {
-        plan: newPlan,
-        updatedAt: serverTimestamp(),
-      });
+      const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "assignBusinessPlan");
+      await callable({ businessId: bizId, plan: newPlan, status: "active" });
       toast.success(`Plan ${newPlan} olarak güncellendi.`);
       await loadBusinesses();
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reviewBusiness(bizId: string, decision: "approved" | "rejected") {
+    setBusyId(bizId);
+    try {
+      const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "reviewBusiness");
+      await callable({ businessId: bizId, decision });
+      toast.success(decision === "approved" ? "Mağaza onaylandı ve yayına açıldı." : "Mağaza başvurusu reddedildi.");
+      await loadBusinesses();
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       setBusyId(null);
     }
@@ -161,7 +180,7 @@ export default function SuperAdminBusinessesPage() {
   return (
     <div className="space-y-4">
       <Card title="İşletme Yönetimi" description={`Toplam ${businesses.length} işletme`}>
-        <div className="mb-4 grid gap-3 md:grid-cols-5">
+        <div className="mb-4 grid gap-3 md:grid-cols-6">
           <div className="md:col-span-2">
             <Input
               label="Ara"
@@ -178,6 +197,9 @@ export default function SuperAdminBusinessesPage() {
           </Button>
           <Button variant={filter === "suspended" ? "secondary" : "ghost"} onClick={() => setFilter("suspended")}>
             Askıda
+          </Button>
+          <Button variant={filter === "pending" ? "secondary" : "ghost"} onClick={() => setFilter("pending")}>
+            Onay bekleyen
           </Button>
         </div>
 
@@ -200,19 +222,23 @@ export default function SuperAdminBusinessesPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-[var(--text-1)]">{biz.name}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${biz.isSuspended ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                        {biz.isSuspended ? "Askıda" : "Aktif"}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${biz.status === "pending_review" ? "bg-amber-100 text-amber-800" : biz.status === "rejected" || biz.isSuspended ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        {biz.status === "pending_review" ? "Onay bekliyor" : biz.status === "rejected" ? "Reddedildi" : biz.isSuspended ? "Askıda" : "Aktif"}
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${planColors[biz.plan] ?? "bg-gray-100 text-gray-700"}`}>
                         {biz.plan}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-[var(--text-3)]">
-                      {biz.city} · {biz.category} · {biz.createdAt ?? "—"}
+                      {biz.storePosition}. mağaza · {biz.city} · {biz.category} · {biz.createdAt ?? "—"}
                     </p>
                     <p className="text-xs text-[var(--text-3)]">ID: {biz.id}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {biz.status === "pending_review" && <>
+                      <Button className="text-xs" disabled={busyId === biz.id} onClick={() => reviewBusiness(biz.id, "approved")}>Onayla</Button>
+                      <Button variant="danger" className="text-xs" disabled={busyId === biz.id} onClick={() => reviewBusiness(biz.id, "rejected")}>Reddet</Button>
+                    </>}
                     <select
                       value={biz.plan}
                       onChange={(e) => changePlan(biz.id, e.target.value)}

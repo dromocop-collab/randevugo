@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import { createBusinessFromOnboarding, updateBusiness } from "@/features/businesses/business-repository";
-import { ensureFreePlan } from "@/features/subscriptions/subscription-repository";
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusiness } from "@/hooks/use-business";
@@ -184,7 +183,7 @@ export function OnboardingWizard() {
     try {
       const payload = validated.data;
 
-      const businessId = await createBusinessFromOnboarding({
+      const creation = await createBusinessFromOnboarding({
         ownerUid: user.uid,
         name: payload.name,
         category: payload.category,
@@ -195,9 +194,11 @@ export function OnboardingWizard() {
         district: payload.district,
         logoUrl: payload.logoUrl && payload.logoUrl !== "pending-upload" ? payload.logoUrl : undefined,
         coverUrl: payload.coverUrl && payload.coverUrl !== "pending-upload" ? payload.coverUrl : undefined,
+        description,
         slug: payload.slug,
         workingHours: defaultWorkingHours,
       });
+      const businessId = creation.businessId;
 
       // Upload images after business is created
       const imageUpdates: Record<string, string> = {};
@@ -217,14 +218,10 @@ export function OnboardingWizard() {
         } catch { /* non-critical */ }
       }
 
-      try {
-        await ensureFreePlan(businessId);
-      } catch {
-        toast.message("Plan kaydı otomatik tamamlanacak.");
-      }
-
       setBusinessId(businessId);
-      toast.success("🎉 İşletmeniz başarıyla oluşturuldu!");
+      toast.success(creation.requiresApproval
+        ? `🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`
+        : "🎉 İlk mağazan başarıyla oluşturuldu!");
       router.push("/dashboard");
     } catch (error) {
       toast.error(mapOnboardingError(error));
@@ -574,7 +571,7 @@ export function OnboardingWizard() {
                       <ul className="mt-1.5 space-y-1 text-xs text-[var(--text-3)]">
                         <li>• Çalışma saatleriniz varsayılan olarak ayarlanacak (daha sonra değiştirebilirsiniz)</li>
                         <li>• Dashboard&apos;dan hizmetlerinizi ve çalışanlarınızı ekleyebilirsiniz</li>
-                        <li>• Müşterileriniz hemen online randevu almaya başlayabilir</li>
+                        <li>• İlk mağaza hemen açılır; 2. ve 3. mağaza süper admin onayından sonra yayınlanır</li>
                       </ul>
                     </div>
                   </div>

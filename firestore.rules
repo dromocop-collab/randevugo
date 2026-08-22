@@ -52,7 +52,8 @@ service cloud.firestore {
     // Protect fields that should only be changed by server/admin
     function protectedFieldsUnchanged() {
       return (!request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["rating", "reviewCount", "isVerified", "status", "isSuspended"]));
+        .hasAny(["rating", "reviewCount", "isVerified", "status", "isSuspended",
+          "approvalStatus", "storePosition", "reviewedBy", "reviewedAt", "plan"]));
     }
 
     // ────────────────────────────────────────────────
@@ -65,6 +66,17 @@ service cloud.firestore {
 
     match /platformSettings/{doc} {
       allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    match /platformPlans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformAdmin();
+    }
+
+    match /businessApprovalRequests/{businessId} {
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && resource.data.ownerUid == uid());
       allow write: if isPlatformAdmin();
     }
 
@@ -126,7 +138,8 @@ service cloud.firestore {
         (isAuthenticated() &&
           (resource.data.userId == uid() ||
            (resource.data.businessId is string && isMember(resource.data.businessId))));
-      allow create: if isAuthenticated();
+      // Server-only: enforces the maximum of three stores and approval for stores two/three.
+      allow create: if false;
       allow update: if isPlatformAdmin() ||
         (isAuthenticated() &&
           (resource.data.userId == uid() ||

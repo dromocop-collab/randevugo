@@ -1,4 +1,6 @@
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Customer } from "@/types/customer";
@@ -23,34 +25,15 @@ export async function createOrUpdateCustomer(
   businessId: string,
   input: Pick<Customer, "fullName" | "phone" | "email">
 ): Promise<string> {
-  const db = getDb();
-  const match = await getDocs(query(collection(db, "businesses", businessId, "customers")));
-  const existing = match.docs.find((item) => {
-    const row = item.data();
-    return String(row.phone ?? "") === input.phone;
-  });
+  const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "upsertCustomer");
+  const result = await callable({ businessId, ...input });
+  return String((result.data as { customerId?: string }).customerId ?? "");
+}
 
-  if (existing) {
-    await updateDoc(existing.ref, {
-      fullName: input.fullName,
-      email: input.email ?? null,
-      updatedAt: serverTimestamp(),
-    });
-    return existing.id;
-  }
-
-  const ref = await addDoc(collection(db, "businesses", businessId, "customers"), {
-    fullName: input.fullName,
-    phone: input.phone,
-    email: input.email ?? null,
-    totalAppointments: 0,
-    completedAppointments: 0,
-    cancelledAppointments: 0,
-    noShowAppointments: 0,
-    totalSpent: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  return ref.id;
+export function normalizeCustomerPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("90") && digits.length === 12) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+90${digits.slice(1)}`;
+  if (digits.length === 10) return `+90${digits}`;
+  return value.trim();
 }
