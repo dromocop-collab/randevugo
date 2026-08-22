@@ -1,15 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
+exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
 const app_1 = require("firebase-admin/app");
+const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
+const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const crypto_1 = require("crypto");
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
+const auth = (0, auth_1.getAuth)();
 const messaging = (0, messaging_1.getMessaging)();
+const storage = (0, storage_1.getStorage)();
 const GLOBAL_PUSH_TOPIC = "senin_randevun_all";
 const publicCallableOptions = {
     region: "europe-west1",
@@ -76,6 +80,24 @@ async function sendTokenBatches(tokens, title, body, data) {
         await Promise.all(invalidRefs.map((ref) => ref.delete()));
     }
     return { successCount, failureCount };
+}
+async function deleteRootMatches(collectionName, field, value) {
+    while (true) {
+        const snapshot = await db.collection(collectionName).where(field, "==", value).limit(200).get();
+        if (snapshot.empty)
+            return;
+        for (const document of snapshot.docs)
+            await db.recursiveDelete(document.ref);
+    }
+}
+async function deleteGroupMatches(collectionName, field, value) {
+    while (true) {
+        const snapshot = await db.collectionGroup(collectionName).where(field, "==", value).limit(200).get();
+        if (snapshot.empty)
+            return;
+        for (const document of snapshot.docs)
+            await db.recursiveDelete(document.ref);
+    }
 }
 function normalizedPhoneKey(raw) {
     const phone = normalizePhone(raw);
@@ -321,6 +343,61 @@ exports.unregisterPushToken = (0, https_1.onCall)({ region: "europe-west1" }, as
     if (token)
         await messaging.unsubscribeFromTopic([token], GLOBAL_PUSH_TOPIC);
     await ref.delete();
+    return { success: true };
+});
+exports.deleteMyAccount = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Hesabınızı silmek için yeniden giriş yapmalısınız.");
+    const [userRecord, userProfile, ownedBusinesses] = await Promise.all([
+        auth.getUser(uid),
+        db.doc(`users/${uid}`).get(),
+        db.collection("businesses").where("ownerUid", "==", uid).get(),
+    ]);
+    const email = userRecord.email?.trim().toLowerCase() ?? "";
+    const phone = String(userProfile.data()?.phone ?? "").trim();
+    // Storage is removed before identity deletion so a failed media cleanup can be retried safely.
+    const bucket = storage.bucket();
+    await bucket.deleteFiles({ prefix: `users/${uid}/`, force: true });
+    for (const business of ownedBusinesses.docs) {
+        const businessId = business.id;
+        const slug = String(business.data().slug ?? "").trim();
+        await bucket.deleteFiles({ prefix: `businesses/${businessId}/`, force: true });
+        await Promise.all([
+            slug ? db.doc(`businessSlugs/${slug}`).delete() : Promise.resolve(),
+            db.doc(`businessApprovalRequests/${businessId}`).delete(),
+            db.doc(`subscriptions/${businessId}`).delete(),
+            deleteRootMatches("categoryRequests", "businessId", businessId),
+            deleteRootMatches("supportTickets", "businessId", businessId),
+            deleteRootMatches("notificationLogs", "businessId", businessId),
+            deleteRootMatches("appointmentTokens", "businessId", businessId),
+        ]);
+        await db.recursiveDelete(business.ref);
+    }
+    // Remove customer-side records created inside businesses the user does not own.
+    const customerAppointments = await db.collectionGroup("appointments").where("customerId", "==", uid).get();
+    for (const appointment of customerAppointments.docs) {
+        const publicToken = String(appointment.data().publicToken ?? "");
+        if (publicToken)
+            await db.doc(`appointmentTokens/${publicToken}`).delete();
+        await db.recursiveDelete(appointment.ref);
+    }
+    await Promise.all([
+        deleteGroupMatches("customers", "userId", uid),
+        deleteGroupMatches("reviews", "customerId", uid),
+        deleteGroupMatches("members", "uid", uid),
+        deleteRootMatches("supportTickets", "userId", uid),
+        deleteRootMatches("notificationLogs", "senderUid", uid),
+        deleteRootMatches("platformAuditLogs", "actorUid", uid),
+        db.doc(`businessAccounts/${uid}`).delete(),
+        db.doc(`platformAdmins/${uid}`).delete(),
+        email ? db.doc(`emailVerificationCodes/${email}`).delete() : Promise.resolve(),
+        email ? db.doc(`passwordResetCodes/${email}`).delete() : Promise.resolve(),
+        email ? deleteRootMatches("mail", "to", email) : Promise.resolve(),
+        phone ? db.doc(`verificationCodes/${phone}`).delete() : Promise.resolve(),
+    ]);
+    await db.recursiveDelete(db.doc(`users/${uid}`));
+    await auth.deleteUser(uid);
     return { success: true };
 });
 exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
