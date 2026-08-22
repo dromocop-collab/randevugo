@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function OnboardingPage() {
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,var(--surface-0),var(--surface-1))] px-4 py-10 sm:py-16">
+    <main className="onboarding-stage min-h-screen px-4 py-8 sm:py-14">
       <ProtectedRoute>
         <OnboardingWizard />
       </ProtectedRoute>

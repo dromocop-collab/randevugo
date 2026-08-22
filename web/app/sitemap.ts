@@ -1,7 +1,17 @@
 import type { MetadataRoute } from "next";
+import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, type LocalCategorySlug } from "@/lib/seo/local-seo";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://seninrandevun.com";
+  const businesses = await getFethiyeBusinesses().catch(() => []);
+  const localPages: MetadataRoute.Sitemap = ["mugla", "mugla/fethiye"].map((path) => ({
+    url: `${baseUrl}/${path}`, lastModified: new Date(), changeFrequency: "daily", priority: path === "mugla/fethiye" ? 0.95 : 0.8,
+  }));
+  for (const slug of Object.keys(LOCAL_CATEGORIES) as LocalCategorySlug[]) {
+    const hasBusiness = businessesForCategory(businesses, slug).length > 0;
+    if (hasBusiness) localPages.push({ url: `${baseUrl}/mugla/fethiye/${slug}`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 });
+  }
+  const businessPages: MetadataRoute.Sitemap = businesses.map((business) => ({ url: `${baseUrl}/isletme/${business.slug}`, lastModified: new Date(), changeFrequency: "daily", priority: 0.8 }));
 
   return [
     {
@@ -82,5 +92,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly" as const,
       priority: 0.75,
     })),
+    ...localPages,
+    ...businessPages,
   ];
 }

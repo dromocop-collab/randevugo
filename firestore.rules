@@ -175,9 +175,7 @@ service cloud.firestore {
     match /businessSlugs/{slug} {
       // Public read — storefront resolves slug to businessId
       allow read: if true;
-      // Authenticated users can create during onboarding (transaction)
-      allow create: if isAuthenticated() &&
-        request.resource.data.ownerUid == uid();
+      allow create: if false;
       // Only the owner or platform admin can update/delete
       allow update, delete: if isPlatformAdmin() ||
         (isAuthenticated() && resource.data.ownerUid == uid());
@@ -190,7 +188,7 @@ service cloud.firestore {
       // Platform admins can read all; businesses can read their own
       allow read: if isPlatformAdmin() ||
         (isAuthenticated() && resource.data.businessId != null);
-      // Authenticated users can create requests
+      // Authenticated businesses can request a new platform category.
       allow create: if isAuthenticated();
       // Only platform admins can approve/reject
       allow update: if isPlatformAdmin();
@@ -214,7 +212,9 @@ service cloud.firestore {
         resource.data.ownerUid == uid() ||
         isMember(businessId) ||
         isPlatformAdmin();
-      allow create: if isAuthenticated();
+      // Business creation is server-only so the three-store limit and approval
+      // workflow cannot be bypassed by a direct client write.
+      allow create: if false;
       // Owner or manager can update but cannot change protected fields
       allow update: if isPlatformAdmin() ||
         (isBusinessOwner(businessId) && protectedFieldsUnchanged()) ||

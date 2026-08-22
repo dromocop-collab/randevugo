@@ -23,6 +23,7 @@ const DEFAULT_CATEGORIES: HomeCategory[] = [
   { slug: "saglik", label: "Sağlık", emoji: "+", tone: "cyan", image: "/images/categories/saglik.png", description: "Uzman sağlık hizmetleri" },
   { slug: "danismanlik", label: "Danışmanlık", emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.png", description: "Doğru uzmanla yeni bir adım" },
   { slug: "veteriner", label: "Veteriner", emoji: "♥", tone: "coral", image: "/images/categories/veteriner.png", description: "Dostların için güvenilir bakım" },
+  { slug: "yazilim", label: "Yazılım", emoji: "</>", tone: "blue", image: "/images/categories/yazilim.png", description: "Web, mobil ve dijital çözümler" },
 ];
 
 const CUSTOMER_FAQ = [

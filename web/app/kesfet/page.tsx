@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { EmptyState, LoadingState } from "@/components/ui/states";
@@ -20,6 +21,7 @@ const DEFAULT_CATEGORIES = [
   { value: "saglik", label: "Sağlık", icon: "🩺" },
   { value: "danismanlik", label: "Danışmanlık", icon: "📋" },
   { value: "veteriner", label: "Veteriner", icon: "🐾" },
+  { value: "yazilim", label: "Yazılım", icon: "💻" },
   { value: "egitim", label: "Eğitim", icon: "📚" },
   { value: "servis", label: "Servis / Teknik", icon: "🔧" },
   { value: "diger", label: "Diğer", icon: "📦" },
@@ -166,9 +168,11 @@ export default function DiscoverPage() {
                 {/* Cover */}
                 <div className="relative h-40 w-full overflow-hidden rounded-t-2xl bg-[var(--surface-3)]">
                   {biz.coverUrl ? (
-                    <img
+                    <Image
                       src={biz.coverUrl}
                       alt={biz.name}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
                   ) : (

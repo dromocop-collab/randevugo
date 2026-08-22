@@ -13,6 +13,8 @@ const DEFAULT_CATEGORIES = [
   { value: "danismanlik", label: "Danışmanlık" },
   { value: "veteriner", label: "Veteriner" },
   { value: "saglik", label: "Sağlık" },
+  { value: "spa", label: "Spa & Masaj" },
+  { value: "yazilim", label: "Yazılım" },
   { value: "egitim", label: "Eğitim" },
   { value: "servis", label: "Servis / Teknik" },
   { value: "diger", label: "Diğer" },

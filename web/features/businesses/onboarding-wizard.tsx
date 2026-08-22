@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ const DEFAULT_CATEGORIES = [
   { value: "spor", label: "Spor / Personal Training" },
   { value: "danismanlik", label: "Danışmanlık" },
   { value: "veteriner", label: "Veteriner" },
+  { value: "yazilim", label: "Yazılım" },
   { value: "servis", label: "Servis İşletmesi" },
   { value: "saglik", label: "Sağlık" },
   { value: "egitim", label: "Eğitim" },
@@ -34,6 +36,13 @@ const businessTypes = [
   { value: "erkek", label: "Erkek" },
   { value: "unisex", label: "Unisex" },
 ];
+
+const STEP_GUIDANCE = [
+  { title: "Markanı doğru konumlandır", text: "Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur.", items: ["Benzersiz mağaza adresi", "Doğru müşteri segmenti", "SEO uyumlu profil başlangıcı"] },
+  { title: "Müşterilerin sana ulaşsın", text: "İletişim ve konum bilgileri randevu güvenini yükseltir.", items: ["Türkiye telefon doğrulaması", "Şehir ve ilçe eşleşmesi", "Harita için hazır adres"] },
+  { title: "Vitrinini güçlendir", text: "Net logo, kapak ve açıklama mağazanı profesyonel gösterir.", items: ["Mobil uyumlu görseller", "Akılda kalan profil adresi", "600 karakterlik marka hikâyesi"] },
+  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; kurulum güvenli şekilde tamamlanacak.", items: ["14 günlük başlangıç planı", "Online randevu altyapısı", "Çoklu mağaza onay güvencesi"] },
+] as const;
 
 const defaultWorkingHours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
   day,
@@ -233,10 +242,10 @@ export function OnboardingWizard() {
   const categoryLabel = categories.find((c) => c.value === category)?.label ?? category;
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="onboarding-wizard mx-auto max-w-4xl">
       {/* Header */}
-      <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-2xl shadow-lg">
+      <div className="onboarding-heading mb-8 text-center">
+        <div className="onboarding-logo mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl">
           🚀
         </div>
         <h1 className="text-2xl font-bold text-[var(--text-1)]">İşletme Kurulumu</h1>
@@ -246,7 +255,7 @@ export function OnboardingWizard() {
       </div>
 
       {/* Step Indicator */}
-      <div className="mb-8">
+      <div className="onboarding-progress mb-8">
         <div className="flex items-center justify-between">
           {STEPS.map((s, idx) => (
             <div key={s.title} className="flex flex-1 items-center">
@@ -294,9 +303,9 @@ export function OnboardingWizard() {
 
       {/* Step Card */}
       <form onSubmit={submit}>
-        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-xl shadow-[var(--shadow-hard)]">
+        <div className="onboarding-card overflow-hidden rounded-[28px] border border-[var(--border)] bg-white/90 shadow-xl">
           {/* Step Header */}
-          <div className="border-b border-[var(--border)] bg-[linear-gradient(135deg,var(--accent)/5,var(--accent-2)/5)] px-6 py-5">
+          <div className="onboarding-card-head border-b border-[var(--border)] px-6 py-5 sm:px-8">
             <div className="flex items-center gap-3">
               <span className="text-2xl">{STEPS[step]!.icon}</span>
               <div>
@@ -306,8 +315,9 @@ export function OnboardingWizard() {
             </div>
           </div>
 
+          <div className="onboarding-layout">
           {/* Step Content */}
-          <div className="p-6">
+          <div key={step} className="onboarding-step-content p-6 sm:p-8">
             {/* Step 1: İşletme Bilgileri */}
             {step === 0 && (
               <div className="space-y-5">
@@ -437,7 +447,7 @@ export function OnboardingWizard() {
                       }`}
                     >
                       {logoPreview ? (
-                        <img src={logoPreview} alt="Logo" className="h-full w-full object-cover" />
+                        <Image src={logoPreview} alt="Logo önizlemesi" width={320} height={160} unoptimized className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex flex-col items-center gap-1 text-center">
                           <svg className="h-6 w-6 text-[var(--text-3)] group-hover:text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -475,7 +485,7 @@ export function OnboardingWizard() {
                       }`}
                     >
                       {coverPreview ? (
-                        <img src={coverPreview} alt="Kapak" className="h-full w-full object-cover" />
+                        <Image src={coverPreview} alt="Kapak görseli önizlemesi" width={640} height={320} unoptimized className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex flex-col items-center gap-1 text-center">
                           <svg className="h-6 w-6 text-[var(--text-3)] group-hover:text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -579,9 +589,21 @@ export function OnboardingWizard() {
               </div>
             )}
           </div>
+          <aside className="onboarding-sidecar" aria-label="Kurulum rehberi">
+            <div>
+              <small>ADIM {step + 1} · AKILLI REHBER</small>
+              <h3>{STEP_GUIDANCE[step]!.title}</h3>
+              <p>{STEP_GUIDANCE[step]!.text}</p>
+              <ul>{STEP_GUIDANCE[step]!.items.map((item, index) => <li key={item}><b>{index + 1}</b><span>{item}</span></li>)}</ul>
+              <div className="onboarding-completion" style={{ "--onboarding-progress": `${((step + 1) / STEPS.length) * 100}%` } as CSSProperties}>
+                <span><b>Kurulum ilerlemesi</b><strong>%{Math.round(((step + 1) / STEPS.length) * 100)}</strong></span><i />
+              </div>
+            </div>
+          </aside>
+          </div>
 
           {/* Step Footer */}
-          <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--surface-2)] px-6 py-4">
+          <div className="flex items-center justify-between border-t border-[var(--border)] bg-[#f8fbf8] px-6 py-4 sm:px-8">
             <div>
               {step > 0 && (
                 <button
