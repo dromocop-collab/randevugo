@@ -7,6 +7,7 @@ import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
+import { getDemoStorefrontByCategory, isDemoBusiness } from "@/lib/demo-storefronts";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ChevronLeft, ChevronRight, MapPin, Search, ShieldCheck, Sparkles, Star, UsersRound } from "lucide-react";
 
@@ -51,6 +52,11 @@ export default function DiscoverPage() {
   const [category, setCategory] = useState("");
   const [city, setCity] = useState("");
 
+  useEffect(() => {
+    const requestedCategory = new URLSearchParams(window.location.search).get("category");
+    if (requestedCategory) setCategory(requestedCategory);
+  }, []);
+
   // Fetch dynamic categories
   useEffect(() => {
     listDynamicCategories().then((dynamic: DynamicCategory[]) => {
@@ -89,6 +95,11 @@ export default function DiscoverPage() {
     return () => { cancelled = true; };
   }, [keyword, category, city]);
 
+  const demoStorefront = !loading && results.length === 0 && category && !keyword.trim() && !city
+    ? getDemoStorefrontByCategory(category)
+    : null;
+  const visibleResults = demoStorefront ? [demoStorefront.business] : results;
+
   return (
     <div className="marketing-page discover-v2 min-h-screen">
       <MarketingHeader />
@@ -114,7 +125,12 @@ export default function DiscoverPage() {
 
         {/* Search */}
         <div className="discover-search-panel mb-8 space-y-4">
-          <div className="relative">
+          <div className="discover-search-intro">
+            <span><Search size={18} /></span>
+            <div><strong>Sana uygun deneyimi bul</strong><small>Hizmet, kategori ve konuma göre profesyonel eşleştirme</small></div>
+            <aside><b><Sparkles size={12} /> Akıllı kategori</b><b><BadgeCheck size={12} /> Gerçek mağazalar</b></aside>
+          </div>
+          <div className="discover-search-field relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-3)]" />
             <input
               type="search"
@@ -123,6 +139,7 @@ export default function DiscoverPage() {
               onChange={(e) => setKeyword(e.target.value)}
               className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] py-3.5 pl-12 pr-4 text-sm text-[var(--text-1)] placeholder-[var(--text-3)] shadow-lg shadow-[var(--shadow-soft)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
+            <span className="discover-search-shortcut">Hızlı ara</span>
           </div>
 
           {/* Category Pills */}
@@ -141,25 +158,25 @@ export default function DiscoverPage() {
               ))}
             </select>
             <p className="discover-result-count text-sm text-[var(--text-3)]">
-              {loading ? "Aranıyor..." : `${results.length} işletme bulundu`}
+              {loading ? "Aranıyor..." : demoStorefront ? "1 örnek vitrin" : `${results.length} işletme bulundu`}
             </p>
             <span className="discover-filter-hint"><MapPin size={14} /> Şehrindeki en iyi seçenekleri gösteriyoruz</span>
           </div>
         </div>
 
-        <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> Gerçek işletmeler, kolay randevu deneyimi</p></div>
+        <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> {demoStorefront ? "Bu kategorinin örnek mağaza ve hizmetlerini incele" : "Gerçek işletmeler, kolay randevu deneyimi"}</p></div>
 
         {/* Results */}
         {loading ? (
           <LoadingState title="İşletmeler yükleniyor" description="Lütfen bekleyin..." />
-        ) : results.length === 0 ? (
+        ) : visibleResults.length === 0 ? (
           <EmptyState
             title="Sonuç bulunamadı"
             description="Filtrelerinizi değiştirip tekrar deneyin."
           />
         ) : (
           <div className="discover-results grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {results.map((biz) => (
+            {visibleResults.map((biz) => (
               <Link
                 key={biz.id}
                 href={`/isletme/${biz.slug}`}
@@ -180,7 +197,11 @@ export default function DiscoverPage() {
                       <span className="text-5xl font-bold text-[var(--accent)]/10">{biz.name.charAt(0)}</span>
                     </div>
                   )}
-                  {biz.status === "active" && (biz.rating ?? 0) >= 4.5 && (
+                  {isDemoBusiness(biz) ? (
+                    <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold tracking-wide text-white backdrop-blur-sm">
+                      ÖRNEK VİTRİN
+                    </span>
+                  ) : biz.status === "active" && (biz.rating ?? 0) >= 4.5 && (
                     <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
                       ✓ Doğrulanmış
                     </span>
@@ -212,7 +233,7 @@ export default function DiscoverPage() {
 
                   <div className="mt-3 flex items-center gap-2">
                     <span className="rounded-full bg-[var(--accent)]/5 px-2.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
-                      {biz.category}
+                      {categories.find((item) => item.value === biz.category)?.label ?? biz.category}
                     </span>
                     {(biz.reviewCount ?? 0) > 0 && (
                       <span className="text-[10px] text-[var(--text-3)]">

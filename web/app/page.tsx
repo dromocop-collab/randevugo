@@ -10,6 +10,7 @@ import { BusinessCard } from "@/components/discovery/business-card";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { getBusinessCities, getPopularBusinesses, searchBusinesses } from "@/features/discovery/search-repository";
 import type { Business } from "@/types/business";
+import { getDemoStorefrontByCategory } from "@/lib/demo-storefronts";
 
 type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
 
@@ -68,7 +69,10 @@ export default function HomePage() {
     requestAnimationFrame(() => document.querySelector("#magazalar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  const visibleBusinesses = useMemo(() => searched ? results : popular, [searched, results, popular]);
+  const demoBusiness = searched && activeCategory && results.length === 0
+    ? getDemoStorefrontByCategory(activeCategory)?.business ?? null
+    : null;
+  const visibleBusinesses = useMemo(() => searched ? (demoBusiness ? [demoBusiness] : results) : popular, [searched, demoBusiness, results, popular]);
 
   return <div className="marketing-page customer-home">
     <MarketingHeader />
@@ -98,7 +102,7 @@ export default function HomePage() {
 
       <section className="customer-category-section" id="kategoriler">
         <div className="customer-section-heading"><div><span>KATEGORİLER</span><h2>Bugün neye ihtiyacın var?</h2></div><Link href="/kesfet">Tümünü keşfet <ArrowRight size={15} /></Link></div>
-        <div className="customer-category-grid">{categories.slice(0, 9).map((category, index) => <button key={category.slug} className={`customer-category-card tone-${category.tone} ${activeCategory === category.slug ? "active" : ""}`} onClick={() => selectCategory(category.slug)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}>
+        <div className="customer-category-grid">{categories.slice(0, 10).map((category, index) => <button key={category.slug} className={`customer-category-card tone-${category.tone} ${activeCategory === category.slug ? "active" : ""}`} onClick={() => selectCategory(category.slug)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}>
           <span className="customer-category-media">{category.image ? <Image src={category.image} alt={`${category.label} hizmetleri`} fill sizes="(max-width: 760px) 100vw, (max-width: 1050px) 50vw, 33vw" /> : <b>{category.emoji}</b>}<i>{String(index + 1).padStart(2, "0")}</i></span>
           <span className="customer-category-body"><small><b>{category.emoji}</b> HEMEN KEŞFET</small><strong>{category.label}</strong><em>{category.description || "Yakınındaki uzmanları keşfet"}</em></span>
           <span className="customer-category-action" aria-hidden="true"><span>İncele</span><ArrowUpRight size={18} /></span>

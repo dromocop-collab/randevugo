@@ -13,6 +13,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   veteriner: "Veteriner",
   servis: "Servis",
   saglik: "Sağlık",
+  spa: "Spa & Masaj",
+  yazilim: "Yazılım",
   egitim: "Eğitim",
   diger: "Diğer",
 };
@@ -47,11 +49,12 @@ interface BusinessCardProps {
 }
 
 export function BusinessCard({ business }: BusinessCardProps) {
+  const isDemo = business.id.startsWith("demo-");
   const categoryLabel =
     CATEGORY_LABELS[business.category] ?? business.category;
 
   return (
-    <Link href={`/${business.slug}`} className="group block">
+    <Link href={`/isletme/${business.slug}`} className="group block">
       <article className="premium-card relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-lg shadow-[var(--shadow-soft)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[var(--shadow-hard)]">
         {/* Cover Image */}
         <div className="relative h-40 overflow-hidden bg-gradient-to-br from-[var(--accent)]/10 to-[var(--accent-3)]/10">
@@ -71,7 +74,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
 
           {/* Category Badge */}
           <span className="absolute left-3 top-3 rounded-lg bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-            {categoryLabel}
+            {isDemo ? "Örnek vitrin" : categoryLabel}
           </span>
 
           {/* Logo */}
@@ -93,7 +96,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
           </h3>
 
           <div className="mt-1.5 flex items-center gap-2">
-            <StarRating rating={business.rating ?? 0} />
+            {isDemo ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">{categoryLabel} hizmet örneği</span> : <StarRating rating={business.rating ?? 0} />}
             {(business.reviewCount ?? 0) > 0 && (
               <span className="text-xs text-[var(--text-3)]">
                 ({business.reviewCount})
@@ -121,14 +124,14 @@ export function BusinessCard({ business }: BusinessCardProps) {
               />
             </svg>
             <span className="line-clamp-1">
-              {business.district}, {business.city}
+              {isDemo ? "Kategori deneyimini incele" : [business.district, business.city].filter(Boolean).join(", ")}
             </span>
           </div>
 
           {/* CTA */}
           <div className="mt-4 flex items-center justify-between">
             <span className="rounded-lg bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-              Randevu Al
+              {isDemo ? "Hizmetleri incele" : "Randevu Al"}
             </span>
             <svg
               className="h-4 w-4 text-[var(--text-3)] transition-transform duration-300 group-hover:translate-x-1"
