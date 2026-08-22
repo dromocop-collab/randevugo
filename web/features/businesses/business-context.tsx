@@ -48,19 +48,6 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     getBusinessesForUser(user.uid)
       .then((rows) => {
         if (!alive) return;
-        console.log("🔥 AUTH UID:", user.uid);
-
-        console.table(
-          rows.map((business) => ({
-            id: business.id,
-            name: business.name,
-            category: business.category,
-            isPublished: business.isPublished,
-            status: business.status,
-            rating: business.rating,
-            ownerUid: business.ownerUid,
-          }))
-        );
         setBusinesses(rows);
         if (rows.length > 0) {
           setBusinessIdState((prev) => {

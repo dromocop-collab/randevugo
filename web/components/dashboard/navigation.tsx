@@ -94,7 +94,8 @@ export function DashboardBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-30 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-2 shadow-2xl shadow-[var(--shadow-hard)] backdrop-blur lg:hidden">
+    <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
+      <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
       <ul className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -103,18 +104,17 @@ export function DashboardBottomNav() {
               ? pathname === "/dashboard"
               : pathname.startsWith(item.href);
           return (
-            <li key={item.href} className="w-[74px] shrink-0 snap-start">
+            <li key={item.href} className="w-[78px] shrink-0 snap-start">
               <Link
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 rounded-xl px-1 py-2 text-center",
-                  active
-                    ? "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-3)] text-white"
-                    : "text-[var(--text-3)]"
+                  "dashboard-bottom-nav-link",
+                  active ? "active" : ""
                 )}
               >
-                <Icon aria-hidden="true" size={19} strokeWidth={1.9} />
-                <span className="text-[10px] leading-tight">{item.label}</span>
+                <span className="dashboard-bottom-nav-icon"><Icon aria-hidden="true" size={20} strokeWidth={2} /></span>
+                <span>{item.label}</span>
               </Link>
             </li>
           );

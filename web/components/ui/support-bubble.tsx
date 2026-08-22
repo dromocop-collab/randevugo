@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, Clock3, Headphones, Mail, MessageCircleMore, Phone, X } from "lucide-react";
 
 const SUPPORT_CHANNELS = [
@@ -31,10 +32,12 @@ const SUPPORT_CHANNELS = [
 ];
 
 export function SupportBubble() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const isBusinessPanel = pathname.startsWith("/dashboard") || pathname.startsWith("/isletme/");
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
@@ -78,6 +81,8 @@ export function SupportBubble() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen, handleClose]);
+
+  if (isBusinessPanel) return null;
 
   return (
     <>

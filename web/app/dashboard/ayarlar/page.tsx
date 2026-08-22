@@ -16,7 +16,7 @@ import {
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
-import { Building2, CalendarCog, Images, Share2, type LucideIcon } from "lucide-react";
+import { Building2, CalendarCog, CheckCircle2, Images, Share2, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
 
 const DEFAULT_CATEGORY_OPTIONS = [
@@ -216,19 +216,31 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="settings-page">
+      <section className="settings-command-hero">
+        <div className="settings-command-copy">
+          <span><Sparkles size={15} /> İŞLETME KONTROL MERKEZİ</span>
+          <h1>Mağazanı kusursuzlaştır.</h1>
+          <p>Profil, marka, iletişim ve randevu kurallarını tek bir akıştan güvenle yönet.</p>
+        </div>
+        <div className="settings-command-status">
+          <span><ShieldCheck size={25} /></span>
+          <div><small>AYAR DURUMU</small><b><CheckCircle2 size={15} /> Güvenli ve senkron</b></div>
+        </div>
+      </section>
+
       {/* Tab Navigation */}
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1">
+      <div className="settings-tabs">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              className={`settings-tab ${
                 activeTab === tab.id
-                  ? "bg-[var(--accent)] text-white shadow-md"
-                  : "text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
+                  ? "is-active"
+                  : ""
               }`}
             >
               <Icon aria-hidden="true" size={17} strokeWidth={1.9} />
@@ -238,6 +250,7 @@ export default function SettingsPage() {
         })}
       </div>
 
+      <div key={activeTab} className="settings-tab-content">
       {/* Tab 1: İşletme Bilgileri */}
       {activeTab === "bilgiler" && (
         <Card title="İşletme Bilgileri" description="İşletmenizin temel bilgilerini düzenleyin.">
@@ -588,6 +601,7 @@ export default function SettingsPage() {
           </form>
         </Card>
       )}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
-import { ArrowRight, Clock3, Layers3, Sparkles } from "lucide-react";
+import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Layers3,
+  Sparkles,
+  Tag,
+  WandSparkles,
+} from "lucide-react";
 
 interface Props {
   services: Service[];
@@ -11,139 +23,196 @@ interface Props {
   onSelectService?: (serviceId: string) => void;
 }
 
+type ServiceGroup = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  items: Service[];
+  category?: ServiceCategory;
+};
+
+const DEFAULT_CATEGORY_COLOR = "#0b6b45";
+
 export function StorefrontServices({ services, categories = [], onSelectService }: Props) {
-  const [activeCat, setActiveCat] = useState<string>("all");
+  const [activeCat, setActiveCat] = useState("all");
+  const categoryRailRef = useRef<HTMLDivElement>(null);
+
+  const scrollCategories = (direction: -1 | 1) => {
+    categoryRailRef.current?.scrollBy({
+      left: direction * Math.max(260, categoryRailRef.current.clientWidth * 0.72),
+      behavior: "smooth",
+    });
+  };
+
+  const groups = useMemo<ServiceGroup[]>(() => {
+    const categoryGroups: ServiceGroup[] = categories
+      .map((category) => ({
+        id: category.id,
+        name: category.name,
+        icon: category.icon || "✦",
+        color: category.color || DEFAULT_CATEGORY_COLOR,
+        items: services.filter((service) => service.category === category.id),
+        category,
+      }))
+      .filter((group) => group.items.length > 0);
+
+    const uncategorized = services.filter(
+      (service) =>
+        !service.category || !categories.some((category) => category.id === service.category),
+    );
+
+    if (uncategorized.length > 0) {
+      categoryGroups.push({
+        id: "uncategorized",
+        name: "Diğer hizmetler",
+        icon: "✦",
+        color: DEFAULT_CATEGORY_COLOR,
+        items: uncategorized,
+      });
+    }
+
+    return categoryGroups;
+  }, [categories, services]);
 
   if (services.length === 0) {
     return (
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-10 text-center shadow-lg">
-        <Layers3 className="mx-auto text-[var(--accent)]" size={36} strokeWidth={1.5} />
-        <h2 className="mt-3 text-base font-bold text-[var(--text-1)]">Henüz hizmet eklenmemiş</h2>
-        <p className="mt-1 text-xs text-[var(--text-3)]">İşletme yakında hizmetlerini ekleyecek.</p>
+      <section className="storefront-service-empty" aria-labelledby="empty-services-title">
+        <div><Layers3 size={28} strokeWidth={1.7} /></div>
+        <p>HİZMET MENÜSÜ HAZIRLANIYOR</p>
+        <h2 id="empty-services-title">Yeni deneyimler yakında burada.</h2>
+        <span>İşletme hizmetlerini ve online randevu seçeneklerini hazırlıyor.</span>
       </section>
     );
   }
 
-  // Group by category
-  const grouped: { cat: ServiceCategory | null; items: Service[] }[] = [];
-
-  if (categories.length > 0) {
-    for (const cat of categories) {
-      const items = services.filter((service) => service.category === cat.id);
-      grouped.push({ cat, items });
-    }
-    const uncategorized = services.filter(
-      (s) => !s.category || !categories.some((c) => c.id === s.category)
-    );
-    if (uncategorized.length > 0) {
-      grouped.push({ cat: null, items: uncategorized });
-    }
-  } else {
-    grouped.push({ cat: null, items: services });
-  }
-
-  const activeGroup = grouped.find((group) => group.cat?.id === activeCat);
-  const filteredServices = activeCat === "all" ? services : activeGroup?.items ?? [];
-
-  const showCategoryFilter = categories.length > 0;
+  const safeActiveCat =
+    activeCat === "all" || groups.some((group) => group.id === activeCat)
+      ? activeCat
+      : "all";
+  const visibleGroups =
+    safeActiveCat === "all"
+      ? groups
+      : groups.filter((group) => group.id === safeActiveCat);
 
   return (
-    <section className="storefront-services space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[var(--text-1)]">Hizmetler</h2>
-        <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-          <Sparkles size={13} /> {services.length} hizmet
-        </span>
-      </div>
+    <section className="storefront-services-v3" aria-labelledby="service-menu-title">
+      <header className="storefront-services-hero">
+        <div className="storefront-services-title">
+          <span><WandSparkles size={17} /> HİZMET MENÜSÜ</span>
+          <h2 id="service-menu-title">Sana uygun deneyimi seç.</h2>
+          <p>Hizmetleri karşılaştır, detayları incele ve uygun saatini ayır.</p>
+        </div>
+        <div className="storefront-services-count" aria-label={`${services.length} aktif hizmet`}>
+          <small>AKTİF MENÜ</small>
+          <strong>{String(services.length).padStart(2, "0")}</strong>
+          <span>hizmet</span>
+        </div>
+      </header>
 
-      {/* Category Filter Chips */}
-      {showCategoryFilter && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setActiveCat("all")}
-            className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition ${
-              activeCat === "all"
-                ? "bg-[var(--accent)] text-white shadow-md"
-                : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:border-[var(--accent)]/40"
-            }`}
+      {groups.length > 1 && (
+        <div className="storefront-category-shell">
+          <div className="storefront-category-intro">
+            <span><Tag size={13} /> KATEGORİLER</span>
+            <div className="storefront-category-controls">
+              <small>Kaydır veya seç</small>
+              <button type="button" onClick={() => scrollCategories(-1)} aria-label="Önceki kategoriler"><ChevronLeft size={17} /></button>
+              <button type="button" onClick={() => scrollCategories(1)} aria-label="Sonraki kategoriler"><ChevronRight size={17} /></button>
+            </div>
+          </div>
+          <div
+            ref={categoryRailRef}
+            className="storefront-category-rail"
+            role="tablist"
+            aria-label="Hizmet kategorileri"
+            onWheel={(event) => {
+              if (!categoryRailRef.current || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+              event.preventDefault();
+              categoryRailRef.current.scrollLeft += event.deltaY;
+            }}
           >
-            Tümü
-          </button>
-          {categories.map((cat) => {
-              const isActive = activeCat === cat.id;
+            <button
+              type="button"
+              role="tab"
+              aria-selected={safeActiveCat === "all"}
+              className={`storefront-category-card all${safeActiveCat === "all" ? " active" : ""}`}
+              onClick={(event) => {
+                setActiveCat("all");
+                event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+              }}
+            >
+              <i><Layers3 size={18} /></i>
+              <span><small>TÜM MENÜ</small><strong>Tümü</strong></span>
+              <b>{services.length}</b>
+            </button>
+
+            {groups.map((group) => {
+              const isActive = safeActiveCat === group.id;
+              const style = { "--category-color": group.color } as CSSProperties;
               return (
                 <button
-                  key={cat.id}
-                  onClick={() => setActiveCat(isActive ? "all" : cat.id)}
-                  className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition ${
-                    isActive
-                      ? "text-white shadow-md"
-                      : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:shadow-sm"
-                  }`}
-                  style={isActive ? { backgroundColor: cat.color } : undefined}
+                  key={group.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`storefront-category-card${isActive ? " active" : ""}`}
+                  style={style}
+                  onClick={(event) => {
+                    setActiveCat(isActive ? "all" : group.id);
+                    event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                  }}
                 >
-                  <span>{cat.icon}</span>
-                  {cat.name}
+                  <i aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={23} /></i>
+                  <span><small>KATEGORİ</small><strong>{group.name}</strong></span>
+                  <b>{group.items.length}</b>
                 </button>
               );
             })}
+          </div>
         </div>
       )}
 
-      {/* Service List */}
-      {activeCat === "all" && showCategoryFilter ? (
-        // Grouped view
-        <div className="space-y-5">
-          {grouped.map((group) => (
-            <div key={group.cat?.id ?? "uncategorized"}>
-              <div className="mb-2 flex items-center gap-2">
-                {group.cat ? (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold"
-                    style={{ backgroundColor: group.cat.color + "15", color: group.cat.color }}
-                  >
-                    {group.cat.icon} {group.cat.name}
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium text-[var(--text-3)]">Diğer</span>
-                )}
-                <span className="text-[10px] text-[var(--text-3)]">
-                  {group.items.length} hizmet
-                </span>
-              </div>
-              <div className="space-y-2">
-                {group.items.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-1)]/60 px-4 py-5 text-center text-xs text-[var(--text-3)]">
-                    Bu kategoride henüz aktif hizmet yok.
-                  </div>
-                ) : group.items.map((service) => (
+      <div key={safeActiveCat} className="storefront-service-groups">
+        {visibleGroups.map((group, groupIndex) => {
+          const style = { "--category-color": group.color } as CSSProperties;
+          return (
+            <section
+              key={group.id}
+              className="storefront-service-group"
+              style={{ ...style, animationDelay: `${groupIndex * 70}ms` }}
+              aria-labelledby={`service-group-${group.id}`}
+            >
+              <header className="storefront-service-group-head">
+                <div className="storefront-service-group-icon" aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={23} /></div>
+                <div>
+                  <span>SEÇİLİ KATEGORİ</span>
+                  <h3 id={`service-group-${group.id}`}>{group.name}</h3>
+                </div>
+                <b>{group.items.length} hizmet</b>
+              </header>
+
+              <div className="storefront-service-grid">
+                {group.items.map((service, index) => (
                   <ServiceItem
                     key={service.id}
                     service={service}
-                    categoryMeta={group.cat ?? undefined}
-                    showCategoryBadge={false}
+                    categoryMeta={group.category}
+                    categoryColor={group.color}
+                    index={index}
                     onSelect={onSelectService}
                   />
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        // Flat / filtered view
-        <div className="space-y-2">
-          {filteredServices.map((service) => (
-            <ServiceItem
-              key={service.id}
-              service={service}
-              categoryMeta={activeGroup?.cat ?? undefined}
-              showCategoryBadge={activeCat === "all"}
-              onSelect={onSelectService}
-            />
-          ))}
-        </div>
-      )}
+            </section>
+          );
+        })}
+      </div>
+
+      <footer className="storefront-services-assurance">
+        <span><CheckCircle2 size={15} /> Şeffaf fiyat</span>
+        <span><CalendarCheck2 size={15} /> Anlık uygunluk</span>
+        <span><Sparkles size={15} /> Güvenli randevu</span>
+      </footer>
     </section>
   );
 }
@@ -151,57 +220,66 @@ export function StorefrontServices({ services, categories = [], onSelectService 
 function ServiceItem({
   service,
   categoryMeta,
-  showCategoryBadge,
+  categoryColor,
+  index,
   onSelect,
 }: {
   service: Service;
   categoryMeta?: ServiceCategory;
-  showCategoryBadge: boolean;
+  categoryColor: string;
+  index: number;
   onSelect?: (id: string) => void;
 }) {
+  const style = {
+    "--category-color": categoryColor,
+    animationDelay: `${index * 55}ms`,
+  } as CSSProperties;
+
   return (
-    <div className="storefront-service-card group flex items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 transition hover:border-[var(--accent)]/30 hover:shadow-lg sm:p-5">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-[var(--text-1)] group-hover:text-[var(--accent)] transition">
-            {service.name}
-          </p>
-          {showCategoryBadge && categoryMeta && (
-            <span
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: categoryMeta.color + "15",
-                color: categoryMeta.color,
-              }}
-            >
-              {categoryMeta.icon} {categoryMeta.name}
-            </span>
-          )}
+    <article className="storefront-service-card-v3" style={style}>
+      <div className="storefront-service-visual" aria-hidden="true">
+        <span>{categoryMeta?.icon || "✦"}</span>
+        <small>{String(index + 1).padStart(2, "0")}</small>
+      </div>
+
+      <div className="storefront-service-copy">
+        <div className="storefront-service-kicker">
+          <span>ONLINE RANDEVU</span>
+          {service.isBookableOnline && <b><i /> Uygun</b>}
         </div>
-        {service.description && (
-          <p className="mt-1 text-xs leading-relaxed text-[var(--text-3)] line-clamp-2">
-            {service.description}
-          </p>
-        )}
-        <div className="mt-2 flex items-center gap-3">
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--text-2)]">
-            <Clock3 size={13} /> {service.durationMinutes} dk
-          </span>
+        <h4>{service.name}</h4>
+        {service.description && <p>{service.description}</p>}
+        <div className="storefront-service-meta-v3">
+          <span><Clock3 size={14} /> {formatDuration(service.durationMinutes)}</span>
+          {service.requiresDeposit && <span><CheckCircle2 size={14} /> Ön ödeme</span>}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-2">
-        <span className="text-lg font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">
-          {service.price.toLocaleString("tr-TR")} ₺
-        </span>
+
+      <div className="storefront-service-action">
+        <small>HİZMET BEDELİ</small>
+        <strong>{formatPrice(service.price, service.currency)}</strong>
         {onSelect && (
-          <button
-            onClick={() => onSelect(service.id)}
-            className="rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-4 py-2 text-xs font-bold text-white shadow-lg shadow-sky-500/20 transition hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
-          >
-            Randevu Al <ArrowRight className="inline ml-1" size={14} />
+          <button type="button" onClick={() => onSelect(service.id)}>
+            <span>Randevu seç</span>
+            <i><ArrowUpRight size={17} /></i>
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
+}
+
+function formatPrice(price: number, currency: Service["currency"]) {
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(price);
+}
+
+function formatDuration(totalMinutes: number) {
+  if (totalMinutes < 60) return `${totalMinutes} dk`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours} sa ${minutes} dk` : `${hours} sa`;
 }

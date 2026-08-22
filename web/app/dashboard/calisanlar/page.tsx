@@ -14,6 +14,7 @@ import { firstErrorMessage, staffCreateSchema } from "@/lib/validation/schemas";
 import type { Staff } from "@/types/staff";
 import type { Service } from "@/types/service";
 import type { DaySchedule } from "@/types/business";
+import { BriefcaseBusiness, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Save, ShieldCheck, Sparkles, Trash2, UserRound, WandSparkles } from "lucide-react";
 
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const ORDERED_DAYS = [1, 2, 3, 4, 5, 6, 0];
@@ -107,16 +108,25 @@ export default function StaffPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="staff-page">
+      <section className="staff-command-hero">
+        <div>
+          <span><Sparkles size={15} /> EKİP OPERASYONU</span>
+          <h1>Yeteneği doğru hizmetle buluştur.</h1>
+          <p>Uzmanlıkları, kapasiteyi, vardiyaları ve izinleri akıcı bir çalışma alanından yönet.</p>
+        </div>
+        <aside><UserRound size={27} /><strong>{staff.length}</strong><small>aktif ekip profili</small></aside>
+      </section>
+
       {/* Create Staff Form */}
-      <Card title="Yeni Çalışan Ekle" description="Ekibinize yeni bir üye ekleyin.">
+      <Card className="staff-create-card" title="Yeni Çalışan Ekle" description="Ekibinize yeni bir üye ekleyin.">
         <form className="grid gap-3 sm:grid-cols-5" onSubmit={onCreate}>
           <Input label="Ad Soyad *" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ali Yılmaz" />
           <Input label="Telefon *" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="05XX" />
           <Input label="E-posta *" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input label="Pozisyon" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="Uzman" />
           <div className="flex items-end">
-            <Button className="w-full" type="submit">+ Ekle</Button>
+            <Button className="w-full" type="submit"><UserRound size={17} /> Ekibe Ekle</Button>
           </div>
         </form>
       </Card>
@@ -125,7 +135,7 @@ export default function StaffPage() {
       {staff.length === 0 ? (
         <EmptyState title="Henüz çalışan yok" description="İlk ekip üyenizi yukarıdan ekleyin." />
       ) : (
-        <div className="space-y-3">
+        <div className="staff-list">
           {staff.map((item) => (
             <StaffCard
               key={item.id}
@@ -220,19 +230,19 @@ function StaffCard({
   }
 
   return (
-    <div className={`rounded-2xl border transition ${isExpanded ? "border-[var(--accent)]/40 shadow-lg" : "border-[var(--border)]"} bg-[var(--surface-1)]`}>
+    <article className={`staff-member-card ${isExpanded ? "is-expanded" : ""}`}>
       {/* Collapsed Header */}
       <button
         onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+        className="staff-member-head"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white ${item.isActive ? "bg-emerald-500" : "bg-gray-400"}`}>
+          <div className={`staff-member-avatar ${item.isActive ? "is-active" : ""}`}>
             {item.fullName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="truncate font-semibold text-[var(--text-1)]">{item.fullName}</p>
-            <p className="truncate text-xs text-[var(--text-3)]">
+            <p className="staff-member-name">{item.fullName}</p>
+            <p className="staff-member-meta">
               {item.position} · {item.phone}
               {!item.isActive && <span className="ml-2 text-rose-500">(Pasif)</span>}
             </p>
@@ -240,24 +250,23 @@ function StaffCard({
         </div>
         <div className="flex items-center gap-2">
           {item.serviceIds.length > 0 && (
-            <span className="hidden rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)] sm:inline">
-              {item.serviceIds.length} hizmet
+            <span className="staff-service-count">
+              <CheckCircle2 size={13} /> {item.serviceIds.length} hizmet
             </span>
           )}
-          <svg
-            className={`h-5 w-5 text-[var(--text-3)] transition ${isExpanded ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <span className="staff-expand-icon"><ChevronDown className={isExpanded ? "rotate-180" : ""} size={19} /></span>
         </div>
       </button>
 
       {/* Expanded Detail Panel */}
       {isExpanded && (
-        <div className="border-t border-[var(--border)] px-5 py-5 space-y-6">
+        <div className="staff-editor-panel">
+          <div className="staff-editor-intro">
+            <div><span><WandSparkles size={14} /> PROFİL STÜDYOSU</span><h3>{item.fullName} için çalışma planı</h3></div>
+            <i><ShieldCheck size={18} /> Değişiklikler güvenle senkronlanır</i>
+          </div>
           {/* Basic Info */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <section className="staff-editor-section"><header><BriefcaseBusiness size={18} /><div><h4>Uzmanlık profili</h4><p>Rol, kapasite ve müşteriye görünen tanıtım.</p></div></header><div className="grid gap-3 sm:grid-cols-3">
             <Input label="Pozisyon" value={editPosition} onChange={(e) => setEditPosition(e.target.value)} />
             <Select
               label="Kapasite (aynı anda)"
@@ -279,11 +288,11 @@ function StaffCard({
                 placeholder="Kısa açıklama..."
               />
             </div>
-          </div>
+          </div></section>
 
           {/* Service Assignment */}
-          <div>
-            <h4 className="mb-2 text-sm font-semibold text-[var(--text-1)]">🎯 Hizmet Ataması</h4>
+          <section className="staff-editor-section">
+            <header><Sparkles size={18} /><div><h4>Hizmet yetkinlikleri</h4><p>Bu uzmanın sunabildiği hizmetleri seç.</p></div></header>
             {services.length === 0 ? (
               <p className="text-sm text-[var(--text-3)]">Henüz hizmet tanımlı değil.</p>
             ) : (
@@ -291,10 +300,10 @@ function StaffCard({
                 {services.map((svc) => (
                   <label
                     key={svc.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${
+                    className={`staff-service-option ${
                       selectedServiceIds.includes(svc.id)
-                        ? "border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]"
-                        : "border-[var(--border)] text-[var(--text-2)] hover:border-[var(--accent)]/30"
+                        ? "is-selected"
+                        : ""
                     }`}
                   >
                     <input
@@ -311,19 +320,19 @@ function StaffCard({
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
           {/* Staff Working Hours */}
-          <div>
-            <h4 className="mb-2 text-sm font-semibold text-[var(--text-1)]">🕐 Çalışma Saatleri</h4>
-            <div className="space-y-1.5">
+          <section className="staff-editor-section">
+            <header><CalendarClock size={18} /><div><h4>Haftalık çalışma ritmi</h4><p>Açık günleri ve hizmet saatlerini planla.</p></div></header>
+            <div className="staff-hours-grid">
               {staffHours.map((h, idx) => (
                 <div
                   key={h.day}
-                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                  className={`staff-hour-row ${
                     h.isOpen
-                      ? "border-[var(--border)] bg-[var(--surface-1)]"
-                      : "border-[var(--border)] bg-[var(--surface-2)] opacity-60"
+                      ? "is-open"
+                      : "is-closed"
                   }`}
                 >
                   <span className="w-20 font-medium text-[var(--text-1)]">{DAY_NAMES[h.day]}</span>
@@ -350,11 +359,11 @@ function StaffCard({
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
           {/* Leave Dates */}
-          <div>
-            <h4 className="mb-2 text-sm font-semibold text-[var(--text-1)]">🏖️ İzin Günleri</h4>
+          <section className="staff-editor-section">
+            <header><CalendarOff size={18} /><div><h4>İzin ve müsaitlik</h4><p>Randevuya kapanacak özel günleri ekle.</p></div></header>
             <div className="flex gap-2">
               <Input label="Tarih" type="date" value={newLeaveDate} onChange={(e) => setNewLeaveDate(e.target.value)} />
               <Button
@@ -386,22 +395,22 @@ function StaffCard({
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
+          <footer className="staff-editor-actions">
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Kaydediliyor..." : "💾 Değişiklikleri Kaydet"}
+              <Save size={17} /> {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
             </Button>
             <Button variant="secondary" onClick={handleToggleActive}>
-              {item.isActive ? "⏸️ Pasif Yap" : "▶️ Aktif Yap"}
+              {item.isActive ? <PauseCircle size={17} /> : <PlayCircle size={17} />} {item.isActive ? "Pasif Yap" : "Aktif Yap"}
             </Button>
             <Button variant="danger" onClick={handleDelete}>
-              🗑️ Sil
+              <Trash2 size={17} /> Sil
             </Button>
-          </div>
+          </footer>
         </div>
       )}
-    </div>
+    </article>
   );
 }

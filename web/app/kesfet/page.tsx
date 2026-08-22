@@ -28,6 +28,20 @@ const DEFAULT_CATEGORIES = [
   { value: "diger", label: "Diğer", icon: "📦" },
 ];
 
+const CATEGORY_VISUALS: Record<string, string> = {
+  "": "/images/categories/guzellik.png",
+  kuafor: "/images/categories/kuafor.png",
+  berber: "/images/categories/berber.png",
+  guzellik: "/images/categories/guzellik.png",
+  spa: "/images/categories/spa.png",
+  nail: "/images/categories/nail.png",
+  spor: "/images/categories/spor.png",
+  saglik: "/images/categories/saglik.png",
+  danismanlik: "/images/categories/danismanlik.png",
+  veteriner: "/images/categories/veteriner.png",
+  yazilim: "/images/categories/yazilim.png",
+};
+
 const ALL_CITIES = [
   "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara",
   "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman",
@@ -54,7 +68,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     const requestedCategory = new URLSearchParams(window.location.search).get("category");
-    if (requestedCategory) setCategory(requestedCategory);
+    if (requestedCategory) queueMicrotask(() => setCategory(requestedCategory));
   }, []);
 
   // Fetch dynamic categories
@@ -305,7 +319,18 @@ function CategoryRail({ categories, value, onChange }: { categories: typeof DEFA
   return <div className={`category-carousel ${edges.left ? "can-left" : ""} ${edges.right ? "can-right" : ""}`}>
     <button type="button" className="category-arrow category-arrow--left" onClick={() => scroll(-1)} disabled={!edges.left} aria-label="Önceki kategoriler"><ChevronLeft size={20} /></button>
     <div ref={railRef} className={`discover-category-rail ${isDragging ? "is-dragging" : ""}`} onScroll={updateEdges} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
-      {categories.map((cat) => <button key={cat.value} type="button" aria-pressed={value === cat.value} onClick={() => { if (!drag.current.moved) onChange(cat.value); }} className={value === cat.value ? "active" : ""}><span>{cat.icon}</span>{cat.label}</button>)}
+      {categories.map((cat) => {
+        const visual = CATEGORY_VISUALS[cat.value];
+        const active = value === cat.value;
+        return <button key={cat.value} type="button" aria-pressed={active} onClick={() => { if (!drag.current.moved) onChange(cat.value); }} className={`discover-category-card ${active ? "active" : ""}`}>
+          <figure>
+            {visual ? <Image src={visual} alt="" fill sizes="150px" /> : <span>{cat.icon}</span>}
+            <i aria-hidden="true" />
+          </figure>
+          <span className="discover-category-card-copy"><small>{cat.value ? "KATEGORİ" : "TÜM DENEYİMLER"}</small><strong>{cat.label}</strong><em>{active ? "Seçildi" : "Hemen keşfet"}</em></span>
+          <b className="discover-category-card-icon">{cat.icon}</b>
+        </button>;
+      })}
     </div>
     <button type="button" className="category-arrow category-arrow--right" onClick={() => scroll(1)} disabled={!edges.right} aria-label="Sonraki kategoriler"><ChevronRight size={20} /></button>
     <div className="category-drag-hint"><ArrowLeft size={11} /> sürükle <ArrowRight size={11} /></div>

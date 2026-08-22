@@ -27,7 +27,7 @@ import type { ServiceCategory } from "@/types/service-category";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
 import {
-  ArrowRight, CalendarCheck2, GalleryHorizontalEnd,
+  ArrowRight, ArrowUpRight, CalendarCheck2, GalleryHorizontalEnd,
   Globe2, Mail, MapPin, MessageCircleMore, Phone, Star,
   UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -294,22 +294,22 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
 
               {/* Quick Contact */}
               {!isDemo && <section className="storefront-quick-contact">
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]"><MessageCircleMore size={15} /> Hızlı İletişim</h3>
-                <div className="mt-3 space-y-2.5">
+                <header className="storefront-quick-head"><span><MessageCircleMore size={21} /></span><div><small>TEK DOKUNUŞLA</small><h3>Hızlı iletişim</h3></div></header>
+                <div className="storefront-quick-links">
                   <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerClassName="storefront-message-trigger" />
                   {business.phone && (
-                    <a href={`tel:${business.phone}`} className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs font-medium text-[var(--text-1)] transition hover:border-[var(--accent)]/30">
-                      <Phone size={15} /> {business.phone}
+                    <a href={`tel:${business.phone}`} className="storefront-quick-link">
+                      <i><Phone size={18} /></i><span><small>TELEFON</small><b>{business.phone}</b></span><ArrowUpRight size={17}/>
                     </a>
                   )}
                   {business.email && (
-                    <a href={`mailto:${business.email}`} className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs font-medium text-[var(--text-1)] transition hover:border-[var(--accent)]/30">
-                      <Mail size={15} /> {business.email}
+                    <a href={`mailto:${business.email}`} className="storefront-quick-link">
+                      <i><Mail size={18} /></i><span><small>E-POSTA</small><b>{business.email}</b></span><ArrowUpRight size={17}/>
                     </a>
                   )}
                   {business.website && (
-                    <a href={business.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs font-medium text-[var(--accent)] transition hover:border-[var(--accent)]/30">
-                      <Globe2 size={15} /> {business.website.replace(/^https?:\/\//, "")}
+                    <a href={business.website} target="_blank" rel="noopener noreferrer" className="storefront-quick-link">
+                      <i><Globe2 size={18} /></i><span><small>WEB SİTESİ</small><b>{business.website.replace(/^https?:\/\//, "")}</b></span><ArrowUpRight size={17}/>
                     </a>
                   )}
                 </div>
@@ -325,14 +325,10 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
         {!isDemo && <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel="Mesaj" triggerClassName="storefront-message-mobile" />}
         <Link
           href={isDemo ? `/kesfet?category=${business.category}` : `/isletme/${params.slug}/randevu`}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] py-3.5 text-sm font-bold text-white shadow-xl shadow-sky-500/25 transition active:scale-[0.97]"
+          className="storefront-mobile-booking"
         >
           <CalendarCheck2 size={17} /> {isDemo ? "Gerçek işletmeleri gör" : "Randevu Al"}
-          {!isDemo && services.length > 0 && (
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
-              {Math.min(...services.map((s) => s.price)).toLocaleString("tr-TR")} ₺&apos;den
-            </span>
-          )}
+          <ArrowRight size={17}/>
         </Link>
       </div>
     </div>
