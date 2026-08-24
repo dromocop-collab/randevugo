@@ -5,6 +5,7 @@ import { LoginForm } from "@/features/auth/auth-forms";
 export const metadata: Metadata = {
   title: "Giriş | SeninRandevun",
   description: "SeninRandevun işletme paneline giriş yapın.",
+  robots: { index: false, follow: false },
 };
 
 export default function LoginPage() {

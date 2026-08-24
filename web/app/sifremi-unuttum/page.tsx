@@ -5,6 +5,7 @@ import { ForgotPasswordForm } from "@/features/auth/auth-forms";
 export const metadata: Metadata = {
   title: "Sifremi Unuttum | SeninRandevun",
   description: "SeninRandevun sifrenizi guvenli sekilde sifirlayin.",
+  robots: { index: false, follow: false },
 };
 
 export default function ForgotPasswordPage() {

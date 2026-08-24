@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { Business } from "@/types/business";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -59,9 +60,11 @@ export function BusinessCard({ business }: BusinessCardProps) {
         {/* Cover Image */}
         <div className="relative h-40 overflow-hidden bg-gradient-to-br from-[var(--accent)]/10 to-[var(--accent-3)]/10">
           {business.coverUrl ? (
-            <img
+            <Image
               src={business.coverUrl}
               alt={business.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -80,9 +83,11 @@ export function BusinessCard({ business }: BusinessCardProps) {
           {/* Logo */}
           {business.logoUrl && (
             <div className="absolute -bottom-5 left-4 h-12 w-12 overflow-hidden rounded-xl border-2 border-white bg-white shadow-md">
-              <img
+              <Image
                 src={business.logoUrl}
                 alt=""
+                fill
+                sizes="48px"
                 className="h-full w-full object-cover"
               />
             </div>

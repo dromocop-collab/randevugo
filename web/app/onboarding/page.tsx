@@ -5,6 +5,7 @@ import { OnboardingWizard } from "@/features/businesses/onboarding-wizard";
 export const metadata: Metadata = {
   title: "İşletme Kurulumu | SeninRandevun",
   description: "Birkaç adımda işletmenizi oluşturun ve online randevuya başlayın.",
+  robots: { index: false, follow: false },
 };
 
 export default function OnboardingPage() {

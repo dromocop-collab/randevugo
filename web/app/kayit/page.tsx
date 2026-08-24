@@ -5,6 +5,7 @@ import { RegisterForm } from "@/features/auth/auth-forms";
 export const metadata: Metadata = {
   title: "Kayıt | SeninRandevun",
   description: "SeninRandevun ile işletmeniz için online randevu sistemi kurun.",
+  robots: { index: false, follow: false },
 };
 
 export default function RegisterPage() {

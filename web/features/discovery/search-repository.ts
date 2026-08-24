@@ -3,7 +3,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   limit,
 } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
@@ -94,7 +93,7 @@ export async function getPopularBusinesses(
     )
   );
 
-  let results = snap.docs.map((doc) => ({
+  const results = snap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as Omit<Business, "id">),
   }));

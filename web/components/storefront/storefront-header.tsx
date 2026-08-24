@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { AtSign, BadgeCheck, BriefcaseBusiness, CalendarCheck2, Camera, Clock3, ExternalLink, Images, MapPin, MessageCircle, Phone, Share2, Sparkles, Star, UsersRound } from "lucide-react";
 import { toast } from "sonner";
@@ -50,7 +51,7 @@ export function StorefrontHeader({ business, workingHours, serviceCount, staffCo
     <section className="storefront-hero">
       <div className="storefront-cover">
         {coverUrl && failedCoverUrl !== coverUrl ? (
-          <img src={coverUrl} alt={`${business.name} mağaza kapağı`} onError={() => setFailedCoverUrl(coverUrl)} />
+          <Image src={coverUrl} alt={`${business.name} mağaza kapağı`} fill priority sizes="(max-width: 900px) 100vw, 1200px" onError={() => setFailedCoverUrl(coverUrl)} />
         ) : (
           <div className="storefront-cover-fallback"><Sparkles size={42}/><span>{business.name.charAt(0).toLocaleUpperCase("tr-TR")}</span></div>
         )}
@@ -68,7 +69,7 @@ export function StorefrontHeader({ business, workingHours, serviceCount, staffCo
       <div className="storefront-profile">
         <div className="storefront-profile-main">
           <div className="storefront-logo">
-            {business.logoUrl ? <img src={business.logoUrl} alt={`${business.name} logosu`}/> : <span>{business.name.charAt(0).toLocaleUpperCase("tr-TR")}</span>}
+            {business.logoUrl ? <Image src={business.logoUrl} alt={`${business.name} logosu`} fill sizes="134px"/> : <span>{business.name.charAt(0).toLocaleUpperCase("tr-TR")}</span>}
           </div>
           <div className="storefront-identity">
             <span className="storefront-category"><Sparkles size={13}/>{categoryLabel}</span>
