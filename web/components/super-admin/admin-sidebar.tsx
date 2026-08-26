@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import {
   Building2, CircleGauge, ClipboardList, Headphones, Settings2,
-  ShieldCheck, UsersRound, WalletCards, type LucideIcon,
+  MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
@@ -16,6 +16,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin/destek", label: "Destek", icon: Headphones },
   { href: "/super-admin/moderasyon", label: "Moderasyon", icon: ShieldCheck },
   { href: "/super-admin/audit-logs", label: "Audit Kayıtları", icon: ClipboardList },
+  { href: "/super-admin/sms", label: "SMS Merkezi", icon: MessageSquareText },
   { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2 },
 ];
 

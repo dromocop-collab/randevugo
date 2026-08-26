@@ -69,6 +69,11 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // API anahtarları yalnızca callable Cloud Functions tarafından okunur/yazılır.
+    match /platformPrivateSettings/{doc} {
+      allow read, write: if false;
+    }
+
     match /platformPlans/{planId} {
       allow read: if isAuthenticated();
       allow write: if isPlatformAdmin();

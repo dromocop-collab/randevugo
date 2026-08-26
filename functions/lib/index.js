@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
+exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.getAvailableSlots = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -9,12 +9,17 @@ const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const crypto_1 = require("crypto");
+const params_1 = require("firebase-functions/params");
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
 const auth = (0, auth_1.getAuth)();
 const messaging = (0, messaging_1.getMessaging)();
 const storage = (0, storage_1.getStorage)();
 const GLOBAL_PUSH_TOPIC = "senin_randevun_all";
+const MUTLUCELL_USERNAME = (0, params_1.defineSecret)("MUTLUCELL_USERNAME");
+const MUTLUCELL_API_KEY = (0, params_1.defineSecret)("MUTLUCELL_API_KEY");
+const MUTLUCELL_SEND_URL = "https://smsgw.mutlucell.com/smsgw-ws/sndblkex";
+const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
 const publicCallableOptions = {
     region: "europe-west1",
     cors: [
@@ -1116,15 +1121,235 @@ exports.submitReview = (0, https_1.onCall)({ region: "europe-west1" }, async (re
     return { success: true, reviewId: reviewRef.id };
 });
 // ━━━ Phone Verification OTP ━━━
+// ━━━ Phone Verification OTP / Mutlucell ━━━
 function normalizePhone(raw) {
-    let phone = raw.replace(/\s+/g, "").replace(/[()-]/g, "");
-    if (phone.startsWith("0"))
+    let phone = raw
+        .trim()
+        .replace(/\s+/g, "")
+        .replace(/[()-]/g, "");
+    if (phone.startsWith("0090")) {
+        phone = "+" + phone.slice(2);
+    }
+    if (phone.startsWith("90") && !phone.startsWith("+90")) {
+        phone = "+" + phone;
+    }
+    if (phone.startsWith("0")) {
         phone = "+90" + phone.slice(1);
-    if (!phone.startsWith("+"))
+    }
+    if (!phone.startsWith("+")) {
         phone = "+90" + phone;
+    }
     return phone;
 }
-exports.sendVerificationCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+function mutlucellPhone(phone) {
+    const normalized = normalizePhone(phone);
+    if (!/^\+90\d{10}$/.test(normalized)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
+    }
+    // +905321234567 -> 5321234567
+    return normalized.slice(3);
+}
+function xmlEscape(value) {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+}
+function otpHash(phone, code) {
+    return (0, crypto_1.createHash)("sha256")
+        .update(`${phone}:${code}`)
+        .digest("hex");
+}
+function mutlucellErrorMessage(code) {
+    const messages = {
+        "20": "Mutlucell SMS isteği hatalı oluşturuldu.",
+        "21": "Mutlucell SMS gönderici başlığı geçersiz veya hesabınıza tanımlı değil.",
+        "22": "Mutlucell SMS bakiyesi yetersiz.",
+        "23": "Mutlucell kullanıcı adı veya API anahtarı hatalı.",
+        "24": "Mutlucell hesabında başka bir SMS işlemi devam ediyor.",
+        "25": "Mutlucell SMS servisi geçici olarak kullanılamıyor.",
+        "30": "Mutlucell hesabı henüz aktive edilmemiş.",
+        "34": "Mutlucell hesabında API erişimi kapalı.",
+    };
+    return (messages[code] ??
+        `Mutlucell SMS gönderimi başarısız oldu. Hata kodu: ${code}`);
+}
+async function getMutlucellConfiguration() {
+    const snapshot = await db.doc(MUTLUCELL_SETTINGS_PATH).get();
+    const data = snapshot.data() ?? {};
+    const storedUsername = String(data.username ?? "").trim();
+    const storedApiKey = String(data.apiKey ?? "").trim();
+    const secretUsername = MUTLUCELL_USERNAME.value().trim();
+    const secretApiKey = MUTLUCELL_API_KEY.value().trim();
+    const hasStoredConfiguration = snapshot.exists && (storedUsername.length > 0 || storedApiKey.length > 0 || String(data.senderTitle ?? "").trim().length > 0);
+    const hasSecretCredentials = secretUsername.length > 0 && secretApiKey.length > 0;
+    return {
+        username: storedUsername || secretUsername,
+        apiKey: storedApiKey || secretApiKey,
+        senderTitle: String(data.senderTitle ?? "").trim(),
+        enabled: data.enabled !== false,
+        fallbackEnabled: data.fallbackEnabled !== false,
+        source: hasStoredConfiguration ? "admin" : hasSecretCredentials ? "secret" : "none",
+    };
+}
+async function sendMutlucellSms(phone, message, configuration) {
+    const config = configuration ?? await getMutlucellConfiguration();
+    const { username, apiKey, senderTitle } = config;
+    if (!username || !apiKey) {
+        throw new https_1.HttpsError("failed-precondition", "Mutlucell SMS servisi yapılandırılmamış.");
+    }
+    if (!config.enabled) {
+        throw new https_1.HttpsError("failed-precondition", "Mutlucell SMS gönderimi süper admin tarafından duraklatıldı.");
+    }
+    if (!senderTitle) {
+        throw new https_1.HttpsError("failed-precondition", "Mutlucell gönderici başlığı henüz tanımlanmamış veya onaylanmamış.");
+    }
+    const gsm = mutlucellPhone(phone);
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<smspack
+  ka="${xmlEscape(username)}"
+  pwd="${xmlEscape(apiKey)}"
+  org="${xmlEscape(senderTitle)}"
+  charset="turkish"
+>
+  <mesaj>
+    <metin>${xmlEscape(message)}</metin>
+    <nums>${xmlEscape(gsm)}</nums>
+  </mesaj>
+</smspack>`;
+    let response;
+    try {
+        response = await fetch(MUTLUCELL_SEND_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "text/xml; charset=UTF-8",
+            },
+            body: xml,
+            signal: AbortSignal.timeout(15_000),
+        });
+    }
+    catch (error) {
+        console.error("Mutlucell network error:", error);
+        throw new https_1.HttpsError("unavailable", "SMS servisine şu anda ulaşılamıyor. Lütfen tekrar deneyin.");
+    }
+    const result = (await response.text()).trim();
+    if (!response.ok) {
+        console.error("Mutlucell HTTP error:", response.status, result);
+        throw new https_1.HttpsError("unavailable", "SMS servisi geçici olarak kullanılamıyor.");
+    }
+    // Mutlucell başarılı gönderimde $ ile başlayan paket numarası döndürür.
+    if (!result.startsWith("$")) {
+        console.error("Mutlucell API error:", result);
+        throw new https_1.HttpsError("unavailable", mutlucellErrorMessage(result));
+    }
+    return result;
+}
+exports.getMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const [config, snapshot] = await Promise.all([
+        getMutlucellConfiguration(),
+        db.doc(MUTLUCELL_SETTINGS_PATH).get(),
+    ]);
+    const data = snapshot.data() ?? {};
+    return {
+        username: config.username,
+        senderTitle: config.senderTitle,
+        enabled: config.enabled,
+        fallbackEnabled: config.fallbackEnabled,
+        hasApiKey: config.apiKey.length > 0,
+        apiKeyMasked: config.apiKey ? `••••••${config.apiKey.slice(-4)}` : "",
+        source: config.source,
+        lastTest: data.lastTest ?? null,
+        updatedAt: data.updatedAt ?? null,
+    };
+});
+exports.updateMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const username = requireString(request.data?.username, "Mutlucell kullanıcı adı").slice(0, 120);
+    const senderTitle = String(request.data?.senderTitle ?? "").trim().slice(0, 30);
+    const apiKey = String(request.data?.apiKey ?? "").trim();
+    const enabled = request.data?.enabled !== false;
+    const fallbackEnabled = request.data?.fallbackEnabled !== false;
+    const ref = db.doc(MUTLUCELL_SETTINGS_PATH);
+    const existing = await ref.get();
+    const currentApiKey = String(existing.data()?.apiKey ?? "").trim();
+    const secretApiKey = MUTLUCELL_API_KEY.value().trim();
+    if (enabled && !senderTitle) {
+        throw new https_1.HttpsError("invalid-argument", "SMS aktifken onaylı gönderici başlığı zorunludur.");
+    }
+    if (!apiKey && !currentApiKey && !secretApiKey) {
+        throw new https_1.HttpsError("invalid-argument", "Mutlucell API anahtarı zorunludur.");
+    }
+    await ref.set({
+        username,
+        ...(apiKey ? { apiKey } : {}),
+        senderTitle,
+        enabled,
+        fallbackEnabled,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedBy: uid,
+        ...(!existing.exists ? { createdAt: firestore_1.FieldValue.serverTimestamp() } : {}),
+    }, { merge: true });
+    await db.collection("platformAuditLogs").add({
+        action: "mutlucell.settings_updated",
+        actorUid: uid,
+        enabled,
+        senderTitleConfigured: senderTitle.length > 0,
+        apiKeyChanged: apiKey.length > 0,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true };
+});
+exports.testMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const phone = normalizedPhoneKey(requireString(request.data?.phone, "Test telefonu"));
+    const config = await getMutlucellConfiguration();
+    const ref = db.doc(MUTLUCELL_SETTINGS_PATH);
+    try {
+        const providerMessageId = await sendMutlucellSms(phone, "SeninRandevun Mutlucell bağlantı testi başarılıdır.", config);
+        await ref.set({
+            lastTest: {
+                success: true,
+                phone,
+                providerMessageId,
+                testedAt: firestore_1.FieldValue.serverTimestamp(),
+                testedBy: uid,
+            },
+        }, { merge: true });
+        return { success: true, providerMessageId };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Mutlucell testi başarısız oldu.";
+        await ref.set({
+            lastTest: {
+                success: false,
+                phone,
+                error: message,
+                testedAt: firestore_1.FieldValue.serverTimestamp(),
+                testedBy: uid,
+            },
+        }, { merge: true });
+        throw error;
+    }
+});
+exports.sendVerificationCode = (0, https_1.onCall)({
+    region: "europe-west1",
+    secrets: [
+        MUTLUCELL_USERNAME,
+        MUTLUCELL_API_KEY,
+    ],
+}, async (request) => {
     const data = request.data ?? {};
     const rawPhone = requireString(data.phone, "phone");
     const phone = normalizePhone(rawPhone);
@@ -1133,7 +1358,7 @@ exports.sendVerificationCode = (0, https_1.onCall)({ region: "europe-west1" }, a
     }
     const codeDocRef = db.doc(`verificationCodes/${phone}`);
     const existing = await codeDocRef.get();
-    // Rate limit: 60 seconds between sends
+    // 60 saniyelik tekrar gönderme limiti
     if (existing.exists) {
         const lastSent = existing.data()?.sentAt;
         if (lastSent) {
@@ -1143,81 +1368,142 @@ exports.sendVerificationCode = (0, https_1.onCall)({ region: "europe-west1" }, a
             }
         }
     }
-    const code = String((0, crypto_1.randomInt)(100000, 999999));
+    const code = String((0, crypto_1.randomInt)(100000, 1000000));
     const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
-    const smsWebhookUrl = process.env.SMS_WEBHOOK_URL;
-    if (!isEmulator && !smsWebhookUrl) {
-        throw new https_1.HttpsError("failed-precondition", "SMS servisi henüz yapılandırılmadı.");
+    // localhost'tan canlı Firebase Function çağrıldığında da
+    // test kodunu gösterebilmemiz için:
+    const requestOrigin = String(request.rawRequest.headers.origin ?? "");
+    const isLocalClient = /^http:\/\/localhost(?::\d+)?$/.test(requestOrigin) ||
+        /^http:\/\/127\.0\.0\.1(?::\d+)?$/.test(requestOrigin);
+    const allowDevCode = isEmulator || isLocalClient;
+    let mutlucellConfiguration = null;
+    let providerMessageId = null;
+    let smsDelivered = false;
+    let smsError = null;
+    // Emulator'da Mutlucell'e hiç gitme
+    if (isEmulator) {
+        console.log(`[SMS emulator] Verification code for ${phone}: ${code}`);
     }
-    if (!isEmulator && smsWebhookUrl) {
-        const response = await fetch(smsWebhookUrl, {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-                ...(process.env.SMS_WEBHOOK_TOKEN ? { authorization: `Bearer ${process.env.SMS_WEBHOOK_TOKEN}` } : {}),
-            },
-            body: JSON.stringify({
-                phone,
-                message: `SeninRandevun doğrulama kodunuz: ${code}. Kod 5 dakika geçerlidir.`,
-                code,
-            }),
-        });
-        if (!response.ok) {
-            throw new https_1.HttpsError("unavailable", "Doğrulama mesajı gönderilemedi. Lütfen tekrar deneyin.");
+    else {
+        try {
+            mutlucellConfiguration = await getMutlucellConfiguration();
+            providerMessageId = await sendMutlucellSms(phone, `SeninRandevun doğrulama kodunuz: ${code}. Kod 5 dakika geçerlidir.`, mutlucellConfiguration ?? undefined);
+            smsDelivered = true;
+        }
+        catch (error) {
+            console.error("Mutlucell SMS gönderilemedi:", error);
+            smsError =
+                error instanceof Error
+                    ? error.message
+                    : "SMS gönderimi başarısız.";
         }
     }
+    /*
+      SMS gönderilemese dahi OTP kaydedilsin,
+      böylece canlıda SMS hatası olduğunda
+      kullanıcı fallback koduyla giriş yapabilsin.
+    */
     await codeDocRef.set({
-        code,
+        codeHash: otpHash(phone, code),
         phone,
         attempts: 0,
         verified: false,
+        provider: isEmulator
+            ? "emulator"
+            : smsDelivered
+                ? "mutlucell"
+                : "fallback",
+        providerMessageId,
+        smsDelivered,
+        smsError,
         sentAt: firestore_1.FieldValue.serverTimestamp(),
         expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
     });
-    if (isEmulator)
-        console.log(`[SMS emulator] Verification code for ${phone}: ${code}`);
+    // SMS başarılı
+    if (smsDelivered) {
+        return {
+            success: true,
+            smsDelivered: true,
+            message: "Doğrulama kodu telefonunuza gönderildi.",
+            // localhost'ta test ederken ayrıca kodu da görebilirsin
+            ...(allowDevCode
+                ? { _devCode: code }
+                : {}),
+        };
+    }
+    // SMS GÖNDERİLEMEDİ FALLBACK (Lokal veya Canlı)
+    console.warn(`[OTP fallback] SMS gönderilemedi. Test code for ${phone}: ${code}`);
+    if (mutlucellConfiguration?.fallbackEnabled === false) {
+        throw new https_1.HttpsError("unavailable", smsError ?? "SMS gönderilemedi. Lütfen daha sonra tekrar deneyin.");
+    }
     return {
         success: true,
-        message: "Doğrulama kodu gönderildi.",
-        ...(isEmulator ? { _devCode: code } : {}),
+        smsDelivered: false,
+        fallback: true,
+        message: "SMS gönderilemedi. Test doğrulama kodu oluşturuldu.",
+        _devCode: code,
     };
 });
 exports.verifyPhoneCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const data = request.data ?? {};
     const rawPhone = requireString(data.phone, "phone");
-    const inputCode = requireString(data.code, "code");
+    const inputCode = requireString(data.code, "code").trim();
     const phone = normalizePhone(rawPhone);
+    if (!/^\+90\d{10}$/.test(phone)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
+    }
+    if (!/^\d{6}$/.test(inputCode)) {
+        throw new https_1.HttpsError("invalid-argument", "Doğrulama kodu 6 haneli olmalıdır.");
+    }
     const codeDocRef = db.doc(`verificationCodes/${phone}`);
     const codeSnap = await codeDocRef.get();
     if (!codeSnap.exists) {
         throw new https_1.HttpsError("not-found", "Doğrulama kodu bulunamadı. Lütfen tekrar kod gönderin.");
     }
     const codeData = codeSnap.data();
-    // Check expiration
     const expiresAt = codeData.expiresAt;
-    if (expiresAt && expiresAt.toMillis() < Date.now()) {
+    if (!expiresAt ||
+        expiresAt.toMillis() < Date.now()) {
         await codeDocRef.delete();
         throw new https_1.HttpsError("deadline-exceeded", "Doğrulama kodunun süresi doldu. Lütfen yeni kod gönderin.");
     }
-    // Check max attempts
+    if (codeData.verified === true) {
+        return {
+            success: true,
+            verified: true,
+        };
+    }
     const attempts = Number(codeData.attempts ?? 0);
     if (attempts >= 3) {
         await codeDocRef.delete();
         throw new https_1.HttpsError("permission-denied", "Çok fazla hatalı deneme. Lütfen yeni kod gönderin.");
     }
-    // Verify code
-    if (codeData.code !== inputCode.trim()) {
-        await codeDocRef.update({
-            attempts: firestore_1.FieldValue.increment(1),
-        });
-        throw new https_1.HttpsError("invalid-argument", `Yanlış kod. ${2 - attempts} deneme hakkınız kaldı.`);
+    const expectedHash = String(codeData.codeHash ?? "");
+    const suppliedHash = otpHash(phone, inputCode);
+    if (!expectedHash ||
+        expectedHash !== suppliedHash) {
+        const nextAttempts = attempts + 1;
+        if (nextAttempts >= 3) {
+            await codeDocRef.delete();
+        }
+        else {
+            await codeDocRef.update({
+                attempts: firestore_1.FieldValue.increment(1),
+            });
+        }
+        throw new https_1.HttpsError("invalid-argument", nextAttempts >= 3
+            ? "Çok fazla hatalı deneme. Lütfen yeni kod gönderin."
+            : `Yanlış kod. ${3 - nextAttempts} deneme hakkınız kaldı.`);
     }
-    // Mark as verified
     await codeDocRef.update({
         verified: true,
         verifiedAt: firestore_1.FieldValue.serverTimestamp(),
+        attempts: 0,
     });
-    return { success: true, verified: true };
+    return {
+        success: true,
+        verified: true,
+    };
 });
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    EMAIL VERIFICATION & PASSWORD RESET (6-digit code)
