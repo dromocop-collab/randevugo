@@ -1,9 +1,23 @@
 import type { MetadataRoute } from "next";
 import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, type LocalCategorySlug } from "@/lib/seo/local-seo";
+import { searchBusinesses } from "@/features/discovery/search-repository";
 
-const STATIC_LAST_MODIFIED = new Date("2026-08-24T00:00:00.000Z");
+/** Use a recent date for static pages to signal freshness to crawlers. */
+const STATIC_LAST_MODIFIED = new Date();
 
 export const revalidate = 3600;
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  kuafor: "/images/categories/kuafor.png",
+  berber: "/images/categories/berber.png",
+  guzellik: "/images/categories/guzellik.png",
+  spa: "/images/categories/spa.png",
+  nail: "/images/categories/nail.png",
+  spor: "/images/categories/spor.png",
+  saglik: "/images/categories/saglik.png",
+  danismanlik: "/images/categories/danismanlik.png",
+  veteriner: "/images/categories/veteriner.png",
+};
 
 function businessLastModified(value: unknown): Date {
   if (typeof value === "string" || typeof value === "number" || value instanceof Date) {
@@ -29,19 +43,28 @@ function businessLastModified(value: unknown): Date {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://seninrandevun.com").replace(/\/+$/, "");
   const alternates = (url: string) => ({ languages: { "tr-TR": url, "x-default": url } });
-  const businesses = await getFethiyeBusinesses().catch(() => []);
+
+  // Fetch ALL active businesses for sitemap (not just Fethiye)
+  const [allBusinesses, fethiyeBusinesses] = await Promise.all([
+    searchBusinesses({ maxResults: 500 }).catch(() => []),
+    getFethiyeBusinesses().catch(() => []),
+  ]);
+
+  // Local SEO pages
   const localPages: MetadataRoute.Sitemap = ["mugla", "mugla/fethiye"].map((path) => ({
     url: `${baseUrl}/${path}`, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: path === "mugla/fethiye" ? 0.95 : 0.8,
     alternates: alternates(`${baseUrl}/${path}`),
   }));
   for (const slug of Object.keys(LOCAL_CATEGORIES) as LocalCategorySlug[]) {
-    const hasBusiness = businessesForCategory(businesses, slug).length > 0;
+    const hasBusiness = businessesForCategory(fethiyeBusinesses, slug).length > 0;
     if (hasBusiness) {
       const url = `${baseUrl}/mugla/fethiye/${slug}`;
       localPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.85, alternates: alternates(url), images: [`${baseUrl}${LOCAL_CATEGORIES[slug].image}`] });
     }
   }
-  const businessPages: MetadataRoute.Sitemap = businesses
+
+  // All active business pages
+  const businessPages: MetadataRoute.Sitemap = allBusinesses
     .filter((business) => business.slug && business.isPublished && business.status === "active")
     .map((business) => {
       const url = `${baseUrl}/isletme/${encodeURIComponent(business.slug)}`;
@@ -57,6 +80,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         images: images.length ? images : undefined,
       };
     });
+
+  // Category landing pages with images
+  const categoryLandingPages: MetadataRoute.Sitemap = [
+    { path: "kuafor-randevu", cat: "kuafor", priority: 0.85 },
+    { path: "berber-randevu", cat: "berber", priority: 0.85 },
+    { path: "guzellik-merkezi-randevu", cat: "guzellik", priority: 0.85 },
+    { path: "spa-randevu", cat: "spa", priority: 0.8 },
+    { path: "saglik-randevu", cat: "saglik", priority: 0.8 },
+    { path: "spor-randevu", cat: "spor", priority: 0.8 },
+    { path: "veteriner-randevu", cat: "veteriner", priority: 0.8 },
+    { path: "nail-studio-randevu", cat: "nail", priority: 0.8 },
+    { path: "danismanlik-randevu", cat: "danismanlik", priority: 0.8 },
+  ].map(({ path, cat, priority }) => ({
+    url: `${baseUrl}/${path}`,
+    lastModified: STATIC_LAST_MODIFIED,
+    changeFrequency: "weekly" as const,
+    priority,
+    alternates: alternates(`${baseUrl}/${path}`),
+    images: CATEGORY_IMAGES[cat] ? [`${baseUrl}${CATEGORY_IMAGES[cat]}`] : undefined,
+  }));
 
   return [
     {
@@ -94,6 +137,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.9,
       alternates: alternates(`${baseUrl}/online-randevu`),
+      images: [`${baseUrl}/og.png`],
     },
     ...[
       ["ozellikler", 0.9],
@@ -113,41 +157,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: priority as number,
       alternates: alternates(`${baseUrl}/${path}`),
     })),
-    {
-      url: `${baseUrl}/kuafor-randevu`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 0.8,
-      alternates: alternates(`${baseUrl}/kuafor-randevu`),
-    },
-    {
-      url: `${baseUrl}/berber-randevu`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 0.8,
-      alternates: alternates(`${baseUrl}/berber-randevu`),
-    },
-    {
-      url: `${baseUrl}/guzellik-merkezi-randevu`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 0.8,
-      alternates: alternates(`${baseUrl}/guzellik-merkezi-randevu`),
-    },
-    ...[
-      "spa-randevu",
-      "saglik-randevu",
-      "spor-randevu",
-      "veteriner-randevu",
-      "nail-studio-randevu",
-      "danismanlik-randevu",
-    ].map((path) => ({
-      url: `${baseUrl}/${path}`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly" as const,
-      priority: 0.75,
-      alternates: alternates(`${baseUrl}/${path}`),
-    })),
+    ...categoryLandingPages,
     ...localPages,
     ...businessPages,
   ];
