@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import {
-  Building2, CircleGauge, ClipboardList, Headphones, Settings2,
+  Activity, ArrowLeftToLine, Building2, CircleGauge, ClipboardList, Headphones, Settings2,
   MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
@@ -20,58 +20,56 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2 },
 ];
 
-export function AdminSidebar() {
+function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <aside className="admin-sidebar hidden w-64 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-xl shadow-[var(--shadow-hard)] lg:block">
-      <div className="mb-6 px-2">
+    <nav className={mobile ? "admin-mobile-nav-track" : "space-y-1"}>
+      {mobile && <Link href="/dashboard" className="admin-mobile-nav-link admin-mobile-return"><span className="admin-nav-icon"><ArrowLeftToLine size={17}/></span><span>İşletme Paneli</span></Link>}
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        const active = item.href === "/super-admin" ? pathname === "/super-admin" : pathname.startsWith(item.href);
+        return (
+          <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(mobile ? "admin-mobile-nav-link" : "admin-side-link", active ? "active" : "")}>
+            <span className="admin-nav-icon"><Icon aria-hidden="true" size={17} strokeWidth={1.9} /></span>
+            <span>{item.label}</span>
+            {!mobile && active && <i aria-hidden="true" />}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function AdminSidebar() {
+  return (
+    <aside className="admin-sidebar admin-command-sidebar hidden w-[278px] shrink-0 overflow-hidden rounded-[28px] p-4 lg:flex lg:flex-col">
+      <div className="admin-brand-panel mb-5 p-2">
         <Link href="/super-admin" className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600 text-sm font-bold text-white shadow-md">
-            SA
+          <span className="admin-brand-mark">
+            <ShieldCheck size={20} />
           </span>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-rose-500">
-              Super Admin
-            </p>
-            <p className="text-sm font-semibold text-[var(--text-1)]">
-              Platform Kontrol
-            </p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-cyan-300">Super Admin OS</p>
+            <p className="text-sm font-semibold text-white">Platform Komuta</p>
           </div>
         </Link>
       </div>
-      <nav className="space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active =
-            item.href === "/super-admin"
-              ? pathname === "/super-admin"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
-                active
-                  ? "bg-[#13271d] font-medium text-white shadow-lg shadow-emerald-950/20"
-                  : "text-[var(--text-2)] hover:bg-[var(--surface-2)]"
-              )}
-            >
-              <span className="admin-nav-icon"><Icon aria-hidden="true" size={17} strokeWidth={1.9} /></span>
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="mt-6 border-t border-[var(--border)] pt-4">
+      <div className="admin-system-chip mb-4"><span><Activity size={13} /> CANLI SİSTEM</span><b>Operasyon normal</b></div>
+      <div className="admin-sidebar-scroll min-h-0 flex-1 overflow-y-auto pr-1"><AdminNavigation /></div>
+      <div className="admin-return-panel mt-4 border-t border-white/10 pt-4">
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-[var(--text-3)] transition hover:text-[var(--text-1)]"
+          className="admin-return-business"
         >
-          ← İşletme Paneline Dön
+          <span><ArrowLeftToLine size={17} /></span>
+          <div><small>ÇALIŞMA ALANI</small><b>İşletme paneline dön</b></div>
         </Link>
       </div>
     </aside>
   );
+}
+
+export function AdminMobileNav() {
+  return <div className="admin-mobile-nav lg:hidden"><AdminNavigation mobile /></div>;
 }

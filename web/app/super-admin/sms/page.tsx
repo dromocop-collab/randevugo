@@ -68,6 +68,15 @@ export default function SmsCenterPage() {
     return { tone: "success", title: "Gönderime hazır", detail: "Kimlik bilgileri ve gönderici başlığı tanımlı." };
   }, [settings]);
 
+  const healthChecks = useMemo(() => [
+    { label: "Kullanıcı hesabı", ok: Boolean(settings?.username), detail: settings?.username || "Kullanıcı adı girilmedi" },
+    { label: "API kimlik doğrulama", ok: Boolean(settings?.hasApiKey), detail: settings?.hasApiKey ? settings.apiKeyMasked : "API anahtarı eksik" },
+    { label: "Gönderici başlığı", ok: Boolean(settings?.senderTitle), detail: settings?.senderTitle || "Mutlucell onaylı başlık bekleniyor" },
+    { label: "Canlı gönderim", ok: Boolean(settings?.enabled), detail: settings?.enabled ? "Gönderim açık" : "Süper admin tarafından duraklatıldı" },
+    { label: "Arıza güvenliği", ok: Boolean(settings?.fallbackEnabled), detail: settings?.fallbackEnabled ? "SMS hatasında kod ekranda gösterilir" : "Fallback kapalı" },
+    { label: "Son uçtan uca test", ok: settings?.lastTest?.success === true, detail: !settings?.lastTest ? "Henüz gerçek test yapılmadı" : settings.lastTest.success ? `Başarılı · ${settings.lastTest.providerMessageId ?? "paket alındı"}` : settings.lastTest.error || "Mutlucell testi başarısız" },
+  ], [settings]);
+
   async function save() {
     if (!settings) return;
     setSaving(true);
@@ -135,6 +144,17 @@ export default function SmsCenterPage() {
         {readiness.tone === "success" ? <BadgeCheck className="mt-0.5" /> : <CircleAlert className="mt-0.5" />}
         <div><p className="font-semibold">{readiness.title}</p><p className="text-sm opacity-75">{readiness.detail}</p></div>
       </div>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {healthChecks.map((check) => (
+          <article key={check.label} className={`rounded-2xl border p-4 transition hover:-translate-y-0.5 ${check.ok ? "border-emerald-200 bg-emerald-50/75" : "border-amber-200 bg-amber-50/80"}`}>
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${check.ok ? "bg-emerald-500 text-white" : "bg-amber-400 text-amber-950"}`}>{check.ok ? <BadgeCheck size={17} /> : <CircleAlert size={17} />}</span>
+              <div className="min-w-0"><p className="text-sm font-semibold text-slate-900">{check.label}</p><p className={`mt-1 break-words text-xs leading-5 ${check.ok ? "text-emerald-800/70" : "text-amber-900/70"}`}>{check.detail}</p></div>
+            </div>
+          </article>
+        ))}
+      </section>
 
       <div className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
         <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">

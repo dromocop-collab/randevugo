@@ -19353,6 +19353,311 @@ body {
   transform: rotate(-7deg) scale(1.06)
 }
 
+/* Discovery carousel: silent, fluid progress instead of instructional copy. */
+.category-carousel-progress {
+  width: min(220px, 42%);
+  height: 4px;
+  margin: 14px auto 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(11 107 69/.09)
+}
+
+.category-carousel-progress>span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0b6b45, #54c98c, #c9f45b);
+  box-shadow: 0 0 16px rgb(64 196 125/.4);
+  transition: width .35s cubic-bezier(.2, .8, .2, 1)
+}
+
+.category-carousel:after,
+.category-carousel:before {
+  transition: opacity .3s ease
+}
+
+.category-arrow:not(:disabled) {
+  animation: categoryArrowPulse 2.8s ease-in-out infinite
+}
+
+@keyframes categoryArrowPulse {
+  50% { box-shadow: 0 10px 28px rgb(11 107 69/.2), 0 0 0 5px rgb(11 107 69/.045) }
+}
+
+/* Distinct platform command center — intentionally not the business workspace. */
+.admin-v2 {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: clip;
+  background:
+    radial-gradient(900px 480px at 4% 0%, rgb(26 188 156/.12), transparent 68%),
+    radial-gradient(860px 540px at 98% 8%, rgb(56 189 248/.1), transparent 72%),
+    linear-gradient(145deg, #f4f8f7, #edf4f5 52%, #f7f8f4)
+}
+
+.admin-command-sidebar {
+  top: 8px !important;
+  height: calc(100svh - 16px) !important;
+  border: 1px solid rgb(103 232 249/.15) !important;
+  border-top: 1px solid rgb(103 232 249/.22) !important;
+  background:
+    radial-gradient(circle at 15% 0%, rgb(34 211 238/.18), transparent 27%),
+    linear-gradient(165deg, #081923, #0b2430 52%, #07151d) !important;
+  box-shadow: 0 28px 70px rgb(2 21 31/.24) !important
+}
+
+.admin-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(103 232 249/.22) transparent
+}
+
+.admin-sidebar-scroll::-webkit-scrollbar { width: 4px }
+.admin-sidebar-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: rgb(103 232 249/.22) }
+
+.admin-return-panel {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  background: linear-gradient(180deg, transparent, rgb(7 21 29/.96) 22%)
+}
+
+.admin-return-business {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+  min-height: 58px;
+  border: 1px solid rgb(103 232 249/.2);
+  border-radius: 17px;
+  padding: 9px 11px;
+  background: linear-gradient(120deg, rgb(34 211 238/.14), rgb(52 211 153/.12));
+  color: #ecfeff;
+  box-shadow: inset 0 1px rgb(255 255 255/.08), 0 12px 28px rgb(0 10 18/.2);
+  transition: transform .25s ease, border-color .25s ease, background .25s ease
+}
+
+.admin-return-business:after {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  right: -42px;
+  top: -39px;
+  border-radius: 50%;
+  background: rgb(103 232 249/.14);
+  content: "";
+  transition: transform .35s ease
+}
+
+.admin-return-business:hover {
+  transform: translateY(-2px);
+  border-color: rgb(103 232 249/.4);
+  background: linear-gradient(120deg, rgb(34 211 238/.24), rgb(52 211 153/.2))
+}
+
+.admin-return-business:hover:after { transform: scale(1.25) }
+
+.admin-return-business>span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #67e8f9, #34d399);
+  color: #06202a;
+  box-shadow: 0 8px 18px rgb(34 211 238/.2)
+}
+
+.admin-return-business>div { display: flex; min-width: 0; flex-direction: column }
+.admin-return-business small { color: #67e8f9; font-size: 7px; font-weight: 850; letter-spacing: .16em }
+.admin-return-business b { margin-top: 3px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap }
+
+.admin-brand-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgb(103 232 249/.25);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgb(34 211 238/.2), rgb(16 185 129/.18));
+  color: #a5f3fc;
+  box-shadow: inset 0 1px rgb(255 255 255/.12), 0 10px 25px rgb(6 182 212/.12)
+}
+
+.admin-system-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgb(255 255 255/.08);
+  border-radius: 16px;
+  background: rgb(255 255 255/.04);
+  padding: 11px 13px
+}
+
+.admin-system-chip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #67e8f9;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .16em
+}
+
+.admin-system-chip b { color: #d9f7f2; font-size: 11px }
+
+.admin-side-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 8px 10px;
+  color: #91a8b2;
+  font-size: 12px;
+  font-weight: 650;
+  transition: transform .28s cubic-bezier(.2,.8,.2,1), color .25s, background .25s, border-color .25s
+}
+
+.admin-side-link:hover {
+  transform: translateX(3px);
+  border-color: rgb(103 232 249/.1);
+  background: rgb(255 255 255/.055);
+  color: #eefcff
+}
+
+.admin-side-link.active {
+  border-color: rgb(103 232 249/.2);
+  background: linear-gradient(100deg, rgb(8 145 178/.28), rgb(16 185 129/.14));
+  color: #fff;
+  box-shadow: inset 0 1px rgb(255 255 255/.06), 0 9px 25px rgb(1 15 23/.18)
+}
+
+.admin-side-link>i {
+  position: absolute;
+  right: 10px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #67e8f9;
+  box-shadow: 0 0 12px #22d3ee
+}
+
+.admin-command-sidebar .admin-nav-icon {
+  width: 31px;
+  height: 31px;
+  border-radius: 11px;
+  background: rgb(255 255 255/.055) !important;
+  color: #7dd3fc !important
+}
+
+.admin-command-sidebar .admin-side-link.active .admin-nav-icon {
+  background: linear-gradient(145deg, #22d3ee, #34d399) !important;
+  color: #06202a !important;
+  box-shadow: 0 8px 18px rgb(34 211 238/.18)
+}
+
+.admin-command-topbar {
+  top: 8px !important;
+  border: 1px solid rgb(14 116 144/.11) !important;
+  background: rgb(255 255 255/.82) !important;
+  backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow: 0 18px 50px rgb(8 47 58/.09) !important
+}
+
+.admin-mobile-nav {
+  position: fixed;
+  z-index: 50;
+  right: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: 10px;
+  overflow: hidden;
+  border: 1px solid rgb(103 232 249/.19);
+  border-radius: 22px;
+  background: rgb(7 25 34/.94);
+  padding: 7px;
+  box-shadow: 0 22px 55px rgb(2 18 26/.35);
+  backdrop-filter: blur(20px)
+}
+
+.admin-mobile-nav-track {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none
+}
+
+.admin-mobile-nav-track::-webkit-scrollbar { display: none }
+
+.admin-mobile-nav-link {
+  display: flex;
+  min-width: 76px;
+  flex: 0 0 76px;
+  scroll-snap-align: start;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border-radius: 16px;
+  padding: 7px 4px;
+  color: #8ea5af;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap
+}
+
+.admin-mobile-nav-link.active {
+  background: linear-gradient(145deg, rgb(34 211 238/.2), rgb(52 211 153/.18));
+  color: #ecfeff
+}
+
+.admin-mobile-nav-link .admin-nav-icon {
+  width: 27px;
+  height: 27px;
+  background: transparent;
+  color: inherit
+}
+
+.admin-mobile-return {
+  min-width: 92px;
+  flex-basis: 92px;
+  border: 1px solid rgb(103 232 249/.2);
+  background: linear-gradient(145deg, rgb(34 211 238/.2), rgb(52 211 153/.16));
+  color: #ecfeff
+}
+
+/* Business workspace navigation gets a softer productivity identity. */
+.dashboard-sidebar .nav-chip {
+  position: relative;
+  overflow: hidden;
+  transition: transform .28s cubic-bezier(.2,.8,.2,1), background .25s, color .25s, box-shadow .25s
+}
+
+.dashboard-sidebar .nav-chip:not(.active):hover { transform: translateX(4px) }
+
+.dashboard-sidebar .nav-chip.active:after {
+  position: absolute;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: #0b6b45;
+  box-shadow: 0 0 0 5px rgb(11 107 69/.08);
+  content: ""
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-arrow:not(:disabled) { animation: none }
+  .admin-side-link,
+  .dashboard-sidebar .nav-chip,
+  .category-carousel-progress>span { transition: none }
+}
+
 :root[data-theme="dark"] .discover-category-rail>.discover-category-card {
   border-color: rgb(255 255 255/.1);
   background: #10271b;

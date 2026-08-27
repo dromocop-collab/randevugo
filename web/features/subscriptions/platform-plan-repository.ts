@@ -5,10 +5,14 @@ export interface PlatformPlan {
   id: string;
   label: string;
   yearlyPrice: number;
+  monthlyPrice: number;
+  currency: string;
   trialDays: number;
   maxStores: number;
   maxStaff: number;
   isActive: boolean;
+  isRecommended: boolean;
+  description: string;
   features: string[];
 }
 
@@ -20,10 +24,14 @@ export async function listPlatformPlans(): Promise<PlatformPlan[]> {
       id: item.id,
       label: String(data.label ?? item.id),
       yearlyPrice: Number(data.yearlyPrice ?? 0),
+      monthlyPrice: Number(data.monthlyPrice ?? Math.round(Number(data.yearlyPrice ?? 0) / 12)),
+      currency: String(data.currency ?? "TRY"),
       trialDays: Number(data.trialDays ?? 0),
       maxStores: Number(data.maxStores ?? 3),
       maxStaff: Number(data.maxStaff ?? 250),
       isActive: data.isActive !== false,
+      isRecommended: data.isRecommended === true,
+      description: String(data.description ?? ""),
       features: Array.isArray(data.features) ? data.features.map(String) : [],
     };
   });

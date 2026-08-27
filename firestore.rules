@@ -126,13 +126,22 @@ service cloud.firestore {
     match /subscriptions/{businessId} {
       allow read: if isAuthenticated() &&
         (isMember(businessId) || isPlatformAdmin());
-      // Only server / admin can write subscription data
-      allow create: if isAuthenticated() &&
-        request.resource.data.userId == uid() &&
-        (!(request.resource.data.businessId is string) ||
-         isMember(request.resource.data.businessId));
+      // İşletme yalnızca kendi ilk deneme kaydını oluşturabilir. Paket, ödeme
+      // sağlayıcısı ve durum yükseltmeleri callable Cloud Function/admin işidir.
+      allow create: if isPlatformAdmin() ||
+        (isAuthenticated() &&
+         request.resource.data.businessId == businessId &&
+         (isMember(businessId) || isBusinessOwner(businessId)) &&
+         request.resource.data.plan == "RANDEVUGO" &&
+         request.resource.data.status == "trialing" &&
+         request.resource.data.paymentProvider == "manual" &&
+         request.resource.data.renewalEnabled == false &&
+         request.resource.data.keys().hasOnly([
+           "businessId", "plan", "status", "trialStartedAt", "trialEndsAt",
+           "renewalEnabled", "paymentProvider", "createdAt", "updatedAt"
+         ]));
       allow update: if isPlatformAdmin();
-      allow delete: if false;
+      allow delete: if isPlatformAdmin();
     }
 
     // ────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { listDynamicCategories, type DynamicCategory } from "@/features/categori
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
 import { getDemoStorefrontByCategory, isDemoBusiness } from "@/lib/demo-storefronts";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ChevronLeft, ChevronRight, MapPin, Search, ShieldCheck, Sparkles, Star, UsersRound } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, MapPin, Search, Sparkles, Star, UsersRound } from "lucide-react";
 
 const DEFAULT_CATEGORIES = [
   { value: "", label: "Tümü", icon: "🏢" },
@@ -247,11 +247,14 @@ function CategoryRail({ categories, value, onChange }: { categories: typeof DEFA
   const drag = useRef({ active: false, moved: false, startX: 0, scrollLeft: 0, pointerId: -1 });
   const [edges, setEdges] = useState({ left: false, right: true });
   const [isDragging, setIsDragging] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const updateEdges = useCallback(() => {
     const rail = railRef.current;
     if (!rail) return;
-    setEdges({ left: rail.scrollLeft > 4, right: rail.scrollLeft < rail.scrollWidth - rail.clientWidth - 4 });
+    const maxScroll = Math.max(1, rail.scrollWidth - rail.clientWidth);
+    setEdges({ left: rail.scrollLeft > 4, right: rail.scrollLeft < maxScroll - 4 });
+    setProgress(Math.min(100, Math.max(0, (rail.scrollLeft / maxScroll) * 100)));
   }, []);
 
   useEffect(() => {
@@ -262,6 +265,12 @@ function CategoryRail({ categories, value, onChange }: { categories: typeof DEFA
     observer.observe(rail);
     return () => observer.disconnect();
   }, [categories, updateEdges]);
+
+  useEffect(() => {
+    const index = categories.findIndex((item) => item.value === value);
+    const target = index >= 0 ? railRef.current?.children.item(index) : null;
+    if (target instanceof HTMLElement) target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [categories, value]);
 
   function scroll(direction: -1 | 1) { railRef.current?.scrollBy({ left: direction * Math.max(280, railRef.current.clientWidth * .72), behavior: "smooth" }); }
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -309,6 +318,6 @@ function CategoryRail({ categories, value, onChange }: { categories: typeof DEFA
       })}
     </div>
     <button type="button" className="category-arrow category-arrow--right" onClick={() => scroll(1)} disabled={!edges.right} aria-label="Sonraki kategoriler"><ChevronRight size={20} /></button>
-    <div className="category-drag-hint"><ArrowLeft size={11} /> sürükle <ArrowRight size={11} /></div>
+    <div className="category-carousel-progress" aria-hidden="true"><span style={{ width: `${Math.max(12, progress)}%` }} /></div>
   </div>;
 }

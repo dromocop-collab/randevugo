@@ -6,7 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
-import { AdminSidebar } from "@/components/super-admin/admin-sidebar";
+import { AdminMobileNav, AdminSidebar } from "@/components/super-admin/admin-sidebar";
 import { LoadingState, EmptyState } from "@/components/ui/states";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/auth-service";
@@ -62,15 +62,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="admin-v2 mx-auto flex w-full max-w-[1500px] gap-5 px-3 py-4 lg:px-5">
+    <div className="admin-v2 flex w-full max-w-none gap-5 px-2 py-2 sm:px-4 sm:py-4 xl:px-6">
       <AdminSidebar />
-      <div className="min-w-0 flex-1 pb-6">
+      <div className="min-w-0 flex-1 pb-28 lg:pb-6">
         {/* Admin Topbar */}
-        <header className="admin-topbar mb-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-lg shadow-[var(--shadow-hard)]">
+        <header className="admin-topbar admin-command-topbar mb-5 rounded-[24px] p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-rose-500">
-                Canlı operasyon merkezi
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-600">
+                Platform komuta katmanı
               </p>
               <h1 className="mt-0.5 text-lg font-semibold text-[var(--text-1)]">
                 Platformun nabzı tek ekranda
@@ -97,6 +97,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </header>
         {children}
       </div>
+      <AdminMobileNav />
     </div>
   );
 }
