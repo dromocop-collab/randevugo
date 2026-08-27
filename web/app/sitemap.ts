@@ -19,6 +19,15 @@ const CATEGORY_IMAGES: Record<string, string> = {
   veteriner: "/images/categories/veteriner.png",
 };
 
+/**
+ * Ensure image URLs are valid inside XML by encoding bare `&` as `&amp;`.
+ * Next.js sitemap generator does NOT XML-encode image URLs, causing
+ * Google Search Console parse errors (e.g. Firebase Storage token URLs).
+ */
+function xmlSafeUrl(url: string): string {
+  return url.replace(/&(?!amp;)/g, "&amp;");
+}
+
 function businessLastModified(value: unknown): Date {
   if (typeof value === "string" || typeof value === "number" || value instanceof Date) {
     const parsed = new Date(value);
@@ -59,7 +68,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const hasBusiness = businessesForCategory(fethiyeBusinesses, slug).length > 0;
     if (hasBusiness) {
       const url = `${baseUrl}/mugla/fethiye/${slug}`;
-      localPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.85, alternates: alternates(url), images: [`${baseUrl}${LOCAL_CATEGORIES[slug].image}`] });
+      localPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.85, alternates: alternates(url), images: [xmlSafeUrl(`${baseUrl}${LOCAL_CATEGORIES[slug].image}`)] });
     }
   }
 
@@ -70,7 +79,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const url = `${baseUrl}/isletme/${encodeURIComponent(business.slug)}`;
       const images = [business.coverUrl, business.logoUrl]
         .filter((image): image is string => Boolean(image))
-        .map((image) => image.startsWith("http") ? image : `${baseUrl}${image.startsWith("/") ? image : `/${image}`}`);
+        .map((image) => image.startsWith("http") ? image : `${baseUrl}${image.startsWith("/") ? image : `/${image}`}`)
+        .map(xmlSafeUrl);
       return {
         url,
         lastModified: businessLastModified(business.updatedAt || business.createdAt),
@@ -98,7 +108,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "weekly" as const,
     priority,
     alternates: alternates(`${baseUrl}/${path}`),
-    images: CATEGORY_IMAGES[cat] ? [`${baseUrl}${CATEGORY_IMAGES[cat]}`] : undefined,
+    images: CATEGORY_IMAGES[cat] ? [xmlSafeUrl(`${baseUrl}${CATEGORY_IMAGES[cat]}`)] : undefined,
   }));
 
   return [
