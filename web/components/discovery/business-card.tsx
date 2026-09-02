@@ -50,7 +50,6 @@ interface BusinessCardProps {
 }
 
 export function BusinessCard({ business }: BusinessCardProps) {
-  const isDemo = business.id.startsWith("demo-");
   const categoryLabel =
     CATEGORY_LABELS[business.category] ?? business.category;
 
@@ -77,7 +76,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
 
           {/* Category Badge */}
           <span className="absolute left-3 top-3 rounded-lg bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-            {isDemo ? "Örnek vitrin" : categoryLabel}
+            {categoryLabel}
           </span>
 
           {/* Logo */}
@@ -101,7 +100,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
           </h3>
 
           <div className="mt-1.5 flex items-center gap-2">
-            {isDemo ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">{categoryLabel} hizmet örneği</span> : <StarRating rating={business.rating ?? 0} />}
+            {(business.reviewCount ?? 0) > 0 ? <StarRating rating={business.rating ?? 0} /> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">Yeni</span>}
             {(business.reviewCount ?? 0) > 0 && (
               <span className="text-xs text-[var(--text-3)]">
                 ({business.reviewCount})
@@ -129,14 +128,14 @@ export function BusinessCard({ business }: BusinessCardProps) {
               />
             </svg>
             <span className="line-clamp-1">
-              {isDemo ? "Kategori deneyimini incele" : [business.district, business.city].filter(Boolean).join(", ")}
+              {[business.district, business.city].filter(Boolean).join(", ")}
             </span>
           </div>
 
           {/* CTA */}
           <div className="mt-4 flex items-center justify-between">
             <span className="rounded-lg bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-              {isDemo ? "Hizmetleri incele" : "Randevu Al"}
+              Randevu Al
             </span>
             <svg
               className="h-4 w-4 text-[var(--text-3)] transition-transform duration-300 group-hover:translate-x-1"

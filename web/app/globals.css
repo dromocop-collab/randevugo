@@ -23,7 +23,7 @@
 
 .marketing-header {
   position: sticky;
-  top: 0;
+  top: 34px;
   z-index: 60;
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   background: color-mix(in srgb, var(--cream) 88%, transparent);
@@ -5766,6 +5766,9 @@ a {
 }
 
 .customer-empty button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 17px;
   border: 0;
   background: transparent;
@@ -5773,6 +5776,15 @@ a {
   font-size: 10px;
   font-weight: 850;
   cursor: pointer
+}
+
+.customer-empty-error {
+  border-color: rgb(190 70 70/.24);
+  background: rgb(255 248 246/.72)
+}
+
+.customer-empty-error>svg {
+  color: #b34b45
 }
 
 .customer-how-section {
@@ -6190,7 +6202,7 @@ a {
 
 .business-header {
   position: sticky;
-  top: 0;
+  top: 34px;
   z-index: 70;
   border-bottom: 1px solid rgb(18 55 37/.09);
   background: rgb(246 244 236/.88);
@@ -19735,4 +19747,138 @@ body {
 
 .dashboard-v2>.min-w-0>.mt-5 .staff-editor-intro i {
   color: rgb(255 255 255/.72) !important
+}
+
+/* First-year-free launch campaign */
+.campaign-ticker {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  height: 34px;
+  overflow: hidden;
+  align-items: center;
+  background: linear-gradient(90deg, #092d1d, #0b6b45 45%, #174c31);
+  color: #fff;
+  box-shadow: 0 7px 24px rgb(5 49 30/.16);
+}
+
+.campaign-ticker-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  white-space: nowrap;
+  animation: campaignTicker 26s linear infinite;
+}
+
+.campaign-ticker-track>span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 52px;
+  color: #f8ffe9;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .14em;
+}
+
+.campaign-ticker-track svg { color: #c9f45b; }
+.campaign-ticker:hover .campaign-ticker-track { animation-play-state: paused; }
+
+@keyframes campaignTicker { to { transform: translateX(-50%); } }
+
+.campaign-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgb(3 20 13/.72);
+  backdrop-filter: blur(16px);
+  animation: campaignFade .3s ease both;
+}
+
+.campaign-modal {
+  position: relative;
+  display: grid;
+  grid-template-columns: .78fr 1.22fr;
+  width: min(820px, 100%);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255/.18);
+  border-radius: 34px;
+  background: #f7f5ed;
+  box-shadow: 0 42px 120px rgb(0 0 0/.38);
+  animation: campaignRise .42s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.campaign-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(16 36 28/.1);
+  border-radius: 50%;
+  background: rgb(255 255 255/.72);
+  color: #10241c;
+  cursor: pointer;
+}
+
+.campaign-modal-art {
+  position: relative;
+  display: flex;
+  min-height: 455px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 30%, rgb(201 244 91/.36), transparent 34%), linear-gradient(145deg, #0b6b45, #073521);
+  color: #fff;
+}
+
+.campaign-modal-art::before,
+.campaign-modal-art::after {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border: 1px solid rgb(255 255 255/.12);
+  border-radius: 50%;
+  content: "";
+}
+
+.campaign-modal-art::after { width: 370px; height: 370px; }
+.campaign-modal-art span { z-index: 1; font: 800 110px/.85 var(--font-space-grotesk); letter-spacing: -.09em; }
+.campaign-modal-art small { z-index: 1; margin: 8px 0 24px; color: #c9f45b; font-size: 16px; font-weight: 900; letter-spacing: .35em; }
+.campaign-modal-art svg { z-index: 1; padding: 13px; width: 58px; height: 58px; border-radius: 18px; background: rgb(255 255 255/.1); color: #c9f45b; }
+
+.campaign-modal-copy { padding: 54px 52px 42px; color: #10241c; }
+.campaign-modal-copy>span { display: inline-flex; align-items: center; gap: 7px; color: #0b6b45; font-size: 10px; font-weight: 900; letter-spacing: .16em; }
+.campaign-modal-copy h2 { margin-top: 17px; font: 760 42px/1.06 var(--font-space-grotesk); letter-spacing: -.055em; }
+.campaign-modal-copy h2 em { color: #0b6b45; font-style: normal; }
+.campaign-modal-copy>p { margin-top: 17px; color: #60756a; font-size: 14px; line-height: 1.75; }
+.campaign-modal-copy ul { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-top: 18px; color: #244b38; font-size: 11px; font-weight: 750; }
+.campaign-modal-copy>a { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 24px; padding: 15px 20px; border-radius: 16px; background: #0b6b45; color: #fff; font-size: 13px; font-weight: 800; box-shadow: 0 15px 30px rgb(11 107 69/.22); transition: .25s ease; }
+.campaign-modal-copy>a:hover { transform: translateY(-2px); background: #085437; }
+.campaign-modal-copy>small { display: block; margin-top: 15px; color: #7b8d84; font-size: 9px; line-height: 1.55; }
+
+@keyframes campaignFade { from { opacity: 0; } }
+@keyframes campaignRise { from { opacity: 0; transform: translateY(24px) scale(.97); } }
+
+@media(max-width: 640px) {
+  .campaign-modal { display: block; max-height: min(760px, calc(100dvh - 28px)); overflow-y: auto; border-radius: 27px; }
+  .campaign-modal-art { min-height: 190px; }
+  .campaign-modal-art span { font-size: 78px; }
+  .campaign-modal-art small { margin: 4px 0 14px; }
+  .campaign-modal-art svg { width: 48px; height: 48px; }
+  .campaign-modal-copy { padding: 30px 25px 26px; }
+  .campaign-modal-copy h2 { font-size: 34px; }
+}
+
+@media(prefers-reduced-motion: reduce) {
+  .campaign-ticker-track { animation: none; }
+  .campaign-modal, .campaign-modal-backdrop { animation: none; }
 }

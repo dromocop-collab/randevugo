@@ -2,7 +2,7 @@
  * SeninRandevun — Tek Abonelik Modeli
  *
  * Tek plan: "SeninRandevun" — 1.490 TL/yıl (≈124 TL/ay)
- * Trial: 14 gün, kredi kartı gerekmez
+ * Lansman kampanyası: yeni işletmelere 365 gün, kredi kartı gerekmez
  * Tüm özellikler açık — feature kilidi yok
  */
 
@@ -63,7 +63,7 @@ export const PLAN_PRICE = {
   yearly: 1490,
   monthlyEquivalent: 124,
   currency: "TRY" as const,
-  trialDays: 14,
+  trialDays: 365,
 } as const;
 
 export const PLAN_LABEL = "SeninRandevun";

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getBusinessBySlug, listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { listServices } from "@/features/services/service-repository";
-import { getDemoStorefrontBySlug } from "@/lib/demo-storefronts";
 
 const SITE_URL = "https://seninrandevun.com";
 
@@ -22,12 +21,6 @@ function labelFromSlug(slug: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const demo = getDemoStorefrontBySlug(slug);
-  if (demo) {
-    const title = `${demo.business.name} | Örnek Vitrin`;
-    const description = `${demo.business.description} Bu sayfa kategori deneyimini gösteren örnek vitrindir.`;
-    return { title, description, robots: { index: false, follow: true }, openGraph: { title, description, images: [demo.business.coverUrl!], locale: "tr_TR" } };
-  }
   const business = await getBusinessBySlug(slug).catch(() => null);
   const label = business?.name ?? labelFromSlug(slug);
   const canonical = `${SITE_URL}/isletme/${encodeURIComponent(slug)}`;
@@ -64,9 +57,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BusinessProfileLayout({ children, params }: { children: ReactNode; params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const demo = getDemoStorefrontBySlug(slug);
-  if (demo) return <>{children}</>;
-
   const business = await getBusinessBySlug(slug).catch(() => null);
   if (!business || !business.isPublished || business.status !== "active") return <>{children}</>;
 

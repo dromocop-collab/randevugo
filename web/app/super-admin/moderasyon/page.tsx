@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { EmptyState, LoadingState } from "@/components/ui/states";
@@ -18,7 +19,7 @@ import {
   updateReviewStatus,
 } from "@/features/reviews/review-repository";
 import type { Review } from "@/types/review";
-import { CheckCircle2, Clock3, FolderPlus, XCircle, type LucideIcon } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Clock3, FolderPlus, XCircle, type LucideIcon } from "lucide-react";
 
 type StatusFilter = "pending" | "approved" | "rejected" | "all";
 
@@ -292,12 +293,11 @@ export default function SuperAdminModerationPage() {
         )}
       </Card>
 
-      {/* Business Moderation */}
-      <Card title="İşletme Moderasyon" description="Onay bekleyen ve incelenmesi gereken işletmeler">
-        <EmptyState
-          title="Onay bekleyen işletme yok"
-          description="Yeni işletmeler review sürecine girdiğinde burada listelenecek."
-        />
+      <Card title="İşletme moderasyonu" description="Başvuruların gerçek zamanlı onay ve yayın işlemleri">
+        <div className="flex flex-col gap-4 rounded-2xl border border-cyan-500/15 bg-cyan-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-500/10 text-cyan-700"><Building2 size={20} /></span><div><p className="font-semibold text-[var(--text-1)]">İşletme başvuruları merkezi</p><p className="mt-1 text-xs text-[var(--text-3)]">Bekleyen başvuruları incele, onayla, reddet veya yayından kaldır.</p></div></div>
+          <Link href="/super-admin/isletmeler" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-cyan-800">Başvuruları aç <ArrowRight size={14} /></Link>
+        </div>
       </Card>
 
       <ReviewModerationCard />

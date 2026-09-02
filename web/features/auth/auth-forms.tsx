@@ -393,7 +393,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
       <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
         <div className="mb-6 text-center">
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Kart bilgisi yok · Tüm özellikler 14 gün açık"}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 12 ay ücretsiz"}</p>
         </div>
 
         <form className="space-y-4" onSubmit={onSubmit}>
@@ -493,7 +493,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
         {(accountType === "customer" ? [
           { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
         ] : [
-          { icon: "💳", text: "14 gün ücretsiz" }, { icon: "⚡", text: "2 dk kurulum" }, { icon: "🚫", text: "Kredi kartı yok" }, { icon: "📱", text: "Tüm cihazlar" },
+          { icon: "🎁", text: "İlk yıl ücretsiz" }, { icon: "⚡", text: "2 dk kurulum" }, { icon: "🚫", text: "Kredi kartı yok" }, { icon: "📱", text: "Tüm cihazlar" },
         ]).map((b) => (
           <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">
             <span>{b.icon}</span>

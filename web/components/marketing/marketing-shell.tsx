@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
+import { LaunchCampaign } from "@/components/marketing/launch-campaign";
 import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2, LogIn, Mail, MoonStar, ShieldCheck, Sparkles, SunMedium } from "lucide-react";
 
 const productLinks = [
@@ -69,5 +70,5 @@ function FooterColumn({ title, links }: { title: string; links: [string, string]
 }
 
 export function MarketingPage({ children }: { children: ReactNode }) {
-  return <div className="marketing-page"><MarketingHeader />{children}<MarketingFooter /></div>;
+  return <div className="marketing-page"><LaunchCampaign /><MarketingHeader />{children}<MarketingFooter /></div>;
 }

@@ -5,10 +5,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
-import { EmptyState, LoadingState } from "@/components/ui/states";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
-import { getDemoStorefrontByCategory, isDemoBusiness } from "@/lib/demo-storefronts";
-import { BadgeCheck, ChevronLeft, ChevronRight, MapPin, Search, Sparkles, Star, UsersRound } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, MapPin, RefreshCw, Search, Sparkles, Star, UsersRound } from "lucide-react";
 
 const DEFAULT_CATEGORIES = [
   { value: "", label: "Tümü", icon: "🏢" },
@@ -59,6 +58,8 @@ const ALL_CITIES = [
 export function DiscoverInteractive() {
   const [results, setResults] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   const [keyword, setKeyword] = useState("");
@@ -87,7 +88,7 @@ export function DiscoverInteractive() {
 
   useEffect(() => {
     let cancelled = false;
-    queueMicrotask(() => { if (!cancelled) setLoading(true); });
+    queueMicrotask(() => { if (!cancelled) { setLoading(true); setLoadError(false); } });
 
     searchBusinesses({
       searchText: keyword.trim() || undefined,
@@ -99,19 +100,20 @@ export function DiscoverInteractive() {
         if (!cancelled) setResults(rows);
       })
       .catch(() => {
-        if (!cancelled) setResults([]);
+        if (!cancelled) { setResults([]); setLoadError(true); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [keyword, category, city]);
+  }, [keyword, category, city, retryKey]);
 
-  const demoStorefront = !loading && results.length === 0 && category && !keyword.trim() && !city
-    ? getDemoStorefrontByCategory(category)
-    : null;
-  const visibleResults = demoStorefront ? [demoStorefront.business] : results;
+  function clearFilters() {
+    setKeyword("");
+    setCategory("");
+    setCity("");
+  }
 
   return (
     <>
@@ -150,25 +152,32 @@ export function DiscoverInteractive() {
             ))}
           </select>
           <p className="discover-result-count text-sm text-[var(--text-3)]">
-            {loading ? "Aranıyor..." : demoStorefront ? "1 örnek vitrin" : `${results.length} işletme bulundu`}
+            {loading ? "Aranıyor..." : loadError ? "Bağlantı kurulamadı" : `${results.length} işletme bulundu`}
           </p>
           <span className="discover-filter-hint"><MapPin size={14} /> Şehrindeki en iyi seçenekleri gösteriyoruz</span>
         </div>
       </div>
 
-      <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> {demoStorefront ? "Bu kategorinin örnek mağaza ve hizmetlerini incele" : "Gerçek işletmeler, kolay randevu deneyimi"}</p></div>
+      <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> Yayındaki işletmeler, kolay randevu deneyimi</p></div>
 
       {/* Results */}
       {loading ? (
         <LoadingState title="İşletmeler yükleniyor" description="Lütfen bekleyin..." />
-      ) : visibleResults.length === 0 ? (
+      ) : loadError ? (
+        <ErrorState
+          title="İşletmelere ulaşılamadı"
+          description="Bağlantını kontrol edip yeniden deneyebilirsin."
+          action={<button type="button" onClick={() => setRetryKey((value) => value + 1)} className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-800"><RefreshCw size={15} /> Yeniden dene</button>}
+        />
+      ) : results.length === 0 ? (
         <EmptyState
           title="Sonuç bulunamadı"
-          description="Filtrelerinizi değiştirip tekrar deneyin."
+          description="Arama alanını veya filtrelerini temizleyerek diğer işletmelere göz atabilirsin."
+          action={(keyword || category || city) ? <button type="button" onClick={clearFilters} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">Filtreleri temizle</button> : undefined}
         />
       ) : (
         <div className="discover-results grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleResults.map((biz) => (
+          {results.map((biz) => (
             <Link
               key={biz.id}
               href={`/isletme/${biz.slug}`}
@@ -189,13 +198,9 @@ export function DiscoverInteractive() {
                     <span className="text-5xl font-bold text-[var(--accent)]/10">{biz.name.charAt(0)}</span>
                   </div>
                 )}
-                {isDemoBusiness(biz) ? (
-                  <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold tracking-wide text-white backdrop-blur-sm">
-                    ÖRNEK VİTRİN
-                  </span>
-                ) : biz.status === "active" && (biz.rating ?? 0) >= 4.5 && (
+                {biz.isVerified && (
                   <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
-                    ✓ Doğrulanmış
+                    <BadgeCheck size={12} /> Doğrulanmış
                   </span>
                 )}
               </div>
@@ -221,6 +226,7 @@ export function DiscoverInteractive() {
                       </span>
                     </div>
                   )}
+                  {(biz.reviewCount ?? 0) === 0 && <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-bold text-emerald-700">Yeni</span>}
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">

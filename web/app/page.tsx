@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, CalendarCheck2, Check, Clock3, Heart, MapPin, Search, ShieldCheck, Sparkles, Star } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarCheck2, Check, Clock3, Heart, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { HomeInteractive } from "./home-client";
 

@@ -18,7 +18,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const isPrimaryAdmin = user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
-  const [firestoreAllowed, setFirestoreAllowed] = useState<boolean | null>(null);
+  const [adminCheck, setAdminCheck] = useState<{ uid: string; allowed: boolean } | null>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/giris");
+  }, [router, status]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user || isPrimaryAdmin) return;
@@ -26,28 +30,23 @@ export function AdminShell({ children }: { children: ReactNode }) {
     const db = getDb();
     getDoc(doc(db, "platformAdmins", user.uid))
       .then((snap) => {
-        setFirestoreAllowed(snap.exists());
+        setAdminCheck({ uid: user.uid, allowed: snap.exists() });
       })
       .catch(() => {
-        setFirestoreAllowed(false);
+        setAdminCheck({ uid: user.uid, allowed: false });
       });
   }, [isPrimaryAdmin, status, user]);
 
   // Derived: primary admin is always allowed, otherwise wait for Firestore check
-  const allowed = isPrimaryAdmin ? true : firestoreAllowed;
+  const allowed = isPrimaryAdmin ? true : user && adminCheck?.uid === user.uid ? adminCheck.allowed : null;
 
-  if (status === "loading" || allowed === null) {
+  if (status === "loading" || status === "unauthenticated" || allowed === null) {
     return (
       <LoadingState
-        title="Yetki kontrol ediliyor"
-        description="Platform admin erişimi doğrulanıyor..."
+        title={status === "unauthenticated" ? "Girişe yönlendiriliyor" : "Yetki kontrol ediliyor"}
+        description={status === "unauthenticated" ? "Güvenli giriş ekranı hazırlanıyor..." : "Platform admin erişimi doğrulanıyor..."}
       />
     );
-  }
-
-  if (status === "unauthenticated") {
-    router.replace("/giris");
-    return null;
   }
 
   if (!allowed) {

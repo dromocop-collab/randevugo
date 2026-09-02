@@ -49,10 +49,9 @@ interface BusinessProfileClientProps {
   initialStaff: Staff[];
   initialReviews: Review[];
   initialServiceCategories: ServiceCategory[];
-  isDemo?: boolean;
 }
 
-export default function BusinessProfileClient({ initialBusiness, initialWorkingHours, initialServices, initialStaff, initialReviews, initialServiceCategories, isDemo = false }: BusinessProfileClientProps) {
+export default function BusinessProfileClient({ initialBusiness, initialWorkingHours, initialServices, initialStaff, initialReviews, initialServiceCategories }: BusinessProfileClientProps) {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const [business, setBusiness] = useState<Business | null>(initialBusiness);
@@ -66,7 +65,6 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   const [activeTab, setActiveTab] = useState<Tab>("hizmetler");
 
   useEffect(() => {
-    if (isDemo) return;
     const slug = params.slug;
     if (!slug) return;
 
@@ -79,7 +77,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
           setError("İşletme bulunamadı.");
           return;
         }
-        if (row.status !== "active" && !row.isPublished) {
+        if (row.status !== "active" || !row.isPublished) {
           setError("Bu işletme şu anda aktif değil.");
           return;
         }
@@ -116,7 +114,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
     return () => {
       cancelled = true;
     };
-  }, [isDemo, params.slug]);
+  }, [params.slug]);
 
   if (loading) {
     return (
@@ -168,15 +166,8 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
           serviceCount={services.length}
           staffCount={staff.length}
           galleryCount={(business.galleryUrls ?? []).length}
-          bookingHref={isDemo ? "/kesfet" : `/isletme/${params.slug}/randevu`}
+          bookingHref={`/isletme/${params.slug}/randevu`}
         />
-
-        {isDemo && (
-          <section className="my-5 flex flex-col gap-3 rounded-2xl border border-emerald-700/15 bg-emerald-50 px-5 py-4 text-emerald-950 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-black tracking-[0.14em] text-emerald-700">ÖRNEK VİTRİN</p><p className="mt-1 text-sm">Bu mağaza, kategoride gerçek bir işletme yayınlanana kadar hizmet deneyimini göstermek için hazırlandı.</p></div>
-            <Link href={`/kesfet?category=${business.category}`} className="shrink-0 rounded-xl bg-emerald-800 px-4 py-2.5 text-center text-xs font-bold text-white">Gerçek işletmeleri keşfet</Link>
-          </section>
-        )}
 
         {/* ━━━ TAB NAVIGATION ━━━ */}
         <nav className="storefront-tabs" aria-label="Mağaza bölümleri">
@@ -208,10 +199,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
               <StorefrontServices
                 services={services}
                 categories={serviceCategories}
-                onSelectService={(serviceId) => {
-                  if (isDemo) router.push(`/kesfet?category=${business.category}`);
-                  else router.push(`/isletme/${params.slug}/randevu?service=${serviceId}`);
-                }}
+                onSelectService={(serviceId) => router.push(`/isletme/${params.slug}/randevu?service=${serviceId}`)}
               />
             )}
             {activeTab === "ekip" && <StorefrontStaff staff={staff} />}
@@ -228,14 +216,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                 <p className="mt-1 text-xs text-[var(--text-3)]">İşletme yakında görseller ekleyecek.</p>
               </div>
             )}
-            {activeTab === "yorumlar" && isDemo && (
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-12 text-center">
-                <Star className="mx-auto text-[var(--accent)]" size={34} strokeWidth={1.5} />
-                <p className="mt-3 text-sm font-medium text-[var(--text-1)]">Örnek vitrinlerde puan ve yorum gösterilmez</p>
-                <p className="mt-1 text-xs text-[var(--text-3)]">Gerçek işletmelerin doğrulanmış yorumlarını keşif ekranında inceleyebilirsin.</p>
-              </div>
-            )}
-            {activeTab === "yorumlar" && !isDemo && (
+            {activeTab === "yorumlar" && (
               <StorefrontReviews
                 reviews={reviews}
                 averageRating={business.rating ?? 0}
@@ -267,10 +248,10 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                     <div><small>SANİYELER İÇİNDE</small><p>Online randevunuzu oluşturun.</p></div>
                   </div>
                   <Link
-                    href={isDemo ? `/kesfet?category=${business.category}` : `/isletme/${params.slug}/randevu`}
+                    href={`/isletme/${params.slug}/randevu`}
                     className="storefront-booking-cta"
                   >
-                    {isDemo ? "Gerçek işletmeleri gör" : "Randevu Al"} <ArrowRight size={16} />
+                    Randevu Al <ArrowRight size={16} />
                   </Link>
                   {services.length > 0 && (
                     <div className="storefront-booking-meta">
@@ -293,7 +274,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
               <StorefrontHours workingHours={workingHours} />
 
               {/* Quick Contact */}
-              {!isDemo && <section className="storefront-quick-contact">
+              <section className="storefront-quick-contact">
                 <header className="storefront-quick-head"><span><MessageCircleMore size={21} /></span><div><small>TEK DOKUNUŞLA</small><h3>Hızlı iletişim</h3></div></header>
                 <div className="storefront-quick-links">
                   <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerClassName="storefront-message-trigger" />
@@ -313,7 +294,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                     </a>
                   )}
                 </div>
-              </section>}
+              </section>
             </div>
           </aside>
         </div>
@@ -322,12 +303,12 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
 
       {/* ━━━ MOBILE BOTTOM BAR ━━━ */}
       <div className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-[auto_1fr] gap-2 border-t border-[var(--border)] bg-[var(--bg-1)]/90 p-3 backdrop-blur-2xl lg:hidden">
-        {!isDemo && <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel="Mesaj" triggerClassName="storefront-message-mobile" />}
+        <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel="Mesaj" triggerClassName="storefront-message-mobile" />
         <Link
-          href={isDemo ? `/kesfet?category=${business.category}` : `/isletme/${params.slug}/randevu`}
+          href={`/isletme/${params.slug}/randevu`}
           className="storefront-mobile-booking"
         >
-          <CalendarCheck2 size={17} /> {isDemo ? "Gerçek işletmeleri gör" : "Randevu Al"}
+          <CalendarCheck2 size={17} /> Randevu Al
           <ArrowRight size={17}/>
         </Link>
       </div>

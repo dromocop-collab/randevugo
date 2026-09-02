@@ -17,6 +17,11 @@ export interface SearchFilters {
   maxResults?: number;
 }
 
+function isPublicReadyBusiness(business: Business): boolean {
+  return [business.id, business.slug, business.name, business.category, business.phone, business.address, business.city, business.district]
+    .every((value) => typeof value === "string" && value.trim().length > 0);
+}
+
 export async function searchBusinesses(
   filters: SearchFilters
 ): Promise<Business[]> {
@@ -61,7 +66,7 @@ export async function searchBusinesses(
   let results = snap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as Omit<Business, "id">),
-  }));
+  })).filter(isPublicReadyBusiness);
 
   if (filters.searchText) {
     const searchTerm = filters.searchText.toLowerCase().trim();
@@ -96,7 +101,7 @@ export async function getPopularBusinesses(
   const results = snap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as Omit<Business, "id">),
-  }));
+  })).filter(isPublicReadyBusiness);
   
   // Sort by reviewCount locally to avoid filtering out docs without the field
   results.sort((a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0));

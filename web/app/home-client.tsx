@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ArrowUpRight, Search, WandSparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, ArrowUpRight, RefreshCw, Search, WifiOff, WandSparkles } from "lucide-react";
 import { SearchBar } from "@/components/discovery/search-bar";
 import { BusinessCard } from "@/components/discovery/business-card";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { getBusinessCities, getPopularBusinesses, searchBusinesses } from "@/features/discovery/search-repository";
 import type { Business } from "@/types/business";
-import { getDemoStorefrontByCategory } from "@/lib/demo-storefronts";
 
 export type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
 
@@ -32,24 +31,35 @@ export function HomeInteractive() {
   const [cities, setCities] = useState<string[]>([]);
   const [categories, setCategories] = useState<HomeCategory[]>(DEFAULT_CATEGORIES);
   const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState("");
 
-  useEffect(() => {
-    Promise.all([getPopularBusinesses(8), getBusinessCities(), listDynamicCategories()])
-      .then(([businesses, cityList, dynamic]) => {
-        setPopular(businesses);
-        setCities(cityList);
-        const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
-        const additions = dynamic.filter((item: DynamicCategory) => !known.has(item.slug)).map((item: DynamicCategory) => ({ slug: item.slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }));
-        setCategories([...DEFAULT_CATEGORIES, ...additions]);
-      }).catch(() => undefined);
+  const loadHomepage = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const [businesses, cityList, dynamic] = await Promise.all([getPopularBusinesses(8), getBusinessCities(), listDynamicCategories()]);
+      setPopular(businesses);
+      setCities(cityList);
+      const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
+      const additions = dynamic.filter((item: DynamicCategory) => !known.has(item.slug)).map((item: DynamicCategory) => ({ slug: item.slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }));
+      setCategories([...DEFAULT_CATEGORIES, ...additions]);
+    } catch {
+      setErrorMessage("İşletmeler şu anda yüklenemedi. Bağlantını kontrol edip yeniden deneyebilirsin.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    queueMicrotask(() => { void loadHomepage(); });
+  }, [loadHomepage]);
+
   async function runSearch(params: { searchText: string; category: string; city: string }) {
-    setLoading(true); setSearched(true); setActiveCategory(params.category);
+    setLoading(true); setErrorMessage(null); setSearched(true); setActiveCategory(params.category);
     try { setResults(await searchBusinesses({ searchText: params.searchText, category: params.category || undefined, city: params.city || undefined })); }
-    catch { setResults([]); } finally { setLoading(false); }
+    catch { setResults([]); setErrorMessage("Arama şu anda tamamlanamadı. Lütfen yeniden dene."); } finally { setLoading(false); }
     requestAnimationFrame(() => document.querySelector("#magazalar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
@@ -57,15 +67,12 @@ export function HomeInteractive() {
     const next = activeCategory === category ? "" : category;
     setActiveCategory(next);
     if (!next) { setSearched(false); setResults([]); return; }
-    setLoading(true); setSearched(true);
-    try { setResults(await searchBusinesses({ category: next })); } catch { setResults([]); } finally { setLoading(false); }
+    setLoading(true); setErrorMessage(null); setSearched(true);
+    try { setResults(await searchBusinesses({ category: next })); } catch { setResults([]); setErrorMessage("Bu kategori şu anda yüklenemedi. Lütfen yeniden dene."); } finally { setLoading(false); }
     requestAnimationFrame(() => document.querySelector("#magazalar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  const demoBusiness = searched && activeCategory && results.length === 0
-    ? getDemoStorefrontByCategory(activeCategory)?.business ?? null
-    : null;
-  const visibleBusinesses = useMemo(() => searched ? (demoBusiness ? [demoBusiness] : results) : popular, [searched, demoBusiness, results, popular]);
+  const visibleBusinesses = useMemo(() => searched ? results : popular, [searched, results, popular]);
 
   return <>
     {/* ─── Search Area ─── */}
@@ -88,7 +95,7 @@ export function HomeInteractive() {
     {/* ─── Business Results / Popular ─── */}
     <section className="customer-business-section" id="magazalar">
       <div className="customer-section-heading"><div><span>{searched ? "ARAMA SONUÇLARI" : "ÖNE ÇIKAN MAĞAZALAR"}</span><h2>{searched ? `${visibleBusinesses.length} eşleşme bulundu` : "Sevilen yerleri keşfet."}</h2></div>{searched ? <button className="clear-home-search" onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Aramayı temizle</button> : <Link href="/kesfet">Tüm mağazalar <ArrowRight size={15} /></Link>}</div>
-      {loading ? <div className="business-skeletons">{[1,2,3,4].map(item => <div key={item} />)}</div> : visibleBusinesses.length > 0 ? <div className="business-grid">{visibleBusinesses.slice(0,8).map(business => <BusinessCard key={business.id} business={business} />)}</div> : <div className="customer-empty"><Search size={28} /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button onClick={() => { setSearched(false); setActiveCategory(""); }}>Popüler mağazalara dön</button></div>}
+      {loading ? <div className="business-skeletons" role="status" aria-label="İşletmeler yükleniyor">{[1,2,3,4].map(item => <div key={item} />)}</div> : errorMessage ? <div className="customer-empty customer-empty-error"><WifiOff size={28} /><h3>Bağlantı kurulamadı.</h3><p>{errorMessage}</p><button onClick={() => searched ? runSearch({ searchText: "", category: activeCategory, city: "" }) : loadHomepage()}><RefreshCw size={13} /> Yeniden dene</button></div> : visibleBusinesses.length > 0 ? <div className="business-grid">{visibleBusinesses.slice(0,8).map(business => <BusinessCard key={business.id} business={business} />)}</div> : <div className="customer-empty"><Search size={28} /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Popüler mağazalara dön</button></div>}
     </section>
   </>;
 }

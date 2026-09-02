@@ -41,7 +41,7 @@ const STEP_GUIDANCE = [
   { title: "Markanı doğru konumlandır", text: "Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur.", items: ["Benzersiz mağaza adresi", "Doğru müşteri segmenti", "SEO uyumlu profil başlangıcı"] },
   { title: "Müşterilerin sana ulaşsın", text: "İletişim ve konum bilgileri randevu güvenini yükseltir.", items: ["Türkiye telefon doğrulaması", "Şehir ve ilçe eşleşmesi", "Harita için hazır adres"] },
   { title: "Vitrinini güçlendir", text: "Net logo, kapak ve açıklama mağazanı profesyonel gösterir.", items: ["Mobil uyumlu görseller", "Akılda kalan profil adresi", "600 karakterlik marka hikâyesi"] },
-  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; kurulum güvenli şekilde tamamlanacak.", items: ["14 günlük başlangıç planı", "Online randevu altyapısı", "Çoklu mağaza onay güvencesi"] },
+  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; kurulum güvenli şekilde tamamlanacak.", items: ["İlk 12 ay ücretsiz kullanım", "Online randevu altyapısı", "Çoklu mağaza onay güvencesi"] },
 ] as const;
 
 const defaultWorkingHours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
