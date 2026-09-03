@@ -6205,7 +6205,7 @@ a {
 
 .business-header {
   position: sticky;
-  top: 34px;
+  top: 42px;
   z-index: 70;
   border-bottom: 1px solid rgb(18 55 37/.09);
   background: rgb(246 244 236/.88);
