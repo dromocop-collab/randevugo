@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 import type { Business } from "@/types/business";
+import { businessCategoryQueryValues } from "@/lib/business-categories";
 
 export interface SearchFilters {
   searchText?: string;
@@ -27,6 +28,14 @@ export async function searchBusinesses(
 ): Promise<Business[]> {
   const db = getDb();
   const ref = collection(db, "businesses");
+  const categoryValues = filters.category
+    ? businessCategoryQueryValues(filters.category)
+    : [];
+  const categoryFilter = filters.category
+    ? categoryValues.length > 1
+      ? where("category", "in", categoryValues)
+      : where("category", "==", categoryValues[0])
+    : null;
 
   /* Build dynamic query based on filters */
   const q = filters.category && filters.city
@@ -34,7 +43,7 @@ export async function searchBusinesses(
         ref,
         where("isPublished", "==", true),
         where("status", "==", "active"),
-        where("category", "==", filters.category),
+        categoryFilter!,
         where("city", "==", filters.city),
         limit(filters.maxResults ?? 50)
       )
@@ -43,7 +52,7 @@ export async function searchBusinesses(
           ref,
           where("isPublished", "==", true),
           where("status", "==", "active"),
-          where("category", "==", filters.category),
+          categoryFilter!,
           limit(filters.maxResults ?? 50)
         )
       : filters.city

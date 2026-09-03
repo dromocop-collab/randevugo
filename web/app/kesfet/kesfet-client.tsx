@@ -8,6 +8,7 @@ import { listDynamicCategories, type DynamicCategory } from "@/features/categori
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
 import { BadgeCheck, ChevronLeft, ChevronRight, MapPin, RefreshCw, Search, Sparkles, Star, UsersRound } from "lucide-react";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 const DEFAULT_CATEGORIES = [
   { value: "", label: "Tümü", icon: "🏢" },
@@ -77,8 +78,10 @@ export function DiscoverInteractive() {
       const existing = new Set(DEFAULT_CATEGORIES.map((c) => c.value));
       const merged = [...DEFAULT_CATEGORIES.filter((c) => c.value !== "diger")];
       dynamic.forEach((dc) => {
-        if (!existing.has(dc.slug)) {
-          merged.push({ value: dc.slug, label: dc.label, icon: dc.emoji });
+        const canonicalSlug = canonicalBusinessCategory(dc.slug);
+        if (!existing.has(canonicalSlug)) {
+          existing.add(canonicalSlug);
+          merged.push({ value: canonicalSlug, label: dc.label, icon: dc.emoji });
         }
       });
       merged.push({ value: "diger", label: "Diğer", icon: "📦" });

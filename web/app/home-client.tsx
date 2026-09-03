@@ -9,6 +9,7 @@ import { BusinessCard } from "@/components/discovery/business-card";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { getBusinessCities, getPopularBusinesses, searchBusinesses } from "@/features/discovery/search-repository";
 import type { Business } from "@/types/business";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 export type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
 
@@ -43,7 +44,12 @@ export function HomeInteractive() {
       setPopular(businesses);
       setCities(cityList);
       const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
-      const additions = dynamic.filter((item: DynamicCategory) => !known.has(item.slug)).map((item: DynamicCategory) => ({ slug: item.slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }));
+      const additions = dynamic.flatMap((item: DynamicCategory) => {
+        const slug = canonicalBusinessCategory(item.slug);
+        if (known.has(slug)) return [];
+        known.add(slug);
+        return [{ slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }];
+      });
       setCategories([...DEFAULT_CATEGORIES, ...additions]);
     } catch {
       setErrorMessage("İşletmeler şu anda yüklenemedi. Bağlantını kontrol edip yeniden deneyebilirsin.");

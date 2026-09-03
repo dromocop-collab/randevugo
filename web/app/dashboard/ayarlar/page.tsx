@@ -18,6 +18,7 @@ import { createCategoryRequest, listDynamicCategories } from "@/features/categor
 import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
 import { Building2, CalendarCog, CheckCircle2, Images, Share2, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 const DEFAULT_CATEGORY_OPTIONS = [
   { value: "kuafor", label: "Kuaför" },
@@ -30,6 +31,7 @@ const DEFAULT_CATEGORY_OPTIONS = [
   { value: "servis", label: "Servis / Teknik" },
   { value: "saglik", label: "Sağlık" },
   { value: "egitim", label: "Eğitim" },
+  { value: "yazilim", label: "Yazılım / Web / Video" },
   { value: "diger", label: "Diğer" },
 ];
 
@@ -86,7 +88,7 @@ export default function SettingsPage() {
       if (cancelled || !biz) return;
       setBusiness(biz);
       setName(biz.name);
-      setCategory(biz.category);
+      setCategory(canonicalBusinessCategory(biz.category));
       setBusinessType(biz.businessType ?? "");
       setDescription(biz.description ?? "");
       setPhone(biz.phone);
@@ -117,8 +119,10 @@ export default function SettingsPage() {
       const existing = new Set(DEFAULT_CATEGORY_OPTIONS.map((o) => o.value));
       const merged = [...DEFAULT_CATEGORY_OPTIONS.filter(o => o.value !== "diger")];
       dynamic.forEach((dc) => {
-        if (!existing.has(dc.slug)) {
-          merged.push({ value: dc.slug, label: dc.label });
+        const canonicalSlug = canonicalBusinessCategory(dc.slug);
+        if (!existing.has(canonicalSlug)) {
+          existing.add(canonicalSlug);
+          merged.push({ value: canonicalSlug, label: dc.label });
         }
       });
       // Always keep "Diğer" at the end

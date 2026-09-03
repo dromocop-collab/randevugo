@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Business } from "@/types/business";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 const CATEGORY_LABELS: Record<string, string> = {
   kuafor: "Kuaför",
@@ -51,7 +52,7 @@ interface BusinessCardProps {
 
 export function BusinessCard({ business }: BusinessCardProps) {
   const categoryLabel =
-    CATEGORY_LABELS[business.category] ?? business.category;
+    CATEGORY_LABELS[canonicalBusinessCategory(business.category)] ?? business.category;
 
   return (
     <Link href={`/isletme/${business.slug}`} className="group block">

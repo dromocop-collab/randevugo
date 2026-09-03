@@ -23,7 +23,7 @@
 
 .marketing-header {
   position: sticky;
-  top: 34px;
+  top: 0;
   z-index: 60;
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   background: color-mix(in srgb, var(--cream) 88%, transparent);
