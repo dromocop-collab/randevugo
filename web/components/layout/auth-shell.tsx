@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { CalendarCheck2, Clock3, Heart, LockKeyhole, ShieldCheck, Smartphone, Sparkles, Zap, type LucideIcon } from "lucide-react";
 
 interface AuthShellProps {
   eyebrow: string;
@@ -14,10 +15,10 @@ interface AuthShellProps {
 }
 
 const TRUST_ITEMS = [
-  { icon: "🔒", label: "256-bit SSL", desc: "Bankacılık düzeyinde şifreleme" },
-  { icon: "🛡️", label: "Tenant İzolasyonu", desc: "Her işletme izole ortamda" },
-  { icon: "⚡", label: "%99.99 Uptime", desc: "Firebase altyapı garantisi" },
-  { icon: "📱", label: "7/24 Erişim", desc: "Tüm cihazlardan erişin" },
+  { icon: LockKeyhole, label: "256-bit SSL", desc: "Bankacılık düzeyinde şifreleme" },
+  { icon: ShieldCheck, label: "Tenant İzolasyonu", desc: "Her işletme izole ortamda" },
+  { icon: Zap, label: "%99.99 Uptime", desc: "Firebase altyapı garantisi" },
+  { icon: Smartphone, label: "7/24 Erişim", desc: "Tüm cihazlardan erişin" },
 ];
 
 const TESTIMONIALS = [
@@ -37,10 +38,10 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
   const { user, status } = useAuth();
   const customer = variant === "customer";
   const trustItems = customer ? [
-    { icon: "✓", label: "Ücretsiz Hesap", desc: "Müşteriler için daima ücretsiz" },
-    { icon: "♡", label: "Favori Mağazalar", desc: "Sevdiğiniz yerler tek listede" },
-    { icon: "◷", label: "Randevu Geçmişi", desc: "Geçmiş ve yaklaşan planlarınız" },
-    { icon: "⚡", label: "Hızlı Randevu", desc: "Saniyeler içinde yerinizi ayırın" },
+    { icon: Sparkles, label: "Ücretsiz Hesap", desc: "Müşteriler için daima ücretsiz" },
+    { icon: Heart, label: "Favori Mağazalar", desc: "Sevdiğiniz yerler tek listede" },
+    { icon: Clock3, label: "Randevu Geçmişi", desc: "Geçmiş ve yaklaşan planlarınız" },
+    { icon: CalendarCheck2, label: "Hızlı Randevu", desc: "Saniyeler içinde yerinizi ayırın" },
   ] : TRUST_ITEMS;
   return (
     <main className="auth-v2 relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
@@ -82,20 +83,22 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
 
           {/* Trust Grid */}
           <div className="auth-trust-grid mt-10 grid grid-cols-2 gap-3">
-            {trustItems.map((item) => (
+            {trustItems.map((item) => {
+              const Icon = item.icon as LucideIcon;
+              return (
               <div
                 key={item.label}
-                className="group rounded-xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-3.5 backdrop-blur transition hover:border-[var(--accent)]/30 hover:shadow-md"
+                className="group auth-trust-item rounded-xl border border-[var(--border)] bg-[var(--surface-1)]/80 p-3.5 backdrop-blur transition hover:border-[var(--accent)]/30 hover:shadow-md"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="text-lg">{item.icon}</span>
+                  <span className="auth-trust-icon"><Icon size={18} strokeWidth={1.9} /></span>
                   <div>
                     <p className="text-xs font-bold text-[var(--text-1)]">{item.label}</p>
                     <p className="text-[10px] text-[var(--text-3)]">{item.desc}</p>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
 
           {/* Testimonials */}

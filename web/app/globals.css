@@ -20018,6 +20018,114 @@ body {
 
 @keyframes campaignTicker { to { transform: translateX(-50%); } }
 
+/* Premium account creation experience */
+.auth-v2 {
+  isolation: isolate;
+}
+
+.auth-v2::before,
+.auth-v2::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: authAmbient 11s ease-in-out infinite alternate;
+}
+
+.auth-v2::before { left: -170px; top: -150px; background: rgb(201 244 91 / .2); }
+.auth-v2::after { right: -130px; bottom: -180px; background: rgb(55 183 126 / .15); animation-delay: -5s; }
+
+.auth-story { animation: authPanelIn .65s cubic-bezier(.2,.8,.2,1) both; }
+.auth-form-stage { animation: authPanelIn .65s .12s cubic-bezier(.2,.8,.2,1) both; }
+
+.auth-trust-item { position: relative; overflow: hidden; }
+.auth-trust-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / .65), transparent 70%);
+  transform: translateX(-120%);
+  transition: transform .65s ease;
+}
+.auth-trust-item:hover::after { transform: translateX(120%); }
+.auth-trust-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgb(11 107 69 / .12);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #eff9f1, #e0f0e4);
+  color: #0b6b45;
+  box-shadow: 0 7px 18px rgb(11 107 69 / .1);
+  transition: transform .3s ease, background .3s ease;
+}
+.auth-trust-item:hover .auth-trust-icon { transform: translateY(-2px) rotate(-4deg); background: #0b6b45; color: #fff; }
+
+.auth-register-card { position: relative; overflow: hidden; padding: 30px !important; }
+.auth-register-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #0b6b45, #85c96e, #c9f45b);
+}
+
+.register-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; color: #91a198; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.register-progress span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.register-progress span b { display: grid; place-items: center; width: 21px; height: 21px; border: 1px solid #dce5df; border-radius: 50%; background: #f4f7f5; font-size: 9px; }
+.register-progress span.active { color: #0b6b45; }
+.register-progress span.active b { border-color: #0b6b45; background: #0b6b45; color: #fff; box-shadow: 0 5px 14px rgb(11 107 69 / .2); }
+.register-progress>i { width: 32px; height: 1px; background: linear-gradient(90deg, #0b6b45, #dce5df); }
+
+.register-heading-icon { display: grid; place-items: center; width: 44px; height: 44px; margin: 0 auto 13px; border: 1px solid rgb(11 107 69 / .12); border-radius: 15px; background: linear-gradient(145deg, #e9f7ec, #f8fff0); color: #0b6b45; box-shadow: 0 12px 30px rgb(11 107 69 / .12); animation: registerIconFloat 4s ease-in-out infinite; }
+
+.register-field { position: relative; }
+.register-field>svg { position: absolute; z-index: 2; left: 16px; top: 39px; color: #789083; transition: color .25s ease, transform .25s ease; pointer-events: none; }
+.register-field:focus-within>svg { color: #0b6b45; transform: scale(1.08); }
+.auth-form-card .register-input { min-height: 58px; padding-left: 48px; border-color: rgb(21 61 42 / .12); background: rgb(248 250 248 / .92); box-shadow: inset 0 1px 0 #fff; transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease, background .25s ease; }
+.auth-form-card .register-input:hover { border-color: rgb(11 107 69 / .24); background: #fff; }
+.auth-form-card .register-input:focus { transform: translateY(-1px); border-color: #0b6b45; background: #fff; box-shadow: 0 0 0 4px rgb(11 107 69 / .1), 0 12px 24px rgb(20 62 39 / .08); }
+.register-password-input { padding-right: 92px !important; }
+.register-password-toggle { position: absolute; z-index: 3; right: 13px; top: 34px; display: flex; align-items: center; gap: 5px; padding: 8px 9px; border-radius: 9px; color: #71847a; font-size: 10px; font-weight: 750; transition: .2s ease; }
+.register-password-toggle:hover { background: #eaf4ed; color: #0b6b45; }
+.register-strength { padding: 0 3px; }
+
+.register-consent { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid rgb(19 61 41 / .09); border-radius: 13px; background: rgb(246 249 246 / .75); color: #71847a; font-size: 11px; line-height: 1.55; cursor: pointer; transition: .25s ease; }
+.register-consent:hover,.register-consent.checked { border-color: rgb(11 107 69 / .25); background: #f0f8f2; }
+.register-consent>i { display: grid; place-items: center; flex: 0 0 auto; width: 19px; height: 19px; margin-top: 1px; border: 1.5px solid #b8c6be; border-radius: 6px; background: #fff; color: #fff; transition: .25s ease; }
+.register-consent.checked>i { border-color: #0b6b45; background: #0b6b45; box-shadow: 0 5px 12px rgb(11 107 69 / .2); transform: scale(1.04); }
+
+.auth-form-card .register-submit { position: relative; min-height: 58px; margin-top: 5px; overflow: hidden; font-size: 13px; letter-spacing: -.01em; }
+.auth-form-card .register-submit:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 18px 38px rgb(11 107 69 / .3) !important; }
+.auth-form-card .register-submit svg { transition: transform .25s ease; }
+.auth-form-card .register-submit:hover svg { transform: translateX(4px); }
+
+.register-benefits>div { min-height: 48px; border-color: rgb(19 61 41 / .1) !important; background: rgb(255 255 255 / .64) !important; box-shadow: 0 8px 22px rgb(23 55 40 / .05); transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.register-benefits>div:hover { transform: translateY(-3px); border-color: rgb(11 107 69 / .25) !important; box-shadow: 0 13px 26px rgb(23 55 40 / .1); }
+.register-benefits>div>span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: #e8f4eb; color: #0b6b45; }
+
+@keyframes authPanelIn { from { opacity: 0; transform: translateY(18px) scale(.985); } }
+@keyframes authAmbient { to { transform: translate3d(45px, 25px, 0) scale(1.12); } }
+@keyframes registerIconFloat { 50% { transform: translateY(-4px) rotate(3deg); } }
+
+@media(max-width:640px) {
+  .auth-register-card { padding: 22px !important; }
+  .register-progress { justify-content: center; }
+  .register-progress span { font-size: 8px; }
+  .register-password-toggle span { display: none; }
+  .register-password-input { padding-right: 54px !important; }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .auth-v2::before,.auth-v2::after,.auth-story,.auth-form-stage,.register-heading-icon { animation: none !important; }
+}
+
 .campaign-modal-backdrop {
   position: fixed;
   inset: 0;

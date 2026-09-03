@@ -15,6 +15,7 @@ import {
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ArrowRight, Check, CreditCard, Eye, EyeOff, Gift, LockKeyhole, Mail, Smartphone, Sparkles, UserRound, Zap } from "lucide-react";
 
 const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
 
@@ -397,30 +398,34 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
   return (
     <div className="space-y-6">
       {/* Form Card */}
-      <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-        <div className="mb-6 text-center">
+      <div className="auth-form-card auth-register-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
+        <div className="register-progress" aria-label="Kayıt ilerlemesi"><span className="active"><b>1</b> Hesap bilgileri</span><i /><span><b>2</b> İşletme kurulumu</span></div>
+        <div className="register-heading mb-6 text-center">
+          <span className="register-heading-icon"><Sparkles size={20} /></span>
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
           <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 12 ay ücretsiz"}</p>
         </div>
 
-        <form className="space-y-4" onSubmit={onSubmit}>
-          <Input
+        <form className="register-form space-y-4" onSubmit={onSubmit}>
+          <div className="register-field"><UserRound size={18} aria-hidden="true" /><Input
             label="Ad Soyad"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             placeholder="Adınız Soyadınız"
-          />
-          <Input
+            className="register-input"
+          /></div>
+          <div className="register-field"><Mail size={18} aria-hidden="true" /><Input
             label="E-posta Adresi"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="ornek@email.com"
-          />
-          <div>
-            <div className="relative">
+            className="register-input"
+          /></div>
+          <div className="register-password-block">
+            <div className="register-field relative"><LockKeyhole size={18} aria-hidden="true" />
               <Input
                 label="Şifre"
                 type={showPassword ? "text" : "password"}
@@ -429,23 +434,25 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
                 minLength={8}
                 required
                 placeholder="En az 8 karakter"
+                className="register-input register-password-input"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-[38px] text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition"
+                className="register-password-toggle"
+                aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
               >
-                {showPassword ? "Gizle" : "Göster"}
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}<span>{showPassword ? "Gizle" : "Göster"}</span>
               </button>
             </div>
             {/* Strength bar */}
             {password.length > 0 && (
-              <div className="mt-2">
-                <div className="flex gap-1">
+              <div className="register-strength mt-2">
+                <div className="flex gap-1" aria-hidden="true">
                   {[1, 2, 3, 4].map((level) => (
                     <div
                       key={level}
-                      className={`h-1 flex-1 rounded-full transition ${
+                      className={`h-1 flex-1 rounded-full transition-all duration-500 ${
                         level <= strength ? strengthColor[strength] : "bg-[var(--surface-3)]"
                       }`}
                     />
@@ -458,13 +465,14 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
             )}
           </div>
 
-          <label className="flex items-start gap-2.5 text-xs text-[var(--text-3)]">
+          <label className={`register-consent ${agreed ? "checked" : ""}`}>
             <input
               type="checkbox"
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 rounded border-[var(--border)]"
+              className="sr-only"
             />
+            <i aria-hidden="true">{agreed && <Check size={13} />}</i>
             <span>
               <Link href="/kullanim-kosullari" className="text-[var(--accent)] hover:underline">Kullanım Şartları</Link>
               {" "}ve{" "}
@@ -473,14 +481,14 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
             </span>
           </label>
 
-          <Button className="w-full" disabled={loading || !agreed} type="submit">
+          <Button className="register-submit w-full" disabled={loading || !agreed} type="submit" glow>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 Hesap oluşturuluyor...
               </span>
             ) : (
-              accountType === "customer" ? "Ücretsiz Hesap Oluştur →" : "14 Gün Ücretsiz Başla →"
+              <>{accountType === "customer" ? "Ücretsiz Hesap Oluştur" : "İlk 12 Ay Ücretsiz Başla"}<ArrowRight size={17} /></>
             )}
           </Button>
         </form>
@@ -496,17 +504,18 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
       </div>
 
       {/* Benefits */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="register-benefits grid grid-cols-2 gap-3">
         {(accountType === "customer" ? [
           { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
         ] : [
-          { icon: "🎁", text: "İlk yıl ücretsiz" }, { icon: "⚡", text: "2 dk kurulum" }, { icon: "🚫", text: "Kredi kartı yok" }, { icon: "📱", text: "Tüm cihazlar" },
-        ]).map((b) => (
-          <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">
-            <span>{b.icon}</span>
+          { icon: Gift, text: "İlk yıl ücretsiz" }, { icon: Zap, text: "2 dk kurulum" }, { icon: CreditCard, text: "Kredi kartı yok" }, { icon: Smartphone, text: "Tüm cihazlar" },
+        ]).map((b) => {
+          const BenefitIcon = b.icon;
+          return <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">
+            <span>{typeof BenefitIcon === "string" ? BenefitIcon : <BenefitIcon size={15} />}</span>
             {b.text}
-          </div>
-        ))}
+          </div>;
+        })}
       </div>
     </div>
   );
