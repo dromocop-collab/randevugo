@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/states";
 import {
   getPlatformSettings,
   updatePlatformSettings,
 } from "@/features/platform/platform-settings-repository";
 import type { PlatformSettings } from "@/types/platform";
+import { Activity, Blocks, Check, CheckCircle2, Globe2, LoaderCircle, Megaphone, PlugZap, RotateCcw, Save, Search, Settings2, Share2, type LucideIcon } from "lucide-react";
 
 const FEATURE_FLAG_LABELS: Record<string, string> = {
   allowAnonymousReviews: "Girişsiz Yorum (isim yeterli)",
@@ -29,13 +29,13 @@ const SOCIAL_LABELS: { key: keyof PlatformSettings["social"]; label: string; pla
 ];
 
 const TABS = [
-  { key: "genel", label: "Genel", icon: "⚙️" },
-  { key: "sistem", label: "Sistem Durumu", icon: "🚦" },
-  { key: "ozellikler", label: "Özellikler", icon: "🧩" },
-  { key: "seo", label: "SEO & Marka", icon: "🔎" },
-  { key: "iletisim", label: "İletişim & Sosyal", icon: "📣" },
-  { key: "duyuru", label: "Duyuru Banner", icon: "📢" },
-  { key: "entegrasyon", label: "Entegrasyonlar", icon: "🔌" },
+  { key: "genel", label: "Genel", icon: Settings2 },
+  { key: "sistem", label: "Sistem Durumu", icon: Activity },
+  { key: "ozellikler", label: "Özellikler", icon: Blocks },
+  { key: "seo", label: "SEO & Marka", icon: Search },
+  { key: "iletisim", label: "İletişim & Sosyal", icon: Share2 },
+  { key: "duyuru", label: "Duyuru Banner", icon: Megaphone },
+  { key: "entegrasyon", label: "Entegrasyonlar", icon: PlugZap },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -52,23 +52,19 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-      <div>
+    <div className={`admin-setting-toggle ${checked ? "is-on" : ""}`}>
+      <div className="flex min-w-0 items-center gap-3"><span className="admin-setting-toggle-icon">{checked ? <Check size={16}/> : <span />}</span><div>
         <p className="text-sm font-medium text-[var(--text-1)]">{label}</p>
         {description && <p className="text-xs text-[var(--text-3)]">{description}</p>}
-      </div>
+      </div></div>
       <button
         type="button"
+        aria-pressed={checked}
+        aria-label={`${label}: ${checked ? "açık" : "kapalı"}`}
         onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-          checked ? "bg-emerald-500" : "bg-[var(--border)]"
-        }`}
+        className="admin-modern-switch"
       >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-5" : "translate-x-0.5"
-          }`}
-        />
+        <span />
       </button>
     </div>
   );
@@ -79,10 +75,13 @@ export default function SuperAdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<TabKey>("genel");
+  const [savedSettings, setSavedSettings] = useState<PlatformSettings | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const dirty = Boolean(settings && savedSettings && JSON.stringify(settings) !== JSON.stringify(savedSettings));
 
   useEffect(() => {
     getPlatformSettings()
-      .then(setSettings)
+      .then((value) => { setSettings(value); setSavedSettings(structuredClone(value)); })
       .catch(() => toast.error("Platform ayarları yüklenemedi."))
       .finally(() => setLoading(false));
   }, []);
@@ -107,6 +106,9 @@ export default function SuperAdminSettingsPage() {
         announcement: settings.announcement,
         analytics: settings.analytics,
       });
+      setSavedSettings(structuredClone(settings));
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 1800);
       toast.success("Platform ayarları kaydedildi. Değişiklikler tüm siteye yansıyacak.");
     } catch {
       toast.error("Kaydetme başarısız oldu.");
@@ -120,23 +122,25 @@ export default function SuperAdminSettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
+    <div className="admin-settings-page settings-page">
+      <section className="admin-settings-hero"><div className="admin-settings-hero-copy"><span><Globe2 size={15}/> PLATFORM YAPILANDIRMASI</span><h1>Ayarları tek merkezden yönetin.</h1><p>Platform davranışını, görünürlüğünü, iletişim kanallarını ve entegrasyonlarını güvenle yapılandırın.</p></div><div className={`admin-settings-health ${dirty ? "has-changes" : ""}`}><span>{dirty ? <Activity size={21}/> : <CheckCircle2 size={21}/>}</span><div><small>YAPILANDIRMA DURUMU</small><b>{dirty ? "Kaydedilmemiş değişiklikler" : "Tüm ayarlar güncel"}</b></div></div></section>
+      <nav className="settings-tabs" aria-label="Platform ayar bölümleri">
+        {TABS.map((t) => {
+          const Icon = t.icon as LucideIcon;
+          return (
           <button
+            type="button"
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition ${
-              tab === t.key
-                ? "bg-[var(--accent)] text-white shadow-lg shadow-sky-500/25"
-                : "bg-[var(--surface-2)] text-[var(--text-3)] hover:text-[var(--text-1)]"
-            }`}
+            className={`settings-tab ${tab === t.key ? "is-active" : ""}`}
           >
-            <span>{t.icon}</span>
+            <Icon size={17}/>
             {t.label}
           </button>
-        ))}
-      </div>
+        )})}
+      </nav>
+
+      <div className="settings-tab-content" key={tab}>
 
       {tab === "genel" && (
         <Card
@@ -356,11 +360,11 @@ export default function SuperAdminSettingsPage() {
           </div>
         </Card>
       )}
+      </div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Kaydediliyor..." : "💾 Değişiklikleri Kaydet"}
-        </Button>
+      <div className="admin-settings-savebar">
+        <div><span className={dirty ? "is-dirty" : ""}/><p><b>{dirty ? "Değişiklikler kaydedilmeyi bekliyor" : justSaved ? "Ayarlar başarıyla güncellendi" : "Yapılandırma güncel"}</b><small>{dirty ? "Yayınlamak için değişiklikleri kaydedin." : "Platform son kaydedilen ayarlarla çalışıyor."}</small></p></div>
+        <div className="admin-settings-save-actions">{dirty && savedSettings && <button type="button" className="admin-settings-reset" onClick={() => setSettings(structuredClone(savedSettings))}><RotateCcw size={16}/> Geri al</button>}<button type="button" className={`admin-settings-save ${saving ? "is-saving" : ""} ${justSaved ? "is-saved" : ""}`} onClick={() => void handleSave()} disabled={saving || !dirty}>{saving ? <LoaderCircle size={19}/> : justSaved ? <CheckCircle2 size={19}/> : <Save size={19}/>}<span>{saving ? "Kaydediliyor" : justSaved ? "Kaydedildi" : "Değişiklikleri Kaydet"}</span></button></div>
       </div>
     </div>
   );
