@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
-import { createReview, hasUserReviewed } from "@/features/reviews/review-repository";
+import { createReview } from "@/features/reviews/review-repository";
 import { uploadReviewImage } from "@/lib/firebase/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,15 +90,7 @@ export function ReviewForm({
     setSubmitting(true);
 
     try {
-      // Check duplicate
-      if (appointmentId) {
-        const already = await hasUserReviewed(businessId, appointmentId);
-        if (already) {
-          toast.error("Bu randevu için zaten yorum yapmışsınız.");
-          setSubmitting(false);
-          return;
-        }
-      }
+      if (!appointmentId) throw new Error("Yorum için tamamlanmış randevu gereklidir.");
 
       // Upload images
       const imageUrls: string[] = [];
@@ -113,7 +105,7 @@ export function ReviewForm({
 
       await createReview(businessId, {
         customerName: customerName.trim(),
-        appointmentId: appointmentId ?? `direct_${Date.now()}`,
+        appointmentId,
         serviceName: serviceName,
         staffName: staffName,
         rating,
@@ -140,7 +132,7 @@ export function ReviewForm({
     >
       <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><PenLine size={18}/> Yorum Yaz</h3>
       <p className="mt-1 text-xs text-[var(--text-3)]">
-        Giriş yapmanıza gerek yok — adınızı yazıp deneyiminizi paylaşabilirsiniz.
+        Yalnızca tamamlanmış ve hesabınıza bağlı randevular değerlendirilebilir.
       </p>
 
       {/* Name */}

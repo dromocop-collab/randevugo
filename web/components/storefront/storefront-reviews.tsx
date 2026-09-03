@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Review } from "@/types/review";
-import { ReviewForm } from "./review-form";
 import { MessageCircleMore, PenLine, Scissors } from "lucide-react";
 
 interface Props {
@@ -44,12 +44,9 @@ export function StorefrontReviews({
   reviews,
   averageRating,
   totalReviews,
-  businessId,
-  onReviewSubmitted,
 }: Props) {
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
 
   // Rating distribution
   const distribution = [5, 4, 3, 2, 1].map((star) => {
@@ -94,12 +91,12 @@ export function StorefrontReviews({
             )}
           </div>
 
-          <button
-            onClick={() => setShowForm(!showForm)}
+          <Link
+            href="/hesabim"
             className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
           >
-            <PenLine size={15}/> {showForm ? "Formu Kapat" : "Yorum Yaz"}
-          </button>
+            <PenLine size={15}/> Randevunu değerlendir
+          </Link>
         </div>
 
         {/* Rating Distribution */}
@@ -124,17 +121,6 @@ export function StorefrontReviews({
           </div>
         )}
       </div>
-
-      {/* ━━━ REVIEW FORM ━━━ */}
-      {showForm && (
-        <ReviewForm
-          businessId={businessId}
-          onSuccess={() => {
-            setShowForm(false);
-            onReviewSubmitted?.();
-          }}
-        />
-      )}
 
       {/* ━━━ SORT BAR ━━━ */}
       {reviews.length > 0 && (
@@ -163,7 +149,7 @@ export function StorefrontReviews({
             Henüz değerlendirme yapılmamış
           </p>
           <p className="mt-1 text-xs text-[var(--text-3)]">
-            İlk yorumu siz bırakın!
+            Tamamlanan randevunuzdan sonra ilk doğrulanmış yorumu siz bırakın.
           </p>
         </div>
       ) : (

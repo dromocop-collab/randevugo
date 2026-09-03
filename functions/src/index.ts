@@ -25,8 +25,10 @@ const MUTLUCELL_API_KEY = defineSecret("MUTLUCELL_API_KEY");
 const MUTLUCELL_SEND_URL =
   "https://smsgw.mutlucell.com/smsgw-ws/sndblkex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
+const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicCallableOptions = {
   region: "europe-west1",
+  enforceAppCheck,
   cors: [
     /^http:\/\/localhost(?::\d+)?$/,
     /^https:\/\/(?:www\.)?seninrandevun\.com$/,
@@ -35,6 +37,7 @@ const publicCallableOptions = {
     /^https:\/\/.*\.hosted\.app$/,
   ],
 };
+const protectedCallableOptions = { region: "europe-west1", enforceAppCheck };
 
 function requireString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -842,7 +845,7 @@ export const submitPublicSupportRequest = onCall(
 );
 
 export const cancelCustomerAppointment = onCall(
-  { region: "europe-west1" },
+  protectedCallableOptions,
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError("unauthenticated", "Randevuyu iptal etmek için giriş yapmalısınız.");
@@ -894,6 +897,89 @@ export const cancelCustomerAppointment = onCall(
       });
     });
 
+    return { success: true };
+  }
+);
+
+export const rescheduleAppointment = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const staffId = requireString(data.staffId, "staffId");
+    const startAtMillis = Number(data.startAtMillis);
+    if (!Number.isFinite(startAtMillis)) throw new HttpsError("invalid-argument", "Yeni randevu saati geçersiz.");
+    await requireBusinessManager(uid, businessId);
+
+    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    const appointmentSnapshot = await appointmentRef.get();
+    if (!appointmentSnapshot.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
+    const appointment = appointmentSnapshot.data()!;
+    if (!["pending", "confirmed"].includes(String(appointment.status))) {
+      throw new HttpsError("failed-precondition", "Yalnızca aktif randevular yeniden planlanabilir.");
+    }
+    const serviceId = requireString(appointment.serviceId, "serviceId");
+    const context = await loadBookingContext(businessId, serviceId, staffId);
+    const durationMinutes = normalizedBookingDuration(context.service.durationMinutes);
+    const startAt = Timestamp.fromMillis(startAtMillis);
+    const endAt = Timestamp.fromMillis(startAtMillis + durationMinutes * 60_000);
+    const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+    const selectedLocal = localParts(startAt.toDate(), timeZone);
+    if (!buildSlots(context, selectedLocal.dateKey, staffId, []).includes(startAtMillis)) {
+      throw new HttpsError("failed-precondition", "Seçilen saat çalışma planına uygun değil.");
+    }
+    const dayStart = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+    const nextDay = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const dayEnd = zonedTimeToMillis(nextDay.toISOString().slice(0, 10), 0, timeZone);
+    const conflicts = db.collection(`businesses/${businessId}/appointments`)
+      .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+      .where("startAt", "<", Timestamp.fromMillis(dayEnd));
+
+    await db.runTransaction(async (tx) => {
+      const conflictSnapshot = await tx.get(conflicts);
+      const bufferBefore = Math.max(0, numberOr(context.business.bufferBeforeMinutes, 0));
+      const bufferAfter = Math.max(0, numberOr(context.business.bufferAfterMinutes, numberOr(context.business.appointmentBufferMinutes, 0)));
+      const collision = conflictSnapshot.docs.some((item) => {
+        if (item.id === appointmentId) return false;
+        const row = item.data();
+        if (!["pending", "confirmed"].includes(String(row.status))) return false;
+        if (row.staffId && row.staffId !== staffId) return false;
+        const existingStart = row.startAt as Timestamp | undefined;
+        const existingEnd = row.endAt as Timestamp | undefined;
+        return !!existingStart && !!existingEnd
+          && existingStart.toMillis() < endAt.toMillis() + bufferAfter * 60_000
+          && existingEnd.toMillis() > startAt.toMillis() - bufferBefore * 60_000;
+      });
+      if (collision) throw new HttpsError("already-exists", "Seçilen saat artık müsait değil.");
+      tx.update(appointmentRef, {
+        staffId,
+        staffName: String(context.staff?.fullName ?? context.business.name ?? "İşletme"),
+        startAt,
+        endAt,
+        serviceDurationMinutes: durationMinutes,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+        type: "appointment_rescheduled",
+        title: "Randevu yeniden planlandı",
+        body: `${String(appointment.customerName ?? "Müşteri")} randevusu yeni saate taşındı.`,
+        appointmentId,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+        action: "appointment.rescheduled",
+        entityId: appointmentId,
+        actorUid: uid,
+        previousStartAt: appointment.startAt ?? null,
+        startAt,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
     return { success: true };
   }
 );
@@ -967,7 +1053,7 @@ export const getAvailableSlots = onCall(
 );
 
 export const createAppointment = onCall(
-  { region: "europe-west1" },
+  publicCallableOptions,
   async (request) => {
     const data = request.data ?? {};
 
@@ -1192,13 +1278,17 @@ export const appointmentCreated = onDocumentCreated(
 );
 
 export const submitReview = onCall(
-  { region: "europe-west1" },
+  protectedCallableOptions,
   async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Yorum yapmak için hesabınıza giriş yapmalısınız.");
+    }
     const data = request.data ?? {};
 
     const businessId = requireString(data.businessId, "businessId");
     const appointmentId = requireString(data.appointmentId, "appointmentId");
-    const customerName = requireString(data.customerName, "customerName");
+    requireString(data.customerName, "customerName");
     const rating = Number(data.rating);
 
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
@@ -1216,6 +1306,9 @@ export const submitReview = onCall(
     }
 
     const appointmentData = appointmentSnap.data()!;
+    if (appointmentData.customerId !== uid) {
+      throw new HttpsError("permission-denied", "Bu randevuyu değerlendirme yetkiniz yok.");
+    }
     if (appointmentData.status !== "completed") {
       throw new HttpsError(
         "failed-precondition",
@@ -1223,57 +1316,113 @@ export const submitReview = onCall(
       );
     }
 
-    // Check for duplicate review
-    const existingReviews = await db
-      .collection(`businesses/${businessId}/reviews`)
-      .where("appointmentId", "==", appointmentId)
-      .get();
-
-    if (!existingReviews.empty) {
-      throw new HttpsError(
-        "already-exists",
-        "Bu randevu için zaten değerlendirme yapılmış."
-      );
-    }
-
     const comment =
       typeof data.comment === "string" ? data.comment.trim() : null;
+    if (comment && comment.length > 2_000) {
+      throw new HttpsError("invalid-argument", "Yorum 2000 karakteri geçemez.");
+    }
+    const imageUrls: string[] = Array.isArray(data.imageUrls)
+      ? data.imageUrls.filter((value: unknown): value is string => typeof value === "string").slice(0, 3)
+      : [];
+    const expectedImagePath = encodeURIComponent(`businesses/${businessId}/public/reviews/${uid}/`);
+    if (imageUrls.some((url) => !url.startsWith("https://firebasestorage.googleapis.com/") || !url.includes(expectedImagePath))) {
+      throw new HttpsError("invalid-argument", "Yorum fotoğrafı adresi geçersiz.");
+    }
 
-    const reviewRef = db.collection(`businesses/${businessId}/reviews`).doc();
+    const reviewId = createHash("sha256").update(`${businessId}:${appointmentId}`).digest("hex").slice(0, 40);
+    const reviewRef = db.doc(`businesses/${businessId}/reviews/${reviewId}`);
 
     await db.runTransaction(async (tx) => {
+      const existing = await tx.get(reviewRef);
+      if (existing.exists) {
+        throw new HttpsError("already-exists", "Bu randevu için zaten değerlendirme yapılmış.");
+      }
       tx.set(reviewRef, {
         businessId,
-        customerId: appointmentData.customerId ?? `guest_review`,
-        customerName,
+        customerId: uid,
+        customerName: String(appointmentData.customerName ?? "Müşteri").slice(0, 80),
         appointmentId,
         serviceId: appointmentData.serviceId ?? null,
+        serviceName: appointmentData.serviceName ?? null,
         staffId: appointmentData.staffId ?? null,
+        staffName: appointmentData.staffName ?? null,
         rating,
         comment,
-        isVisible: true,
+        imageUrls,
+        status: "pending",
+        isVisible: false,
         isModerated: false,
         createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      // Update business rating
-      const businessRef = db.doc(`businesses/${businessId}`);
-      const businessSnap = await tx.get(businessRef);
-      const businessData = businessSnap.data() ?? {};
-      const oldCount = Number(businessData.reviewCount ?? 0);
-      const oldRating = Number(businessData.rating ?? 0);
-      const newCount = oldCount + 1;
-      const newRating = (oldRating * oldCount + rating) / newCount;
-
-      tx.update(businessRef, {
-        rating: Math.round(newRating * 100) / 100,
-        reviewCount: newCount,
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
 
     return { success: true, reviewId: reviewRef.id };
+  }
+);
+
+export const moderateReview = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const reviewId = requireString(data.reviewId, "reviewId");
+    const status = requireString(data.status, "status");
+    if (!["approved", "rejected"].includes(status)) {
+      throw new HttpsError("invalid-argument", "Geçersiz moderasyon kararı.");
+    }
+    const platformAdmin = request.auth?.token.email?.toString().toLowerCase() === "cihatwin@gmail.com"
+      || (await db.doc(`platformAdmins/${uid}`).get()).exists;
+    if (!platformAdmin) await requireBusinessManager(uid, businessId);
+
+    const reviewRef = db.doc(`businesses/${businessId}/reviews/${reviewId}`);
+    const businessRef = db.doc(`businesses/${businessId}`);
+    await db.runTransaction(async (tx) => {
+      const [reviewSnapshot, businessSnapshot] = await Promise.all([tx.get(reviewRef), tx.get(businessRef)]);
+      if (!reviewSnapshot.exists || !businessSnapshot.exists) {
+        throw new HttpsError("not-found", "Yorum veya işletme bulunamadı.");
+      }
+      const review = reviewSnapshot.data()!;
+      const business = businessSnapshot.data()!;
+      const previousStatus = String(review.status ?? "pending");
+      const oldCount = Math.max(0, Number(business.reviewCount ?? 0));
+      const oldRating = Math.max(0, Number(business.rating ?? 0));
+      const reviewRating = Number(review.rating ?? 0);
+      let newCount = oldCount;
+      let newRating = oldRating;
+      if (status === "approved" && previousStatus !== "approved") {
+        newCount = oldCount + 1;
+        newRating = (oldRating * oldCount + reviewRating) / newCount;
+      } else if (status !== "approved" && previousStatus === "approved") {
+        newCount = Math.max(0, oldCount - 1);
+        newRating = newCount === 0 ? 0 : Math.max(0, (oldRating * oldCount - reviewRating) / newCount);
+      }
+      tx.update(reviewRef, {
+        status,
+        isVisible: status === "approved",
+        isModerated: true,
+        moderationNote: typeof data.moderationNote === "string" ? data.moderationNote.slice(0, 500) : null,
+        moderatedBy: uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (newCount !== oldCount || newRating !== oldRating) {
+        tx.update(businessRef, {
+          rating: Math.round(newRating * 100) / 100,
+          reviewCount: newCount,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: `review.${status}`,
+        businessId,
+        entityId: reviewId,
+        actorUid: uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return { success: true };
   }
 );
 

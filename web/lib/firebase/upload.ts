@@ -1,5 +1,7 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "@/lib/firebase/storage";
+import { getAuth } from "firebase/auth";
+import { getFirebaseApp } from "@/lib/firebase/client";
 
 /**
  * Upload a file to Firebase Storage and return its public download URL.
@@ -38,9 +40,11 @@ export async function uploadReviewImage(
   businessId: string,
   file: File
 ): Promise<string> {
+  const user = getAuth(getFirebaseApp()).currentUser;
+  if (!user) throw new Error("Yorum fotoğrafı yüklemek için giriş yapmalısınız.");
   const ext = file.name.split(".").pop() ?? "jpg";
   const fileName = `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const path = `businesses/${businessId}/public/reviews/${fileName}`;
+  const path = `businesses/${businessId}/public/reviews/${user.uid}/${fileName}`;
   return uploadFile(path, file);
 }
 

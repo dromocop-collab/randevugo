@@ -56,12 +56,13 @@ export async function rescheduleAppointment(
   appointmentId: string,
   payload: { startAt: Date; endAt: Date; staffId: string }
 ): Promise<void> {
-  const db = getDb();
-  await updateDoc(doc(db, "businesses", businessId, "appointments", appointmentId), {
-    startAt: Timestamp.fromDate(payload.startAt),
-    endAt: Timestamp.fromDate(payload.endAt),
+  const functions = getFunctions(getFirebaseApp(), "europe-west1");
+  const callable = call(functions, "rescheduleAppointment");
+  await callable({
+    businessId,
+    appointmentId,
     staffId: payload.staffId,
-    updatedAt: Timestamp.now(),
+    startAtMillis: payload.startAt.getTime(),
   });
 }
 

@@ -49,6 +49,10 @@ service cloud.firestore {
         getMember(businessId).data.role in ["owner", "admin", "manager", "staff"];
     }
 
+    function isPublicBusiness(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
+    }
+
     // Protect fields that should only be changed by server/admin
     function protectedFieldsUnchanged() {
       return (!request.resource.data.diff(resource.data).affectedKeys()
@@ -157,7 +161,9 @@ service cloud.firestore {
       allow update: if isPlatformAdmin() ||
         (isAuthenticated() &&
           (resource.data.userId == uid() ||
-           (resource.data.businessId is string && isMember(resource.data.businessId))));
+           (resource.data.businessId is string && isMember(resource.data.businessId))) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["status", "updatedAt"]));
       allow delete: if false;
 
       match /messages/{messageId} {
@@ -170,7 +176,12 @@ service cloud.firestore {
           (isAuthenticated() &&
             (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == uid() ||
              (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId is string &&
-              isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId))));
+              isMember(get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.businessId))) &&
+            request.resource.data.senderId == uid() &&
+            request.resource.data.body is string &&
+            request.resource.data.body.size() > 0 &&
+            request.resource.data.body.size() <= 5000 &&
+            request.resource.data.keys().hasOnly(["body", "senderId", "senderRole", "createdAt"]));
       }
     }
 
@@ -201,9 +212,17 @@ service cloud.firestore {
     match /categoryRequests/{requestId} {
       // Platform admins can read all; businesses can read their own
       allow read: if isPlatformAdmin() ||
-        (isAuthenticated() && resource.data.businessId != null);
+        (resource.data.businessId is string && isMember(resource.data.businessId));
       // Authenticated businesses can request a new platform category.
-      allow create: if isAuthenticated();
+      allow create: if request.resource.data.businessId is string &&
+        isMember(request.resource.data.businessId) &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.requestedCategory is string &&
+        request.resource.data.requestedCategory.size() > 1 &&
+        request.resource.data.requestedCategory.size() <= 80 &&
+        request.resource.data.keys().hasOnly([
+          "businessId", "businessName", "requestedCategory", "status", "requestedAt"
+        ]);
       // Only platform admins can approve/reject
       allow update: if isPlatformAdmin();
       allow delete: if isPlatformAdmin();
@@ -223,7 +242,7 @@ service cloud.firestore {
     match /businesses/{businessId} {
       // Public read for published businesses, members, owner, or admin
       allow read: if resource.data.isPublished == true ||
-        resource.data.ownerUid == uid() ||
+        (isAuthenticated() && resource.data.ownerUid == uid()) ||
         isMember(businessId) ||
         isPlatformAdmin();
       // Business creation is server-only so the three-store limit and approval
@@ -250,31 +269,31 @@ service cloud.firestore {
 
       // Services (public read for storefront)
       match /services/{serviceId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
       // Service Categories (public read, owner/manager write)
       match /serviceCategories/{categoryId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
       }
 
       // Staff (public read for storefront)
       match /staff/{staffId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
       // Working Hours (public read for availability)
       match /workingHours/{hourId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
       }
 
       // Special Days (holidays, leaves, custom)
       match /specialDays/{dayId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
@@ -284,7 +303,10 @@ service cloud.firestore {
           isPlatformAdmin() ||
           (isAuthenticated() && resource.data.customerId == uid());
         allow create: if false; // Only via Cloud Function
-        allow update: if canOperate(businessId) || isPlatformAdmin();
+        allow update: if isPlatformAdmin() ||
+          (canOperate(businessId) &&
+           request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["status", "paymentStatus", "updatedAt"]));
         allow delete: if false;
       }
 
@@ -294,18 +316,14 @@ service cloud.firestore {
         allow write: if canOperate(businessId) || isPlatformAdmin();
       }
 
-      // Reviews — anyone can create one (no login required, name-only);
-      // pending/rejected reviews stay hidden until the owner or admin approves them.
+      // Reviews are created and moderated by callable Cloud Functions.
       match /reviews/{reviewId} {
         allow read: if resource.data.isVisible == true ||
           canManage(businessId) || isPlatformAdmin();
-        allow create: if request.resource.data.status == "pending" &&
-          request.resource.data.isVisible == false &&
-          request.resource.data.customerName is string &&
-          request.resource.data.customerName.size() > 0 &&
-          request.resource.data.rating is number &&
-          request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
-        allow update: if canManage(businessId) || isPlatformAdmin();
+        allow create: if false;
+        allow update: if canManage(businessId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["ownerReply", "ownerReplyAt", "updatedAt"]);
         allow delete: if isPlatformAdmin();
       }
 
@@ -323,7 +341,7 @@ service cloud.firestore {
 
       // Branches
       match /branches/{branchId} {
-        allow read: if true;
+        allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
         allow write: if canManage(businessId) || isPlatformAdmin();
       }
     }

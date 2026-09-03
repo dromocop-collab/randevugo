@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { AuthProvider } from "@/features/auth/auth-context";
 import { BusinessProvider } from "@/features/businesses/business-context";
 import { ThemeProvider } from "@/components/layout/theme-provider";
@@ -10,8 +10,13 @@ import { MaintenanceGate } from "@/components/layout/maintenance-gate";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { AnalyticsScripts } from "@/components/layout/analytics-scripts";
 import { BrandCursor } from "@/components/ui/brand-cursor";
+import { initializeFirebaseAppCheck } from "@/lib/firebase/app-check";
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    initializeFirebaseAppCheck();
+  }, []);
+
   return (
     <ThemeProvider>
       <AuthProvider>

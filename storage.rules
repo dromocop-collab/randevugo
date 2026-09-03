@@ -28,11 +28,10 @@ service firebase.storage {
       allow write: if isBusinessMember(businessId) && imageUpload();
     }
 
-    // Review images — anyone can upload (reviews require no login, but are
-    // moderated by the business owner before becoming publicly visible)
-    match /businesses/{businessId}/public/reviews/{fileName} {
+    // Review images are scoped to the authenticated reviewer.
+    match /businesses/{businessId}/public/reviews/{uid}/{fileName} {
       allow read: if true;
-      allow write: if imageUpload();
+      allow write: if signedIn() && request.auth.uid == uid && imageUpload();
     }
 
     match /businesses/{businessId}/private/{allPaths=**} {
