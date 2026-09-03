@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 
 export interface PlatformPlan {
@@ -38,11 +38,13 @@ export async function listPlatformPlans(): Promise<PlatformPlan[]> {
 }
 
 export async function savePlatformPlan(plan: PlatformPlan): Promise<void> {
-  await setDoc(doc(getDb(), "platformPlans", plan.id.toUpperCase()), {
+  const planRef = doc(getDb(), "platformPlans", plan.id.toUpperCase());
+  const existing = await getDoc(planRef);
+  await setDoc(planRef, {
     ...plan,
     id: plan.id.toUpperCase(),
     updatedAt: serverTimestamp(),
-    createdAt: serverTimestamp(),
+    ...(!existing.exists() ? { createdAt: serverTimestamp() } : {}),
   }, { merge: true });
 }
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { collection, doc, getDoc, getDocs, type DocumentData } from "firebase/firestore";
-import { BadgeCheck, CircleAlert, Plus, ReceiptText, RefreshCw, Save, Store, UsersRound, WalletCards } from "lucide-react";
+import { BadgeCheck, CircleAlert, Copy, PencilLine, Plus, ReceiptText, RefreshCw, Save, Store, Trash2, UsersRound, WalletCards, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,8 +57,30 @@ export default function SuperAdminSubscriptionsPage() {
   const emptyPlan = (): PlatformPlan => ({ ...DEFAULT_PLAN, features: [...DEFAULT_PLAN.features] });
   const [editing, setEditing] = useState<PlatformPlan>(emptyPlan);
   const [busy, setBusy] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<PlatformPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadWarning, setLoadWarning] = useState("");
+  const editorRef = useRef<HTMLFormElement>(null);
+
+  function focusEditor() {
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => editorRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 450);
+    });
+  }
+
+  function startNewPlan(source?: PlatformPlan) {
+    setEditingPlanId(null);
+    setEditing(source ? { ...source, id: `${source.id}_KOPYA`, label: `${source.label} Kopya`, isRecommended: false, features: [...source.features] } : { ...emptyPlan(), id: "", label: "", isRecommended: false });
+    focusEditor();
+  }
+
+  function startEditing(plan: PlatformPlan) {
+    setEditingPlanId(plan.id);
+    setEditing({ ...plan, features: [...plan.features] });
+    focusEditor();
+  }
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -77,9 +99,29 @@ export default function SuperAdminSubscriptionsPage() {
   }, [reload]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true);
-    try { await savePlatformPlan(editing); await reload(); toast.success("Paket kaydedildi."); }
+    event.preventDefault();
+    if (!Number.isFinite(editing.yearlyPrice) || !Number.isFinite(editing.monthlyPrice) || editing.yearlyPrice < 0 || editing.monthlyPrice < 0) { toast.error("Fiyatlar sıfır veya daha büyük olmalıdır."); return; }
+    if (!Number.isInteger(editing.maxStores) || editing.maxStores < 1 || editing.maxStores > 3) { toast.error("Mağaza limiti 1–3 arasında olmalıdır."); return; }
+    if (!Number.isInteger(editing.maxStaff) || editing.maxStaff < 1) { toast.error("Çalışan limiti en az 1 olmalıdır."); return; }
+    if (editing.features.length === 0) { toast.error("Pakete en az bir özellik ekleyin."); return; }
+    setBusy(true);
+    try { await savePlatformPlan({ ...editing, id: editing.id.trim(), label: editing.label.trim(), description: editing.description.trim() }); setEditingPlanId(editing.id); await reload(); toast.success(editingPlanId ? "Paket değişiklikleri kaydedildi." : "Yeni paket oluşturuldu."); }
     catch (error) { toast.error((error as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmDeletePlan() {
+    if (!deleteCandidate) return;
+    const assignedCount = subscriptions.filter((item) => item.plan === deleteCandidate.id).length;
+    if (assignedCount > 0) { toast.error(`Bu paket ${assignedCount} abonelikte kullanılıyor. Önce abonelikleri başka pakete taşıyın.`); return; }
+    setBusy(true);
+    try {
+      await removePlatformPlan(deleteCandidate.id);
+      setDeleteCandidate(null);
+      if (editingPlanId === deleteCandidate.id) startNewPlan();
+      await reload();
+      toast.success("Paket silindi.");
+    } catch (error) { toast.error((error as Error).message); }
     finally { setBusy(false); }
   }
 
@@ -87,7 +129,7 @@ export default function SuperAdminSubscriptionsPage() {
     <div className="space-y-5">
       <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(125deg,#081923,#0b4050_58%,#0e7490)] px-6 py-7 text-white shadow-xl shadow-cyan-950/15 sm:px-8">
         <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full border border-cyan-200/15 bg-cyan-200/5" />
-        <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-[.18em] text-cyan-200"><WalletCards size={14}/> GELİR KONTROL MERKEZİ</span><h1 className="mt-4 text-3xl font-semibold tracking-tight">Paketleri, fiyatları ve kapasiteyi yönet.</h1><p className="mt-2 max-w-2xl text-sm text-cyan-50/65">Aylık/yıllık fiyatlandırmayı, deneme süresini, mağaza ve ekip limitlerini canlı olarak yapılandır.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void reload()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"><RefreshCw size={17} className={loading ? "animate-spin" : ""}/> Yenile</button><button type="button" onClick={() => setEditing(emptyPlan())} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-bold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-200"><Plus size={17}/> Yeni paket</button></div></div>
+        <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-[.18em] text-cyan-200"><WalletCards size={14}/> GELİR KONTROL MERKEZİ</span><h1 className="mt-4 text-3xl font-semibold tracking-tight">Paketleri, fiyatları ve kapasiteyi yönet.</h1><p className="mt-2 max-w-2xl text-sm text-cyan-50/65">Aylık/yıllık fiyatlandırmayı, deneme süresini, mağaza ve ekip limitlerini canlı olarak yapılandır.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void reload()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"><RefreshCw size={17} className={loading ? "animate-spin" : ""}/> Yenile</button><button type="button" onClick={() => startNewPlan()} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-bold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-200"><Plus size={17}/> Yeni paket</button></div></div>
       </section>
 
       {loadWarning && <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><CircleAlert size={17}/>{loadWarning}</span><button type="button" onClick={() => void reload()} className="shrink-0 rounded-xl bg-amber-900 px-3 py-2 text-xs font-bold text-white">Yeniden dene</button></div>}
@@ -110,9 +152,10 @@ export default function SuperAdminSubscriptionsPage() {
 
       <Card title="Dinamik Paket Yönetimi" description="Paketleri oluştur, fiyat ve mağaza/ekip limitlerini yönet">
         <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
-          <form onSubmit={submit} className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+          <form ref={editorRef} onSubmit={submit} className={`space-y-3 rounded-2xl border bg-[var(--surface-2)] p-4 transition-all duration-300 ${editingPlanId ? "border-cyan-400 shadow-lg shadow-cyan-950/10 ring-4 ring-cyan-500/5" : "border-[var(--border)]"}`}>
+            <div className="flex items-center justify-between gap-3"><div><span className="text-[10px] font-black tracking-[.16em] text-cyan-700">{editingPlanId ? "DÜZENLEME MODU" : "YENİ PAKET"}</span><h3 className="mt-1 font-bold text-[var(--text-1)]">{editingPlanId ? `${editing.label} paketini düzenle` : "Yeni paket oluştur"}</h3></div>{editingPlanId && <button type="button" onClick={() => startNewPlan()} className="inline-flex items-center gap-1 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold text-[var(--text-2)] hover:bg-white"><X size={14}/> İptal</button>}</div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input label="Paket kodu" value={editing.id} onChange={(event) => setEditing({ ...editing, id: event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })} required />
+              <Input label="Paket kodu" value={editing.id} disabled={Boolean(editingPlanId)} title={editingPlanId ? "Mevcut paketin kodu değiştirilemez" : undefined} onChange={(event) => setEditing({ ...editing, id: event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })} required />
               <Input label="Görünen ad" value={editing.label} onChange={(event) => setEditing({ ...editing, label: event.target.value })} required />
               <Input label="Yıllık fiyat (₺)" type="number" value={editing.yearlyPrice} onChange={(event) => setEditing({ ...editing, yearlyPrice: Number(event.target.value) })} min={0} />
               <Input label="Aylık fiyat (₺)" type="number" value={editing.monthlyPrice} onChange={(event) => setEditing({ ...editing, monthlyPrice: Number(event.target.value) })} min={0} />
@@ -124,12 +167,12 @@ export default function SuperAdminSubscriptionsPage() {
             <Input label="Paket açıklaması" value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} />
             <label className="block space-y-2 text-sm text-[var(--text-2)]"><span>Özellikler (her satıra bir özellik)</span><textarea rows={5} value={editing.features.join("\n")} onChange={(event) => setEditing({ ...editing, features: event.target.value.split("\n").map((row) => row.trim()).filter(Boolean) })} className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--text-1)] outline-none focus:border-cyan-500" /></label>
             <div className="grid gap-2 sm:grid-cols-2"><label className="flex items-center gap-2 rounded-xl border border-[var(--border)] p-3 text-sm text-[var(--text-2)]"><input type="checkbox" checked={editing.isActive} onChange={(event) => setEditing({ ...editing, isActive: event.target.checked })} /> Satışa ve atamaya açık</label><label className="flex items-center gap-2 rounded-xl border border-[var(--border)] p-3 text-sm text-[var(--text-2)]"><input type="checkbox" checked={editing.isRecommended} onChange={(event) => setEditing({ ...editing, isRecommended: event.target.checked })} /> Önerilen paket rozeti</label></div>
-            <Button type="submit" disabled={busy || !editing.id || !editing.label}>{busy ? "Kaydediliyor…" : <><Save size={16}/> Paketi kaydet</>}</Button>
+            <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || !editing.id || !editing.label}>{busy ? "Kaydediliyor…" : <><Save size={16}/> {editingPlanId ? "Değişiklikleri kaydet" : "Paketi oluştur"}</>}</Button>{editingPlanId && <Button type="button" variant="secondary" onClick={() => startNewPlan(editing)}><Copy size={15}/> Kopyasını oluştur</Button>}</div>
           </form>
           <div className="space-y-3">
             {plans.length === 0 ? <p className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--text-3)]">Henüz dinamik paket yok. Varsayılan paketi kaydederek başla.</p> : plans.map((plan) => <article key={plan.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
               <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-[var(--text-1)]">{plan.label} <small className="text-[var(--text-3)]">{plan.id}</small> {plan.isRecommended && <span className="ml-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[9px] text-cyan-700">ÖNERİLEN</span>}</p><p className="mt-1 text-xs text-[var(--text-3)]">{plan.description}</p><p className="mt-2 text-sm font-semibold text-[var(--text-2)]">{plan.monthlyPrice.toLocaleString("tr-TR")} {plan.currency}/ay · {plan.yearlyPrice.toLocaleString("tr-TR")} {plan.currency}/yıl</p><p className="mt-1 text-xs text-[var(--text-3)]">{plan.trialDays} gün deneme · {plan.maxStores} mağaza · {plan.maxStaff} çalışan · {plan.features.length} özellik</p></div><span className={`rounded-full px-2 py-1 text-xs ${plan.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{plan.isActive ? "Aktif" : "Kapalı"}</span></div>
-              <div className="mt-3 flex gap-2"><Button variant="secondary" className="text-xs" onClick={() => setEditing(plan)}>Düzenle</Button><Button variant="danger" className="text-xs" onClick={async () => { if (!confirm(`${plan.label} paketi silinsin mi?`)) return; await removePlatformPlan(plan.id); await reload(); }}>Sil</Button></div>
+              <div className="mt-3 flex gap-2"><Button type="button" variant="secondary" className="text-xs" onClick={() => startEditing(plan)}><PencilLine size={14}/> Düzenle</Button><Button type="button" variant="danger" className="text-xs" onClick={() => setDeleteCandidate(plan)}><Trash2 size={14}/> Sil</Button></div>
             </article>)}
           </div>
         </div>
@@ -189,6 +232,7 @@ export default function SuperAdminSubscriptionsPage() {
           </Card>
         </div>
       </Card>
+      {deleteCandidate && <div className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={() => setDeleteCandidate(null)}><section role="dialog" aria-modal="true" aria-labelledby="delete-plan-title" onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-white/15 bg-white p-6 shadow-2xl"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600"><Trash2 size={21}/></div><h2 id="delete-plan-title" className="mt-4 text-xl font-bold text-slate-950">{deleteCandidate.label} silinsin mi?</h2><p className="mt-2 text-sm leading-6 text-slate-500">Bu işlem paket tanımını kalıcı olarak kaldırır. Aktif aboneliğe atanmış paketlerin silinmesine izin verilmez.</p>{subscriptions.some((item) => item.plan === deleteCandidate.id) && <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800"><CircleAlert size={15}/> {subscriptions.filter((item) => item.plan === deleteCandidate.id).length} abonelik bu paketi kullanıyor</div>}<div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setDeleteCandidate(null)}>Vazgeç</Button><Button type="button" variant="danger" disabled={busy || subscriptions.some((item) => item.plan === deleteCandidate.id)} onClick={() => void confirmDeletePlan()}><Trash2 size={15}/> Kalıcı olarak sil</Button></div></section></div>}
     </div>
   );
 }
