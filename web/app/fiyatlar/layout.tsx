@@ -5,7 +5,7 @@ const SITE_URL = "https://seninrandevun.com";
 
 export const metadata: Metadata = {
   title: "Online Randevu Sistemi Fiyatları | İşletme Planları",
-  description: `SeninRandevun online randevu sistemi yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon özellikleriyle işletmenizi büyütün. 14 gün ücretsiz deneyin.`,
+  description: `Yeni işletmelere SeninRandevun ilk 12 ay ücretsiz. Sonrasında yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
   keywords: [
     "online randevu sistemi fiyatları",
     "randevu yazılımı fiyat",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `${SITE_URL}/fiyatlar` },
   openGraph: {
     title: "Online Randevu Sistemi Fiyatları | SeninRandevun",
-    description: `Tüm özellikler dahil tek plan — yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. 14 gün ücretsiz deneyin.`,
+    description: `Yeni işletmelere ilk 12 ay ücretsiz; sonrasında yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Tüm özellikler dahil.`,
     url: `${SITE_URL}/fiyatlar`,
     type: "website",
   },
@@ -55,8 +55,8 @@ const pricingJsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "Deneme süresi nasıl çalışır?",
-          acceptedAnswer: { "@type": "Answer", text: "14 gün boyunca tüm özellikleri ücretsiz kullanırsınız. Kart bilgisi istenmez." },
+          name: "İlk yıl ücretsiz kampanyası nasıl çalışır?",
+          acceptedAnswer: { "@type": "Answer", text: "Yeni işletme kayıtları tüm özellikleri kayıt tarihinden itibaren 12 ay ücretsiz kullanır. Kart bilgisi istenmez." },
         },
         {
           "@type": "Question",

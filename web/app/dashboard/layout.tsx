@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "İşletme Paneli", robots: { index: 
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute loginPath="/isletmeler/giris">
       <DashboardShell>
         <RequireBusiness>{children}</RequireBusiness>
       </DashboardShell>

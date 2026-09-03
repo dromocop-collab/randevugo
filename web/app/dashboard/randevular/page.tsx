@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { toast } from "sonner";
-import { BadgeCheck, Banknote, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, CircleX, Clock3, Mail, MapPin, Phone, Search, Sparkles, Timer, UserRound, UserX } from "lucide-react";
+import { BadgeCheck, Banknote, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, CircleX, Clock3, Download, Mail, MapPin, Phone, Search, Sparkles, Timer, UserRound, UserX } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import {
   listAppointments,
@@ -49,6 +49,7 @@ const STATUS_CONFIG: Record<
 };
 
 type FilterTab = "all" | AppointmentStatus;
+type DateScope = "all" | "today" | "upcoming" | "past";
 
 const FILTER_TABS: { key: FilterTab; label: string; icon: ComponentType<{size?:number}> }[] = [
   { key: "all", label: "Tümü", icon: CalendarDays },
@@ -67,6 +68,7 @@ export default function AppointmentsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [dateScope, setDateScope] = useState<DateScope>("all");
 
   useEffect(() => {
     if (!businessId) return;
@@ -92,15 +94,44 @@ export default function AppointmentsPage() {
     };
   }, [businessId]);
 
+  useEffect(() => {
+    if (appointments.length === 0) return;
+    const requestedId = new URLSearchParams(window.location.search).get("appointment");
+    if (requestedId && appointments.some((item) => item.id === requestedId)) {
+      queueMicrotask(() => setExpandedId(requestedId));
+    }
+  }, [appointments]);
+
   const filtered = useMemo(
     () =>
       appointments.filter((a) => {
         if (activeTab !== "all" && a.status !== activeTab) return false;
+        const appointmentDate = new Date(a.startAt);
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        if (dateScope === "today" && !(appointmentDate >= startOfToday && appointmentDate < startOfTomorrow)) return false;
+        if (dateScope === "upcoming" && appointmentDate < now) return false;
+        if (dateScope === "past" && appointmentDate >= now) return false;
         const needle=search.trim().toLocaleLowerCase("tr-TR");
         return !needle||`${a.customerName} ${a.customerPhone??""} ${a.serviceName??""} ${a.staffName??""}`.toLocaleLowerCase("tr-TR").includes(needle);
       }),
-    [appointments, activeTab, search]
+    [appointments, activeTab, dateScope, search]
   );
+
+  function exportAppointments() {
+    const rows = [
+      ["Tarih", "Saat", "Müşteri", "Telefon", "E-posta", "Hizmet", "Çalışan", "Durum", "Ödeme", "Tutar"],
+      ...filtered.map((item) => [formatDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", item.serviceName ?? "", item.staffName ?? "", STATUS_CONFIG[item.status].label, item.paymentStatus, String(item.servicePrice ?? 0)]),
+    ];
+    const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `randevular-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Stats
   const stats = useMemo(() => {
@@ -226,6 +257,11 @@ export default function AppointmentsPage() {
             </button>
           );
         })}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2"><CalendarDays size={16} className="text-[#0b6b45]"/><label htmlFor="appointment-date-scope" className="text-xs font-bold text-[var(--text-2)]">Tarih aralığı</label><select id="appointment-date-scope" value={dateScope} onChange={(event) => setDateScope(event.target.value as DateScope)} className="rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2 text-xs font-semibold text-[var(--text-1)] outline-none focus:border-[#0b6b45]"><option value="all">Tüm zamanlar</option><option value="today">Bugün</option><option value="upcoming">Yaklaşan</option><option value="past">Geçmiş</option></select><span className="text-[10px] text-[var(--text-3)]">{filtered.length} sonuç</span></div>
+        <button type="button" onClick={exportAppointments} disabled={filtered.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b6b45] px-4 py-2.5 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"><Download size={15}/> CSV dışa aktar</button>
       </div>
 
       {/* ━━━ Appointment Cards ━━━ */}
@@ -472,6 +508,8 @@ export default function AppointmentsPage() {
     </div>
   );
 }
+
+function csvCell(value: string) { return `"${value.replaceAll('"', '""')}"`; }
 
 function DetailItem({
   icon,

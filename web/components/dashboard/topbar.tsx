@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { CirclePlus, Clock3, Compass, ExternalLink, LogOut, Store, UserRound } from "lucide-react";
+import { NotificationCenter } from "@/components/dashboard/notification-center";
 
 export function DashboardTopBar() {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ export function DashboardTopBar() {
           )}
           {businesses.length < 3 && <Link href="/onboarding" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni mağaza</span></Link>}
           {activeBusiness?.status === "pending_review" && <span className="command-link command-pending text-amber-700"><Clock3 size={16} /><span>Süper admin onayı bekleniyor</span></span>}
+          <NotificationCenter key={businessId} businessId={businessId}/>
           <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
           {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="command-link command-link-store"><Store size={17} /><span>Mağazamı gör</span><ExternalLink size={14} /></Link>}
           <span className="command-account"><i><UserRound size={15} /></i><span><small>Aktif hesap</small><b>{user?.email ?? ""}</b></span></span>

@@ -8,7 +8,7 @@ import { collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, serverTim
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { updateProfile } from "firebase/auth";
 import { toast } from "sonner";
-import { ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, Check, ChevronRight, CircleUserRound, Clock3, Compass, ExternalLink, History, LayoutDashboard, LoaderCircle, LogOut, MapPin, MessageCircleMore, Search, Settings2, Sparkles, Star, Store, TicketCheck, UserRound, X } from "lucide-react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Compass, ExternalLink, History, LayoutDashboard, LoaderCircle, LogOut, MapPin, MessageCircleMore, Search, Settings2, Sparkles, Star, Store, TicketCheck, UserRound, X } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -33,6 +33,7 @@ export default function CustomerAccountPage() {
   const router = useRouter();
   const [appointments,setAppointments] = useState<CustomerAppointment[]>([]);
   const [loading,setLoading] = useState(true);
+  const [reloadKey,setReloadKey] = useState(0);
   const [loadError,setLoadError] = useState("");
   const [tab,setTab] = useState<AccountTab>("overview");
   const [filter,setFilter] = useState<AppointmentFilter>("all");
@@ -49,6 +50,7 @@ export default function CustomerAccountPage() {
   useEffect(() => {
     if (authStatus !== "authenticated" || !user) return;
     let active = true;
+    queueMicrotask(() => { if (active) { setLoading(true); setLoadError(""); } });
     const db = getDb();
     (async () => {
       try {
@@ -71,7 +73,7 @@ export default function CustomerAccountPage() {
       finally { if(active)setLoading(false); }
     })();
     return()=>{active=false};
-  },[authStatus,user]);
+  },[authStatus,user,reloadKey]);
 
   const upcoming = appointments.filter(item=>["pending","confirmed"].includes(item.status)&&new Date(item.startAt).getTime()>now).sort((a,b)=>+new Date(a.startAt)-+new Date(b.startAt));
   const completed = appointments.filter(item=>item.status==="completed"||(["pending","confirmed"].includes(item.status)&&new Date(item.startAt).getTime()<=now));
@@ -117,7 +119,7 @@ export default function CustomerAccountPage() {
           {tab==="appointments"&&<>
             <div className="account-section-head"><div><span>RANDEVULARIM</span><h2>Tüm planınız, tek akışta.</h2></div><Link href="/kesfet">+ Yeni randevu</Link></div>
             <div className="account-appointment-toolbar"><label><Search size={17}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="İşletme, hizmet veya çalışan ara…"/></label><div>{([['all','Tümü'],['upcoming','Yaklaşan'],['history','Geçmiş'],['cancelled','İptal']] as const).map(([key,label])=><button key={key} className={filter===key?"active":""} onClick={()=>setFilter(key)}>{label}</button>)}</div></div>
-            {loading?<div className="account-loading-list">{[1,2,3].map(x=><i key={x}/>)}</div>:loadError?<div className="account-error"><X/><h3>Randevular yüklenemedi.</h3><p>{loadError}</p></div>:filtered.length?<div className="account-appointment-list">{filtered.map(item=><AppointmentRow key={item.id} item={item} now={now} onCancel={()=>setCancelling(item)} onReview={()=>setReviewing(item)}/>)}</div>:<div className="account-empty-premium"><div><Search size={31}/></div><h3>Bu görünümde randevu bulunamadı.</h3><p>Filtreyi temizleyebilir veya yeni bir işletme keşfedebilirsiniz.</p><button onClick={()=>{setFilter("all");setSearch("")}}>Filtreleri temizle</button></div>}
+            {loading?<div className="account-loading-list">{[1,2,3].map(x=><i key={x}/>)}</div>:loadError?<div className="account-error"><X/><h3>Randevular yüklenemedi.</h3><p>{loadError}</p><button type="button" onClick={()=>setReloadKey(value=>value+1)}>Yeniden dene</button></div>:filtered.length?<div className="account-appointment-list">{filtered.map(item=><AppointmentRow key={item.id} item={item} now={now} onCancel={()=>setCancelling(item)} onReview={()=>setReviewing(item)}/>)}</div>:<div className="account-empty-premium"><div><Search size={31}/></div><h3>Bu görünümde randevu bulunamadı.</h3><p>Filtreyi temizleyebilir veya yeni bir işletme keşfedebilirsiniz.</p><button type="button" onClick={()=>{setFilter("all");setSearch("")}}>Filtreleri temizle</button></div>}
           </>}
 
           {tab==="profile"&&<>
@@ -135,7 +137,8 @@ export default function CustomerAccountPage() {
 
 function AppointmentRow({item,now,onCancel,onReview}:{item:CustomerAppointment;now:number;onCancel:()=>void;onReview:()=>void}) {
   const status=statuses[item.status]??{label:item.status,icon:Clock3}; const StatusIcon=status.icon; const future=new Date(item.startAt).getTime()>now; const active=["pending","confirmed"].includes(item.status)&&future; const href=item.businessSlug?`/isletme/${item.businessSlug}`:"/kesfet";
-  return <article className="customer-appointment-card"><div className="appointment-business-logo">{item.businessLogo?<Image src={item.businessLogo} alt="" fill sizes="54px"/>:<Store size={23}/>}</div><div className="appointment-main"><div><span className={`appointment-status status-${item.status}`}><StatusIcon size={13}/>{status.label}</span><small>{formatDate(item.startAt)}</small></div><h3>{item.businessName}</h3><p>{item.serviceName}<i/> {item.staffName}</p><span><MapPin size={13}/>{item.businessCity||"İşletme konumu"}</span></div><div className="appointment-card-actions">{item.publicToken&&<Link href={`/randevu/${item.publicToken}`}>Detay <ChevronRight size={14}/></Link>}<Link href={href}>{active?"Mağazayı aç":"Tekrar randevu"}</Link>{active&&<button onClick={onCancel}>İptal et</button>}{item.status==="completed"&&<button className="review" onClick={onReview}><Star size={13}/> Yorum yap</button>}</div></article>;
+  return <article className="customer-appointment-card"><div className="appointment-business-logo">{item.businessLogo?<Image src={item.businessLogo} alt="" fill sizes="54px"/>:<Store size={23}/>}</div><div className="appointment-main"><div><span className={`appointment-status status-${item.status}`}><StatusIcon size={13}/>{status.label}</span><small>{formatDate(item.startAt)}</small></div><h3>{item.businessName}</h3><p>{item.serviceName}<i/> {item.staffName}</p><span><MapPin size={13}/>{item.businessCity||"İşletme konumu"}</span></div><div className="appointment-card-actions">{item.publicToken&&<Link href={`/randevu/${item.publicToken}`}>Detay <ChevronRight size={14}/></Link>}<Link href={href}>{active?"Mağazayı aç":"Tekrar randevu"}</Link>{active&&<button type="button" onClick={()=>downloadCalendarEvent(item)}><CalendarPlus size={13}/> Takvime ekle</button>}{active&&<button onClick={onCancel}>İptal et</button>}{item.status==="completed"&&<button className="review" onClick={onReview}><Star size={13}/> Yorum yap</button>}</div></article>;
 }
 
 function formatDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"Tarih bilgisi yok":date.toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})+" · "+date.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
+function downloadCalendarEvent(item:CustomerAppointment){const stamp=(value:string)=>new Date(value).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");const escape=(value:string)=>value.replace(/\\/g,"\\\\").replace(/,/g,"\\,").replace(/;/g,"\\;").replace(/\n/g,"\\n");const content=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//SeninRandevun//TR","BEGIN:VEVENT",`UID:${item.id}@seninrandevun.com`,`DTSTAMP:${stamp(new Date().toISOString())}`,`DTSTART:${stamp(item.startAt)}`,`DTEND:${stamp(item.endAt)}`,`SUMMARY:${escape(`${item.serviceName} · ${item.businessName}`)}`,`DESCRIPTION:${escape(`Çalışan: ${item.staffName}`)}`,`LOCATION:${escape(item.businessCity)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");const url=URL.createObjectURL(new Blob([content],{type:"text/calendar;charset=utf-8"}));const anchor=document.createElement("a");anchor.href=url;anchor.download=`randevu-${item.id}.ics`;anchor.click();URL.revokeObjectURL(url)}

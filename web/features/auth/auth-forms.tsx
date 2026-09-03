@@ -136,7 +136,8 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
       await loginWithEmailPassword(email, password);
       toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
       const normalizedEmail = email.trim().toLowerCase();
-      router.push(normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : accountType === "customer" ? "/hesabim" : "/dashboard");
+      const fallback = normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : accountType === "customer" ? "/hesabim" : "/dashboard";
+      router.push(getSafeNextPath(fallback));
     } catch (error) {
       toast.error(mapAuthError(error));
     } finally {
@@ -222,6 +223,12 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
       </div>
     </div>
   );
+}
+
+function getSafeNextPath(fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : fallback;
 }
 
 /* ─────────────────── REGISTER ─────────────────── */

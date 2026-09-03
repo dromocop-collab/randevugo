@@ -251,7 +251,10 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         }
         transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
             businessId: businessRef.id, userId: uid, plan: "RANDEVUGO", status: "trialing",
-            trialDays: 14, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            trialDays: 365,
+            trialStartedAt: new Date().toISOString(),
+            trialEndsAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            renewalEnabled: false, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });
     const needsApproval = position > 1;

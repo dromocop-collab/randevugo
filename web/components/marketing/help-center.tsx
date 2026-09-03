@@ -22,7 +22,7 @@ const businessTopics: HelpTopic[] = [
   { icon: CalendarCheck, title: "Takvim ve randevular", description: "Günlük akışı, durumları ve müsaitliği yönetin.", articles: ["Takvim görünümünü kullanma", "Manuel randevu ekleme", "İptal ve gelmedi durumları"] },
   { icon: UsersRound, title: "Ekip ve hizmetler", description: "Çalışan, yetki, süre ve fiyat düzeninizi kurun.", articles: ["Çalışan ve rol ekleme", "Hizmet kataloğu oluşturma", "Çalışana hizmet atama"] },
   { icon: MessagesSquare, title: "Müşteri ve iletişim", description: "CRM kayıtlarını ve otomatik iletişimi güçlendirin.", articles: ["Müşteri kartlarını yönetme", "Hatırlatma akışları", "Yorumlara profesyonel yanıt verme"] },
-  { icon: CreditCard, title: "Plan ve abonelik", description: "Deneme, fatura ve abonelik detaylarını öğrenin.", articles: ["14 günlük deneme nasıl çalışır?", "Abonelik ve ödeme adımları", "Plan durumunu görüntüleme"] },
+  { icon: CreditCard, title: "Plan ve abonelik", description: "Ücretsiz dönem, fatura ve abonelik detaylarını öğrenin.", articles: ["İlk yıl ücretsiz kampanyası nasıl çalışır?", "Abonelik ve ödeme adımları", "Plan durumunu görüntüleme"] },
   { icon: ChartNoAxesCombined, title: "Analitik ve büyüme", description: "Raporları okuyup daha güçlü kararlar alın.", articles: ["Doluluk oranını yorumlama", "Gelir ve hizmet performansı", "Müşteri sadakati metrikleri"] },
 ];
 

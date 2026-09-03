@@ -67,7 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Only redirect on protected paths
     if (PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p))) {
-      router.replace(pathname.startsWith("/hesabim") ? "/musteri/giris" : "/isletmeler/giris");
+      const loginPath = pathname.startsWith("/hesabim") ? "/musteri/giris" : "/isletmeler/giris";
+      const requestedPath = `${pathname}${window.location.search}`;
+      router.replace(`${loginPath}?next=${encodeURIComponent(requestedPath)}`);
     }
   }, [pathname, router, status]);
 

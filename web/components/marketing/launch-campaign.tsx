@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Gift, Sparkles, X } from "lucide-react";
+import { ArrowRight, Diamond, Gift, Sparkles, X } from "lucide-react";
 
 const CAMPAIGN_STORAGE_KEY = "seninrandevun:first-year-free:seen:v1";
-const announcement = "YENİ KAMPANYA · YENİ İŞLETMELERE İLK 12 AY ÜCRETSİZ · KREDİ KARTI GEREKMEZ";
+const announcement = "İlk yıl bizden · Yeni işletmelere özel";
 
 export function LaunchCampaign() {
   const [open, setOpen] = useState(false);
@@ -32,7 +32,14 @@ export function LaunchCampaign() {
     <>
       <Link href="/isletmeler/kayit" className="campaign-ticker" aria-label="Yeni işletmelere ilk yıl ücretsiz kampanyasını incele">
         <span className="campaign-ticker-track" aria-hidden="true">
-          {[0, 1, 2, 3].map((item) => <span key={item}><Sparkles size={13} /> {announcement}</span>)}
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <span key={item}>
+              <b><Gift size={12} /> 12 AY HEDİYE</b>
+              <strong>{announcement}</strong>
+              <Diamond size={6} />
+              <small>Kredi kartı gerekmez</small>
+            </span>
+          ))}
         </span>
         <span className="sr-only">{announcement}</span>
       </Link>

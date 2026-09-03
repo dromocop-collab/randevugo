@@ -14,4 +14,6 @@ export interface NotificationItem extends EntityBase {
   body: string;
   isRead: boolean;
   relatedAppointmentId?: string;
+  appointmentId?: string;
+  ticketId?: string;
 }

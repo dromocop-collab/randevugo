@@ -12,6 +12,8 @@ import {
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
+import Link from "next/link";
+import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +28,7 @@ interface BusinessItem {
   plan: string;
   city: string;
   category: string;
+  slug?: string;
   approvalStatus?: string;
   storePosition?: number;
   createdAt?: string;
@@ -58,6 +61,7 @@ export default function SuperAdminBusinessesPage() {
             plan: String(d.plan ?? "RANDEVUGO"),
             city: String(d.city ?? ""),
             category: String(d.category ?? ""),
+            slug: typeof d.slug === "string" ? d.slug : undefined,
             approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
             storePosition: Number(d.storePosition ?? 1),
             createdAt: d.createdAt?.toDate?.()
@@ -91,6 +95,7 @@ export default function SuperAdminBusinessesPage() {
           plan: String(d.plan ?? "FREE"),
           city: String(d.city ?? ""),
           category: String(d.category ?? ""),
+          slug: typeof d.slug === "string" ? d.slug : undefined,
           approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
           storePosition: Number(d.storePosition ?? 1),
           createdAt: d.createdAt?.toDate?.()
@@ -177,8 +182,23 @@ export default function SuperAdminBusinessesPage() {
     BUSINESS: "bg-violet-100 text-violet-700",
   };
 
+  function exportBusinesses() {
+    const rows = [
+      ["İşletme", "Şehir", "Kategori", "Plan", "Durum", "Mağaza sırası", "Oluşturulma", "İşletme ID", "Sahip UID"],
+      ...filtered.map((business) => [business.name, business.city, business.category, business.plan, business.isSuspended ? "Askıda" : business.status, String(business.storePosition ?? ""), business.createdAt ?? "", business.id, business.ownerUid]),
+    ];
+    const csv = "\uFEFF" + rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(";")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `isletmeler-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-4">
+      <section className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(125deg,#111827,#173a46_58%,#155e75)] px-6 py-6 text-white shadow-xl shadow-slate-950/10"><div className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><span className="text-[10px] font-bold tracking-[.18em] text-cyan-200">MAĞAZA OPERASYONU</span><h1 className="mt-3 text-2xl font-semibold">İşletme ağı kontrolü</h1><p className="mt-1 text-sm text-cyan-50/60">Onay, paket, yayın ve risk durumlarını tek merkezden yönetin.</p></div><div className="flex gap-2"><button type="button" onClick={exportBusinesses} disabled={filtered.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold disabled:opacity-40"><Download size={14}/> CSV</button><button type="button" onClick={() => void loadBusinesses()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-60"><RefreshCw size={14} className={loading ? "animate-spin" : ""}/> Yenile</button></div></div></section>
       <Card title="İşletme Yönetimi" description={`Toplam ${businesses.length} işletme`}>
         <div className="mb-4 grid gap-3 md:grid-cols-6">
           <div className="md:col-span-2">
@@ -235,6 +255,7 @@ export default function SuperAdminBusinessesPage() {
                     <p className="text-xs text-[var(--text-3)]">ID: {biz.id}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {biz.slug && <Link href={`/isletme/${biz.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-xs font-bold text-[var(--text-2)] transition hover:text-[var(--accent)]">Mağazayı aç <ExternalLink size={13}/></Link>}
                     {biz.status === "pending_review" && <>
                       <Button className="text-xs" disabled={busyId === biz.id} onClick={() => reviewBusiness(biz.id, "approved")}>Onayla</Button>
                       <Button variant="danger" className="text-xs" disabled={busyId === biz.id} onClick={() => reviewBusiness(biz.id, "rejected")}>Reddet</Button>
