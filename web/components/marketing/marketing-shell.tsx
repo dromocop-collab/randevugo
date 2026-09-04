@@ -24,7 +24,7 @@ export function MarketingHeader() {
     <header className="marketing-header">
       <div className="marketing-nav">
         <Link href="/" className="brand-lockup" aria-label="SeninRandevun ana sayfa">
-          <Image src="/logo.png" alt="" width={38} height={38} className="brand-mark" priority />
+          <Image src="/logo.png" alt="" width={38} height={38} className="brand-mark" />
           <span>Senin<span>Randevun</span></span>
         </Link>
         <nav className="marketing-links" aria-label="Ana menü">
