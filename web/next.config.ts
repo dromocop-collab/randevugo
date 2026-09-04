@@ -10,6 +10,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Keep Next.js tracing inside the web app. Without an explicit root, a
+  // package-lock.json in a parent directory can make Next infer the wrong
+  // workspace and print misleading startup warnings.
+  outputFileTracingRoot: path.resolve(__dirname),
   turbopack: {
     root: path.resolve(__dirname),
   },
