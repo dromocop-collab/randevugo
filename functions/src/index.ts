@@ -216,7 +216,9 @@ export const createBusiness = onCall(
       const reservedCount = Math.max(Number(account.data()?.storeCount ?? 0), owned.size);
       if (reservedCount >= 3) throw new HttpsError("resource-exhausted", "Bir hesap en fazla 3 mağaza açabilir.");
       position = reservedCount + 1;
-      const needsApproval = position > 1;
+      // Every storefront must pass platform review before becoming public.
+      // This includes the account's first store.
+      const needsApproval = true;
       transaction.set(accountRef, {
         ownerUid: uid, storeCount: position, updatedAt: FieldValue.serverTimestamp(),
         createdAt: account.data()?.createdAt ?? FieldValue.serverTimestamp(),
@@ -279,8 +281,7 @@ export const createBusiness = onCall(
         renewalEnabled: false, paymentProvider: "manual", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
     });
-    const needsApproval = position > 1;
-    return { businessId: businessRef.id, status: needsApproval ? "pending_review" : "active", requiresApproval: needsApproval, storePosition: position };
+    return { businessId: businessRef.id, status: "pending_review", requiresApproval: true, storePosition: position };
   }
 );
 

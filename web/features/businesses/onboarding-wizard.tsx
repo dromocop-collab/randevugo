@@ -228,9 +228,7 @@ export function OnboardingWizard() {
       }
 
       setBusinessId(businessId);
-      toast.success(creation.requiresApproval
-        ? `🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`
-        : "🎉 İlk mağazan başarıyla oluşturuldu!");
+      toast.success(`🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`);
       router.push("/dashboard");
     } catch (error) {
       toast.error(mapOnboardingError(error));

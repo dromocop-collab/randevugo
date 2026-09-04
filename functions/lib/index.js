@@ -197,7 +197,9 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         if (reservedCount >= 3)
             throw new https_1.HttpsError("resource-exhausted", "Bir hesap en fazla 3 mağaza açabilir.");
         position = reservedCount + 1;
-        const needsApproval = position > 1;
+        // Every storefront must pass platform review before becoming public.
+        // This includes the account's first store.
+        const needsApproval = true;
         transaction.set(accountRef, {
             ownerUid: uid, storeCount: position, updatedAt: firestore_1.FieldValue.serverTimestamp(),
             createdAt: account.data()?.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
@@ -260,8 +262,7 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             renewalEnabled: false, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });
-    const needsApproval = position > 1;
-    return { businessId: businessRef.id, status: needsApproval ? "pending_review" : "active", requiresApproval: needsApproval, storePosition: position };
+    return { businessId: businessRef.id, status: "pending_review", requiresApproval: true, storePosition: position };
 });
 exports.reviewBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;

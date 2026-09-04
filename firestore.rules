@@ -245,8 +245,8 @@ service cloud.firestore {
         (isAuthenticated() && resource.data.ownerUid == uid()) ||
         isMember(businessId) ||
         isPlatformAdmin();
-      // Business creation is server-only so the three-store limit and approval
-      // workflow cannot be bypassed by a direct client write.
+      // Business creation is server-only so the three-store limit and mandatory
+      // approval workflow cannot be bypassed by a direct client write.
       allow create: if false;
       // Owner or manager can update but cannot change protected fields
       allow update: if isPlatformAdmin() ||
