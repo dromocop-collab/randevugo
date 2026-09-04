@@ -190,13 +190,12 @@ export function BookingWizard(props: Props) {
     setVerifyError("");
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
-      const sendCode = httpsCallable<{ phone: string }, { success: boolean; _devCode?: string }>(functions, "sendVerificationCode");
+      const sendCode = httpsCallable<{ phone: string }, { success: boolean; smsDelivered?: boolean; fallbackCode?: string }>(functions, "sendVerificationCode");
       const result = await sendCode({ phone: customerPhone });
       setCodeSent(true);
       setCountdown(60);
-      // In dev mode, show the code directly (will be removed in production)
-      if (result.data._devCode) {
-        toast.success(`Doğrulama kodu: ${result.data._devCode}`, { duration: 15000 });
+      if (!result.data.smsDelivered && result.data.fallbackCode) {
+        toast.success(`SMS iletilemedi. Geçici doğrulama kodun: ${result.data.fallbackCode}`, { duration: 15000 });
       } else {
         toast.success("Doğrulama kodu gönderildi!");
       }

@@ -1529,12 +1529,6 @@ exports.sendVerificationCode = (0, https_1.onCall)({
     }
     const code = String((0, crypto_1.randomInt)(100000, 1000000));
     const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
-    // localhost'tan canlı Firebase Function çağrıldığında da
-    // test kodunu gösterebilmemiz için:
-    const requestOrigin = String(request.rawRequest.headers.origin ?? "");
-    const isLocalClient = /^http:\/\/localhost(?::\d+)?$/.test(requestOrigin) ||
-        /^http:\/\/127\.0\.0\.1(?::\d+)?$/.test(requestOrigin);
-    const allowDevCode = isEmulator || isLocalClient;
     let mutlucellConfiguration = null;
     let providerMessageId = null;
     let smsDelivered = false;
@@ -1557,50 +1551,44 @@ exports.sendVerificationCode = (0, https_1.onCall)({
                     : "SMS gönderimi başarısız.";
         }
     }
-    /*
-      SMS gönderilemese dahi OTP kaydedilsin,
-      böylece canlıda SMS hatası olduğunda
-      kullanıcı fallback koduyla giriş yapabilsin.
-    */
+    // SMS sağlayıcısı ulaşılamazsa yapılandırılmış kurtarma akışı devreye girer.
+    if (!smsDelivered && !isEmulator && mutlucellConfiguration?.fallbackEnabled === false) {
+        throw new https_1.HttpsError("unavailable", "SMS şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin.");
+    }
     await codeDocRef.set({
         codeHash: otpHash(phone, code),
         phone,
         attempts: 0,
         verified: false,
-        provider: isEmulator
-            ? "emulator"
-            : smsDelivered
-                ? "mutlucell"
-                : "fallback",
+        provider: isEmulator ? "emulator" : smsDelivered ? "mutlucell" : "recovery",
         providerMessageId,
         smsDelivered,
         smsError,
         sentAt: firestore_1.FieldValue.serverTimestamp(),
         expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
     });
-    // SMS başarılı
+    if (isEmulator) {
+        console.log(`[SMS emulator] Verification code created for ${phone}.`);
+        return {
+            success: true,
+            smsDelivered: true,
+            message: "Doğrulama kodu emülatörde oluşturuldu.",
+            _devCode: code,
+        };
+    }
     if (smsDelivered) {
         return {
             success: true,
             smsDelivered: true,
             message: "Doğrulama kodu telefonunuza gönderildi.",
-            // localhost'ta test ederken ayrıca kodu da görebilirsin
-            ...(allowDevCode
-                ? { _devCode: code }
-                : {}),
         };
     }
-    // SMS GÖNDERİLEMEDİ FALLBACK (Lokal veya Canlı)
-    console.warn(`[OTP fallback] SMS gönderilemedi. Test code for ${phone}: ${code}`);
-    if (mutlucellConfiguration?.fallbackEnabled === false) {
-        throw new https_1.HttpsError("unavailable", smsError ?? "SMS gönderilemedi. Lütfen daha sonra tekrar deneyin.");
-    }
+    console.warn(`[OTP recovery] SMS delivery failed for ${phone}; recovery flow enabled.`);
     return {
         success: true,
         smsDelivered: false,
-        fallback: true,
-        message: "SMS gönderilemedi. Test doğrulama kodu oluşturuldu.",
-        _devCode: code,
+        fallbackCode: code,
+        message: "SMS iletilemedi. Geçici doğrulama kodu hazırlandı.",
     };
 });
 exports.verifyPhoneCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
