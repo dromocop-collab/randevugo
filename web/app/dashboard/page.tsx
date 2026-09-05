@@ -14,8 +14,8 @@ import type { Business } from "@/types/business";
 import {
   ArrowUpRight, Building2, CalendarCheck2, CalendarDays, CheckCircle2,
   CircleDollarSign, Clock3, Copy, Eye, FileText, FolderOpen, ImageIcon,
-  Inbox, ListChecks, PartyPopper, Scissors, Settings2,
-  UserRound, UsersRound, XCircle, Zap, type LucideIcon,
+  ArrowRight, BarChart3, CalendarPlus2, Gauge, Inbox, ListChecks, PartyPopper, Rocket, Scissors, Settings2,
+  Sparkles, Target, TrendingUp, UserRound, UsersRound, XCircle, Zap, type LucideIcon,
 } from "lucide-react";
 
 interface DashboardData {
@@ -28,6 +28,11 @@ interface DashboardData {
   staffCount: number;
   todayRevenue: number;
   upcoming: Appointment[];
+  weekRevenue: number;
+  weekAppointments: number;
+  completionRate: number;
+  returningCustomers: number;
+  weeklyActivity: Array<{ label: string; value: number }>;
 }
 
 interface SetupItem {
@@ -40,6 +45,7 @@ interface SetupItem {
 const EMPTY_DATA: DashboardData = {
   todayCount: 0, pending: 0, completed: 0, cancelled: 0,
   customerCount: 0, serviceCount: 0, staffCount: 0, todayRevenue: 0, upcoming: [],
+  weekRevenue: 0, weekAppointments: 0, completionRate: 0, returningCustomers: 0, weeklyActivity: [],
 };
 
 function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
@@ -94,12 +100,27 @@ export default function DashboardHomePage() {
           .filter((a) => a.status === "completed")
           .reduce((sum, a) => sum + (a.servicePrice ?? 0), 0);
 
+        const weekStart = now - 7 * 86_400_000;
+        const weekAppointments = appts.filter((item) => new Date(item.startAt).getTime() >= weekStart);
+        const weekCompleted = weekAppointments.filter((item) => item.status === "completed");
+        const weekRevenue = weekCompleted.reduce((sum, item) => sum + (item.servicePrice ?? 0), 0);
+        const resolved = appts.filter((item) => ["completed", "cancelled", "no_show"].includes(item.status));
+        const completionRate = resolved.length ? Math.round(completed / resolved.length * 100) : 0;
+        const returningCustomers = customers.filter((item) => item.completedAppointments > 1).length;
+        const weeklyActivity = Array.from({ length: 7 }, (_, index) => {
+          const date = new Date(now - (6 - index) * 86_400_000);
+          return {
+            label: date.toLocaleDateString("tr-TR", { weekday: "short" }).slice(0, 3),
+            value: weekAppointments.filter((item) => new Date(item.startAt).toDateString() === date.toDateString()).length,
+          };
+        });
+
         const upcoming = appts
           .filter((a) => (a.status === "confirmed" || a.status === "pending") && new Date(a.startAt).getTime() > now)
           .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
           .slice(0, 5);
 
-        setData({ todayCount: todayAppts.length, pending, completed, cancelled, customerCount: customers.length, serviceCount: services.length, staffCount: staff.length, todayRevenue, upcoming });
+        setData({ todayCount: todayAppts.length, pending, completed, cancelled, customerCount: customers.length, serviceCount: services.length, staffCount: staff.length, todayRevenue, upcoming, weekRevenue, weekAppointments: weekAppointments.length, completionRate, returningCustomers, weeklyActivity });
 
         // Dynamic labels with actual counts
         const items: SetupItem[] = [
@@ -166,12 +187,40 @@ export default function DashboardHomePage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-command-home space-y-6">
       {loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-sm text-rose-600">{loadError}</p>
         </div>
       )}
+
+      <section className="dashboard-ops-hero">
+        <div className="dashboard-ops-orb dashboard-ops-orb-a"/><div className="dashboard-ops-orb dashboard-ops-orb-b"/>
+        <div className="dashboard-ops-main">
+          <div className="dashboard-ops-copy">
+            <span className="dashboard-ops-kicker"><Sparkles size={14}/> BUGÜNÜN KOMUTA MERKEZİ</span>
+            <h2>{business?.name ?? "İşletmeniz"} için ritim <em>kontrol altında.</em></h2>
+            <p>{data.todayCount ? `Bugün ${data.todayCount} randevunuz var. ${data.pending ? `${data.pending} kayıt aksiyon bekliyor.` : "Bekleyen aksiyon bulunmuyor."}` : "Bugün için programınız açık. Yeni talepleri karşılamaya hazırsınız."}</p>
+            <div className="dashboard-ops-actions"><Link href="/dashboard/takvim"><CalendarPlus2 size={17}/> Takvimi aç</Link><Link href="/dashboard/buyume">Büyüme merkezine git <ArrowRight size={15}/></Link></div>
+          </div>
+          <div className="dashboard-ops-focus">
+            <header><span><i/> CANLI AKIŞ</span><small>{new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })}</small></header>
+            {data.upcoming[0] ? <div className="dashboard-next-appointment"><time>{new Date(data.upcoming[0].startAt).toLocaleTimeString("tr-TR", {hour:"2-digit",minute:"2-digit"})}</time><div><small>SIRADAKİ RANDEVU</small><b>{data.upcoming[0].customerName}</b><span>{data.upcoming[0].serviceName ?? "Hizmet"}{data.upcoming[0].staffName ? ` · ${data.upcoming[0].staffName}` : ""}</span></div><ArrowUpRight size={18}/></div> : <div className="dashboard-next-empty"><CalendarCheck2 size={25}/><div><b>Takvim şu an sakin</b><span>Yeni randevular burada belirecek.</span></div></div>}
+            <div className="dashboard-live-mini"><span><b>{data.todayRevenue.toLocaleString("tr-TR")} ₺</b><small>Bugünkü gelir</small></span><span><b>%{data.completionRate}</b><small>Başarı oranı</small></span><span><b>{data.pending}</b><small>Bekleyen</small></span></div>
+          </div>
+        </div>
+        <div className="dashboard-ops-signals">
+          <span><Gauge size={16}/><b>Sistem hazır</b><small>Randevu altyapısı aktif</small></span>
+          <span><Target size={16}/><b>{data.weekAppointments} randevu</b><small>Son 7 günlük hacim</small></span>
+          <span><TrendingUp size={16}/><b>{data.weekRevenue.toLocaleString("tr-TR")} ₺</b><small>Haftalık gerçekleşen</small></span>
+          <span><UsersRound size={16}/><b>{data.returningCustomers} sadık müşteri</b><small>Tekrar gelen kitle</small></span>
+        </div>
+      </section>
+
+      <section className="dashboard-intelligence-row">
+        <article className="dashboard-week-pulse"><div><span><BarChart3 size={16}/> 7 GÜNLÜK NABIZ</span><b>{data.weekAppointments} toplam randevu</b></div><div className="dashboard-week-bars">{data.weeklyActivity.map((day) => { const max = Math.max(...data.weeklyActivity.map((item) => item.value), 1); return <span key={day.label}><i style={{height:`${Math.max(day.value ? 18 : 4, day.value / max * 100)}%`}}/><small>{day.label}</small></span>; })}</div></article>
+        <Link href="/dashboard/buyume" className="dashboard-ai-brief"><span><Rocket size={20}/></span><div><small>AKILLI İŞLETME ÖZETİ</small><b>Büyüme fırsatlarını keşfet</b><p>Yoğun saat, geri kazanım ve performans önerileri hazır.</p></div><ArrowUpRight size={18}/></Link>
+      </section>
 
       {/* Setup Progress */}
       {setupItems.length > 0 && !allComplete && (
