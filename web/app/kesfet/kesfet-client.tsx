@@ -68,8 +68,11 @@ export function DiscoverInteractive() {
   const [city, setCity] = useState("");
 
   useEffect(() => {
-    const requestedCategory = new URLSearchParams(window.location.search).get("category");
+    const params = new URLSearchParams(window.location.search);
+    const requestedCategory = params.get("category");
+    const requestedSearch = params.get("q");
     if (requestedCategory) queueMicrotask(() => setCategory(requestedCategory));
+    if (requestedSearch) queueMicrotask(() => setKeyword(requestedSearch.slice(0, 100)));
   }, []);
 
   // Fetch dynamic categories

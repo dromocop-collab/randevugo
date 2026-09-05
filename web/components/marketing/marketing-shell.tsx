@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { LaunchCampaign } from "@/components/marketing/launch-campaign";
-import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2, LogIn, Mail, MoonStar, ShieldCheck, Sparkles, SunMedium } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2, LogIn, Mail, Menu, MoonStar, ShieldCheck, Sparkles, SunMedium, X } from "lucide-react";
 
 const productLinks = [
   { href: "/kesfet", label: "Mağazaları keşfet" },
@@ -19,6 +19,7 @@ export function MarketingHeader() {
   const { theme, toggleTheme } = useTheme();
   const { user, status } = useAuth();
   const signedIn = status === "authenticated" && Boolean(user);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="marketing-header">
@@ -34,6 +35,12 @@ export function MarketingHeader() {
           <button type="button" onClick={toggleTheme} className="icon-action" aria-label={theme === "light" ? "Karanlık temayı aç" : "Açık temayı aç"}>{theme === "light" ? <MoonStar size={17} /> : <SunMedium size={17} />}</button>
           {signedIn ? <Link href="/hesabim" className="primary-action customer-account-action">Hesabım <ArrowUpRight size={15} /></Link> : <><Link href="/musteri/giris" className="login-action"><LogIn size={14} /> Giriş</Link><Link href="/isletmeler" className="primary-action">İşletmeler için <ArrowUpRight size={15} /></Link></>}
         </div>
+        <button type="button" className="marketing-menu-trigger" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-controls="mobile-customer-menu" aria-label={menuOpen ? "Menüyü kapat" : "Menüyü aç"}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+      </div>
+      <div id="mobile-customer-menu" className={`marketing-mobile-menu ${menuOpen ? "open" : ""}`} aria-hidden={!menuOpen}>
+        <div className="marketing-mobile-menu__head"><span><Sparkles size={15} /> Hızlı erişim</span><small>Randevun birkaç dokunuş uzağında</small></div>
+        <nav aria-label="Mobil ana menü">{productLinks.map((item, index) => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}><i>0{index + 1}</i><span>{item.label}</span><ArrowRight size={16} /></Link>)}</nav>
+        <div className="marketing-mobile-menu__actions"><button type="button" onClick={toggleTheme}>{theme === "light" ? <MoonStar size={17} /> : <SunMedium size={17} />} Tema</button>{signedIn ? <Link href="/hesabim">Hesabımı aç <ArrowUpRight size={15} /></Link> : <><Link href="/musteri/giris"><LogIn size={16} /> Müşteri girişi</Link><Link href="/isletmeler">İşletmeler için <ArrowUpRight size={15} /></Link></>}</div>
       </div>
     </header>
   );

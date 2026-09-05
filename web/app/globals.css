@@ -85,6 +85,13 @@
   gap: 8px;
 }
 
+.marketing-menu-trigger,
+.business-menu-trigger,
+.marketing-mobile-menu,
+.business-mobile-menu {
+  display: none;
+}
+
 .icon-action {
   width: 40px;
   height: 40px;
@@ -1296,6 +1303,49 @@
     display: none
   }
 
+  .marketing-menu-trigger {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--cream) 82%, white 18%);
+    color: var(--ink);
+    box-shadow: 0 10px 28px rgb(11 43 29/.1);
+    cursor: pointer;
+  }
+
+  .marketing-mobile-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 20px;
+    right: 20px;
+    display: block;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--ink) 11%, transparent);
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--cream) 94%, transparent);
+    box-shadow: 0 30px 70px rgb(7 31 20/.2);
+    backdrop-filter: blur(24px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(.98);
+    transform-origin: top right;
+    transition: .24s ease;
+  }
+
+  .marketing-mobile-menu.open { opacity: 1; visibility: visible; transform: none; }
+  .marketing-mobile-menu__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px 14px; }
+  .marketing-mobile-menu__head span { display: flex; align-items: center; gap: 7px; color: var(--green); font-size: 11px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+  .marketing-mobile-menu__head small { color: color-mix(in srgb, var(--ink) 52%, transparent); font-size: 9px; }
+  .marketing-mobile-menu nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .marketing-mobile-menu nav a { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; min-height: 58px; padding: 12px; border-radius: 17px; background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); font-size: 12px; font-weight: 800; }
+  .marketing-mobile-menu nav a i { color: var(--green); font-size: 9px; font-style: normal; }
+  .marketing-mobile-menu__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+  .marketing-mobile-menu__actions a, .marketing-mobile-menu__actions button { display: flex; flex: 1 1 130px; align-items: center; justify-content: center; gap: 7px; min-height: 43px; border: 0; border-radius: 14px; background: var(--green); color: white; font-size: 10px; font-weight: 850; cursor: pointer; }
+
   .hero-layout {
     grid-template-columns: 1fr
   }
@@ -1359,6 +1409,11 @@
     padding: 10px 13px;
     font-size: 11px
   }
+
+  .marketing-actions { margin-left: auto; }
+  .marketing-actions .primary-action { display: none; }
+  .marketing-mobile-menu { left: 14px; right: 14px; }
+  .marketing-mobile-menu nav { grid-template-columns: 1fr; }
 
   .hero-layout {
     width: calc(100% - 28px)
@@ -7451,6 +7506,11 @@ a {
     display: none
   }
 
+  .business-menu-trigger { display: grid; place-items: center; width: 42px; height: 42px; margin-left: 10px; border: 1px solid rgb(18 55 37/.12); border-radius: 14px; background: #fff; color: var(--biz-green); box-shadow: 0 10px 25px rgb(11 107 69/.1); }
+  .business-mobile-menu { position: absolute; top: calc(100% + 9px); left: 20px; right: 20px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; padding: 16px; border: 1px solid rgb(18 55 37/.1); border-radius: 22px; background: rgb(248 247 241/.97); box-shadow: 0 25px 60px rgb(7 31 20/.18); opacity: 0; visibility: hidden; transform: translateY(-8px); transition: .22s ease; }
+  .business-mobile-menu.open { opacity: 1; visibility: visible; transform: none; }
+  .business-mobile-menu a { display: flex; align-items: center; justify-content: space-between; min-height: 50px; padding: 12px 14px; border-radius: 15px; background: #edf4ed; color: #173b28; font-size: 11px; font-weight: 850; }
+
   .business-hero-overlay {
     background: linear-gradient(90deg, rgba(5, 25, 16, .98), rgba(5, 25, 16, .76))
   }
@@ -7498,6 +7558,9 @@ a {
   .business-nav {
     width: calc(100% - 28px)
   }
+
+  .business-mobile-menu { left: 14px; right: 14px; grid-template-columns: 1fr; }
+  .business-nav-actions .business-nav-primary { display: none; }
 
   .business-customer-link,
   .business-login {

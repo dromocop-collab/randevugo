@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { ArrowUpRight, LayoutDashboard, LogIn } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ArrowRight, ArrowUpRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LaunchCampaign } from "@/components/marketing/launch-campaign";
 
@@ -17,11 +17,13 @@ const links = [
 export function BusinessHeader() {
   const { user, status } = useAuth();
   const signedIn = status === "authenticated" && Boolean(user);
+  const [menuOpen, setMenuOpen] = useState(false);
   return <header className="business-header"><div className="business-nav">
     <Link href="/isletmeler" className="business-brand"><Image src="/logo.png" alt="SeninRandevun" width={38} height={38} priority /><span>Senin<b>Randevun</b><small>İŞLETME</small></span></Link>
     <nav aria-label="İşletme menüsü">{links.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>
     <div className="business-nav-actions"><Link href="/" className="business-customer-link">Müşteri sitesine dön</Link>{signedIn ? <Link href="/dashboard" className="business-nav-primary"><LayoutDashboard size={17} /> Paneli aç</Link> : <><Link href="/isletmeler/giris" className="business-login"><LogIn size={16} /> İşletme girişi</Link><Link href="/isletmeler/kayit" className="business-nav-primary"><span>İlk yıl ücretsiz</span><ArrowUpRight size={17} /></Link></>}</div>
-  </div></header>;
+    <button type="button" className="business-menu-trigger" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-label={menuOpen ? "Menüyü kapat" : "Menüyü aç"}>{menuOpen ? <X size={20}/> : <Menu size={20}/>}</button>
+  </div><div className={`business-mobile-menu ${menuOpen ? "open" : ""}`}>{links.map(item => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}<ArrowRight size={15}/></Link>)}<Link href="/" onClick={() => setMenuOpen(false)}>Müşteri sitesine dön<ArrowRight size={15}/></Link>{!signedIn && <Link href="/isletmeler/giris" onClick={() => setMenuOpen(false)}>İşletme girişi<LogIn size={15}/></Link>}</div></header>;
 }
 
 export function BusinessFooter() {

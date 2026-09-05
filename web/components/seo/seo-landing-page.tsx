@@ -25,6 +25,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
   saglik: "/images/categories/saglik.png",
   danismanlik: "/images/categories/danismanlik.png",
   veteriner: "/images/categories/veteriner.png",
+  yazilim: "/images/categories/yazilim.png",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -37,6 +38,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   saglik: "Sağlık",
   danismanlik: "Danışmanlık",
   veteriner: "Veteriner",
+  yazilim: "Yazılım & Web",
 };
 
 export function SeoLandingPage({ pathname, eyebrow, title, description, category = "", benefits, steps, faq, relatedLinks }: SeoLandingPageProps) {

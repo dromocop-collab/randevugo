@@ -11,6 +11,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
   saglik: "/images/categories/saglik.png",
   danismanlik: "/images/categories/danismanlik.png",
   veteriner: "/images/categories/veteriner.png",
+  yazilim: "/images/categories/yazilim.png",
 };
 
 export function createProfessionMetadata(content: { title: string; description: string; pathname: string; category?: string }): Metadata {

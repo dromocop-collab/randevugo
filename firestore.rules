@@ -94,6 +94,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Anonymous, privacy-safe traffic events. The client may only create a
+    // tightly constrained page-view row; only platform admins can read it.
+    match /platformAnalyticsEvents/{eventId} {
+      allow read: if isPlatformAdmin();
+      allow create: if request.resource.data.keys().hasOnly([
+          "path", "title", "referrer", "device", "sessionId", "createdAt"
+        ]) &&
+        request.resource.data.path is string && request.resource.data.path.size() <= 180 &&
+        request.resource.data.title is string && request.resource.data.title.size() <= 180 &&
+        request.resource.data.referrer is string && request.resource.data.referrer.size() <= 120 &&
+        request.resource.data.device in ["mobile", "tablet", "desktop"] &&
+        request.resource.data.sessionId is string && request.resource.data.sessionId.size() <= 64 &&
+        request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
     // ────────────────────────────────────────────────
     // Categories (platform-managed)
     // ────────────────────────────────────────────────

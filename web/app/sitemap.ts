@@ -17,6 +17,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
   saglik: "/images/categories/saglik.png",
   danismanlik: "/images/categories/danismanlik.png",
   veteriner: "/images/categories/veteriner.png",
+  yazilim: "/images/categories/yazilim.png",
 };
 
 /**
@@ -102,6 +103,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "veteriner-randevu", cat: "veteriner", priority: 0.8 },
     { path: "nail-studio-randevu", cat: "nail", priority: 0.8 },
     { path: "danismanlik-randevu", cat: "danismanlik", priority: 0.8 },
+    { path: "yazilim-web-randevu", cat: "yazilim", priority: 0.8 },
   ].map(({ path, cat, priority }) => ({
     url: `${baseUrl}/${path}`,
     lastModified: STATIC_LAST_MODIFIED,
