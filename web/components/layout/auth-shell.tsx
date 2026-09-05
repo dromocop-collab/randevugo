@@ -47,7 +47,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
     <main className="auth-v2 relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
       {status === "authenticated" && user && <Link href={customer ? "/hesabim" : "/dashboard"} className="auth-session-pill"><span>✓</span><div><b>Oturumunuz açık</b><small>{customer ? "Hesabıma" : "Panele"} devam et →</small></div></Link>}
       {/* Left — Branding Panel */}
-      <section className="auth-story relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] p-8 shadow-2xl backdrop-blur-xl lg:p-12">
+      <section className="auth-story order-2 relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] p-8 shadow-2xl backdrop-blur-xl lg:order-1 lg:p-12">
         {/* Glow orbs */}
         <div className="absolute -top-20 right-10 h-64 w-64 rounded-full bg-sky-400/20 blur-3xl" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/15 blur-3xl" />
@@ -143,7 +143,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
       </section>
 
       {/* Right — Form */}
-      <section className="auth-form-stage w-full max-w-xl justify-self-center"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">{customer ? "Randevularınıza kaldığınız yerden devam edin." : "İşletmenize kaldığınız yerden devam edin."}</h2></div>{children}</section>
+      <section id="kayit-formu" className="auth-form-stage order-1 w-full max-w-xl scroll-mt-6 justify-self-center lg:order-2"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">{customer ? "Randevularınıza kaldığınız yerden devam edin." : "İşletmenize kaldığınız yerden devam edin."}</h2></div>{children}</section>
     </main>
   );
 }
