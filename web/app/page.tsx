@@ -3,6 +3,7 @@ import { Apple, ArrowRight, BadgeCheck, BellRing, CalendarCheck2, Check, Clock3,
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { AppStoreButton } from "@/components/marketing/app-store-button";
 import { IosAppVisual } from "@/components/marketing/ios-app-visual";
+import { APP_STORE_URL } from "@/lib/app-store";
 import { HomeInteractive } from "./home-client";
 
 const CUSTOMER_FAQ = [
@@ -23,6 +24,7 @@ export default function HomePage() {
             <h1>Aradığın hizmet,<br /><em>sana uygun zamanda.</em></h1>
             <p>Yakınındaki güvenilir işletmeleri keşfet, gerçek yorumları incele ve müsait saatten saniyeler içinde randevunu al.</p>
             <div className="customer-hero-trust"><span><BadgeCheck size={15} /> Doğrulanmış işletmeler</span><span><ShieldCheck size={15} /> Güvenli randevu</span><span><Clock3 size={15} /> 7/24 online</span></div>
+            <a className="home-ios-quick-link" href={APP_STORE_URL} target="_blank" rel="noopener noreferrer"><Apple size={18} fill="currentColor"/><span><small>YENİ · APP STORE&apos;DA</small><b>iOS uygulamasını ücretsiz indir</b></span><ArrowRight size={15}/></a>
           </div>
           <div className="customer-hero-art" aria-hidden="true">
             <div className="customer-art-image" />

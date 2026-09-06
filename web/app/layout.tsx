@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
+import { APP_STORE_ID, APP_STORE_URL } from "@/lib/app-store";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -148,6 +149,7 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "default",
     "apple-mobile-web-app-title": SITE_NAME,
+    "apple-itunes-app": `app-id=${APP_STORE_ID}, app-argument=${SITE_URL}`,
   },
 };
 
@@ -221,6 +223,8 @@ const jsonLd = {
         "SMS ve E-posta Hatırlatmaları",
         "7/24 Online Randevu Sayfası",
       ],
+      downloadUrl: APP_STORE_URL,
+      installUrl: APP_STORE_URL,
     },
     {
       "@type": "CollectionPage",

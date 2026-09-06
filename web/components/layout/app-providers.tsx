@@ -10,6 +10,7 @@ import { MaintenanceGate } from "@/components/layout/maintenance-gate";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { AnalyticsScripts } from "@/components/layout/analytics-scripts";
 import { PageViewTracker } from "@/components/layout/page-view-tracker";
+import { IosSmartBanner } from "@/components/marketing/ios-smart-banner";
 import { BrandCursor } from "@/components/ui/brand-cursor";
 import { initializeFirebaseAppCheck } from "@/lib/firebase/app-check";
 
@@ -30,6 +31,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
           </MaintenanceGate>
           <ToastProvider />
           <SupportBubble />
+          <IosSmartBanner />
           <BrandCursor />
         </BusinessProvider>
       </AuthProvider>
