@@ -153,6 +153,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     ...[
       ["ozellikler", 0.9],
+      ["mobil-uygulama", 0.92],
       ["hakkimizda", 0.6],
       ["iletisim", 0.6],
       ["yardim-merkezi", 0.7],

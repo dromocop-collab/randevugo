@@ -11,6 +11,7 @@ import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2, LogIn, Mail, Menu
 const productLinks = [
   { href: "/kesfet", label: "Mağazaları keşfet" },
   { href: "/#kategoriler", label: "Kategoriler" },
+  { href: "/mobil-uygulama", label: "iOS Uygulaması" },
   { href: "/hesabim", label: "Randevularım" },
   { href: "/yardim-merkezi", label: "Yardım" },
 ];
@@ -64,7 +65,7 @@ export function MarketingFooter() {
         </div>
         <FooterColumn title="Meslekler" links={[["Tüm mağazalar", "/kesfet"], ["Kuaför", "/kuafor-randevu"], ["Berber", "/berber-randevu"], ["Güzellik merkezi", "/guzellik-merkezi-randevu"], ["Spa & Masaj", "/spa-randevu"], ["Nail Studio", "/nail-studio-randevu"], ["Spor & PT", "/spor-randevu"], ["Sağlık", "/saglik-randevu"], ["Danışmanlık", "/danismanlik-randevu"], ["Veteriner", "/veteriner-randevu"]]} />
         <FooterColumn title="İşletmeler" links={[["İşletmeler için", "/isletmeler"], ["Özellikler", "/ozellikler"], ["Fiyatlar", "/fiyatlar"], ["Ücretsiz kayıt", "/isletmeler/kayit"], ["İşletme yardımı", "/isletmeler/yardim"]]} />
-        <FooterColumn title="SeninRandevun" links={[["Online randevu", "/online-randevu"], ["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Güvenlik", "/guvenlik"]]} />
+        <FooterColumn title="SeninRandevun" links={[["iOS uygulaması", "/mobil-uygulama"], ["Online randevu", "/online-randevu"], ["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Güvenlik", "/guvenlik"]]} />
         <FooterColumn title="Yasal" links={[["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Çerez politikası", "/cerez-politikasi"]]} />
       </div>
       <div className="footer-bottom"><span>© {new Date().getFullYear()} SeninRandevun · Tüm hakları saklıdır.</span><a className="footer-dromocob" href="https://dromocob.tr" target="_blank" rel="noopener noreferrer" aria-label="DROMOCOB web sitesini ziyaret et"><i>D</i><span><small>TASARIM &amp; TEKNOLOJİ</small><strong>DROMOCOB</strong></span><ArrowUpRight size={15} /></a></div>

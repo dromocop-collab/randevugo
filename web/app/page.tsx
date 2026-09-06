@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, BellRing, CalendarCheck2, Check, Clock3, Compass, Heart, MapPin, MessageCircleMore, Navigation, ShieldCheck, Sparkles, Star, TimerReset, WandSparkles } from "lucide-react";
+import { Apple, ArrowRight, BadgeCheck, BellRing, CalendarCheck2, Check, Clock3, Compass, Heart, MapPin, MessageCircleMore, Navigation, ShieldCheck, Sparkles, Star, TimerReset, WandSparkles } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
+import { AppStoreButton } from "@/components/marketing/app-store-button";
+import { IosAppVisual } from "@/components/marketing/ios-app-visual";
 import { HomeInteractive } from "./home-client";
 
 const CUSTOMER_FAQ = [
@@ -56,6 +58,11 @@ export default function HomePage() {
       <section className="customer-how-section"><div className="customer-how-copy"><span>3 KOLAY ADIM</span><h2>Planın hazırsa,<br />randevun da hazır.</h2><p>Telefon trafiği ve bekleme olmadan gerçek müsaitlik üzerinden randevunu oluştur.</p><Link href="/kesfet">Şimdi keşfet <ArrowRight size={15} /></Link></div><div className="customer-how-steps">{[["01","Ara ve keşfet","Hizmet, kategori veya konumla sana uygun işletmeyi bul."],["02","Saatini seç","Canlı müsaitlik arasından programına uyan saati seç."],["03","Randevunu al","Bilgilerini onayla; randevun anında oluşsun."]].map(([no,title,text]) => <article key={no}><span>{no}</span><div><h3>{title}</h3><p>{text}</p></div><CalendarCheck2 size={20} /></article>)}</div></section>
 
       <section className="customer-confidence"><div><Heart size={22} /><strong>İyi hissettiren seçimler</strong><p>Gerçek yorumlar ve detaylı işletme profilleriyle kararını güvenle ver.</p></div><div><ShieldCheck size={22} /><strong>Kontrol sende</strong><p>Randevu bilgilerine kolayca ulaş, işletmenin kurallarıyla değiştir veya yönet.</p></div><div><Clock3 size={22} /><strong>Zamanın sana kalsın</strong><p>Aramak, beklemek ve tekrar tekrar saat sormak yok. Dilediğin an planla.</p></div></section>
+
+      <section className="home-ios-promo">
+        <div className="home-ios-copy"><span><Apple size={15} fill="currentColor"/> APP STORE&apos;DA YAYINDA <i/></span><h2>SeninRandevun<br/><em>artık cebinde.</em></h2><p>İşletmeleri keşfet, uygun saati seç ve bütün randevularını iPhone veya iPad&apos;inden yönet.</p><div><AppStoreButton compact/><Link href="/mobil-uygulama">Uygulamayı keşfet <ArrowRight size={15}/></Link></div><small><BadgeCheck size={13}/> Apple tarafından onaylandı · Müşteriler için ücretsiz</small></div>
+        <IosAppVisual compact/>
+      </section>
 
       <section className="customer-faq-section"><div><span>MERAK ETTİKLERİN</span><h2>Randevu almadan önce.</h2><p>SeninRandevun müşteriler için kolay, hızlı ve ücretsiz bir keşif deneyimidir.</p></div><div>{CUSTOMER_FAQ.map(([question,answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div></section>
     </main>
