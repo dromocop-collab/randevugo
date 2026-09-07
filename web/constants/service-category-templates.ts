@@ -39,6 +39,8 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Cilt Bakımı", icon: "💆", color: "#10b981" },
       { name: "Yıkama & Masaj", icon: "🚿", color: "#06b6d4" },
       { name: "Ağda / Alın Düzeltme", icon: "🧹", color: "#f59e0b" },
+      { name: "Saç Boyama / Beyaz Kapama", icon: "🎨", color: "#334155", description: "Renklendirme ve beyaz kapatma işlemleri" },
+      { name: "Damat Bakımı", icon: "✨", color: "#ca8a04", description: "Özel gün saç, sakal ve bakım paketi" },
     ],
   },
   guzellik: {
@@ -63,6 +65,8 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Nail Art", icon: "🎨", color: "#f59e0b" },
       { name: "Jel Tırnak", icon: "✨", color: "#d946ef" },
       { name: "Tırnak Bakımı", icon: "🧴", color: "#06b6d4" },
+      { name: "Kalıcı Oje", icon: "💅", color: "#f43f5e", description: "Kalıcı oje uygulama ve yenileme" },
+      { name: "Protez / Jel Çıkarma", icon: "🫧", color: "#64748b", description: "Güvenli çıkarma ve bakım işlemleri" },
     ],
   },
   spa: {
@@ -75,6 +79,7 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Sauna", icon: "♨️", color: "#f97316", description: "Sauna ve buhar seansları" },
       { name: "Çift Masajı", icon: "💞", color: "#ec4899", description: "İki kişilik eş zamanlı seans" },
       { name: "Bölgesel Bakım", icon: "✨", color: "#8b5cf6", description: "Sıkılaşma ve bölgesel uygulamalar" },
+      { name: "Spa Paketi", icon: "🎁", color: "#eab308", description: "Birleşik bakım ve dinlenme ritüelleri" },
     ],
   },
   spor: {
@@ -86,6 +91,8 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Yoga", icon: "🧘‍♀️", color: "#10b981" },
       { name: "Fonksiyonel Antrenman", icon: "💪", color: "#f59e0b" },
       { name: "Boks / Kickbox", icon: "🥊", color: "#64748b" },
+      { name: "Reformer Pilates", icon: "🧘", color: "#ec4899", description: "Bireysel ve grup reformer seansları" },
+      { name: "Ölçüm / Programlama", icon: "📊", color: "#14b8a6", description: "Vücut analizi ve antrenman planı" },
     ],
   },
   saglik: {
@@ -97,6 +104,10 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Diş", icon: "🦷", color: "#f59e0b" },
       { name: "Göz", icon: "👁️", color: "#06b6d4" },
       { name: "Beslenme / Diyet", icon: "🥗", color: "#22c55e" },
+      { name: "Psikolojik Danışmanlık", icon: "🧠", color: "#a855f7", description: "Bireysel görüşme ve değerlendirme" },
+      { name: "Fizyoterapi", icon: "👐", color: "#14b8a6", description: "Hareket değerlendirmesi ve terapi" },
+      { name: "Laboratuvar / Tetkik", icon: "🧪", color: "#6366f1", description: "Tahlil ve ölçüm randevuları" },
+      { name: "Online Görüşme", icon: "💻", color: "#0ea5e9", description: "Uzaktan sağlık danışmanlığı" },
     ],
   },
   danismanlik: {
@@ -107,6 +118,10 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Kariyer Danışmanlığı", icon: "💼", color: "#0ea5e9" },
       { name: "Hukuk", icon: "⚖️", color: "#64748b" },
       { name: "Mali Müşavirlik", icon: "📊", color: "#10b981" },
+      { name: "Yaşam Koçluğu", icon: "🌱", color: "#22c55e", description: "Hedef ve gelişim görüşmeleri" },
+      { name: "İşletme Danışmanlığı", icon: "🏢", color: "#f59e0b", description: "Strateji ve operasyon görüşmeleri" },
+      { name: "Eğitim Danışmanlığı", icon: "🎓", color: "#6366f1", description: "Okul, bölüm ve eğitim planlama" },
+      { name: "Online Danışmanlık", icon: "💻", color: "#06b6d4", description: "Görüntülü uzaktan görüşme" },
     ],
   },
   veteriner: {
@@ -117,6 +132,10 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Tıraş & Bakım", icon: "✂️", color: "#0ea5e9" },
       { name: "Diş Bakımı", icon: "🦷", color: "#8b5cf6" },
       { name: "Operasyon", icon: "🏥", color: "#ef4444" },
+      { name: "Parazit Uygulaması", icon: "🛡️", color: "#14b8a6", description: "İç ve dış parazit uygulamaları" },
+      { name: "Tahlil / Görüntüleme", icon: "🔬", color: "#6366f1", description: "Kan tahlili, ultrason ve görüntüleme" },
+      { name: "Pet Kuaför", icon: "🛁", color: "#ec4899", description: "Yıkama, tarama ve profesyonel bakım" },
+      { name: "Beslenme Danışmanlığı", icon: "🥣", color: "#22c55e", description: "Mama ve beslenme planlaması" },
     ],
   },
   egitim: {
@@ -127,6 +146,9 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Online Ders", icon: "💻", color: "#10b981" },
       { name: "Sınav Hazırlık", icon: "📝", color: "#f59e0b" },
       { name: "Dil Eğitimi", icon: "🌍", color: "#ec4899" },
+      { name: "Müzik Dersi", icon: "🎵", color: "#f43f5e", description: "Enstrüman ve şan dersleri" },
+      { name: "Sanat Atölyesi", icon: "🎨", color: "#f97316", description: "Resim, tasarım ve yaratıcı atölyeler" },
+      { name: "Rehberlik / Koçluk", icon: "🧭", color: "#14b8a6", description: "Akademik takip ve öğrenci koçluğu" },
     ],
   },
   servis: {
@@ -137,6 +159,9 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Montaj", icon: "⚙️", color: "#0ea5e9" },
       { name: "Kontrol", icon: "📋", color: "#10b981" },
       { name: "Temizlik", icon: "🧹", color: "#8b5cf6" },
+      { name: "Arıza Tespiti", icon: "🔍", color: "#ef4444", description: "Yerinde veya uzaktan arıza analizi" },
+      { name: "Periyodik Bakım", icon: "📅", color: "#06b6d4", description: "Planlı kontrol ve bakım randevuları" },
+      { name: "Danışmanlık / Keşif", icon: "🧭", color: "#22c55e", description: "İhtiyaç analizi ve ön keşif" },
     ],
   },
   yazilim: {

@@ -64,7 +64,7 @@ export default function GrowthCenterPage() {
   if (loading) return <div className="grid gap-4 sm:grid-cols-2"><div className="h-48 animate-pulse rounded-3xl bg-[var(--surface-2)]"/><div className="h-48 animate-pulse rounded-3xl bg-[var(--surface-2)]"/></div>;
 
   return <div className="space-y-6">
-    <section className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(125deg,#073b2c,#0b6b45_62%,#47b881)] p-7 text-white shadow-2xl shadow-emerald-950/20 sm:p-9">
+    <section className="growth-center-hero relative overflow-hidden rounded-[30px] bg-[linear-gradient(125deg,#073b2c,#0b6b45_62%,#47b881)] p-7 text-white shadow-2xl shadow-emerald-950/20 sm:p-9">
       <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/15 bg-white/5"/><div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black tracking-[.16em]"><Sparkles size={13}/> AKILLI BÜYÜME MOTORU</span><h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">Veriyi aksiyona dönüştür.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/75">Yoğun saatleri görün, geri kazanılabilecek müşterileri bulun ve önümüzdeki haftayı daha dolu planlayın.</p></div><Link href="/dashboard/takvim" className="inline-flex w-fit items-center gap-2 rounded-2xl bg-[#d8ff72] px-5 py-3 text-xs font-black text-[#073b2c] transition hover:-translate-y-1"><CalendarPlus2 size={17}/> Takvimi optimize et</Link></div>
     </section>
     {error && <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
