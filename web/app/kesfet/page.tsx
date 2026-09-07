@@ -23,7 +23,7 @@ export default function DiscoverPage() {
             <h2>Takviminizi değil,<br />işletmenizi büyütün.</h2>
             <p>Randevu, ekip, müşteri ve gelirinizi tek profesyonel çalışma alanında yönetin.</p>
             <Link href="/ozellikler">İşletme çözümlerini keşfet <ArrowUpRight size={16} /></Link>
-            <small><BadgeCheck size={13} /> Yeni işletmelere ilk yıl ücretsiz</small>
+            <small><BadgeCheck size={13} /> Yeni işletmelere ilk 3 ay ücretsiz</small>
           </aside>
         </div>
 

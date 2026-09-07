@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function RegisterPage() {
   return (
     <AuthShell
-      eyebrow="14 GÜN ÜCRETSİZ"
+      eyebrow="İLK 3 AY ÜCRETSİZ"
       title="İşletmenizin zamanını geri kazanın."
       subtitle="Mağazanızı birkaç dakikada kurun; hizmet, ekip ve müsaitliklerinizi ekleyip ilk online randevunuzu bugün alın."
     >

@@ -256,9 +256,9 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         }
         transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
             businessId: businessRef.id, userId: uid, plan: "RANDEVUGO", status: "trialing",
-            trialDays: 365,
+            trialDays: 90,
             trialStartedAt: new Date().toISOString(),
-            trialEndsAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            trialEndsAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
             renewalEnabled: false, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });

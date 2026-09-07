@@ -403,7 +403,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
         <div className="register-heading mb-6 text-center">
           <span className="register-heading-icon"><Sparkles size={20} /></span>
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 12 ay ücretsiz"}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 3 ay ücretsiz"}</p>
         </div>
 
         <form className="register-form space-y-4" onSubmit={onSubmit}>
@@ -488,7 +488,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
                 Hesap oluşturuluyor...
               </span>
             ) : (
-              <>{accountType === "customer" ? "Ücretsiz Hesap Oluştur" : "İlk 12 Ay Ücretsiz Başla"}<ArrowRight size={17} /></>
+              <>{accountType === "customer" ? "Ücretsiz Hesap Oluştur" : "İlk 3 Ay Ücretsiz Başla"}<ArrowRight size={17} /></>
             )}
           </Button>
         </form>
@@ -508,7 +508,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
         {(accountType === "customer" ? [
           { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
         ] : [
-          { icon: Gift, text: "İlk yıl ücretsiz" }, { icon: Zap, text: "2 dk kurulum" }, { icon: CreditCard, text: "Kredi kartı yok" }, { icon: Smartphone, text: "Tüm cihazlar" },
+          { icon: Gift, text: "İlk 3 ay ücretsiz" }, { icon: Zap, text: "2 dk kurulum" }, { icon: CreditCard, text: "Kredi kartı yok" }, { icon: Smartphone, text: "Tüm cihazlar" },
         ]).map((b) => {
           const BenefitIcon = b.icon;
           return <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">

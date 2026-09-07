@@ -213,7 +213,7 @@ const jsonLd = {
         "@type": "Offer",
         price: "0",
         priceCurrency: "TRY",
-        description: "Yeni işletmelere ilk 12 ay ücretsiz kullanım",
+        description: "Yeni işletmelere ilk 3 ay ücretsiz kullanım",
       },
       featureList: [
         "Online Randevu Yönetimi",
