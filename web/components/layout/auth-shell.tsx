@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState, type CSSProperties } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { CalendarCheck2, Clock3, Heart, LockKeyhole, ShieldCheck, Smartphone, Sparkles, Zap, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, BarChart3, CalendarCheck2, Check, Clock3, Heart, LockKeyhole, MessageCircleMore, ShieldCheck, Smartphone, Sparkles, Star, TrendingUp, UsersRound, Zap, type LucideIcon } from "lucide-react";
 
 interface AuthShellProps {
   eyebrow: string;
@@ -33,6 +33,53 @@ const TESTIMONIALS = [
     quote: "Takvim yönetimi çok kolay. Çalışanlarım için ayrı müsaitlik ayarlıyorum.",
   },
 ];
+
+const PRODUCT_SCENES = [
+  { label: "Canlı takvim", value: "%84 doluluk", tone: "mint", icon: CalendarCheck2 },
+  { label: "Akıllı büyüme", value: "+%27 bu ay", tone: "lime", icon: TrendingUp },
+  { label: "Müşteri bağı", value: "4.9 memnuniyet", tone: "violet", icon: Heart },
+] as const;
+
+function ProductShowcase() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % PRODUCT_SCENES.length), 4200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const scene = PRODUCT_SCENES[active];
+  const SceneIcon = scene.icon;
+
+  return (
+    <div className={`auth-product-showcase tone-${scene.tone}`}>
+      <div className="auth-product-topline">
+        <span><i /> SENİNRANDEVUN LIVE</span>
+        <small>Şimdi güncellendi</small>
+      </div>
+      <div className="auth-product-canvas">
+        <div className="auth-mini-sidebar" aria-hidden="true">
+          <span className="active"><CalendarCheck2 size={13} /></span><span><UsersRound size={13} /></span><span><BarChart3 size={13} /></span>
+        </div>
+        <div className="auth-scene-copy" key={scene.label}>
+          <span className="auth-scene-icon"><SceneIcon size={18} /></span>
+          <small>{scene.label}</small>
+          <strong>{scene.value}</strong>
+          <p>Tüm operasyonunuz tek ekranda, gerçek zamanlı.</p>
+        </div>
+        <div className="auth-scene-visual" key={`${scene.label}-visual`} aria-hidden="true">
+          {active === 0 && <div className="auth-calendar-demo"><div>{["Pzt", "Sal", "Çar", "Per", "Cum"].map((day) => <small key={day}>{day}</small>)}</div><div>{[1,2,3,4,5,6,7,8,9,10].map((item) => <i key={item} className={item === 3 || item === 7 ? "busy" : item === 9 ? "focus" : ""} />)}</div></div>}
+          {active === 1 && <div className="auth-chart-demo"><b>+27%</b><div>{[38,52,46,72,62,88,96].map((height,index) => <i key={height + index} style={{ "--bar-height": `${height}%`, "--bar-delay": `${index * 70}ms` } as CSSProperties} />)}</div></div>}
+          {active === 2 && <div className="auth-customer-demo"><span><UsersRound size={18} /></span><span><Star size={14} fill="currentColor" /> 4.9</span><div><i /><i /><i /></div><small>+128 sadık müşteri</small></div>}
+        </div>
+        <div className="auth-floating-note"><MessageCircleMore size={14} /><span><b>Yeni randevu</b><small>Bugün · 14:30</small></span><Check size={12} /></div>
+      </div>
+      <div className="auth-product-tabs" role="tablist" aria-label="Ürün özellikleri">
+        {PRODUCT_SCENES.map((item, index) => <button key={item.label} type="button" role="tab" aria-selected={active === index} onClick={() => setActive(index)}><i /><span>{item.label}</span></button>)}
+      </div>
+    </div>
+  );
+}
 
 export function AuthShell({ eyebrow, title, subtitle, children, variant = "business" }: AuthShellProps) {
   const { user, status } = useAuth();
@@ -81,6 +128,8 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
             {subtitle}
           </p>
 
+          {!customer && <ProductShowcase />}
+
           {/* Trust Grid */}
           <div className="auth-trust-grid mt-10 grid grid-cols-2 gap-3">
             {trustItems.map((item) => {
@@ -102,18 +151,19 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
           </div>
 
           {/* Testimonials */}
-          {!customer && <div className="auth-testimonials mt-8 grid gap-3 sm:grid-cols-2">
-            {TESTIMONIALS.map((t) => (
+          {!customer && <div className="auth-testimonials mt-6 grid gap-3 sm:grid-cols-2">
+            {TESTIMONIALS.map((t, index) => (
               <div
                 key={t.name}
                 className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)]/60 p-4 backdrop-blur"
               >
+                <span className="auth-quote-rating"><Star size={10} fill="currentColor" /> 5.0 <ArrowUpRight size={11} /></span>
                 <p className="text-xs leading-relaxed text-[var(--text-2)] italic">
                   &ldquo;{t.quote}&rdquo;
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)]/10 text-[10px] font-bold text-[var(--accent)]">
-                    {t.name[0]}
+                    {index === 0 ? "A" : "M"}
                   </div>
                   <div>
                     <p className="text-[11px] font-semibold text-[var(--text-1)]">{t.name}</p>
