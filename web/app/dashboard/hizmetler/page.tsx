@@ -20,13 +20,15 @@ import {
   deleteServiceCategory,
   updateServiceCategory,
   seedDefaultCategories,
+  normalizeCategoryName,
 } from "@/features/services/service-category-repository";
 import { getBusinessById } from "@/features/businesses/business-repository";
 import { firstErrorMessage, serviceCreateSchema } from "@/lib/validation/schemas";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
-import { SECTOR_TEMPLATES } from "@/constants/service-category-templates";
+import { getCategoryTemplates, SECTOR_TEMPLATES } from "@/constants/service-category-templates";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 import {
   FolderOpen,
   Plus,
@@ -42,7 +44,11 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Info
+  Info,
+  Layers3,
+  PackageCheck,
+  RotateCcw,
+  Search,
 } from "lucide-react";
 
 /* ── Colours for category picker ─────────────────── */
@@ -64,6 +70,10 @@ export default function ServicesPage() {
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [businessSector, setBusinessSector] = useState<string>("diger");
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateBusy, setTemplateBusy] = useState(false);
 
   /* ── New Service Form ─────────────────────────── */
   const [showForm, setShowForm] = useState(false);
@@ -114,12 +124,13 @@ export default function ServicesPage() {
   }, [businessId]);
 
   useEffect(() => {
-    if (!editingService && !editingCategory) return;
+    if (!editingService && !editingCategory && !showTemplatePicker) return;
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setEditingService(null);
         setEditingCategory(null);
+        setShowTemplatePicker(false);
       }
     };
     document.body.style.overflow = "hidden";
@@ -128,7 +139,7 @@ export default function ServicesPage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [editingService, editingCategory]);
+  }, [editingService, editingCategory, showTemplatePicker]);
 
   async function reload() {
     if (!businessId) return;
@@ -142,13 +153,41 @@ export default function ServicesPage() {
 
   /* ── Seed default categories from sector template ── */
   async function handleSeedCategories() {
-    if (!businessId) return;
+    if (!businessId || selectedTemplates.length === 0) return;
+    setTemplateBusy(true);
     try {
-      await seedDefaultCategories(businessId, businessSector);
+      const added = await seedDefaultCategories(businessId, businessSector, selectedTemplates);
       await reload();
-      toast.success("Sektör şablonu yüklendi! 🎉");
+      setShowTemplatePicker(false);
+      setSelectedTemplates([]);
+      setTemplateSearch("");
+      toast.success(added > 0 ? `${added} kategori işletmenize eklendi! 🎉` : "Seçtiğiniz kategoriler zaten mevcut.");
     } catch {
       toast.error("Şablon yüklenirken hata oluştu.");
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
+  async function handleRemoveTemplateCategories() {
+    if (!businessId || seededCategories.length === 0) return;
+    const linkedCount = services.filter((service) => seededCategories.some((category) => category.id === service.category)).length;
+    const detail = linkedCount ? ` Bu kategorilerdeki ${linkedCount} hizmet silinmeyecek, Kategorisiz alanına taşınacak.` : "";
+    if (!window.confirm(`${seededCategories.length} hazır kategori topluca kaldırılsın mı?${detail}`)) return;
+    setTemplateBusy(true);
+    try {
+      const categoryIds = new Set(seededCategories.map((category) => category.id));
+      await Promise.all([
+        ...services.filter((service) => categoryIds.has(service.category)).map((service) => updateService(businessId, service.id, { category: "" })),
+        ...seededCategories.map((category) => deleteServiceCategory(businessId, category.id)),
+      ]);
+      if (categoryIds.has(activeCategory)) setActiveCategory("all");
+      await reload();
+      toast.success("Hazır kategori paketi kaldırıldı. Özel kategorileriniz korundu.");
+    } catch {
+      toast.error("Hazır kategoriler kaldırılırken hata oluştu.");
+    } finally {
+      setTemplateBusy(false);
     }
   }
 
@@ -328,8 +367,24 @@ export default function ServicesPage() {
     (s) => !s.category || !categories.some((c) => c.id === s.category)
   );
 
+  const canonicalSector = canonicalBusinessCategory(businessSector);
+  const sectorTemplates = getCategoryTemplates(canonicalSector);
+  const existingCategoryNames = new Set(categories.map((category) => normalizeCategoryName(category.name)));
+  const missingTemplates = sectorTemplates.filter((template) => !existingCategoryNames.has(normalizeCategoryName(template.name)));
+  const visibleTemplates = missingTemplates.filter((template) => `${template.name} ${template.description ?? ""}`.toLocaleLowerCase("tr-TR").includes(templateSearch.trim().toLocaleLowerCase("tr-TR")));
+  const seededCategories = categories.filter((category) => category.templateSource === canonicalSector);
   const sectorLabel =
-    SECTOR_TEMPLATES[businessSector]?.label ?? "Genel";
+    SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel";
+
+  function openTemplatePicker() {
+    setSelectedTemplates([]);
+    setTemplateSearch("");
+    setShowTemplatePicker(true);
+  }
+
+  function toggleTemplate(name: string) {
+    setSelectedTemplates((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
+  }
 
   return (
     <div className="space-y-6">
@@ -344,11 +399,12 @@ export default function ServicesPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="secondary"
-            onClick={handleSeedCategories}
+            onClick={openTemplatePicker}
             className="gap-2 font-semibold"
           >
-            <Rocket size={16} className="text-[var(--accent)]" /> Eksik Kategorileri Yükle
+            <Rocket size={16} className="text-[var(--accent)]" /> Sektöre Özel Kategoriler
           </Button>
+          {seededCategories.length > 0 && <Button variant="secondary" disabled={templateBusy} onClick={handleRemoveTemplateCategories} className="gap-2 font-semibold text-rose-600"><RotateCcw size={16} /> Hazır Paketi Kaldır</Button>}
 
           <Button
             variant="secondary"
@@ -386,7 +442,7 @@ export default function ServicesPage() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button onClick={handleSeedCategories} className="gap-2 font-bold bg-[var(--text-1)] text-[var(--bg-1)] hover:bg-[var(--text-2)] border-0">
+              <Button onClick={openTemplatePicker} className="gap-2 font-bold bg-[var(--text-1)] text-[var(--bg-1)] hover:bg-[var(--text-2)] border-0">
                 <Rocket size={16} /> Şablonu Yükle
               </Button>
               <Button variant="secondary" onClick={() => setShowCategoryForm(true)} className="gap-2 font-semibold">
@@ -741,6 +797,29 @@ export default function ServicesPage() {
             ))
           )}
         </div>
+      )}
+
+      {/* ━━━ SECTOR TEMPLATE PICKER ━━━ */}
+      {showTemplatePicker && createPortal(
+        <div className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#06150e]/80 px-3 py-5 backdrop-blur-xl sm:px-6 sm:py-10" onMouseDown={(event) => { if (event.target === event.currentTarget && !templateBusy) setShowTemplatePicker(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="template-picker-title" className="relative my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/70 bg-[var(--bg-1)] shadow-[0_45px_120px_rgba(2,20,12,.48)]">
+            <header className="relative shrink-0 overflow-hidden border-b border-[var(--border)] bg-[linear-gradient(120deg,#073d29,#0b6b45_58%,#4ca967)] px-5 py-6 text-white sm:px-8">
+              <div className="pointer-events-none absolute -right-12 -top-24 h-56 w-56 rounded-full bg-[#c9f45b]/25 blur-2xl" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/12 text-[#dafa83] shadow-xl"><Layers3 size={23} /></span><div><p className="text-[9px] font-black tracking-[.18em] text-[#dafa83]">AKILLI SEKTÖR KÜTÜPHANESİ</p><h2 id="template-picker-title" className="mt-1 text-xl font-extrabold sm:text-2xl">{sectorLabel} kategorilerini seçin</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/65">Hiçbir şey otomatik eklenmez. İşletmenizde kullanmak istediğiniz başlıkları seçip onaylayın.</p></div></div>
+                <button type="button" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/10 transition hover:rotate-6 hover:bg-white hover:text-[#073d29]" aria-label="Kategori seçiciyi kapat"><X size={18} /></button>
+              </div>
+              <div className="relative mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur"><Search size={15} className="text-[#dafa83]"/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Kategori ara…" className="w-full bg-transparent text-xs text-white outline-none placeholder:text-white/45"/></label><div className="flex items-center gap-2 text-[10px] font-bold"><span className="rounded-full bg-white/10 px-3 py-2">{missingTemplates.length} uygun seçenek</span><span className="rounded-full bg-[#c9f45b] px-3 py-2 text-[#103323]">{selectedTemplates.length} seçildi</span></div></div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-7">
+              {missingTemplates.length === 0 ? <div className="grid min-h-64 place-items-center text-center"><div><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-500/10 text-emerald-600"><PackageCheck size={30}/></span><h3 className="mt-4 text-lg font-extrabold text-[var(--text-1)]">Sektör paketi tamamlandı</h3><p className="mt-2 text-sm text-[var(--text-3)]">Bu sektör için önerilen kategorilerin tamamı zaten işletmenizde.</p></div></div> : visibleTemplates.length === 0 ? <div className="grid min-h-52 place-items-center text-center text-sm text-[var(--text-3)]">Aramanızla eşleşen kategori bulunamadı.</div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleTemplates.map((template,index) => { const selected = selectedTemplates.includes(template.name); return <button key={template.name} type="button" onClick={() => toggleTemplate(template.name)} aria-pressed={selected} className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${selected ? "border-[var(--accent)] bg-emerald-500/[.08] shadow-lg shadow-emerald-900/10" : "border-[var(--border)] bg-[var(--surface-1)]"}`} style={{ animationDelay: `${index * 35}ms` }}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-xl shadow-sm" style={{ backgroundColor: `${template.color}18`, border: `1px solid ${template.color}28` }}><ServiceCategoryIcon icon={template.icon} name={template.name} size={22}/></span><div className="min-w-0 flex-1"><b className="block text-sm text-[var(--text-1)]">{template.name}</b><p className="mt-1 text-[10px] leading-4 text-[var(--text-3)]">{template.description ?? `${sectorLabel} işletmeleri için önerilen kategori`}</p></div><i className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border transition ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] bg-[var(--surface-2)] text-transparent"}`}><Check size={13} strokeWidth={3}/></i></div><span className="absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 transition group-hover:scale-x-100" style={{ backgroundColor: template.color }}/></button>; })}</div>}
+            </div>
+
+            <footer className="flex shrink-0 flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8"><div className="flex gap-2">{missingTemplates.length > 0 && <button type="button" onClick={() => setSelectedTemplates(selectedTemplates.length === missingTemplates.length ? [] : missingTemplates.map((item) => item.name))} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--accent)] transition hover:bg-emerald-500/10">{selectedTemplates.length === missingTemplates.length ? "Seçimi temizle" : "Tümünü seç"}</button>}</div><div className="flex gap-2"><Button type="button" variant="secondary" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)}>Vazgeç</Button><Button type="button" disabled={templateBusy || selectedTemplates.length === 0} onClick={handleSeedCategories} className="gap-2 border-0 bg-[linear-gradient(135deg,#0b6b45,#4ca967)] px-5 font-bold text-white shadow-lg shadow-emerald-900/15">{templateBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/> : <PackageCheck size={16}/>} {templateBusy ? "Ekleniyor…" : `${selectedTemplates.length} kategoriyi ekle`}</Button></div></footer>
+          </section>
+        </div>,
+        document.body,
       )}
 
       {/* ━━━ CATEGORY EDIT MODAL ━━━ */}

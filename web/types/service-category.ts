@@ -5,4 +5,6 @@ export interface ServiceCategory extends EntityBase {
   icon: string;
   color: string;
   sortOrder: number;
+  templateSource?: string;
+  templateKey?: string;
 }

@@ -14,6 +14,7 @@ import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { ServiceCategory } from "@/types/service-category";
 import { getCategoryTemplates } from "@/constants/service-category-templates";
+import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 /**
  * List all service categories for a business, ordered by sortOrder.
@@ -80,10 +81,13 @@ export async function deleteServiceCategory(
  */
 export async function seedDefaultCategories(
   businessId: string,
-  sector: string
-): Promise<void> {
+  sector: string,
+  selectedNames?: string[]
+): Promise<number> {
   const existing = await listServiceCategories(businessId);
-  const templates = getCategoryTemplates(sector);
+  const source = canonicalBusinessCategory(sector);
+  const requested = selectedNames ? new Set(selectedNames.map(normalizeCategoryName)) : null;
+  const templates = getCategoryTemplates(source).filter((template) => !requested || requested.has(normalizeCategoryName(template.name)));
 
   const db = getDb();
   const batch = writeBatch(db);
@@ -94,15 +98,8 @@ export async function seedDefaultCategories(
     "serviceCategories"
   );
 
-  const normalize = (value: string) =>
-    value
-      .trim()
-      .toLocaleLowerCase("tr-TR")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
   const existingNames = new Set(
-    existing.map((category) => normalize(category.name))
+    existing.map((category) => normalizeCategoryName(category.name))
   );
 
   let sortOrder = existing.length;
@@ -110,7 +107,8 @@ export async function seedDefaultCategories(
 
   templates.forEach((tpl) => {
     // Aynı isimde kategori zaten varsa tekrar oluşturma
-    if (existingNames.has(normalize(tpl.name))) {
+    const templateKey = normalizeCategoryName(tpl.name);
+    if (existingNames.has(templateKey)) {
       return;
     }
 
@@ -121,6 +119,8 @@ export async function seedDefaultCategories(
       icon: tpl.icon,
       color: tpl.color,
       sortOrder,
+      templateSource: source,
+      templateKey,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -130,8 +130,13 @@ export async function seedDefaultCategories(
   });
 
   if (addedCount === 0) {
-    return;
+    return 0;
   }
 
   await batch.commit();
+  return addedCount;
+}
+
+export function normalizeCategoryName(value: string): string {
+  return value.trim().toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }

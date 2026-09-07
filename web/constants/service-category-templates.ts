@@ -2,6 +2,7 @@ export interface CategoryTemplate {
   name: string;
   icon: string;
   color: string;
+  description?: string;
 }
 
 export interface SectorTemplate {
@@ -17,14 +18,16 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
   kuafor: {
     label: "Kuaför",
     categories: [
-      { name: "Saç Kesim", icon: "✂️", color: "#0ea5e9" },
-      { name: "Saç Boyama", icon: "🎨", color: "#8b5cf6" },
-      { name: "Ombre / Balayage", icon: "🌈", color: "#d946ef" },
-      { name: "Fön / Şekillendirme", icon: "💨", color: "#f59e0b" },
-      { name: "Saç Bakımı", icon: "💆", color: "#10b981" },
-      { name: "Keratin / Botoks", icon: "✨", color: "#ec4899" },
-      { name: "Gelin Saçı", icon: "👰", color: "#f43f5e" },
-      { name: "Saç Ekleme / Kaynak", icon: "🔗", color: "#6366f1" },
+      { name: "Saç Kesim", icon: "✂️", color: "#0ea5e9", description: "Kadın, erkek ve çocuk kesimleri" },
+      { name: "Saç Boyama", icon: "🎨", color: "#8b5cf6", description: "Dip, komple ve tonlama işlemleri" },
+      { name: "Röfle / Meç", icon: "✨", color: "#f97316", description: "Işıltı, röfle ve meç uygulamaları" },
+      { name: "Ombre / Balayage", icon: "🌈", color: "#d946ef", description: "Geçişli renklendirme teknikleri" },
+      { name: "Fön / Şekillendirme", icon: "💨", color: "#f59e0b", description: "Fön, maşa, dalga ve şekillendirme" },
+      { name: "Saç Bakımı", icon: "💆", color: "#10b981", description: "Nem, onarım ve saç derisi bakımları" },
+      { name: "Keratin / Botoks", icon: "✨", color: "#ec4899", description: "Düzleştirme ve yoğun bakım" },
+      { name: "Gelin Saçı / Topuz", icon: "👰", color: "#f43f5e", description: "Özel gün saçı ve profesyonel topuz" },
+      { name: "Perma", icon: "🌀", color: "#14b8a6", description: "Kalıcı dalga ve bukle işlemleri" },
+      { name: "Saç Ekleme / Kaynak", icon: "🔗", color: "#6366f1", description: "Kaynak, çıtçıt ve saç uzatma" },
     ],
   },
   berber: {
@@ -60,6 +63,18 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
       { name: "Nail Art", icon: "🎨", color: "#f59e0b" },
       { name: "Jel Tırnak", icon: "✨", color: "#d946ef" },
       { name: "Tırnak Bakımı", icon: "🧴", color: "#06b6d4" },
+    ],
+  },
+  spa: {
+    label: "Spa / Masaj",
+    categories: [
+      { name: "Klasik Masaj", icon: "💆", color: "#14b8a6", description: "Rahatlatıcı tüm vücut masajı" },
+      { name: "Medikal Masaj", icon: "👐", color: "#0ea5e9", description: "Bölgesel ve terapötik uygulamalar" },
+      { name: "Aromaterapi", icon: "🌿", color: "#22c55e", description: "Aromatik yağlarla bakım" },
+      { name: "Hamam / Kese", icon: "🫧", color: "#06b6d4", description: "Geleneksel hamam ritüelleri" },
+      { name: "Sauna", icon: "♨️", color: "#f97316", description: "Sauna ve buhar seansları" },
+      { name: "Çift Masajı", icon: "💞", color: "#ec4899", description: "İki kişilik eş zamanlı seans" },
+      { name: "Bölgesel Bakım", icon: "✨", color: "#8b5cf6", description: "Sıkılaşma ve bölgesel uygulamalar" },
     ],
   },
   spor: {
@@ -146,11 +161,10 @@ export const SECTOR_TEMPLATES: Record<string, SectorTemplate> = {
 export function getCategoryTemplates(
   sector: string
 ): CategoryTemplate[] {
-  const normalizedSector = sector
-    .trim()
-    .toLocaleLowerCase("tr-TR");
+  const normalizedSector = canonicalBusinessCategory(sector);
 
   return SECTOR_TEMPLATES[normalizedSector]?.categories ?? [
-    { name: "Genel", icon: "📋", color: "#64748b" },
+    { name: "Genel", icon: "📋", color: "#64748b", description: "Genel hizmet kategorisi" },
   ];
 }
+import { canonicalBusinessCategory } from "@/lib/business-categories";
