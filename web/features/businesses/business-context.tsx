@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessesForUser } from "@/features/businesses/business-repository";
 import type { Business } from "@/types/business";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 
 interface BusinessContextValue {
   businesses: Business[];
@@ -64,10 +65,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         setBusinesses([]);
         const code = (error as { code?: string })?.code;
         if (code === "permission-denied" || code === "PERMISSION_DENIED") {
-          console.warn("BusinessContext: permission-denied (normal for new users)");
           return;
         }
-        const message = (error as Error | undefined)?.message ?? "Isletme listesi alinirken hata olustu.";
+        const message = userFacingError(error, "İşletme listeniz şu anda alınamadı. Lütfen yeniden deneyin.");
         toast.error(message);
       })
       .finally(() => {

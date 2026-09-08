@@ -10009,6 +10009,22 @@ a {
   gap: 9px
 }
 
+.account-favorite-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px }
+.account-favorite-card { position:relative; display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; overflow:hidden; border:1px solid rgb(19 61 41/.1); border-radius:22px; background:linear-gradient(145deg,#fff,#f4f8f3); padding:17px; box-shadow:0 14px 35px rgb(18 55 37/.07); transition:.28s ease }
+.account-favorite-card:hover { transform:translateY(-4px); border-color:rgb(11 107 69/.25); box-shadow:0 22px 45px rgb(18 55 37/.12) }
+.account-favorite-logo { position:relative; display:grid; place-items:center; overflow:hidden; width:64px; height:64px; border-radius:19px; background:#e2f1e7; color:var(--account-green) }
+.account-favorite-logo img { object-fit:cover }
+.account-favorite-card>div:nth-child(2) { min-width:0 }
+.account-favorite-card small { color:var(--account-green); font-size:8px; font-weight:900; letter-spacing:.11em; text-transform:uppercase }
+.account-favorite-card h3 { overflow:hidden; margin-top:4px; color:var(--account-ink); font-size:16px; text-overflow:ellipsis; white-space:nowrap }
+.account-favorite-card p { display:flex; align-items:center; gap:5px; margin-top:7px; color:#788a80; font-size:10px }
+.account-favorite-card footer { display:flex; grid-column:1/-1; gap:6px; margin-top:3px; border-top:1px solid rgb(19 61 41/.08); padding-top:12px }
+.account-favorite-card footer a { display:flex; flex:1; align-items:center; justify-content:center; gap:6px; min-height:38px; border-radius:11px; background:#e8f3eb; color:var(--account-green); font-size:9px; font-weight:850 }
+.account-favorite-card footer a:nth-child(2) { background:var(--account-green); color:#fff }
+.account-favorite-card footer button { display:grid; width:38px; place-items:center; border:0; border-radius:11px; background:#fff0f0; color:#a94a4a; cursor:pointer }
+
+@media(max-width:720px) { .account-favorite-grid { grid-template-columns:1fr } }
+
 .customer-appointment-card {
   display: grid;
   grid-template-columns: 55px 1fr auto;
@@ -10302,6 +10318,25 @@ a {
   background: #fff;
   box-shadow: 0 20px 50px rgb(18 55 37/.08)
 }
+
+.account-security-center { margin-top:15px; overflow:hidden; border:1px solid rgb(19 61 41/.1); border-radius:24px; background:linear-gradient(145deg,#f8fbf8,#edf6ef); padding:20px }
+.account-security-center>header { display:flex; align-items:center; gap:11px }
+.account-security-center>header>span { display:grid; width:42px; height:42px; place-items:center; border-radius:14px; background:var(--account-green); color:#fff; box-shadow:0 10px 22px rgb(11 107 69/.18) }
+.account-security-center>header div { display:flex; flex-direction:column }
+.account-security-center>header small { color:var(--account-green); font-size:8px; font-weight:900; letter-spacing:.14em }
+.account-security-center>header h3 { margin-top:3px; color:var(--account-ink); font-size:17px }
+.account-security-center>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px }
+.account-security-center article { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; border:1px solid rgb(19 61 41/.08); border-radius:17px; background:rgb(255 255 255/.75); padding:13px }
+.account-security-center article>i { display:grid; width:36px; height:36px; place-items:center; border-radius:12px; background:#e5f2e9; color:var(--account-green) }
+.account-security-center article>span { display:flex; min-width:0; flex-direction:column }
+.account-security-center article b { color:var(--account-ink); font-size:11px }
+.account-security-center article small { margin-top:3px; color:#7b8c82; font-size:8px; line-height:1.45 }
+.account-security-center article>button,.account-security-center article>div { display:flex; grid-column:1/-1; align-items:center; justify-content:center; gap:6px; min-height:36px; border:0; border-radius:11px; background:#e6f2e9; color:var(--account-green); font-size:9px; font-weight:850 }
+.account-security-center article>button:disabled { cursor:wait; opacity:.65 }
+.account-security-center article>div a { flex:1; text-align:center }
+.account-security-center article>div a+a { border-left:1px solid rgb(19 61 41/.1) }
+
+@media(max-width:720px) { .account-security-center>div { grid-template-columns:1fr } }
 
 .account-profile-art {
   position: relative;
@@ -15233,6 +15268,11 @@ a {
   transform: translateY(-3px);
   background: #c9f45b !important
 }
+
+.storefront-favorite-button { display:flex; width:100%; min-height:42px; align-items:center; justify-content:center; gap:8px; margin-top:8px; border:1px solid rgb(255 255 255/.14); border-radius:13px; background:rgb(255 255 255/.07); color:rgb(255 255 255/.78); font-size:10px; font-weight:850; transition:.25s ease }
+.storefront-favorite-button:hover { transform:translateY(-2px); background:rgb(255 255 255/.13); color:#fff }
+.storefront-favorite-button.active { border-color:rgb(255 138 171/.36); background:rgb(255 100 145/.15); color:#ffb4c8 }
+.storefront-favorite-button:disabled { cursor:wait; opacity:.65 }
 
 .storefront-booking-meta {
   display: flex;

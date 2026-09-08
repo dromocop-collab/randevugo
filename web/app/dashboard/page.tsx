@@ -11,6 +11,7 @@ import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import type { Appointment } from "@/types/appointments";
 import type { Business } from "@/types/business";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 import {
   ArrowUpRight, Building2, CalendarCheck2, CalendarDays, CheckCircle2,
   CircleDollarSign, Clock3, Copy, Eye, FileText, FolderOpen, ImageIcon,
@@ -162,7 +163,7 @@ export default function DashboardHomePage() {
       .catch((error) => {
         if (!alive) return;
         setData(EMPTY_DATA);
-        const message = (error as Error | undefined)?.message ?? "Dashboard verileri alınamadı.";
+        const message = userFacingError(error, "İşletme verileri şu anda alınamadı. Lütfen yeniden deneyin.");
         setLoadError(message);
         toast.error(message);
       });

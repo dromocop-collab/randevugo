@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import {
-  CalendarDays, ChartNoAxesCombined, Clock3, Headphones, Rocket,
+  CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, type LucideIcon,
 } from "lucide-react";
@@ -27,6 +27,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/yorumlar", label: "Yorumlar", icon: Star },
   { href: "/dashboard/destek", label: "Destek", icon: Headphones },
   { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2 },
+  { href: "/hesabim", label: "Müşteri Modu", icon: CircleUserRound },
 ];
 
 export function DashboardSidebar() {

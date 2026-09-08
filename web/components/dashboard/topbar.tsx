@@ -80,7 +80,7 @@ export function DashboardTopBar() {
           </div>
           <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
           {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="command-link command-link-store"><Store size={17} /><span>Mağazamı gör</span><ExternalLink size={14} /></Link>}
-          <span className="command-account"><i><UserRound size={15} /></i><span><small>Aktif hesap</small><b>{user?.email ?? ""}</b></span></span>
+          <Link href="/hesabim" className="command-account" title="Müşteri hesabına geç"><i><UserRound size={15} /></i><span><small>MÜŞTERİ MODU</small><b>{user?.email ?? ""}</b></span></Link>
           <Button
             variant="ghost"
             className="command-logout"

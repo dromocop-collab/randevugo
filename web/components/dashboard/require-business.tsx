@@ -11,8 +11,8 @@ export function RequireBusiness({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <LoadingState
-        title="Isletmeler yukleniyor"
-        description="Hesabiniza ait isletmeler kontrol ediliyor."
+        title="İşletmeler yükleniyor"
+        description="Hesabınıza ait çalışma alanları kontrol ediliyor."
       />
     );
   }
@@ -20,9 +20,9 @@ export function RequireBusiness({ children }: { children: ReactNode }) {
   if (!businessId || businesses.length === 0) {
     return (
       <EmptyState
-        title="Henuz bir isletme bagli degil"
-        description="Paneli kullanmak icin once onboarding adimini tamamlayin."
-        action={<Link href="/onboarding" className="text-sky-600">Onboarding sayfasina git</Link>}
+        title="Henüz bir işletme bağlı değil"
+        description="İşletme panelini kullanmak için güvenli kurulum adımlarını tamamlayın."
+        action={<Link href="/onboarding" className="font-bold text-[var(--accent)]">İşletmemi kur →</Link>}
       />
     );
   }

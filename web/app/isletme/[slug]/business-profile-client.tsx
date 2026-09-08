@@ -26,9 +26,13 @@ import type { Review } from "@/types/review";
 import type { ServiceCategory } from "@/types/service-category";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
+import { useAuth } from "@/hooks/use-auth";
+import { addFavoriteBusiness, isFavoriteBusiness, removeFavoriteBusiness } from "@/features/customers/favorite-repository";
+import { toast } from "sonner";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 import {
   ArrowRight, ArrowUpRight, CalendarCheck2, GalleryHorizontalEnd,
-  Globe2, Mail, MapPin, MessageCircleMore, Phone, Star,
+  Globe2, Heart, LoaderCircle, Mail, MapPin, MessageCircleMore, Phone, Star,
   UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
 
@@ -54,6 +58,7 @@ interface BusinessProfileClientProps {
 export default function BusinessProfileClient({ initialBusiness, initialWorkingHours, initialServices, initialStaff, initialReviews, initialServiceCategories }: BusinessProfileClientProps) {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [business, setBusiness] = useState<Business | null>(initialBusiness);
   const [workingHours, setWorkingHours] = useState<DaySchedule[]>(initialWorkingHours);
   const [services, setServices] = useState<Service[]>(initialServices);
@@ -63,6 +68,15 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("hizmetler");
+  const [favorite, setFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+
+  useEffect(() => {
+    if (!user || !initialBusiness.id) return;
+    let active = true;
+    isFavoriteBusiness(user.uid, initialBusiness.id).then((value) => { if (active) setFavorite(value); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [initialBusiness.id, user]);
 
   useEffect(() => {
     const slug = params.slug;
@@ -90,10 +104,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
             listServices(row.id, true),
             listStaff(row.id, true),
             listBusinessReviews(row.id).catch(() => [] as Review[]),
-            listServiceCategories(row.id).catch((error) => {
-              console.error("❌ KATEGORİLER YÜKLENEMEDİ:", error);
-              return [] as ServiceCategory[];
-            }),
+            listServiceCategories(row.id).catch(() => [] as ServiceCategory[]),
           ]);
         if (cancelled) return;
         setWorkingHours(schedules);
@@ -104,7 +115,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
       })
       .catch((e) => {
         if (cancelled) return;
-        setError((e as Error).message);
+        setError(userFacingError(e, "İşletme bilgileri şu anda yüklenemedi. Lütfen yeniden deneyin."));
       })
       .finally(() => {
         if (cancelled) return;
@@ -153,6 +164,25 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
     yorumlar: business.reviewCount ?? 0,
     iletisim: undefined,
   };
+
+  async function toggleFavorite() {
+    if (!business) return;
+    if (!user) {
+      router.push(`/musteri/giris?next=${encodeURIComponent(`/isletme/${params.slug}`)}`);
+      return;
+    }
+    setFavoriteBusy(true);
+    try {
+      if (favorite) await removeFavoriteBusiness(user.uid, business.id);
+      else await addFavoriteBusiness(user.uid, business);
+      setFavorite((value) => !value);
+      toast.success(favorite ? "İşletme favorilerden çıkarıldı." : "İşletme favorilerinize eklendi.");
+    } catch {
+      toast.error("Favori tercihi güncellenemedi. Lütfen tekrar deneyin.");
+    } finally {
+      setFavoriteBusy(false);
+    }
+  }
 
   return (
     <div className="marketing-page storefront-v2 min-h-screen bg-[var(--bg-1)]">
@@ -253,6 +283,9 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                   >
                     Randevu Al <ArrowRight size={16} />
                   </Link>
+                  <button type="button" className={`storefront-favorite-button${favorite ? " active" : ""}`} onClick={toggleFavorite} disabled={favoriteBusy} aria-pressed={favorite}>
+                    {favoriteBusy ? <LoaderCircle className="animate-spin" size={16}/> : <Heart size={16} fill={favorite ? "currentColor" : "none"}/>}<span>{favorite ? "Favorilerimde" : "Favoriye ekle"}</span>
+                  </button>
                   {services.length > 0 && (
                     <div className="storefront-booking-meta">
                       <div>
