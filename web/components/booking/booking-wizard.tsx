@@ -552,6 +552,9 @@ export function BookingWizard(props: Props) {
                     {member.position && (
                       <p className="text-xs text-[var(--text-3)]">{member.position}</p>
                     )}
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+                      {member.expertiseLevel === "trainer" ? "Eğitmen / Usta" : member.expertiseLevel === "senior" ? "Kıdemli uzman" : member.expertiseLevel === "junior" ? "Gelişen uzman" : "Uzman"}
+                    </p>
                   </div>
                 </label>
               ))}

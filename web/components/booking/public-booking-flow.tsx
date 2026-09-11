@@ -65,6 +65,13 @@ export function PublicBookingFlow(props: Props) {
 
   const selectedService = useMemo(() => services.find((item) => item.id === serviceId), [serviceId, services]);
   const selectedStaff = useMemo(() => staff.find((item) => item.id === staffId), [staff, staffId]);
+  const eligibleStaff = useMemo(() => {
+    if (!selectedService) return staff;
+    return staff.filter((member) => member.serviceIds.includes(selectedService.id) || (
+      member.serviceIds.length === 0 &&
+      (!member.specialtyCategoryIds?.length || member.specialtyCategoryIds.includes(selectedService.category))
+    ));
+  }, [selectedService, staff]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -106,7 +113,7 @@ export function PublicBookingFlow(props: Props) {
           <Select
             label="Hizmet"
             value={serviceId}
-            onChange={(e) => { setServiceId(e.target.value); setSlot(""); }}
+            onChange={(e) => { setServiceId(e.target.value); setStaffId(""); setSlot(""); }}
             options={services.map((item) => ({ value: item.id, label: `${item.name} - ${item.durationMinutes} dk` }))}
           />
         </Card>
@@ -118,7 +125,7 @@ export function PublicBookingFlow(props: Props) {
             onChange={(e) => { setStaffId(e.target.value); setSlot(""); }}
             options={[
               { value: "", label: "Uygun herhangi bir çalışan" },
-              ...staff.map((item) => ({ value: item.id, label: item.fullName })),
+              ...eligibleStaff.map((item) => ({ value: item.id, label: `${item.fullName} · ${item.position || "Uzman"}` })),
             ]}
           />
         </Card>

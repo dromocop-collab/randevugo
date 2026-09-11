@@ -23,6 +23,7 @@ import {
   normalizeCategoryName,
 } from "@/features/services/service-category-repository";
 import { getBusinessById } from "@/features/businesses/business-repository";
+import { listStaff, updateStaff } from "@/features/staff/staff-repository";
 import { firstErrorMessage, serviceCreateSchema } from "@/lib/validation/schemas";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
@@ -218,13 +219,43 @@ export default function ServicesPage() {
     if (!businessId) return;
     const category = categories.find((item) => item.id === catId);
     const linkedServices = services.filter((service) => service.category === catId);
+    const allStaff = await listStaff(businessId);
+    const linkedStaff = allStaff.filter((member) => member.specialtyCategoryIds?.includes(catId));
+    let replacementCategoryId = "";
+    if (linkedStaff.length > 0) {
+      const alternatives = categories.filter((item) => item.id !== catId);
+      if (alternatives.length === 0) {
+        toast.error(`Bu branşa bağlı ${linkedStaff.length} çalışan var. Önce yeni bir branş oluşturun.`);
+        return;
+      }
+      const answer = window.prompt(
+        `Bu branşa bağlı ${linkedStaff.length} çalışan var (${linkedStaff.map((member) => member.fullName).join(", ")}). Taşınacak branşın numarasını yazın:\n${alternatives.map((item, index) => `${index + 1}. ${item.name}`).join("\n")}`
+      );
+      if (answer === null) return;
+      const replacement = alternatives[Number(answer) - 1];
+      if (!replacement) {
+        toast.error("Geçerli bir branş numarası seçmelisiniz.");
+        return;
+      }
+      replacementCategoryId = replacement.id;
+    }
     const warning = linkedServices.length > 0
-      ? `“${category?.name ?? "Kategori"}” silinsin mi? İçindeki ${linkedServices.length} hizmet Kategorisiz alanına taşınacak.`
+      ? `“${category?.name ?? "Kategori"}” silinsin mi? İçindeki ${linkedServices.length} hizmet Kategorisiz alanına, bağlı çalışanlar seçtiğiniz branşa taşınacak.`
       : `“${category?.name ?? "Kategori"}” kalıcı olarak silinsin mi?`;
     if (!window.confirm(warning)) return;
     try {
+      const replacementServiceIds = services.filter((service) => service.category === replacementCategoryId).map((service) => service.id);
       await Promise.all(
-        linkedServices.map((service) => updateService(businessId, service.id, { category: "" })),
+        [
+          ...linkedServices.map((service) => updateService(businessId, service.id, { category: "" })),
+          ...linkedStaff.map((member) => updateStaff(businessId, member.id, {
+            specialtyCategoryIds: Array.from(new Set((member.specialtyCategoryIds ?? []).map((id) => id === catId ? replacementCategoryId : id))),
+            serviceIds: Array.from(new Set([
+              ...member.serviceIds.filter((id) => !linkedServices.some((service) => service.id === id)),
+              ...replacementServiceIds,
+            ])),
+          })),
+        ],
       );
       await deleteServiceCategory(businessId, catId);
       if (activeCategory === catId) setActiveCategory("all");

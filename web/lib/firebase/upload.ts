@@ -33,6 +33,16 @@ export async function uploadBusinessImage(
   return uploadFile(path, file);
 }
 
+/** Upload a public staff profile photo. */
+export async function uploadStaffImage(
+  businessId: string,
+  staffId: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "jpg";
+  return uploadFile(`businesses/${businessId}/public/staff/${staffId}_${Date.now()}.${ext}`, file);
+}
+
 /**
  * Upload a review image (customer review photo).
  */

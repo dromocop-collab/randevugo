@@ -9,14 +9,20 @@ import { Select } from "@/components/ui/select";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
 import { useBusiness } from "@/hooks/use-business";
-import { createStaff, listStaff, removeStaff, updateStaff } from "@/features/staff/staff-repository";
+import { archiveStaff, createStaff, linkStaffAccount, listStaff, updateStaff } from "@/features/staff/staff-repository";
 import { listServices } from "@/features/services/service-repository";
 import { listServiceCategories } from "@/features/services/service-category-repository";
 import { firstErrorMessage, staffCreateSchema } from "@/lib/validation/schemas";
+import { ImageUploader } from "@/components/ui/image-uploader";
+import { uploadStaffImage } from "@/lib/firebase/upload";
+import { listAppointments } from "@/features/appointments/appointment-repository";
+import { listBusinessReviewsForOwner } from "@/features/reviews/review-repository";
 import type { Staff } from "@/types/staff";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { DaySchedule } from "@/types/business";
+import type { Appointment } from "@/types/appointments";
+import type { Review } from "@/types/review";
 import { BriefcaseBusiness, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Save, ShieldCheck, Sparkles, Trash2, UserRound, WandSparkles } from "lucide-react";
 
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
@@ -47,8 +53,11 @@ export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadedAt] = useState(() => Date.now());
 
   // Create form
   const [name, setName] = useState("");
@@ -61,12 +70,14 @@ export default function StaffPage() {
     if (!businessId) return;
     let cancelled = false;
 
-    Promise.all([listStaff(businessId), listServices(businessId), listServiceCategories(businessId)]).then(
-      ([staffRows, serviceRows, categoryRows]) => {
+    Promise.all([listStaff(businessId), listServices(businessId), listServiceCategories(businessId), listAppointments(businessId), listBusinessReviewsForOwner(businessId).catch(() => [] as Review[])]).then(
+      ([staffRows, serviceRows, categoryRows, appointmentRows, reviewRows]) => {
         if (cancelled) return;
         setStaff(staffRows);
         setServices(serviceRows);
         setCategories(categoryRows);
+        setAppointments(appointmentRows);
+        setReviews(reviewRows);
         setLoading(false);
       }
     ).catch(() => {
@@ -98,6 +109,9 @@ export default function StaffPage() {
       email: safeEmail,
       position,
       specialtyCategoryIds: safeCategoryIds,
+      expertiseLevel: "specialist",
+      commissionRate: 0,
+      permissions: { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false },
       isActive: true,
       serviceIds: matchingServiceIds,
       workingHours: defaultHours,
@@ -159,8 +173,12 @@ export default function StaffPage() {
             <StaffCard
               key={item.id}
               item={item}
+              allStaff={staff}
               services={services}
               categories={categories}
+              appointments={appointments}
+              reviews={reviews}
+              referenceTime={loadedAt}
               businessId={businessId!}
               isExpanded={expandedId === item.id}
               onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
@@ -177,16 +195,24 @@ export default function StaffPage() {
 
 function StaffCard({
   item,
+  allStaff,
   services,
   categories,
+  appointments,
+  reviews,
+  referenceTime,
   businessId,
   isExpanded,
   onToggle,
   onRefresh,
 }: {
   item: Staff;
+  allStaff: Staff[];
   services: Service[];
   categories: ServiceCategory[];
+  appointments: Appointment[];
+  reviews: Review[];
+  referenceTime: number;
   businessId: string;
   isExpanded: boolean;
   onToggle: () => void;
@@ -194,6 +220,11 @@ function StaffCard({
 }) {
   const [saving, setSaving] = useState(false);
   const [editPosition, setEditPosition] = useState(item.position);
+  const [editPhotoUrl, setEditPhotoUrl] = useState(item.photoUrl ?? "");
+  const [expertiseLevel, setExpertiseLevel] = useState(item.expertiseLevel ?? "specialist");
+  const [commissionRate, setCommissionRate] = useState(item.commissionRate ?? 0);
+  const [permissions, setPermissions] = useState(item.permissions ?? { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false });
+  const [replacementStaffId, setReplacementStaffId] = useState("");
   const [editBio, setEditBio] = useState(item.bio ?? "");
   const [editCapacity, setEditCapacity] = useState(item.appointmentCapacity);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(item.serviceIds);
@@ -214,6 +245,12 @@ function StaffCard({
   });
   const [leaveDates, setLeaveDates] = useState<string[]>(item.leaveDates ?? []);
   const [newLeaveDate, setNewLeaveDate] = useState("");
+  const memberAppointments = appointments.filter((appointment) => appointment.staffId === item.id);
+  const completedAppointments = memberAppointments.filter((appointment) => appointment.status === "completed");
+  const upcomingAppointments = memberAppointments.filter((appointment) => ["pending", "confirmed"].includes(appointment.status) && new Date(appointment.startAt).getTime() >= referenceTime);
+  const memberReviews = reviews.filter((review) => review.staffId === item.id && review.status === "approved");
+  const averageRating = memberReviews.length ? memberReviews.reduce((total, review) => total + review.rating, 0) / memberReviews.length : 0;
+  const generatedRevenue = completedAppointments.reduce((total, appointment) => total + Number(appointment.servicePrice ?? 0), 0);
 
   function updateHourDay(idx: number, patch: Partial<DaySchedule>) {
     setStaffHours((prev) => prev.map((h, i) => (i === idx ? { ...h, ...patch } : h)));
@@ -249,6 +286,10 @@ function StaffCard({
     try {
       await updateStaff(businessId, item.id, {
         position: editPosition,
+        photoUrl: editPhotoUrl,
+        expertiseLevel,
+        commissionRate: Math.min(100, Math.max(0, commissionRate)),
+        permissions,
         bio: editBio || undefined,
         appointmentCapacity: editCapacity,
         specialtyCategoryIds: selectedCategoryIds,
@@ -270,11 +311,25 @@ function StaffCard({
     onRefresh();
   }
 
+  async function handleLinkAccount() {
+    try {
+      const result = await linkStaffAccount(businessId, item.id);
+      toast.success(`${result.email} çalışan paneline bağlandı.`);
+      onRefresh();
+    } catch (error) {
+      toast.error((error as Error).message || "Çalışan hesabı bağlanamadı. Bu e-posta ile önce müşteri hesabı oluşturulmalı.");
+    }
+  }
+
   async function handleDelete() {
-    if (!confirm(`${item.fullName} silinecek. Emin misiniz?`)) return;
-    await removeStaff(businessId, item.id);
-    toast.success("Çalışan silindi.");
-    onRefresh();
+    if (!confirm(`${item.fullName} arşivlenecek. Gelecek randevuları varsa seçtiğiniz çalışana aktarılacak. Emin misiniz?`)) return;
+    try {
+      const result = await archiveStaff(businessId, item.id, replacementStaffId || undefined);
+      toast.success(result.transferred > 0 ? `${result.transferred} randevu aktarıldı ve çalışan arşivlendi.` : "Çalışan güvenle arşivlendi.");
+      onRefresh();
+    } catch (error) {
+      toast.error((error as Error).message || "Çalışan arşivlenemedi.");
+    }
   }
 
   return (
@@ -327,6 +382,18 @@ function StaffCard({
                 { value: "3", label: "3 randevu" },
               ]}
             />
+            <Select
+              label="Yetkinlik seviyesi"
+              value={expertiseLevel}
+              onChange={(e) => setExpertiseLevel(e.target.value as NonNullable<Staff["expertiseLevel"]>)}
+              options={[
+                { value: "junior", label: "Gelişen uzman" },
+                { value: "specialist", label: "Uzman" },
+                { value: "senior", label: "Kıdemli uzman" },
+                { value: "trainer", label: "Eğitmen / Usta" },
+              ]}
+            />
+            <Input label="Prim / komisyon (%)" type="number" min="0" max="100" value={commissionRate} onChange={(e) => setCommissionRate(Number(e.target.value))} />
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-2)]">Bio</label>
               <textarea
@@ -337,11 +404,37 @@ function StaffCard({
                 placeholder="Kısa açıklama..."
               />
             </div>
-          </div></section>
+          </div><div className="mt-4"><ImageUploader label="Çalışan fotoğrafı" currentUrl={editPhotoUrl} onUpload={setEditPhotoUrl} uploadFn={(file) => uploadStaffImage(businessId, item.id, file)} /></div></section>
 
           <section className="staff-editor-section">
             <header><BriefcaseBusiness size={18} /><div><h4>Branşlar *</h4><p>Çalışanın görev aldığı ana hizmet alanlarını seç. En az bir branş zorunludur.</p></div></header>
             <SpecialtyPicker categories={categories} selectedIds={selectedCategoryIds} onChange={changeSpecialties} />
+          </section>
+
+          <section className="staff-editor-section">
+            <header><Sparkles size={18} /><div><h4>Performans özeti</h4><p>Gerçek randevu ve değerlendirme verilerinden hesaplanır.</p></div></header>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="staff-service-option is-selected"><div><p className="font-bold">{completedAppointments.length}</p><small>Tamamlanan randevu</small></div></div>
+              <div className="staff-service-option is-selected"><div><p className="font-bold">{upcomingAppointments.length}</p><small>Gelecek randevu</small></div></div>
+              <div className="staff-service-option is-selected"><div><p className="font-bold">{averageRating ? averageRating.toFixed(1) : "—"}</p><small>Müşteri puanı ({memberReviews.length})</small></div></div>
+              <div className="staff-service-option is-selected"><div><p className="font-bold">{generatedRevenue.toLocaleString("tr-TR")} ₺</p><small>Üretilen gelir · prim {(generatedRevenue * commissionRate / 100).toLocaleString("tr-TR")} ₺</small></div></div>
+            </div>
+          </section>
+
+          <section className="staff-editor-section">
+            <header><ShieldCheck size={18} /><div><h4>Çalışan paneli yetkileri</h4><p>Çalışan hesabı bağlandığında erişebileceği alanları şimdiden sınırla.</p></div></header>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {([
+                ["manageOwnCalendar", "Kendi takvimini yönet"],
+                ["viewCustomers", "Müşteri bilgilerini gör"],
+                ["manageAppointments", "Randevu durumunu değiştir"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className={`staff-service-option ${permissions[key] ? "is-selected" : ""}`}>
+                  <input type="checkbox" checked={permissions[key]} onChange={() => setPermissions((current) => ({ ...current, [key]: !current[key] }))} />
+                  <span className="font-medium">{label}</span>
+                </label>
+              ))}
+            </div>
           </section>
 
           {/* Service Assignment */}
@@ -459,9 +552,19 @@ function StaffCard({
             <Button variant="secondary" onClick={handleToggleActive}>
               {item.isActive ? <PauseCircle size={17} /> : <PlayCircle size={17} />} {item.isActive ? "Pasif Yap" : "Aktif Yap"}
             </Button>
-            <Button variant="danger" onClick={handleDelete}>
-              <Trash2 size={17} /> Sil
+            <Button variant="secondary" onClick={handleLinkAccount}>
+              <ShieldCheck size={17} /> {item.linkedUid ? "Panel Erişimini Yenile" : "Çalışan Panelini Bağla"}
             </Button>
+            <Select
+              label="Gelecek randevuları aktar"
+              value={replacementStaffId}
+              onChange={(e) => setReplacementStaffId(e.target.value)}
+              options={[
+                { value: "", label: "Aktarım gerekmiyorsa boş bırak" },
+                ...allStaff.filter((candidate) => candidate.id !== item.id && candidate.isActive).map((candidate) => ({ value: candidate.id, label: candidate.fullName })),
+              ]}
+            />
+            <Button variant="danger" onClick={handleDelete}><Trash2 size={17} /> Arşivle</Button>
           </footer>
         </div>
       )}

@@ -989,6 +989,128 @@ export const rescheduleAppointment = onCall(
   }
 );
 
+export const archiveStaff = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const staffId = requireString(data.staffId, "staffId");
+    const replacementStaffId = typeof data.replacementStaffId === "string" && data.replacementStaffId.trim()
+      ? data.replacementStaffId.trim()
+      : null;
+    if (replacementStaffId === staffId) throw new HttpsError("invalid-argument", "Aynı çalışan aktarım hedefi olamaz.");
+    await requireBusinessManager(uid, businessId);
+
+    const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
+    const staffSnapshot = await staffRef.get();
+    if (!staffSnapshot.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
+
+    const appointmentSnapshot = await db.collection(`businesses/${businessId}/appointments`)
+      .where("staffId", "==", staffId)
+      .get();
+    const activeAppointments = appointmentSnapshot.docs.filter((document) => {
+      const appointment = document.data();
+      const startAt = appointment.startAt instanceof Timestamp ? appointment.startAt.toMillis() : 0;
+      return startAt >= Date.now() && ["pending", "confirmed"].includes(String(appointment.status));
+    });
+    if (activeAppointments.length > 400) {
+      throw new HttpsError("resource-exhausted", "Çalışanın çok fazla gelecek randevusu var. Destek ekibiyle iletişime geçin.");
+    }
+    if (activeAppointments.length > 0 && !replacementStaffId) {
+      throw new HttpsError("failed-precondition", `${activeAppointments.length} gelecek randevu için aktarım yapılacak çalışan seçmelisiniz.`);
+    }
+
+    let replacementName = "";
+    if (replacementStaffId) {
+      const replacementSnapshot = await db.doc(`businesses/${businessId}/staff/${replacementStaffId}`).get();
+      if (!replacementSnapshot.exists || replacementSnapshot.data()?.isActive !== true) {
+        throw new HttpsError("failed-precondition", "Aktarım yapılacak çalışan aktif değil.");
+      }
+      const replacement = replacementSnapshot.data()!;
+      replacementName = String(replacement.fullName ?? "Çalışan");
+      const serviceIds = Array.isArray(replacement.serviceIds) ? replacement.serviceIds.map(String) : [];
+      const categoryIds = Array.isArray(replacement.specialtyCategoryIds) ? replacement.specialtyCategoryIds.map(String) : [];
+      const uniqueServiceIds = [...new Set(activeAppointments.map((document) => String(document.data().serviceId ?? "")).filter(Boolean))];
+      const serviceSnapshots = await Promise.all(uniqueServiceIds.map((serviceId) => db.doc(`businesses/${businessId}/services/${serviceId}`).get()));
+      const incompatible = serviceSnapshots.find((serviceSnapshot) => {
+        if (!serviceSnapshot.exists) return true;
+        const category = String(serviceSnapshot.data()?.category ?? "");
+        return (serviceIds.length > 0 && !serviceIds.includes(serviceSnapshot.id)) || (categoryIds.length > 0 && !categoryIds.includes(category));
+      });
+      if (incompatible) {
+        throw new HttpsError("failed-precondition", "Seçilen çalışan, gelecekteki randevuların tüm hizmet ve branşlarına yetkili değil.");
+      }
+    }
+
+    const batch = db.batch();
+    activeAppointments.forEach((document) => batch.update(document.ref, {
+      staffId: replacementStaffId,
+      staffName: replacementName,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+    batch.update(staffRef, {
+      isActive: false,
+      archivedAt: FieldValue.serverTimestamp(),
+      archivedBy: uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const linkedUid = typeof staffSnapshot.data()?.linkedUid === "string" ? staffSnapshot.data()!.linkedUid : "";
+    if (linkedUid) batch.delete(db.doc(`businesses/${businessId}/members/${linkedUid}`));
+    batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+      action: "staff.archived",
+      entityId: staffId,
+      replacementStaffId,
+      transferredAppointments: activeAppointments.length,
+      actorUid: uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true, transferred: activeAppointments.length };
+  }
+);
+
+export const linkStaffAccount = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const staffId = requireString(data.staffId, "staffId");
+    await requireBusinessManager(uid, businessId);
+    const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
+    const staffSnapshot = await staffRef.get();
+    if (!staffSnapshot.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
+    const staff = staffSnapshot.data()!;
+    const email = requireString(staff.email, "Çalışan e-postası").toLowerCase();
+    let userRecord;
+    try {
+      userRecord = await auth.getUserByEmail(email);
+    } catch {
+      throw new HttpsError("failed-precondition", "Bu e-posta ile kayıtlı hesap yok. Çalışan önce müşteri hesabı oluşturmalıdır.");
+    }
+    const memberRef = db.doc(`businesses/${businessId}/members/${userRecord.uid}`);
+    const currentMember = await memberRef.get();
+    if (currentMember.exists && ["owner", "admin", "manager"].includes(String(currentMember.data()?.role ?? ""))) {
+      throw new HttpsError("failed-precondition", "Bu hesap işletmede yönetici yetkisine sahip; çalışan rolüne dönüştürülemez.");
+    }
+    const batch = db.batch();
+    batch.set(memberRef, {
+      uid: userRecord.uid,
+      role: "staff",
+      staffId,
+      permissions: staff.permissions ?? { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    batch.update(staffRef, { linkedUid: userRecord.uid, updatedAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { success: true, email };
+  }
+);
+
 export const getAvailableSlots = onCall(
   publicCallableOptions,
   async (request) => {
@@ -1046,14 +1168,16 @@ export const getAvailableSlots = onCall(
       return buildSlots(candidate.context, date, candidate.staffId, blocked).map((startAtMillis) => ({
         startAtMillis,
         staffId: candidate.staffId,
+        load: blocked.length,
       }));
     }));
     const slots = [...candidateSlots.flat()]
-      .sort((a, b) => a.startAtMillis - b.startAtMillis)
+      .sort((a, b) => a.startAtMillis - b.startAtMillis || a.load - b.load)
       .filter((slot, index, rows) => index === 0 || rows[index - 1].startAtMillis !== slot.startAtMillis);
     return {
       slots: slots.map((slot) => ({
-        ...slot,
+        startAtMillis: slot.startAtMillis,
+        staffId: slot.staffId,
         label: new Intl.DateTimeFormat("tr-TR", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(slot.startAtMillis)),
       })),
       timeZone,

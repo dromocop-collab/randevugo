@@ -12,6 +12,8 @@ import {
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Staff } from "@/types/staff";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebaseApp } from "@/lib/firebase/client";
 
 export async function listStaff(businessId: string, activeOnly = false): Promise<Staff[]> {
   const db = getDb();
@@ -48,4 +50,26 @@ export async function updateStaff(
 export async function removeStaff(businessId: string, staffId: string): Promise<void> {
   const db = getDb();
   await deleteDoc(doc(db, "businesses", businessId, "staff", staffId));
+}
+
+export async function archiveStaff(
+  businessId: string,
+  staffId: string,
+  replacementStaffId?: string
+): Promise<{ transferred: number }> {
+  const callable = httpsCallable<
+    { businessId: string; staffId: string; replacementStaffId?: string },
+    { transferred: number }
+  >(getFunctions(getFirebaseApp(), "europe-west1"), "archiveStaff");
+  const result = await callable({ businessId, staffId, replacementStaffId });
+  return result.data;
+}
+
+export async function linkStaffAccount(businessId: string, staffId: string): Promise<{ email: string }> {
+  const callable = httpsCallable<
+    { businessId: string; staffId: string },
+    { email: string }
+  >(getFunctions(getFirebaseApp(), "europe-west1"), "linkStaffAccount");
+  const result = await callable({ businessId, staffId });
+  return result.data;
 }

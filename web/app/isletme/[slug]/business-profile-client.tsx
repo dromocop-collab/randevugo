@@ -232,7 +232,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                 onSelectService={(serviceId) => router.push(`/isletme/${params.slug}/randevu?service=${serviceId}`)}
               />
             )}
-            {activeTab === "ekip" && <StorefrontStaff staff={staff} />}
+            {activeTab === "ekip" && <StorefrontStaff staff={staff} categories={serviceCategories} reviews={reviews} />}
             {activeTab === "galeri" && (business.galleryUrls ?? []).length > 0 && (
               <StorefrontGallery
                 galleryUrls={business.galleryUrls!}
