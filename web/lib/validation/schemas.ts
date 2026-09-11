@@ -34,6 +34,7 @@ export const staffCreateSchema = z.object({
   name: z.string().trim().min(2, "Ad Soyad en az 2 karakter olmalidir."),
   phone: z.string().trim().min(10, "Telefon numarasi gecersiz."),
   email: z.string().trim().email("Gecerli bir e-posta girin."),
+  specialtyCategoryIds: z.array(z.string().min(1)).min(1, "En az bir brans secmelisiniz."),
 });
 
 export function firstErrorMessage(result: z.ZodError): string {

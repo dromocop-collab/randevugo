@@ -147,10 +147,14 @@ export function BookingWizard(props: Props) {
   // Filter staff to those who can provide selected service
   const filteredStaff = useMemo(() => {
     if (!serviceId) return staffList;
+    const categoryId = selectedService?.category;
     return staffList.filter(
-      (s) => s.serviceIds.length === 0 || s.serviceIds.includes(serviceId)
+      (s) => s.serviceIds.includes(serviceId) || (
+        s.serviceIds.length === 0 &&
+        (!s.specialtyCategoryIds?.length || Boolean(categoryId && s.specialtyCategoryIds.includes(categoryId)))
+      )
     );
-  }, [staffList, serviceId]);
+  }, [staffList, serviceId, selectedService]);
 
   const currentStepIndex = STEPS.indexOf(step);
 
@@ -451,7 +455,10 @@ export function BookingWizard(props: Props) {
                     checked={serviceId === service.id}
                     onChange={() => {
                       setServiceId(service.id);
-                      const eligible = staffList.find((member) => member.serviceIds.length === 0 || member.serviceIds.includes(service.id));
+                      const eligible = staffList.find((member) => member.serviceIds.includes(service.id) || (
+                        member.serviceIds.length === 0 &&
+                        (!member.specialtyCategoryIds?.length || member.specialtyCategoryIds.includes(service.category))
+                      ));
                       setStaffId(eligible?.id ?? "");
                       setSlot("");
                     }}

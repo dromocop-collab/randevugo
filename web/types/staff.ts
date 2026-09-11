@@ -13,6 +13,8 @@ export interface Staff extends EntityBase {
   phone: string;
   email: string;
   position: string;
+  /** Service-category branches this employee is qualified to work in. */
+  specialtyCategoryIds?: string[];
   isActive: boolean;
   serviceIds: string[];
   workingHours: DaySchedule[];

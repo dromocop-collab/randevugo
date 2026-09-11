@@ -635,6 +635,10 @@ async function loadBookingContext(businessId: string, serviceId: string, staffId
   const service = serviceSnap.data()!;
   const staff = staffSnap?.data() ?? null;
   const serviceIds = Array.isArray(staff?.serviceIds) ? staff.serviceIds.map(String) : [];
+  const specialtyCategoryIds = Array.isArray(staff?.specialtyCategoryIds) ? staff.specialtyCategoryIds.map(String) : [];
+  if (staff && specialtyCategoryIds.length > 0 && !specialtyCategoryIds.includes(String(service.category ?? ""))) {
+    throw new HttpsError("failed-precondition", "Seçilen çalışan bu hizmet branşında çalışmıyor.");
+  }
   if (staff && serviceIds.length > 0 && !serviceIds.includes(serviceId)) {
     throw new HttpsError("failed-precondition", "Seçilen çalışan bu hizmeti vermiyor.");
   }
@@ -1016,10 +1020,14 @@ export const getAvailableSlots = onCall(
         .where("isActive", "==", true)
         .get();
       const eligibleStaff = staffSnapshot.docs.filter((document) => {
+        const specialtyCategoryIds = Array.isArray(document.data().specialtyCategoryIds)
+          ? document.data().specialtyCategoryIds.map(String)
+          : [];
         const serviceIds = Array.isArray(document.data().serviceIds)
           ? document.data().serviceIds.map(String)
           : [];
-        return serviceIds.length === 0 || serviceIds.includes(serviceId);
+        const matchesBranch = specialtyCategoryIds.length === 0 || specialtyCategoryIds.includes(String(context.service.category ?? ""));
+        return matchesBranch && (serviceIds.length === 0 || serviceIds.includes(serviceId));
       });
       if (eligibleStaff.length === 0) {
         candidates.push({ staffId: null, context });

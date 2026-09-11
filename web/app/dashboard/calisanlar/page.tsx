@@ -7,12 +7,15 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { EmptyState, LoadingState } from "@/components/ui/states";
+import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
 import { useBusiness } from "@/hooks/use-business";
 import { createStaff, listStaff, removeStaff, updateStaff } from "@/features/staff/staff-repository";
 import { listServices } from "@/features/services/service-repository";
+import { listServiceCategories } from "@/features/services/service-category-repository";
 import { firstErrorMessage, staffCreateSchema } from "@/lib/validation/schemas";
 import type { Staff } from "@/types/staff";
 import type { Service } from "@/types/service";
+import type { ServiceCategory } from "@/types/service-category";
 import type { DaySchedule } from "@/types/business";
 import { BriefcaseBusiness, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Save, ShieldCheck, Sparkles, Trash2, UserRound, WandSparkles } from "lucide-react";
 
@@ -43,6 +46,7 @@ export default function StaffPage() {
   const { businessId } = useBusiness();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -51,16 +55,18 @@ export default function StaffPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [position, setPosition] = useState("Uzman");
+  const [specialtyCategoryIds, setSpecialtyCategoryIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!businessId) return;
     let cancelled = false;
 
-    Promise.all([listStaff(businessId), listServices(businessId)]).then(
-      ([staffRows, serviceRows]) => {
+    Promise.all([listStaff(businessId), listServices(businessId), listServiceCategories(businessId)]).then(
+      ([staffRows, serviceRows, categoryRows]) => {
         if (cancelled) return;
         setStaff(staffRows);
         setServices(serviceRows);
+        setCategories(categoryRows);
         setLoading(false);
       }
     ).catch(() => {
@@ -74,13 +80,16 @@ export default function StaffPage() {
     event.preventDefault();
     if (!businessId) return;
 
-    const validated = staffCreateSchema.safeParse({ name, phone, email });
+    const validated = staffCreateSchema.safeParse({ name, phone, email, specialtyCategoryIds });
     if (!validated.success) {
       toast.error(firstErrorMessage(validated.error));
       return;
     }
 
-    const { name: safeName, phone: safePhone, email: safeEmail } = validated.data;
+    const { name: safeName, phone: safePhone, email: safeEmail, specialtyCategoryIds: safeCategoryIds } = validated.data;
+    const matchingServiceIds = services
+      .filter((service) => safeCategoryIds.includes(service.category))
+      .map((service) => service.id);
 
     await createStaff(businessId, {
       fullName: safeName,
@@ -88,8 +97,9 @@ export default function StaffPage() {
       phone: safePhone,
       email: safeEmail,
       position,
+      specialtyCategoryIds: safeCategoryIds,
       isActive: true,
-      serviceIds: [],
+      serviceIds: matchingServiceIds,
       workingHours: defaultHours,
       leaveDates: [],
       appointmentCapacity: 1,
@@ -100,6 +110,7 @@ export default function StaffPage() {
     setPhone("");
     setEmail("");
     setPosition("Uzman");
+    setSpecialtyCategoryIds([]);
     setStaff(await listStaff(businessId));
   }
 
@@ -128,6 +139,14 @@ export default function StaffPage() {
           <div className="flex items-end">
             <Button className="w-full" type="submit"><UserRound size={17} /> Ekibe Ekle</Button>
           </div>
+          <div className="sm:col-span-5">
+            <SpecialtyPicker
+              categories={categories}
+              selectedIds={specialtyCategoryIds}
+              onChange={setSpecialtyCategoryIds}
+              emptyMessage="Önce Hizmetler bölümünden Saç, Cilt Bakımı gibi en az bir kategori oluşturun."
+            />
+          </div>
         </form>
       </Card>
 
@@ -141,6 +160,7 @@ export default function StaffPage() {
               key={item.id}
               item={item}
               services={services}
+              categories={categories}
               businessId={businessId!}
               isExpanded={expandedId === item.id}
               onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
@@ -158,6 +178,7 @@ export default function StaffPage() {
 function StaffCard({
   item,
   services,
+  categories,
   businessId,
   isExpanded,
   onToggle,
@@ -165,6 +186,7 @@ function StaffCard({
 }: {
   item: Staff;
   services: Service[];
+  categories: ServiceCategory[];
   businessId: string;
   isExpanded: boolean;
   onToggle: () => void;
@@ -175,6 +197,12 @@ function StaffCard({
   const [editBio, setEditBio] = useState(item.bio ?? "");
   const [editCapacity, setEditCapacity] = useState(item.appointmentCapacity);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(item.serviceIds);
+  const derivedCategoryIds = Array.from(new Set(
+    services.filter((service) => item.serviceIds.includes(service.id)).map((service) => service.category).filter(Boolean)
+  ));
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(
+    item.specialtyCategoryIds?.length ? item.specialtyCategoryIds : derivedCategoryIds
+  );
   const [staffHours, setStaffHours] = useState<DaySchedule[]>(() => {
     if (item.workingHours.length > 0) {
       return ORDERED_DAYS.map((day) => {
@@ -197,13 +225,33 @@ function StaffCard({
     );
   }
 
+  function changeSpecialties(nextIds: string[]) {
+    const newlyAdded = nextIds.filter((id) => !selectedCategoryIds.includes(id));
+    setSelectedCategoryIds(nextIds);
+    setSelectedServiceIds((current) => {
+      const allowed = current.filter((id) => {
+        const service = services.find((row) => row.id === id);
+        return service && nextIds.includes(service.category);
+      });
+      const defaults = services
+        .filter((service) => newlyAdded.includes(service.category))
+        .map((service) => service.id);
+      return Array.from(new Set([...allowed, ...defaults]));
+    });
+  }
+
   async function handleSave() {
+    if (selectedCategoryIds.length === 0) {
+      toast.error("En az bir branş seçmelisiniz.");
+      return;
+    }
     setSaving(true);
     try {
       await updateStaff(businessId, item.id, {
         position: editPosition,
         bio: editBio || undefined,
         appointmentCapacity: editCapacity,
+        specialtyCategoryIds: selectedCategoryIds,
         serviceIds: selectedServiceIds,
         workingHours: staffHours,
         leaveDates,
@@ -246,6 +294,7 @@ function StaffCard({
               {item.position} · {item.phone}
               {!item.isActive && <span className="ml-2 text-rose-500">(Pasif)</span>}
             </p>
+            {selectedCategoryIds.length > 0 && <p className="staff-member-meta">{categories.filter((category) => selectedCategoryIds.includes(category.id)).map((category) => category.name).join(" · ")}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -290,6 +339,11 @@ function StaffCard({
             </div>
           </div></section>
 
+          <section className="staff-editor-section">
+            <header><BriefcaseBusiness size={18} /><div><h4>Branşlar *</h4><p>Çalışanın görev aldığı ana hizmet alanlarını seç. En az bir branş zorunludur.</p></div></header>
+            <SpecialtyPicker categories={categories} selectedIds={selectedCategoryIds} onChange={changeSpecialties} />
+          </section>
+
           {/* Service Assignment */}
           <section className="staff-editor-section">
             <header><Sparkles size={18} /><div><h4>Hizmet yetkinlikleri</h4><p>Bu uzmanın sunabildiği hizmetleri seç.</p></div></header>
@@ -297,7 +351,7 @@ function StaffCard({
               <p className="text-sm text-[var(--text-3)]">Henüz hizmet tanımlı değil.</p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {services.map((svc) => (
+                {services.filter((svc) => selectedCategoryIds.includes(svc.category)).map((svc) => (
                   <label
                     key={svc.id}
                     className={`staff-service-option ${
@@ -412,5 +466,45 @@ function StaffCard({
         </div>
       )}
     </article>
+  );
+}
+
+function SpecialtyPicker({
+  categories,
+  selectedIds,
+  onChange,
+  emptyMessage = "Henüz seçilebilir hizmet branşı yok.",
+}: {
+  categories: ServiceCategory[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  emptyMessage?: string;
+}) {
+  if (categories.length === 0) return <p className="text-sm text-amber-700">{emptyMessage}</p>;
+
+  return (
+    <fieldset>
+      <legend className="mb-2 text-sm font-semibold text-[var(--text-2)]">Çalışan branşı * <span className="font-normal text-[var(--text-3)]">(birden fazla seçilebilir)</span></legend>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {categories.map((category) => {
+          const selected = selectedIds.includes(category.id);
+          return (
+            <label key={category.id} className={`staff-service-option ${selected ? "is-selected" : ""}`}>
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onChange(selected ? selectedIds.filter((id) => id !== category.id) : [...selectedIds, category.id])}
+                className="h-4 w-4 rounded accent-[var(--accent)]"
+              />
+              <span className="flex items-center gap-2 font-semibold">
+                <ServiceCategoryIcon icon={category.icon} name={category.name} size={17} />
+                {category.name}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {selectedIds.length === 0 && <p className="mt-2 text-xs font-semibold text-rose-600">Devam etmek için en az bir branş seçin.</p>}
+    </fieldset>
   );
 }
