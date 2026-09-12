@@ -524,6 +524,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
 /* ─────────────────── FORGOT PASSWORD (6-digit code) ─────────────────── */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
+  const [staffInvite, setStaffInvite] = useState(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "done">("email");
   const [code, setCode] = useState("");
@@ -531,6 +532,16 @@ export function ForgotPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [resetting, setResetting] = useState(false);
   const countdown = useCountdown(60);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invited = params.get("source") === "staff-invite";
+    const invitedEmail = params.get("email") ?? "";
+    queueMicrotask(() => {
+      setStaffInvite(invited);
+      if (invitedEmail) setEmail(invitedEmail);
+    });
+  }, []);
 
   async function onSendCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -595,12 +606,12 @@ export function ForgotPasswordForm() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25">
             <span className="text-3xl">✅</span>
           </div>
-          <h2 className="text-xl font-bold text-[var(--text-1)]">Şifre güncellendi!</h2>
+          <h2 className="text-xl font-bold text-[var(--text-1)]">{staffInvite ? "Çalışan hesabınız hazır!" : "Şifre güncellendi!"}</h2>
           <p className="mt-2 text-sm text-[var(--text-3)]">
-            Yeni şifrenizle giriş yapabilirsiniz.
+            {staffInvite ? "Yeni şifrenizle kişisel çalışan panelinize giriş yapabilirsiniz." : "Yeni şifrenizle giriş yapabilirsiniz."}
           </p>
           <Link
-            href="/giris"
+            href={staffInvite ? "/isletmeler/giris" : "/giris"}
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
           >
             🔐 Giriş Yap

@@ -17,6 +17,15 @@ export interface Staff extends EntityBase {
   specialtyCategoryIds?: string[];
   expertiseLevel?: "junior" | "specialist" | "senior" | "trainer";
   commissionRate?: number;
+  serviceOverrides?: Record<string, { durationMinutes?: number; price?: number }>;
+  commissionPayouts?: Array<{
+    id: string;
+    periodLabel: string;
+    grossRevenue: number;
+    rate: number;
+    amount: number;
+    paidAt: string;
+  }>;
   permissions?: {
     manageOwnCalendar: boolean;
     viewCustomers: boolean;

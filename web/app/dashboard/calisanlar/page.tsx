@@ -111,6 +111,7 @@ export default function StaffPage() {
       specialtyCategoryIds: safeCategoryIds,
       expertiseLevel: "specialist",
       commissionRate: 0,
+      serviceOverrides: {},
       permissions: { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false },
       isActive: true,
       serviceIds: matchingServiceIds,
@@ -223,6 +224,7 @@ function StaffCard({
   const [editPhotoUrl, setEditPhotoUrl] = useState(item.photoUrl ?? "");
   const [expertiseLevel, setExpertiseLevel] = useState(item.expertiseLevel ?? "specialist");
   const [commissionRate, setCommissionRate] = useState(item.commissionRate ?? 0);
+  const [serviceOverrides, setServiceOverrides] = useState(item.serviceOverrides ?? {});
   const [permissions, setPermissions] = useState(item.permissions ?? { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false });
   const [replacementStaffId, setReplacementStaffId] = useState("");
   const [editBio, setEditBio] = useState(item.bio ?? "");
@@ -251,6 +253,9 @@ function StaffCard({
   const memberReviews = reviews.filter((review) => review.staffId === item.id && review.status === "approved");
   const averageRating = memberReviews.length ? memberReviews.reduce((total, review) => total + review.rating, 0) / memberReviews.length : 0;
   const generatedRevenue = completedAppointments.reduce((total, appointment) => total + Number(appointment.servicePrice ?? 0), 0);
+  const earnedCommission = generatedRevenue * commissionRate / 100;
+  const paidCommission = (item.commissionPayouts ?? []).reduce((total, payout) => total + payout.amount, 0);
+  const outstandingCommission = Math.max(0, earnedCommission - paidCommission);
 
   function updateHourDay(idx: number, patch: Partial<DaySchedule>) {
     setStaffHours((prev) => prev.map((h, i) => (i === idx ? { ...h, ...patch } : h)));
@@ -289,6 +294,7 @@ function StaffCard({
         photoUrl: editPhotoUrl,
         expertiseLevel,
         commissionRate: Math.min(100, Math.max(0, commissionRate)),
+        serviceOverrides,
         permissions,
         bio: editBio || undefined,
         appointmentCapacity: editCapacity,
@@ -314,8 +320,8 @@ function StaffCard({
 
   async function handleLinkAccount() {
     try {
-      const result = await linkStaffAccount(businessId, item.id);
-      toast.success(`${result.email} çalışan paneline bağlandı.`);
+      const result = await linkStaffAccount(businessId, item.id, true);
+      toast.success(result.invited ? `${result.email} adresine panel daveti gönderildi.` : `${result.email} çalışan paneline bağlandı.`);
       onRefresh();
     } catch (error) {
       toast.error((error as Error).message || "Çalışan hesabı bağlanamadı. Bu e-posta ile önce müşteri hesabı oluşturulmalı.");
@@ -331,6 +337,24 @@ function StaffCard({
     } catch (error) {
       toast.error((error as Error).message || "Çalışan arşivlenemedi.");
     }
+  }
+
+  async function handleCommissionPaid() {
+    if (outstandingCommission <= 0) {
+      toast.info("Ödenecek hakediş bulunmuyor.");
+      return;
+    }
+    const payout = {
+      id: crypto.randomUUID(),
+      periodLabel: new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(referenceTime)),
+      grossRevenue: generatedRevenue,
+      rate: commissionRate,
+      amount: outstandingCommission,
+      paidAt: new Date().toISOString(),
+    };
+    await updateStaff(businessId, item.id, { commissionPayouts: [...(item.commissionPayouts ?? []).slice(-35), payout] });
+    toast.success(`${outstandingCommission.toLocaleString("tr-TR")} ₺ hakediş ödendi olarak kaydedildi.`);
+    onRefresh();
   }
 
   return (
@@ -418,8 +442,13 @@ function StaffCard({
               <div className="staff-service-option is-selected"><div><p className="font-bold">{completedAppointments.length}</p><small>Tamamlanan randevu</small></div></div>
               <div className="staff-service-option is-selected"><div><p className="font-bold">{upcomingAppointments.length}</p><small>Gelecek randevu</small></div></div>
               <div className="staff-service-option is-selected"><div><p className="font-bold">{averageRating ? averageRating.toFixed(1) : "—"}</p><small>Müşteri puanı ({memberReviews.length})</small></div></div>
-              <div className="staff-service-option is-selected"><div><p className="font-bold">{generatedRevenue.toLocaleString("tr-TR")} ₺</p><small>Üretilen gelir · prim {(generatedRevenue * commissionRate / 100).toLocaleString("tr-TR")} ₺</small></div></div>
+              <div className="staff-service-option is-selected"><div><p className="font-bold">{generatedRevenue.toLocaleString("tr-TR")} ₺</p><small>Üretilen gelir · hakediş {earnedCommission.toLocaleString("tr-TR")} ₺</small></div></div>
             </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+              <div><small className="text-[var(--text-3)]">Kalan hakediş</small><p className="font-bold text-[var(--text-1)]">{outstandingCommission.toLocaleString("tr-TR")} ₺</p></div>
+              <Button variant="secondary" onClick={handleCommissionPaid} disabled={outstandingCommission <= 0}>Ödendi İşaretle</Button>
+            </div>
+            {(item.commissionPayouts ?? []).length > 0 && <div className="mt-2 text-xs text-[var(--text-3)]">Son ödeme: {(item.commissionPayouts ?? []).at(-1)?.periodLabel} · {(item.commissionPayouts ?? []).at(-1)?.amount.toLocaleString("tr-TR")} ₺</div>}
           </section>
 
           <section className="staff-editor-section">
@@ -463,6 +492,29 @@ function StaffCard({
                     <div className="min-w-0">
                       <p className="truncate font-medium">{svc.name}</p>
                       <p className="text-[10px] text-[var(--text-3)]">{svc.durationMinutes}dk · {svc.price}₺</p>
+                      {selectedServiceIds.includes(svc.id) && (
+                        <div className="mt-2 grid grid-cols-2 gap-2" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="number"
+                            min="5"
+                            max="480"
+                            aria-label={`${svc.name} özel süre`}
+                            placeholder={`${svc.durationMinutes} dk`}
+                            value={serviceOverrides[svc.id]?.durationMinutes ?? ""}
+                            onChange={(event) => setServiceOverrides((current) => ({ ...current, [svc.id]: { ...current[svc.id], durationMinutes: event.target.value ? Number(event.target.value) : undefined } }))}
+                            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-xs"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            aria-label={`${svc.name} özel fiyat`}
+                            placeholder={`${svc.price} ₺`}
+                            value={serviceOverrides[svc.id]?.price ?? ""}
+                            onChange={(event) => setServiceOverrides((current) => ({ ...current, [svc.id]: { ...current[svc.id], price: event.target.value ? Number(event.target.value) : undefined } }))}
+                            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                      )}
                     </div>
                   </label>
                 ))}

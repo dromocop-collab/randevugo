@@ -63,6 +63,7 @@ const FILTER_TABS: { key: FilterTab; label: string; icon: ComponentType<{size?:n
 export default function AppointmentsPage() {
   const { businessId, access } = useBusiness();
   const canManageStatus = access?.role !== "staff" || access.permissions.manageAppointments;
+  const canViewCustomerContact = access?.role !== "staff" || access.permissions.viewCustomers;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -407,10 +408,10 @@ export default function AppointmentsPage() {
                       {appointment.serviceDurationMinutes && (
                         <DetailItem icon={<Timer size={16}/>} label="Süre" value={`${appointment.serviceDurationMinutes} dk`} />
                       )}
-                      {appointment.customerPhone && (
+                      {canViewCustomerContact && appointment.customerPhone && (
                         <DetailItem icon={<Phone size={16}/>} label="Telefon" value={appointment.customerPhone} />
                       )}
-                      {appointment.customerEmail && (
+                      {canViewCustomerContact && appointment.customerEmail && (
                         <DetailItem icon={<Mail size={16}/>} label="E-posta" value={appointment.customerEmail} />
                       )}
                       {appointment.source && (
@@ -476,7 +477,7 @@ export default function AppointmentsPage() {
                           <UserX size={15}/> Gelmedi
                         </ActionButton>
                       )}
-                      {appointment.customerPhone && (
+                      {canViewCustomerContact && appointment.customerPhone && (
                         <a
                           href={`tel:${appointment.customerPhone}`}
                           className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3.5 py-2 text-xs font-semibold text-[var(--text-2)] transition hover:bg-[var(--field-bg-hover)]"

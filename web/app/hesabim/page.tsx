@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { updateProfile } from "firebase/auth";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import { listFavoriteBusinesses, removeFavoriteBusiness, type FavoriteBusiness }
 import { userFacingError } from "@/lib/errors/user-facing-error";
 
 interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessPhone:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number }
+interface SuspendedBusiness { id: string; name: string; adminNote?: string }
 type AccountTab = "overview" | "appointments" | "favorites" | "profile";
 type AppointmentFilter = "all" | "upcoming" | "history" | "cancelled";
 
@@ -35,6 +36,7 @@ export default function CustomerAccountPage() {
   const router = useRouter();
   const [appointments,setAppointments] = useState<CustomerAppointment[]>([]);
   const [favorites,setFavorites] = useState<FavoriteBusiness[]>([]);
+  const [suspendedBusinesses,setSuspendedBusinesses] = useState<SuspendedBusiness[]>([]);
   const [loading,setLoading] = useState(true);
   const [reloadKey,setReloadKey] = useState(0);
   const [loadError,setLoadError] = useState("");
@@ -58,10 +60,11 @@ export default function CustomerAccountPage() {
     const db = getDb();
     (async () => {
       try {
-        const [appointmentSnap,userSnap,favoriteRows] = await Promise.all([
+        const [appointmentSnap,userSnap,favoriteRows,ownedBusinessSnap] = await Promise.all([
           getDocs(query(collectionGroup(db,"appointments"),where("customerId","==",user.uid),orderBy("startAt","desc"),limit(50))),
           getDoc(doc(db,"users",user.uid)).catch(()=>null),
           listFavoriteBusinesses(user.uid).catch(()=>[] as FavoriteBusiness[]),
+          getDocs(query(collection(db,"businesses"),where("ownerUid","==",user.uid))).catch(()=>null),
         ]);
         const businessIds = [...new Set(appointmentSnap.docs.map(item=>String(item.data().businessId??"")).filter(Boolean))];
         const businessSnaps = await Promise.all(businessIds.map(id=>getDoc(doc(db,"businesses",id)).catch(()=>null)));
@@ -73,6 +76,10 @@ export default function CustomerAccountPage() {
         if (!active) return;
         setAppointments(rows);
         setFavorites(favoriteRows);
+        setSuspendedBusinesses(ownedBusinessSnap?.docs.flatMap((item)=>{
+          const data=item.data();
+          return data.status==="suspended"||data.isSuspended===true?[{id:item.id,name:String(data.name??"İşletme"),adminNote:typeof data.adminNote==="string"?data.adminNote:undefined}]:[];
+        })??[]);
         setProfileName(String(userSnap?.data()?.displayName??user.displayName??""));
         setProfilePhone(String(userSnap?.data()?.phone??""));
       } catch (error) { if(active){setAppointments([]);setLoadError(userFacingError(error,"Randevularınıza şu anda ulaşılamadı. Lütfen yeniden deneyin."));} }
@@ -134,6 +141,8 @@ export default function CustomerAccountPage() {
   return <div className="customer-account"><MarketingHeader/>
     <main>
       <section className="account-hero"><div className="account-hero-grid"/><div className="account-hero-copy"><span><Sparkles size={15}/> KİŞİSEL RANDEVU MERKEZİNİZ</span><h1>Planınız net,<br/><em>gününüz size kalsın.</em></h1><p>Yaklaşan randevularınızı yönetin, geçmiş deneyimlerinizi değerlendirin ve sevdiğiniz işletmelere hızla geri dönün.</p><div className="account-hero-actions"><Link href="/kesfet"><Compass size={17}/> Yeni randevu keşfet</Link>{activeBusiness&&<Link href="/dashboard" className="account-dashboard-hero"><BriefcaseBusiness size={17}/> İşletme paneline geç</Link>}<SupportRequestModal audience="customer" triggerLabel="Yardım iste" triggerClassName="account-support-trigger"/></div></div><div className="account-hero-visual"><Image src="/images/help-customer.png" alt="Randevu ve müşteri hesabı görseli" fill priority sizes="(max-width:900px) 100vw, 42vw"/><div className="account-floating-card"><TicketCheck size={20}/><span><b>{upcoming.length} yaklaşan randevu</b><small>Her şey tek yerde</small></span></div></div></section>
+
+      {suspendedBusinesses.map((business)=><section key={business.id} className="mx-auto mt-5 flex w-[min(1180px,calc(100%-32px))] flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950"><div><small className="font-bold tracking-wider">ASKIYA ALINAN İŞLETME</small><h2 className="text-lg font-extrabold">{business.name}</h2><p className="text-sm">{business.adminNote||"İşletmeniz inceleme nedeniyle geçici olarak panel listesinden kaldırıldı."}</p></div><SupportRequestModal audience="business" businessId={business.id} businessName={business.name} triggerLabel="İnceleme / itiraz talebi gönder" triggerClassName="account-support-trigger"/></section>)}
 
       <section className="account-shell">
         <aside className="account-sidebar"><div className="account-profile-mini"><div>{(profileName||user?.email||"U").charAt(0).toUpperCase()}</div><span><b>{profileName||user?.displayName||"Hoş geldiniz"}</b><small>{user?.email}</small></span></div><nav>{([{key:"overview",label:"Genel bakış",icon:LayoutDashboard},{key:"appointments",label:"Randevularım",icon:CalendarDays},{key:"favorites",label:"Favorilerim",icon:Heart},{key:"profile",label:"Hesap ayarları",icon:CircleUserRound}] as const).map(({key,label,icon:Icon})=><button key={key} className={tab===key?"active":""} onClick={()=>setTab(key)}><Icon size={18}/><span>{label}</span>{key==="appointments"&&<i>{appointments.length}</i>}{key==="favorites"&&favorites.length>0&&<i>{favorites.length}</i>}</button>)}</nav>{activeBusiness&&<section className="account-business-access"><div><i><BriefcaseBusiness size={18}/></i><span><small>İŞLETME HESABI</small><b>{activeBusiness.name}</b></span></div>{businesses.length>1&&<label><span>Yönetilecek işletme</span><select value={activeBusiness.id} onChange={event=>setBusinessId(event.target.value)}>{businesses.map(business=><option value={business.id} key={business.id}>{business.name}</option>)}</select></label>}<Link href="/dashboard">Yönetim paneline geç <ExternalLink size={14}/></Link></section>}{businessesLoading&&!activeBusiness&&<div className="account-business-loading" aria-label="İşletme hesapları yükleniyor"/>}<div className="account-side-help"><MessageCircleMore size={22}/><b>Bir sorunuz mu var?</b><p>Destek merkezimiz her adımda yanınızda.</p><Link href="/yardim-merkezi">Yardım merkezini aç <ArrowRight size={13}/></Link></div><button className="account-logout" onClick={async()=>{await logout();router.push("/musteri/giris")}}><LogOut size={17}/> Güvenli çıkış</button></aside>

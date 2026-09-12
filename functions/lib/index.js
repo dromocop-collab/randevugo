@@ -39,6 +39,11 @@ function requireString(value, name) {
     }
     return value.trim();
 }
+function htmlSafe(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
+    })[character] ?? character);
+}
 async function requirePlatformAdmin(uid, email) {
     if (email?.trim().toLowerCase() === "cihatwin@gmail.com")
         return;
@@ -160,7 +165,7 @@ exports.upsertCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (
     if (!uid)
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
-    await requireBusinessManager(uid, businessId);
+    const business = await requireBusinessManager(uid, businessId);
     return upsertBusinessCustomer({
         businessId,
         fullName: requireString(request.data?.fullName, "Ad soyad").slice(0, 80),
@@ -465,6 +470,16 @@ function numberOr(value, fallback) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
+function applyStaffServiceOverride(service, staff, serviceId) {
+    const override = staff && typeof staff.serviceOverrides === "object" && staff.serviceOverrides
+        ? staff.serviceOverrides[serviceId]
+        : null;
+    return override && typeof override === "object" ? {
+        ...service,
+        durationMinutes: numberOr(override.durationMinutes, numberOr(service.durationMinutes, 30)),
+        price: numberOr(override.price, numberOr(service.price, 0)),
+    } : service;
+}
 function normalizedBookingDuration(value) {
     const raw = Math.round(numberOr(value, 0));
     if (raw >= 5 && raw <= 480)
@@ -586,10 +601,11 @@ async function loadBookingContext(businessId, serviceId, staffId) {
     if (staff && serviceIds.length > 0 && !serviceIds.includes(serviceId)) {
         throw new https_1.HttpsError("failed-precondition", "Seçilen çalışan bu hizmeti vermiyor.");
     }
+    const effectiveService = applyStaffServiceOverride(service, staff, serviceId);
     return {
         businessRef,
         business,
-        service,
+        service: effectiveService,
         staff,
         businessHours: hoursSnap.docs.map((item) => scheduleFromData(item.data())).filter((item) => item !== null),
         specialDays: specialDaysSnap.docs.map((item) => item.data()),
@@ -980,6 +996,15 @@ exports.archiveStaff = (0, https_1.onCall)(protectedCallableOptions, async (requ
         actorUid: uid,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: "staff.archived",
+        businessId,
+        entityId: staffId,
+        replacementStaffId,
+        transferredAppointments: activeAppointments.length,
+        actorUid: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
     await batch.commit();
     return { success: true, transferred: activeAppointments.length };
 });
@@ -990,7 +1015,7 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const staffId = requireString(data.staffId, "staffId");
-    await requireBusinessManager(uid, businessId);
+    const business = await requireBusinessManager(uid, businessId);
     const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
     const staffSnapshot = await staffRef.get();
     if (!staffSnapshot.exists)
@@ -998,11 +1023,17 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
     const staff = staffSnapshot.data();
     const email = requireString(staff.email, "Çalışan e-postası").toLowerCase();
     let userRecord;
+    let created = false;
     try {
         userRecord = await auth.getUserByEmail(email);
     }
     catch {
-        throw new https_1.HttpsError("failed-precondition", "Bu e-posta ile kayıtlı hesap yok. Çalışan önce müşteri hesabı oluşturmalıdır.");
+        userRecord = await auth.createUser({
+            email,
+            displayName: String(staff.fullName ?? "Çalışan").slice(0, 80),
+            password: `${(0, crypto_1.randomUUID)()}Aa1!`,
+        });
+        created = true;
     }
     const memberRef = db.doc(`businesses/${businessId}/members/${userRecord.uid}`);
     const currentMember = await memberRef.get();
@@ -1018,9 +1049,39 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
-    batch.update(staffRef, { linkedUid: userRecord.uid, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+    const shouldInvite = created || data.sendInvite === true;
+    batch.update(staffRef, {
+        linkedUid: userRecord.uid,
+        ...(shouldInvite ? { invitationSentAt: firestore_1.FieldValue.serverTimestamp() } : {}),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    if (shouldInvite) {
+        const resetUrl = `https://seninrandevun.com/sifremi-unuttum?email=${encodeURIComponent(email)}&source=staff-invite`;
+        batch.set(db.collection("mail").doc(), {
+            to: email,
+            message: {
+                subject: `${String(business.name ?? "SeninRandevun")} çalışan paneli daveti`,
+                html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;color:#10241b"><h1 style="color:#08734b">Çalışan paneliniz hazır</h1><p>Merhaba <strong>${htmlSafe(staff.fullName)}</strong>,</p><p><strong>${htmlSafe(business.name)}</strong> sizi çalışan çalışma alanına davet etti. Panelde yalnızca size atanan randevuları ve izin verilen alanları görebilirsiniz.</p><p style="margin:28px 0"><a href="${resetUrl}" style="background:#08734b;color:white;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:700">Şifremi belirle ve panele gir</a></p><p style="font-size:12px;color:#64748b">Bu daveti beklemiyorsanız işletmeyle iletişime geçebilirsiniz.</p></div>`,
+            },
+        });
+    }
+    batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+        action: shouldInvite ? "staff.invited" : "staff.access_synced",
+        entityId: staffId,
+        linkedUid: userRecord.uid,
+        actorUid: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: shouldInvite ? "staff.invited" : "staff.access_synced",
+        businessId,
+        entityId: staffId,
+        linkedUid: userRecord.uid,
+        actorUid: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
     await batch.commit();
-    return { success: true, email };
+    return { success: true, email, invited: shouldInvite };
 });
 exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
@@ -1067,7 +1128,11 @@ exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (re
             eligibleStaff.forEach((document) => {
                 candidates.push({
                     staffId: document.id,
-                    context: { ...context, staff: document.data() },
+                    context: {
+                        ...context,
+                        staff: document.data(),
+                        service: applyStaffServiceOverride(context.service, document.data(), serviceId),
+                    },
                 });
             });
         }

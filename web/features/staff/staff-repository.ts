@@ -65,11 +65,11 @@ export async function archiveStaff(
   return result.data;
 }
 
-export async function linkStaffAccount(businessId: string, staffId: string): Promise<{ email: string }> {
+export async function linkStaffAccount(businessId: string, staffId: string, sendInvite = false): Promise<{ email: string; invited?: boolean }> {
   const callable = httpsCallable<
-    { businessId: string; staffId: string },
-    { email: string }
+    { businessId: string; staffId: string; sendInvite: boolean },
+    { email: string; invited?: boolean }
   >(getFunctions(getFirebaseApp(), "europe-west1"), "linkStaffAccount");
-  const result = await callable({ businessId, staffId });
+  const result = await callable({ businessId, staffId, sendInvite });
   return result.data;
 }
