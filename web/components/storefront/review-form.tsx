@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
 import { createReview } from "@/features/reviews/review-repository";
 import { uploadReviewImage } from "@/lib/firebase/upload";
@@ -215,9 +216,12 @@ export function ReviewForm({
         <div className="flex flex-wrap gap-3">
           {previews.map((url, i) => (
             <div key={i} className="group relative">
-              <img
+              <Image
                 src={url}
                 alt={`Fotoğraf ${i + 1}`}
+                width={80}
+                height={80}
+                unoptimized
                 className="h-20 w-20 rounded-xl border border-[var(--border)] object-cover shadow-sm"
               />
               <button

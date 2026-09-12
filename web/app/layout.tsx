@@ -136,9 +136,8 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    // Add these when you have them:
-    // google: "your-google-verification-code",
-    // yandex: "your-yandex-verification-code",
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    yandex: process.env.NEXT_PUBLIC_YANDEX_SITE_VERIFICATION,
   },
   other: {
     "msapplication-TileColor": "#0b6b45",

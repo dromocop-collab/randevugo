@@ -28,6 +28,8 @@ jobs:
       - name: Lint web
         run: npm run lint
         working-directory: web
+      - name: Check internal links
+        run: node scripts/check-internal-links.mjs
       - name: Build web
         run: npm run build
         working-directory: web

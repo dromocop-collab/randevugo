@@ -19,6 +19,7 @@ import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from 
 import { Building2, CalendarCog, CheckCircle2, Images, Share2, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
+import Image from "next/image";
 
 const DEFAULT_CATEGORY_OPTIONS = [
   { value: "kuafor", label: "Kuaför" },
@@ -456,7 +457,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
               {(business?.galleryUrls ?? []).map((url, i) => (
                 <div key={i} className="group relative">
-                  <img src={url} alt={`Galeri ${i + 1}`} className="h-20 w-full rounded-xl object-cover" />
+                  <Image src={url} alt={`Galeri ${i + 1}`} width={160} height={80} className="h-20 w-full rounded-xl object-cover" />
                 </div>
               ))}
               {/* Add Gallery Image */}

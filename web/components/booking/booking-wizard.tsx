@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -540,7 +541,7 @@ export function BookingWizard(props: Props) {
                   </div>
                   <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl shadow-md">
                     {member.photoUrl ? (
-                      <img src={member.photoUrl} alt="" className="h-full w-full object-cover" />
+                      <Image src={member.photoUrl} alt="" width={44} height={44} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)] text-sm font-bold text-white">
                         {member.fullName.charAt(0)}

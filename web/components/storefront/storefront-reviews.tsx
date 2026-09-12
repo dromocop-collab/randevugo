@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import type { Review } from "@/types/review";
 import { MessageCircleMore, PenLine, Scissors } from "lucide-react";
 
@@ -206,9 +207,11 @@ export function StorefrontReviews({
                       onClick={() => setLightboxUrl(url)}
                       className="group/img relative h-20 w-20 overflow-hidden rounded-xl border border-[var(--border)] transition hover:shadow-lg hover:scale-105"
                     >
-                      <img
+                      <Image
                         src={url}
                         alt={`Yorum fotoğrafı ${i + 1}`}
+                        width={80}
+                        height={80}
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover/img:bg-black/20">
@@ -268,9 +271,11 @@ export function StorefrontReviews({
           >
             ✕
           </button>
-          <img
+          <Image
             src={lightboxUrl}
             alt="Büyütülmüş fotoğraf"
+            width={1400}
+            height={1000}
             className="max-h-[85vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />

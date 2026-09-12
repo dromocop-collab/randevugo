@@ -20,6 +20,9 @@ export function AnalyticsScripts() {
     getPlatformSettings()
       .then((settings) => setAnalytics(settings.analytics))
       .catch(() => setAnalytics(null));
+    const openPreferences = () => setConsent(null);
+    window.addEventListener("seninrandevun:cookie-preferences", openPreferences);
+    return () => window.removeEventListener("seninrandevun:cookie-preferences", openPreferences);
   }, []);
 
   function choose(next: "accepted" | "rejected") {

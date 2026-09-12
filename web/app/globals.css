@@ -14171,6 +14171,8 @@ a {
 .cookie-consent>div:last-child { display:flex; flex:0 0 auto; gap:8px }
 .cookie-consent button { border:1px solid rgb(255 255 255/.16); border-radius:999px; background:transparent; padding:10px 13px; color:#fff; font-size:9px; font-weight:850; cursor:pointer }
 .cookie-consent button:last-child { border-color:#c9f45b; background:#c9f45b; color:#10261b }
+.footer-cookie-settings { border:0; background:transparent; color:inherit; font-size:9px; font-weight:800; text-decoration:underline; text-underline-offset:3px; cursor:pointer; opacity:.72 }
+.footer-cookie-settings:hover { opacity:1 }
 @media(max-width:850px) { .home-seo-hub { grid-template-columns:1fr }.home-business-cta { align-items:flex-start; flex-direction:column }.home-business-cta>div:last-child { width:100% } }
 @media(max-width:560px) { .home-seo-hub,.home-business-cta { width:calc(100% - 28px); margin-bottom:70px; border-radius:28px; padding:28px 20px }.home-seo-links { grid-template-columns:1fr }.home-seo-links>a { min-height:145px }.cookie-consent { align-items:stretch; flex-direction:column; gap:14px }.cookie-consent>div:last-child { display:grid; grid-template-columns:1fr 1fr } }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
 
 interface ImageUploaderProps {
@@ -80,9 +81,12 @@ export function ImageUploader({
       >
         {displayUrl ? (
           <>
-            <img
+            <Image
               src={displayUrl}
               alt={label}
+              fill
+              sizes={shape === "wide" ? "(max-width: 768px) 100vw, 50vw" : "128px"}
+              unoptimized={displayUrl.startsWith("blob:")}
               className={`h-full w-full object-cover ${shape === "square" ? "rounded-2xl" : ""}`}
             />
             {/* Overlay on hover */}

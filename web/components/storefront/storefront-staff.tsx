@@ -4,6 +4,7 @@ import type { Staff } from "@/types/staff";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Review } from "@/types/review";
 import { BadgeCheck, Star, UserRound } from "lucide-react";
+import Image from "next/image";
 
 interface Props {
   staff: Staff[];
@@ -36,9 +37,11 @@ export function StorefrontStaff({ staff, categories, reviews }: Props) {
           >
             <div className="storefront-staff-photo">
               {member.photoUrl ? (
-                <img
+                <Image
                   src={member.photoUrl}
                   alt={member.fullName}
+                  width={320}
+                  height={320}
                   className="h-full w-full object-cover"
                 />
               ) : (
