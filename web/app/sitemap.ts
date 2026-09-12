@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, type LocalCategorySlug } from "@/lib/seo/local-seo";
 import { searchBusinesses } from "@/features/discovery/search-repository";
+import { GEO_CATEGORIES, businessesInCategory, seoSlug, type GeoCategorySlug } from "@/lib/seo/geo-seo";
 
 /** Use a recent date for static pages to signal freshness to crawlers. */
 const STATIC_LAST_MODIFIED = new Date();
@@ -92,6 +93,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       };
     });
 
+  // Only publish programmatic city/category URLs when real active inventory exists.
+  const cities = new Map<string, typeof allBusinesses>();
+  for (const business of allBusinesses) {
+    const slug = seoSlug(business.city);
+    if (!slug) continue;
+    cities.set(slug, [...(cities.get(slug) ?? []), business]);
+  }
+  const geoPages: MetadataRoute.Sitemap = [];
+  for (const [citySlug, rows] of cities) {
+    const cityUrl = `${baseUrl}/sehir/${citySlug}`;
+    geoPages.push({ url: cityUrl, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.86, alternates: alternates(cityUrl) });
+    for (const category of Object.keys(GEO_CATEGORIES) as GeoCategorySlug[]) {
+      if (businessesInCategory(rows, category).length === 0) continue;
+      const url = `${cityUrl}/${category}`;
+      geoPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.84, alternates: alternates(url), images: [xmlSafeUrl(`${baseUrl}${GEO_CATEGORIES[category].image}`)] });
+    }
+  }
+
   // Category landing pages with images
   const categoryLandingPages: MetadataRoute.Sitemap = [
     { path: "kuafor-randevu", cat: "kuafor", priority: 0.85 },
@@ -172,6 +191,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     ...categoryLandingPages,
     ...localPages,
+    ...geoPages,
     ...businessPages,
   ];
 }
