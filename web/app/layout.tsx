@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
-import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
 import { APP_STORE_ID, APP_STORE_URL } from "@/lib/app-store";
 import "./globals.css";
@@ -22,8 +21,6 @@ const spaceGrotesk = Space_Grotesk({
 
 const SITE_URL = "https://seninrandevun.com";
 const SITE_NAME = "SeninRandevun";
-const GOOGLE_ANALYTICS_ID = "G-REDQN2FVRD";
-const GOOGLE_TAG_MANAGER_ID = "GTM-KH38NV3L";
 const SITE_DESCRIPTION =
   "Yakınınızdaki kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; müsait saatleri karşılaştırıp saniyeler içinde online randevu alın.";
 
@@ -307,31 +304,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>
       <body className="min-h-full">
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
-          strategy="lazyOnload"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '${GOOGLE_ANALYTICS_ID}', { anonymize_ip: true });`}
-        </Script>
-        <Script id="google-tag-manager" strategy="afterInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-            })(window,document,'script','dataLayer','${GOOGLE_TAG_MANAGER_ID}');`}
-        </Script>
-        <noscript>
-          <iframe
-            src={`https://www.googletagmanager.com/ns.html?id=${GOOGLE_TAG_MANAGER_ID}`}
-            height="0"
-            width="0"
-            style={{ display: "none", visibility: "hidden" }}
-          />
-        </noscript>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
