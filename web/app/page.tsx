@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Apple, ArrowRight, ArrowUpRight, BadgeCheck, BellRing, Building2, CalendarCheck2, Check, Clock3, Compass, Heart, MapPin, MessageCircleMore, Navigation, Scissors, ShieldCheck, Sparkles, Star, Stethoscope, TimerReset, WandSparkles } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { AppStoreButton } from "@/components/marketing/app-store-button";
@@ -36,7 +37,7 @@ export default function HomePage() {
             <a className="home-ios-quick-link" href={APP_STORE_URL} target="_blank" rel="noopener noreferrer"><Apple size={18} fill="currentColor"/><span><small>YENİ · APP STORE&apos;DA</small><b>iOS uygulamasını ücretsiz indir</b></span><ArrowRight size={15}/></a>
           </div>
           <div className="customer-hero-art" aria-hidden="true">
-            <div className="customer-art-image" />
+            <div className="customer-art-image"><Image src="/images/home-hero-studio-v2.jpg" alt="SeninRandevun ile tablet üzerinden randevu planlayan bakım uzmanı ve müşterisi" fill priority sizes="(max-width: 900px) 100vw, 48vw" /></div>
             <div className="customer-art-card art-card-a"><span><Check size={15} /></span><div><b>Randevun hazır</b><small>Bugün · 15:30</small></div></div>
             <div className="customer-art-card art-card-b"><span><Star size={15} /></span><div><b>4.9 müşteri puanı</b><small>Gerçek değerlendirmeler</small></div></div>
             <div className="customer-art-pin"><MapPin size={18} /></div>
