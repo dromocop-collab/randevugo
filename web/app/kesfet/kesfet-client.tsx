@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import type { Business } from "@/types/business";
-import { BadgeCheck, ChevronLeft, ChevronRight, MapPin, RefreshCw, Search, Sparkles, Star, UsersRound } from "lucide-react";
+import { BadgeCheck, Check, ChevronLeft, ChevronRight, MapPin, RefreshCw, Scale, Search, Sparkles, Star, UsersRound, X } from "lucide-react";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 
 const DEFAULT_CATEGORIES = [
@@ -66,6 +66,10 @@ export function DiscoverInteractive() {
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
   const [city, setCity] = useState("");
+  const [sort, setSort] = useState<"recommended" | "rating" | "reviews" | "name">("recommended");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -74,6 +78,15 @@ export function DiscoverInteractive() {
     if (requestedCategory) queueMicrotask(() => setCategory(requestedCategory));
     if (requestedSearch) queueMicrotask(() => setKeyword(requestedSearch.slice(0, 100)));
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("seninrandevun-compare") ?? "[]") as unknown;
+      if (Array.isArray(saved)) queueMicrotask(() => setCompareIds(saved.filter((id): id is string => typeof id === "string").slice(0, 3)));
+    } catch { /* Ignore malformed local preference. */ }
+  }, []);
+
+  useEffect(() => { window.localStorage.setItem("seninrandevun-compare", JSON.stringify(compareIds)); }, [compareIds]);
 
   // Fetch dynamic categories
   useEffect(() => {
@@ -119,6 +132,21 @@ export function DiscoverInteractive() {
     setKeyword("");
     setCategory("");
     setCity("");
+    setVerifiedOnly(false);
+    setSort("recommended");
+  }
+
+  const visibleResults = useMemo(() => {
+    const rows = verifiedOnly ? results.filter((business) => business.isVerified) : [...results];
+    if (sort === "rating") rows.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    if (sort === "reviews") rows.sort((a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
+    if (sort === "name") rows.sort((a, b) => a.name.localeCompare(b.name, "tr"));
+    return rows;
+  }, [results, sort, verifiedOnly]);
+
+  const compared = useMemo(() => compareIds.map((id) => results.find((item) => item.id === id)).filter((item): item is Business => Boolean(item)), [compareIds, results]);
+  function toggleCompare(id: string) {
+    setCompareIds((current) => current.includes(id) ? current.filter((item) => item !== id) : current.length < 3 ? [...current, id] : current);
   }
 
   return (
@@ -157,8 +185,10 @@ export function DiscoverInteractive() {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} aria-label="İşletmeleri sırala" className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2.5 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)]"><option value="recommended">Önerilen sıralama</option><option value="rating">Puana göre</option><option value="reviews">Yorum sayısına göre</option><option value="name">İsme göre</option></select>
+          <button type="button" onClick={() => setVerifiedOnly((value) => !value)} className={`discover-verified-filter ${verifiedOnly ? "active" : ""}`}><BadgeCheck size={15}/>{verifiedOnly ? "Doğrulanmış açık" : "Yalnızca doğrulanmış"}</button>
           <p className="discover-result-count text-sm text-[var(--text-3)]">
-            {loading ? "Aranıyor..." : loadError ? "Bağlantı kurulamadı" : `${results.length} işletme bulundu`}
+            {loading ? "Aranıyor..." : loadError ? "Bağlantı kurulamadı" : `${visibleResults.length} işletme bulundu`}
           </p>
           <span className="discover-filter-hint"><MapPin size={14} /> Şehrindeki en iyi seçenekleri gösteriyoruz</span>
         </div>
@@ -175,7 +205,7 @@ export function DiscoverInteractive() {
           description="Bağlantını kontrol edip yeniden deneyebilirsin."
           action={<button type="button" onClick={() => setRetryKey((value) => value + 1)} className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-800"><RefreshCw size={15} /> Yeniden dene</button>}
         />
-      ) : results.length === 0 ? (
+      ) : visibleResults.length === 0 ? (
         <EmptyState
           title="Sonuç bulunamadı"
           description="Arama alanını veya filtrelerini temizleyerek diğer işletmelere göz atabilirsin."
@@ -183,12 +213,9 @@ export function DiscoverInteractive() {
         />
       ) : (
         <div className="discover-results grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {results.map((biz) => (
-            <Link
-              key={biz.id}
-              href={`/isletme/${biz.slug}`}
-              className="discover-card group rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-md shadow-[var(--shadow-soft)] transition hover:shadow-xl hover:border-[var(--accent)]/30 hover:-translate-y-0.5"
-            >
+          {visibleResults.map((biz) => (
+            <article key={biz.id} className="discover-card group relative rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-md shadow-[var(--shadow-soft)] transition hover:shadow-xl hover:border-[var(--accent)]/30 hover:-translate-y-0.5">
+            <Link href={`/isletme/${biz.slug}`} className="block">
               {/* Cover */}
               <div className="relative h-40 w-full overflow-hidden rounded-t-2xl bg-[var(--surface-3)]">
                 {biz.coverUrl ? (
@@ -247,11 +274,28 @@ export function DiscoverInteractive() {
                 </div>
               </div>
             </Link>
+            <button type="button" onClick={() => toggleCompare(biz.id)} aria-pressed={compareIds.includes(biz.id)} className={`discover-compare-button ${compareIds.includes(biz.id) ? "active" : ""}`} disabled={!compareIds.includes(biz.id) && compareIds.length >= 3}>{compareIds.includes(biz.id) ? <Check size={13}/> : <Scale size={13}/>} {compareIds.includes(biz.id) ? "Eklendi" : "Karşılaştır"}</button>
+            </article>
           ))}
         </div>
       )}
+      {compareIds.length > 0 && <div className="compare-dock"><div><span><Scale size={18}/></span><div><b>Karşılaştırma listen</b><small>{compareIds.length}/3 işletme seçildi</small></div></div><div className="compare-dock-items">{compareIds.map((id) => { const item = results.find((business) => business.id === id); return <span key={id}>{item?.name ?? "Seçili işletme"}<button type="button" onClick={() => toggleCompare(id)} aria-label="Karşılaştırmadan çıkar"><X size={12}/></button></span>; })}</div><button type="button" onClick={() => setComparisonOpen(true)} disabled={compared.length < 2}>Karşılaştır <ChevronRight size={15}/></button></div>}
+      {comparisonOpen && <ComparisonModal businesses={compared} onClose={() => setComparisonOpen(false)} onRemove={toggleCompare}/>}
     </>
   );
+}
+
+function ComparisonModal({ businesses, onClose, onRemove }: { businesses: Business[]; onClose: () => void; onRemove: (id: string) => void }) {
+  const rows = [
+    { label: "Müşteri puanı", render: (business: Business) => business.reviewCount ? `${(business.rating ?? 0).toFixed(1)} / 5` : "Henüz puan yok" },
+    { label: "Yorum", render: (business: Business) => `${business.reviewCount ?? 0} değerlendirme` },
+    { label: "Konum", render: (business: Business) => `${business.district}, ${business.city}` },
+    { label: "Kategori", render: (business: Business) => canonicalBusinessCategory(business.category) },
+    { label: "Güven", render: (business: Business) => business.isVerified ? "Doğrulanmış işletme" : "Standart profil" },
+    { label: "Randevu değişikliği", render: (business: Business) => business.allowReschedule === false ? "Kapalı" : "Kullanılabilir" },
+    { label: "İptal", render: (business: Business) => business.allowCancellation === false ? "Kapalı" : "Kullanılabilir" },
+  ];
+  return <div className="comparison-overlay" role="dialog" aria-modal="true" aria-label="İşletme karşılaştırması" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="comparison-modal"><header><div><span><Scale size={15}/> AKILLI KARŞILAŞTIRMA</span><h2>Doğru işletmeyi yan yana seç.</h2><p>Önemli bilgileri tek bakışta karşılaştır ve sana uygun yerden randevunu oluştur.</p></div><button type="button" onClick={onClose} aria-label="Karşılaştırmayı kapat"><X/></button></header><div className="comparison-table"><div className="comparison-row comparison-head"><b>Özellik</b>{businesses.map((business) => <article key={business.id}>{business.logoUrl ? <Image src={business.logoUrl} alt="" width={46} height={46}/> : <span>{business.name.charAt(0)}</span>}<div><strong>{business.name}</strong><small>{business.district}</small></div><button type="button" onClick={() => onRemove(business.id)} aria-label={`${business.name} işletmesini çıkar`}><X size={12}/></button></article>)}</div>{rows.map((row) => <div className="comparison-row" key={row.label}><b>{row.label}</b>{businesses.map((business) => <span key={business.id}>{row.render(business)}</span>)}</div>)}</div><footer>{businesses.map((business) => <Link key={business.id} href={`/isletme/${business.slug}/randevu`}>{business.name} için randevu al <ChevronRight size={14}/></Link>)}</footer></section></div>;
 }
 
 function CategoryRail({ categories, value, onChange }: { categories: typeof DEFAULT_CATEGORIES; value: string; onChange: (value: string) => void }) {
