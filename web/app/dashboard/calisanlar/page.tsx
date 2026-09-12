@@ -297,6 +297,7 @@ function StaffCard({
         workingHours: staffHours,
         leaveDates,
       });
+      if (item.linkedUid) await linkStaffAccount(businessId, item.id);
       toast.success(`${item.fullName} güncellendi.`);
       onRefresh();
     } catch {

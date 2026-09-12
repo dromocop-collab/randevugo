@@ -13,6 +13,11 @@ interface BusinessContextValue {
   setBusinessId: (id: string) => void;
   refreshBusinesses: () => void;
   loading: boolean;
+  access: {
+    role: "owner" | "admin" | "manager" | "staff";
+    staffId?: string;
+    permissions: { manageOwnCalendar: boolean; viewCustomers: boolean; manageAppointments: boolean };
+  } | null;
 }
 
 const STORAGE_KEY = "randevugo-business-id";
@@ -23,6 +28,7 @@ const BusinessContext = createContext<BusinessContextValue>({
   setBusinessId: () => undefined,
   refreshBusinesses: () => undefined,
   loading: true,
+  access: null,
 });
 
 function getStoredBusinessId(): string | null {
@@ -101,6 +107,19 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         setBusinessId,
         refreshBusinesses,
         loading: status === "loading" || (isAuthenticated && loading),
+        access: (() => {
+          const active = businesses.find((business) => business.id === businessId) ?? businesses[0];
+          if (!isAuthenticated || !active) return null;
+          return {
+            role: active.currentUserRole ?? "owner",
+            staffId: active.currentStaffId,
+            permissions: {
+              manageOwnCalendar: active.currentPermissions?.manageOwnCalendar ?? true,
+              viewCustomers: active.currentPermissions?.viewCustomers ?? false,
+              manageAppointments: active.currentPermissions?.manageAppointments ?? false,
+            },
+          };
+        })(),
       };
     },
     [businessId, businesses, loading, refreshBusinesses, setBusinessId, status, user]

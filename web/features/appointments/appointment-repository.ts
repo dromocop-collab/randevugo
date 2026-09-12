@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -8,16 +9,30 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { getFunctions, httpsCallable as call } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Appointment, AppointmentCreateInput, AppointmentStatus } from "@/types/appointments";
 
+async function staffScope(businessId: string): Promise<string | null> {
+  const user = getAuth(getFirebaseApp()).currentUser;
+  if (!user) return null;
+  const member = await getDoc(doc(getDb(), "businesses", businessId, "members", user.uid));
+  if (!member.exists() || member.data().role !== "staff") return null;
+  const staffId = member.data().staffId;
+  if (typeof staffId !== "string" || !staffId) throw new Error("Çalışan profiliniz işletme hesabına bağlı değil.");
+  return staffId;
+}
+
 export async function listAppointments(businessId: string): Promise<Appointment[]> {
   const db = getDb();
   const ref = collection(db, "businesses", businessId, "appointments");
-  const snap = await getDocs(query(ref, orderBy("startAt", "asc")));
+  const ownStaffId = await staffScope(businessId);
+  const snap = await getDocs(ownStaffId
+    ? query(ref, where("staffId", "==", ownStaffId), orderBy("startAt", "asc"))
+    : query(ref, orderBy("startAt", "asc")));
   return snap.docs.map((item) => mapDoc<Appointment>(item));
 }
 
@@ -28,8 +43,15 @@ export async function listAppointmentsByDateRange(
 ): Promise<Appointment[]> {
   const db = getDb();
   const ref = collection(db, "businesses", businessId, "appointments");
+  const ownStaffId = await staffScope(businessId);
   const snap = await getDocs(
-    query(
+    ownStaffId ? query(
+      ref,
+      where("staffId", "==", ownStaffId),
+      where("startAt", ">=", Timestamp.fromDate(startDate)),
+      where("startAt", "<=", Timestamp.fromDate(endDate)),
+      orderBy("startAt", "asc")
+    ) : query(
       ref,
       where("startAt", ">=", Timestamp.fromDate(startDate)),
       where("startAt", "<=", Timestamp.fromDate(endDate)),

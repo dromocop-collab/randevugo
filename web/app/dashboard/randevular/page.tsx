@@ -61,7 +61,8 @@ const FILTER_TABS: { key: FilterTab; label: string; icon: ComponentType<{size?:n
 ];
 
 export default function AppointmentsPage() {
-  const { businessId } = useBusiness();
+  const { businessId, access } = useBusiness();
+  const canManageStatus = access?.role !== "staff" || access.permissions.manageAppointments;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -439,7 +440,7 @@ export default function AppointmentsPage() {
 
                     {/* Action Buttons */}
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {appointment.status !== "confirmed" && appointment.status !== "completed" && (
+                      {canManageStatus && appointment.status !== "confirmed" && appointment.status !== "completed" && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "confirmed")}
                           disabled={isUpdating}
@@ -448,7 +449,7 @@ export default function AppointmentsPage() {
                           <BadgeCheck size={15}/> Onayla
                         </ActionButton>
                       )}
-                      {appointment.status !== "completed" && (
+                      {canManageStatus && appointment.status !== "completed" && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "completed")}
                           disabled={isUpdating}
@@ -457,7 +458,7 @@ export default function AppointmentsPage() {
                           <Check size={15}/> Tamamla
                         </ActionButton>
                       )}
-                      {appointment.status !== "cancelled" && (
+                      {canManageStatus && appointment.status !== "cancelled" && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "cancelled")}
                           disabled={isUpdating}
@@ -466,7 +467,7 @@ export default function AppointmentsPage() {
                           <CircleX size={15}/> İptal Et
                         </ActionButton>
                       )}
-                      {appointment.status !== "no_show" && past && (
+                      {canManageStatus && appointment.status !== "no_show" && past && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "no_show")}
                           disabled={isUpdating}

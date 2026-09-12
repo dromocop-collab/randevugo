@@ -50,14 +50,18 @@ export async function getBusinessesForUser(uid: string): Promise<Business[]> {
         if (!businessRef) return null;
         const businessSnap = await getDoc(businessRef);
         if (!businessSnap.exists()) return null;
+        const access = member.data();
         return {
           id: businessSnap.id,
           ...(businessSnap.data() as Omit<Business, "id">),
+          currentUserRole: String(access.role ?? "staff") as Business["currentUserRole"],
+          currentStaffId: typeof access.staffId === "string" ? access.staffId : undefined,
+          currentPermissions: access.permissions ?? undefined,
         };
       })
     );
 
-    const rows = businesses.filter(Boolean) as Business[];
+    const rows = (businesses.filter(Boolean) as Business[]).filter((business) => business.status !== "suspended" && business.isSuspended !== true);
     if (rows.length > 0) return rows;
   } catch {
     // Fallback below covers environments where collectionGroup permissions/indexes are not ready.
@@ -70,7 +74,8 @@ export async function getBusinessesForUser(uid: string): Promise<Business[]> {
   const ownerBusinesses = ownerSnap.docs.map((item) => ({
     id: item.id,
     ...(item.data() as Omit<Business, "id">),
-  }));
+    currentUserRole: "owner" as const,
+  })).filter((business) => business.status !== "suspended" && business.isSuspended !== true);
 
   await Promise.all(
     ownerBusinesses.map(async (business) => {

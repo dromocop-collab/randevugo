@@ -87,4 +87,12 @@ export interface Business extends EntityBase {
   plan: AnyPlanType;
   isVerified?: boolean;
   adminNote?: string;
+  /** Access metadata for the currently signed-in user; not persisted on the business. */
+  currentUserRole?: "owner" | "admin" | "manager" | "staff";
+  currentStaffId?: string;
+  currentPermissions?: {
+    manageOwnCalendar?: boolean;
+    viewCustomers?: boolean;
+    manageAppointments?: boolean;
+  };
 }

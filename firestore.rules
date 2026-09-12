@@ -49,6 +49,14 @@ service cloud.firestore {
         getMember(businessId).data.role in ["owner", "admin", "manager", "staff"];
     }
 
+    function isStaff(businessId) {
+      return isMember(businessId) && getMember(businessId).data.role == "staff";
+    }
+
+    function staffPermission(businessId, permission) {
+      return isStaff(businessId) && getMember(businessId).data.permissions[permission] == true;
+    }
+
     function isPublicBusiness(businessId) {
       return get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
     }
@@ -315,21 +323,26 @@ service cloud.firestore {
 
       // Appointments — created via Cloud Function only
       match /appointments/{appointmentId} {
-        allow read: if canOperate(businessId) ||
+        allow read: if canManage(businessId) ||
           isPlatformAdmin() ||
+          (isStaff(businessId) && resource.data.staffId == getMember(businessId).data.staffId) ||
           (isAuthenticated() && resource.data.customerId == uid());
         allow create: if false; // Only via Cloud Function
         allow update: if isPlatformAdmin() ||
-          (canOperate(businessId) &&
+          (canManage(businessId) &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["status", "paymentStatus", "updatedAt"]));
+             .hasOnly(["status", "paymentStatus", "updatedAt"])) ||
+          (staffPermission(businessId, "manageAppointments") &&
+           resource.data.staffId == getMember(businessId).data.staffId &&
+           request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["status", "updatedAt"]));
         allow delete: if false;
       }
 
       // Customers (private CRM data)
       match /customers/{customerId} {
-        allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow write: if canOperate(businessId) || isPlatformAdmin();
+        allow read: if canManage(businessId) || staffPermission(businessId, "viewCustomers") || isPlatformAdmin();
+        allow write: if canManage(businessId) || isPlatformAdmin();
       }
 
       // Reviews are created and moderated by callable Cloud Functions.

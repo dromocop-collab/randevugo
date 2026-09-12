@@ -12,7 +12,8 @@ import { NotificationCenter } from "@/components/dashboard/notification-center";
 
 export function DashboardTopBar() {
   const { user } = useAuth();
-  const { businesses, businessId, setBusinessId } = useBusinessContext();
+  const { businesses, businessId, setBusinessId, access } = useBusinessContext();
+  const isStaff = access?.role === "staff";
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   const router = useRouter();
   const [skinOpen, setSkinOpen] = useState(false);
@@ -50,8 +51,8 @@ export function DashboardTopBar() {
     <header className="dashboard-topbar dashboard-command-bar">
       <div className="dashboard-command-inner">
         <div className="dashboard-command-copy">
-          <p><span /> İŞLETME OS <i>CANLI</i></p>
-          <h1>Operasyon merkeziniz hazır.</h1>
+          <p><span /> {isStaff ? "ÇALIŞAN ÇALIŞMA ALANI" : "İŞLETME OS"} <i>CANLI</i></p>
+          <h1>{isStaff ? "Kişisel randevu merkeziniz hazır." : "Operasyon merkeziniz hazır."}</h1>
         </div>
         <div className="dashboard-command-actions">
           {businesses.length > 1 && (
@@ -68,9 +69,9 @@ export function DashboardTopBar() {
               ))}
             </select>
           )}
-          {businesses.length < 3 && <Link href="/onboarding" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni mağaza</span></Link>}
+          {!isStaff && businesses.length < 3 && <Link href="/onboarding" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni mağaza</span></Link>}
           {activeBusiness?.status === "pending_review" && <span className="command-link command-pending text-amber-700"><Clock3 size={16} /><span>Süper admin onayı bekleniyor</span></span>}
-          <NotificationCenter key={businessId} businessId={businessId}/>
+          {!isStaff && <NotificationCenter key={businessId} businessId={businessId}/>}
           <div className="dashboard-skin-picker" ref={skinPanelRef}>
             <button type="button" className="command-link dashboard-skin-trigger" onClick={() => setSkinOpen((value) => !value)} aria-expanded={skinOpen} aria-label="Panel görünümünü değiştir"><Palette size={17}/><span>Görünüm</span></button>
             <div className={`dashboard-skin-menu ${skinOpen ? "open" : ""}`}>

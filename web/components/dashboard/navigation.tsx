@@ -33,7 +33,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const { businesses, businessId } = useBusinessContext();
+  const { businesses, businessId, access } = useBusinessContext();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
   
   const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
@@ -54,7 +54,7 @@ export function DashboardSidebar() {
         </Link>
       </div>
       <nav className="space-y-0.5">
-        {navItems.map((item) => {
+        {navItems.filter((item) => access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href)).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"
@@ -94,12 +94,13 @@ export function DashboardSidebar() {
 
 export function DashboardBottomNav() {
   const pathname = usePathname();
+  const { access } = useBusinessContext();
 
   return (
     <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
       <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
       <ul className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {navItems.map((item) => {
+        {navItems.filter((item) => access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href)).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"
