@@ -5,7 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
 import {
   ArrowRight, Bot, Building2, CalendarDays, CheckCircle2, Download,
-  Headphones, LoaderCircle, RefreshCw, Send, ShieldAlert, Sparkles, UsersRound,
+  BrainCircuit, Copy, Headphones, LoaderCircle, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, TrendingUp, UsersRound,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { PLAN_PRICE } from "@/constants/plans";
@@ -74,6 +74,7 @@ export function AdminAssistant() {
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([initialMessage()]);
+  const [copiedId, setCopiedId] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
@@ -209,19 +210,33 @@ export function AdminAssistant() {
     URL.revokeObjectURL(url);
   }
 
+  async function copyMessage(message: Message) {
+    await navigator.clipboard.writeText(message.body);
+    setCopiedId(message.id);
+    window.setTimeout(() => setCopiedId(""), 1400);
+  }
+
+  const executiveCards = stats ? [
+    { icon: ShieldAlert, label: "Aksiyon kuyruğu", value: stats.pendingBusinesses + stats.criticalSupport + stats.pendingReviews + stats.pendingCategories, detail: "onay, destek ve moderasyon", prompt: "Bugün önceliğimiz ne?" },
+    { icon: TrendingUp, label: "Büyüme sinyali", value: stats.trialSubscriptions, detail: "dönüşüm bekleyen deneme", prompt: "Büyüme fırsatlarını bul" },
+    { icon: BrainCircuit, label: "Platform zekâsı", value: `${healthScore}/100`, detail: `${stats.healthySources}/${stats.totalSources} kaynak canlı`, prompt: "Riskler için aksiyon planı çıkar" },
+  ] : [];
+
   return <main className="admin-assistant-page">
     <section className="admin-assistant-hero">
       <div><span><Sparkles size={15}/> PLATFORM ZEKÂ KATMANI</span><h2>Sor, analiz et,<br/>aksiyona geç.</h2><p>Canlı platform verisini konuşmaya dönüştüren güvenli yönetim asistanınız.</p></div>
       <aside><i className={loading ? "is-loading" : ""}><Bot size={30}/></i><div><small>ASİSTAN DURUMU</small><b>{loading ? "Veriler hazırlanıyor" : "Canlı ve hazır"}</b><span>{stats ? `${stats.healthySources}/${stats.totalSources} veri kaynağı bağlı` : "Güvenli bağlantı kuruluyor"}</span></div><button type="button" onClick={() => void loadData()} disabled={loading} aria-label="Verileri yenile"><RefreshCw size={16} className={loading ? "animate-spin" : ""}/></button></aside>
     </section>
 
+    <section className="assistant-command-deck" aria-label="Yönetici brifingi">{executiveCards.map((card) => <button type="button" key={card.label} onClick={() => submit(card.prompt)}><span><card.icon size={18}/></span><div><small>{card.label}</small><b>{card.value}</b><p>{card.detail}</p></div><ArrowRight size={15}/></button>)}</section>
+
     <section className="admin-assistant-layout">
       <div className="admin-assistant-chat">
-        <header><div><Bot size={20}/><span><b>SR Platform Asistanı</b><small>Gerçek zamanlı yönetim yardımcısı</small></span></div><i><span/> ÇEVRİMİÇİ</i></header>
+        <header><div><Bot size={20}/><span><b>SR Platform Asistanı</b><small>Gerçek zamanlı yönetim yardımcısı</small></span></div><nav><i><span/> ÇEVRİMİÇİ</i><button type="button" onClick={() => setMessages([initialMessage()])} aria-label="Sohbeti temizle" title="Sohbeti temizle"><Trash2 size={14}/></button></nav></header>
         <div className="admin-assistant-messages" aria-live="polite">
           {messages.map((message) => <article key={message.id} className={message.role}>
             {message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}
-            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time></div>
+            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
           </article>)}
           {thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}
           <div ref={endRef}/>
