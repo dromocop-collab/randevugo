@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   ArrowRight, Bot, Building2, CalendarDays, CheckCircle2, Download,
   BrainCircuit, Copy, Headphones, LoaderCircle, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, TrendingUp, UsersRound,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { PLAN_PRICE } from "@/constants/plans";
 
 type AssistantStats = {
@@ -33,7 +35,9 @@ type AssistantStats = {
   updatedAt: Date;
 };
 
-type AssistantAction = { label: string; href?: string; report?: boolean };
+type ManagedBusiness = { id: string; name: string; status: string; isSuspended: boolean };
+type BusinessOperation = { businessId: string; businessName: string; operation: "suspend" | "activate" | "approve" };
+type AssistantAction = { label: string; href?: string; report?: boolean; businessOperation?: BusinessOperation };
 type Message = { id: string; role: "assistant" | "user"; body: string; actions?: AssistantAction[]; createdAt: Date };
 
 const QUICK_PROMPTS = [
@@ -75,6 +79,8 @@ export function AdminAssistant() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([initialMessage()]);
   const [copiedId, setCopiedId] = useState("");
+  const [businessRows, setBusinessRows] = useState<ManagedBusiness[]>([]);
+  const [runningAction, setRunningAction] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
@@ -91,6 +97,7 @@ export function AdminAssistant() {
     ]);
     const rows = (index: number) => sources[index].status === "fulfilled" ? sources[index].value.docs : [];
     const businesses = rows(0), appointments = rows(2), subscriptions = rows(3), support = rows(4);
+    setBusinessRows(businesses.map((item) => ({ id: item.id, name: String(item.data().name ?? "İsimsiz işletme"), status: String(item.data().status ?? "active"), isSuspended: item.data().isSuspended === true })));
     const thirtyDaysAgo = Date.now() - 30 * 86_400_000;
     const businessStatus = (status: string) => businesses.filter((item) => {
       const data = item.data();
@@ -145,6 +152,17 @@ export function AdminAssistant() {
     const problemRate = outcome ? ((stats.cancelled + stats.noShow) / outcome) * 100 : 0;
     const mrr = Math.round(stats.activeSubscriptions * PLAN_PRICE.monthlyEquivalent);
     const moderation = stats.pendingReviews + stats.pendingCategories;
+    if (/^(selam|merhaba|hey|sa|günaydın|iyi akşamlar)[!. ]*$/.test(text)) return { body: `Merhaba! Ben iyiyim ve platform için hazırım 🙂 Şu anda sağlık puanı ${healthScore}/100; ${stats.pendingBusinesses + stats.criticalSupport + moderation} operasyon kaydı dikkatinizi bekliyor. Siz nasılsınız, bugün neyi birlikte yönetelim?` };
+    if (/nasılsın|ne haber|naber/.test(text)) return { body: `Gayet iyiyim, teşekkür ederim 🙂 Platformu da kontrol ettim: ${stats.healthySources}/${stats.totalSources} veri kaynağı canlı ve sağlık puanı ${healthScore}/100. İsterseniz size bugünün önceliklerini hemen sıralayayım.` };
+    if (/teşekkür|sağ ol|eyvallah/.test(text)) return { body: "Rica ederim 🙂 Platformu birlikte daha güçlü hale getiriyoruz. Sıradaki işlemi söylemeniz yeterli." };
+
+    const mentionedBusiness = businessRows.find((item) => text.includes(item.name.toLocaleLowerCase("tr-TR")));
+    if (mentionedBusiness && /(askıya al|pasif yap|durdur|aktif et|yayına al|onayla)/.test(text)) {
+      const operation: BusinessOperation["operation"] = /onayla|yayına al/.test(text) && mentionedBusiness.status === "pending_review" ? "approve" : /aktif et|yayına al/.test(text) ? "activate" : "suspend";
+      const wording = operation === "approve" ? "onaylanıp yayına alınacak" : operation === "activate" ? "yeniden aktif edilecek" : "askıya alınacak";
+      return { body: `${mentionedBusiness.name} işletmesini buldum. İşletme ${wording}. Bu işlem mağazanın görünürlüğünü etkileyebilir; uygulamadan önce onayınızı bekliyorum.`, actions: [{ label: operation === "suspend" ? "Askıya almayı onayla" : operation === "approve" ? "Onayla ve yayınla" : "Aktif etmeyi onayla", businessOperation: { businessId: mentionedBusiness.id, businessName: mentionedBusiness.name, operation } }, { label: "İşletmeyi incele", href: "/super-admin/isletmeler" }] };
+    }
+    if (/(işletme|mağaza).*(askıya al|aktif et|onayla)/.test(text) && !mentionedBusiness) return { body: "İşlem yapılacak işletmeyi net bulamadım. İşletmenin panelde görünen tam adını yazın; örneğin “Dromocob işletmesini askıya al”. Uygulamadan önce size onay kartı göstereceğim.", actions: [{ label: "İşletmeleri aç", href: "/super-admin/isletmeler" }] };
     if (/öncelik|ne yap|aksiyon|bugün/.test(text)) {
       const items = [
         { count: stats.pendingBusinesses, label: "işletme başvurusu onay bekliyor", href: "/super-admin/isletmeler" },
@@ -216,6 +234,28 @@ export function AdminAssistant() {
     window.setTimeout(() => setCopiedId(""), 1400);
   }
 
+  async function runBusinessOperation(action: BusinessOperation) {
+    if (runningAction) return;
+    setRunningAction(action.businessId);
+    try {
+      if (action.operation === "approve") {
+        const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "reviewBusiness");
+        await callable({ businessId: action.businessId, decision: "approved" });
+      } else {
+        await updateDoc(doc(getDb(), "businesses", action.businessId), {
+          isSuspended: action.operation === "suspend",
+          status: action.operation === "suspend" ? "suspended" : "active",
+          updatedAt: serverTimestamp(),
+        });
+      }
+      const result = action.operation === "approve" ? "onaylandı ve yayına alındı" : action.operation === "suspend" ? "askıya alındı" : "aktif edildi";
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `İşlem tamamlandı ✅ ${action.businessName} ${result}. Canlı platform verilerini yeniledim.`, createdAt: new Date(), actions: [{ label: "İşletmeleri kontrol et", href: "/super-admin/isletmeler" }] }]);
+      await loadData();
+    } catch (error) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `İşlem uygulanamadı: ${(error as Error).message || "Yetki veya bağlantı hatası oluştu."}`, createdAt: new Date() }]);
+    } finally { setRunningAction(""); }
+  }
+
   const executiveCards = stats ? [
     { icon: ShieldAlert, label: "Aksiyon kuyruğu", value: stats.pendingBusinesses + stats.criticalSupport + stats.pendingReviews + stats.pendingCategories, detail: "onay, destek ve moderasyon", prompt: "Bugün önceliğimiz ne?" },
     { icon: TrendingUp, label: "Büyüme sinyali", value: stats.trialSubscriptions, detail: "dönüşüm bekleyen deneme", prompt: "Büyüme fırsatlarını bul" },
@@ -236,7 +276,7 @@ export function AdminAssistant() {
         <div className="admin-assistant-messages" aria-live="polite">
           {messages.map((message) => <article key={message.id} className={message.role}>
             {message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}
-            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
+            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.businessOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.businessOperation && void runBusinessOperation(action.businessOperation)} disabled={Boolean(runningAction)}>{runningAction === action.businessOperation.businessId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
           </article>)}
           {thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}
           <div ref={endRef}/>

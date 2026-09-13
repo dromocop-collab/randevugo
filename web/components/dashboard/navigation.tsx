@@ -96,7 +96,9 @@ export function DashboardSidebar() {
 
 export function DashboardBottomNav() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const { access } = useBusinessContext();
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
   return (
     <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
@@ -124,6 +126,7 @@ export function DashboardBottomNav() {
             </li>
           );
         })}
+        {isAdmin && <li className="w-[78px] shrink-0 snap-start"><Link href="/super-admin" className={cn("dashboard-bottom-nav-link dashboard-bottom-admin-link", pathname.startsWith("/super-admin") ? "active" : "")}><span className="dashboard-bottom-nav-icon"><ShieldCheck aria-hidden="true" size={20}/></span><span>Süper Admin</span></Link></li>}
       </ul>
     </nav>
   );
