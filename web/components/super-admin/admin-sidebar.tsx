@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import {
   Activity, ArrowLeftToLine, BarChart3, Building2, CircleGauge, ClipboardList, Headphones, Settings2,
-  MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
+  Bot, MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin", label: "Platform", icon: CircleGauge },
+  { href: "/super-admin/asistan", label: "Akıllı Asistan", icon: Bot },
   { href: "/super-admin/analitik", label: "Ziyaretçi Analitiği", icon: BarChart3 },
   { href: "/super-admin/isletmeler", label: "İşletmeler", icon: Building2 },
   { href: "/super-admin/kullanicilar", label: "Kullanıcılar", icon: UsersRound },
