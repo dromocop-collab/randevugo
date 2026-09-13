@@ -1257,6 +1257,38 @@ export const getAvailableSlots = onCall(
   }
 );
 
+export const joinWaitlist = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const serviceId = requireString(data.serviceId, "serviceId");
+    const preferredDate = requireString(data.preferredDate, "preferredDate");
+    const customerName = requireString(data.customerName, "customerName");
+    const customerPhone = typeof data.customerPhone === "string" ? normalizePhone(data.customerPhone) : "";
+    const customerEmail = typeof data.customerEmail === "string" ? data.customerEmail.trim().toLowerCase() : "";
+    const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
+    if (!isValidDateKey(preferredDate)) throw new HttpsError("invalid-argument", "Tarih biçimi geçersiz.");
+    if (!/^\+90\d{10}$/.test(customerPhone) && !/^\S+@\S+\.\S+$/.test(customerEmail)) {
+      throw new HttpsError("invalid-argument", "Geçerli bir telefon veya e-posta girin.");
+    }
+    const [business, service] = await Promise.all([
+      db.doc(`businesses/${businessId}`).get(),
+      db.doc(`businesses/${businessId}/services/${serviceId}`).get(),
+    ]);
+    if (!business.exists || business.data()?.status !== "active" || business.data()?.isPublished !== true) throw new HttpsError("failed-precondition", "İşletme şu anda bekleme listesi kabul etmiyor.");
+    if (!service.exists || service.data()?.isActive !== true || service.data()?.isBookableOnline === false) throw new HttpsError("failed-precondition", "Hizmet şu anda bekleme listesine açık değil.");
+    const contactKey = createHash("sha256").update(`${customerPhone}|${customerEmail}`).digest("hex");
+    const duplicate = await db.collection(`businesses/${businessId}/waitlist`)
+      .where("serviceId", "==", serviceId).where("preferredDate", "==", preferredDate).where("contactKey", "==", contactKey).where("status", "==", "waiting").limit(1).get();
+    if (!duplicate.empty) return { waitlistId: duplicate.docs[0].id, alreadyJoined: true };
+    const ref = db.collection(`businesses/${businessId}/waitlist`).doc();
+    await ref.set({ businessId, serviceId, serviceName: String(service.data()?.name ?? "Hizmet"), staffId, customerId: request.auth?.uid ?? null, customerName: customerName.slice(0, 80), customerPhone, customerEmail: customerEmail.slice(0, 160), preferredDate, contactKey, status: "waiting", source: "online", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    await db.collection(`businesses/${businessId}/notifications`).add({ type: "appointment", title: "Yeni bekleme listesi talebi", message: `${customerName.slice(0, 80)} · ${String(service.data()?.name ?? "Hizmet")} · ${preferredDate}`, isRead: false, createdAt: FieldValue.serverTimestamp() });
+    return { waitlistId: ref.id, alreadyJoined: false };
+  }
+);
+
 export const createAppointment = onCall(
   publicCallableOptions,
   async (request) => {

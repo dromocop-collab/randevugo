@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import {
-  CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
+  BellRing, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, type LucideIcon,
 } from "lucide-react";
@@ -18,6 +18,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Genel Bakış", icon: LayoutDashboard },
   { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays },
   { href: "/dashboard/randevular", label: "Randevular", icon: MessageSquareText },
+  { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing },
   { href: "/dashboard/analitik", label: "Büyüme Analitiği", icon: ChartNoAxesCombined },
   { href: "/dashboard/buyume", label: "Büyüme Merkezi", icon: Rocket },
   { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors },

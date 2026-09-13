@@ -135,3 +135,10 @@ export async function listAvailableSlots(input: {
       : [];
   });
 }
+
+export async function joinAppointmentWaitlist(input: { businessId: string; serviceId: string; staffId?: string; preferredDate: string; customerName: string; customerPhone?: string; customerEmail?: string }): Promise<{ waitlistId: string; alreadyJoined: boolean }> {
+  const callable = call(getFunctions(getFirebaseApp(), "europe-west1"), "joinWaitlist");
+  const result = await callable(input);
+  const data = result.data as { waitlistId?: unknown; alreadyJoined?: unknown };
+  return { waitlistId: String(data.waitlistId ?? ""), alreadyJoined: data.alreadyJoined === true };
+}

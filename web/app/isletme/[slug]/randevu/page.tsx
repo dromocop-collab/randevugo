@@ -17,6 +17,7 @@ export default function BookingPage() {
   const params = useParams<{ slug: string }>();
   const searchParams = useSearchParams();
   const [preselectedServiceId] = useState<string | null>(searchParams.get("service"));
+  const [preselectedStaffId] = useState<string | null>(searchParams.get("staff"));
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [workingHours, setWorkingHours] = useState<DaySchedule[]>([]);
@@ -136,6 +137,7 @@ export default function BookingPage() {
           maximumBookingDaysAhead={business.maximumBookingDaysAhead}
           slotIntervalMinutes={business.slotIntervalMinutes ?? 15}
           preselectedServiceId={preselectedServiceId}
+          preselectedStaffId={preselectedStaffId}
         />
       </main>
     </div>

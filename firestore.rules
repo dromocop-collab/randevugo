@@ -339,6 +339,12 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /waitlist/{waitlistId} {
+        allow read: if canManage(businessId) || isPlatformAdmin();
+        allow create, delete: if false;
+        allow update: if canManage(businessId) || isPlatformAdmin();
+      }
+
       // Customers (private CRM data)
       match /customers/{customerId} {
         allow read: if canManage(businessId) || staffPermission(businessId, "viewCustomers") || isPlatformAdmin();

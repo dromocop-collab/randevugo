@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   createAppointment,
+  joinAppointmentWaitlist,
   listAvailableSlots,
   type AvailableAppointmentSlot,
 } from "@/features/appointments/appointment-repository";
@@ -16,8 +17,9 @@ import { listStaff } from "@/features/staff/staff-repository";
 import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 import {
-  ArrowLeft, ArrowRight, Building2, CalendarDays, CheckCircle2,
+  ArrowLeft, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2,
   CircleDollarSign, Clock3, FileCheck2, Mail, MessageSquareText, Phone,
   Send, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -35,6 +37,7 @@ interface Props {
   maximumBookingDaysAhead: number;
   slotIntervalMinutes: number;
   preselectedServiceId?: string | null;
+  preselectedStaffId?: string | null;
 }
 
 type WizardStep =
@@ -73,7 +76,7 @@ export function BookingWizard(props: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
-  const [staffId, setStaffId] = useState("");
+  const [staffId, setStaffId] = useState(props.preselectedStaffId ?? "");
   const [appointmentsDate, setAppointmentsDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -83,6 +86,9 @@ export function BookingWizard(props: Props) {
   const [customerEmail, setCustomerEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistBusy, setWaitlistBusy] = useState(false);
+  const [waitlistDone, setWaitlistDone] = useState(false);
 
   // Phone verification state
   const [verificationCode, setVerificationCode] = useState(["" ,"", "", "", "", ""]);
@@ -116,11 +122,13 @@ export function BookingWizard(props: Props) {
       } else if (serviceRows[0]) {
         setServiceId(serviceRows[0].id);
       }
-      if (staffRows[0]) {
+      if (props.preselectedStaffId && staffRows.some((staff) => staff.id === props.preselectedStaffId)) {
+        setStaffId(props.preselectedStaffId);
+      } else if (staffRows[0]) {
         setStaffId(staffRows[0].id);
       }
     });
-  }, [props.businessId, props.preselectedServiceId]);
+  }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
 
   useEffect(() => {
     if (!serviceId) return;
@@ -156,6 +164,20 @@ export function BookingWizard(props: Props) {
       )
     );
   }, [staffList, serviceId, selectedService]);
+
+  async function joinWaitlist() {
+    if (!selectedService || customerName.trim().length < 2 || (!customerPhone.trim() && !customerEmail.trim())) {
+      toast.error("Bekleme listesi için adınızı ve telefon veya e-postanızı girin.");
+      return;
+    }
+    setWaitlistBusy(true);
+    try {
+      const result = await joinAppointmentWaitlist({ businessId: props.businessId, serviceId: selectedService.id, staffId: staffId || undefined, preferredDate: appointmentsDate, customerName: customerName.trim(), customerPhone: customerPhone.trim(), customerEmail: customerEmail.trim() });
+      setWaitlistDone(true);
+      toast.success(result.alreadyJoined ? "Bu tarih için zaten bekleme listesindesiniz." : "Bekleme listesine eklendiniz. Yer açıldığında işletme sizinle iletişime geçecek.");
+    } catch (error) { toast.error(userFacingError(error, "Bekleme listesine eklenemediniz.")); }
+    finally { setWaitlistBusy(false); }
+  }
 
   const currentStepIndex = STEPS.indexOf(step);
 
@@ -624,6 +646,9 @@ export function BookingWizard(props: Props) {
                     <p className="mt-1 text-xs text-amber-600">
                       Lütfen başka bir tarih seçin veya farklı bir çalışan deneyin.
                     </p>
+                    {!waitlistDone && !waitlistOpen && <button type="button" onClick={() => setWaitlistOpen(true)} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-amber-800">Bekleme listesine katıl <BellRing size={14}/></button>}
+                    {waitlistOpen && !waitlistDone && <div className="mt-5 grid w-full max-w-lg gap-2 rounded-2xl border border-amber-200 bg-white/80 p-4 text-left shadow-sm"><div><b className="text-sm text-amber-950">Yer açılırsa haber verelim</b><p className="mt-1 text-[10px] text-amber-700">İşletme talebinizi görecek ve uygunluk oluştuğunda sizinle iletişime geçecek.</p></div><input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Adınız soyadınız" maxLength={80} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-amber-500"/><div className="grid gap-2 sm:grid-cols-2"><input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="05xx xxx xx xx" inputMode="tel" className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-amber-500"/><input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="E-posta (opsiyonel)" type="email" className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-amber-500"/></div><div className="flex gap-2"><button type="button" onClick={() => void joinWaitlist()} disabled={waitlistBusy} className="flex-1 rounded-xl bg-amber-700 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50">{waitlistBusy ? "Kaydediliyor…" : "Talebi kaydet"}</button><button type="button" onClick={() => setWaitlistOpen(false)} className="rounded-xl border border-amber-200 px-3 py-2.5 text-xs font-bold text-amber-800">Vazgeç</button></div></div>}
+                    {waitlistDone && <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-xs font-bold text-emerald-800"><CheckCircle2 size={16}/> Bekleme listesi talebiniz alındı.</div>}
                   </div>
                 ) : (
                   <div className="mt-4 space-y-4">
