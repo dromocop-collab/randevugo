@@ -43,6 +43,8 @@ const QUICK_PROMPTS = [
   "Randevu kalitesini analiz et",
   "Gelir ve abonelik özeti",
   "Sistem sağlığını kontrol et",
+  "Büyüme fırsatlarını bul",
+  "Riskler için aksiyon planı çıkar",
 ];
 
 function dateFrom(value: unknown) {
@@ -174,6 +176,14 @@ export function AdminAssistant() {
     if (/sistem|sağlık|hata|kaynak/.test(text)) return { body: `Platform sağlık puanı ${healthScore}/100. ${stats.healthySources}/${stats.totalSources} veri kaynağı erişilebilir. ${stats.healthySources === stats.totalSources ? "Canlı veri bağlantılarının tamamı sağlıklı." : "Erişilemeyen kaynaklar için yetki ve indeks kontrolleri yapılmalı."}`, actions: [{ label: "Audit kayıtları", href: "/super-admin/audit-logs" }] };
     if (/rapor|özet|indir|csv/.test(text)) return { body: `Yönetim raporunu hazırladım. Rapor; platform sağlığı, işletme, kullanıcı, randevu, destek, moderasyon ve abonelik göstergelerini ${stats.updatedAt.toLocaleString("tr-TR")} anlık görüntüsüyle içeriyor.`, actions: [{ label: "Raporu indir", report: true }] };
     if (/moderasyon|yorum|kategori/.test(text)) return { body: `${stats.pendingReviews} yorum ve ${stats.pendingCategories} kategori isteği olmak üzere toplam ${moderation} moderasyon kaydı bekliyor.`, actions: [{ label: "Moderasyonu aç", href: "/super-admin/moderasyon" }] };
+    if (/büyü|fırsat|geliştir/.test(text)) {
+      const activeRate = stats.businesses ? stats.activeBusinesses / stats.businesses * 100 : 0;
+      return { body: `Büyüme radarı üç fırsat gösteriyor: ${stats.trialSubscriptions} deneme işletmesini aboneliğe dönüştürmek, aktiflik oranını %${activeRate.toFixed(1)} seviyesinden yükseltmek ve son 30 gündeki ${stats.appointments30d} randevu hacmini yerel keşif trafiğiyle büyütmek. Önce denemedeki işletmelerin kurulum tamamlama ve kullanım sıklığını inceleyin.`, actions: [{ label: "Abonelik havuzu", href: "/super-admin/abonelikler" }, { label: "Ziyaretçi analitiği", href: "/super-admin/analitik" }] };
+    }
+    if (/risk|aksiyon planı|plan çıkar/.test(text)) {
+      const riskTotal = stats.criticalSupport + stats.pastDueSubscriptions + stats.pendingBusinesses + moderation;
+      return { body: riskTotal ? `Önerilen aksiyon planı: 1) ${stats.criticalSupport} kritik destek kaydını sonuçlandırın. 2) ${stats.pendingBusinesses} işletme başvurusunu inceleyin. 3) ${moderation} moderasyon kaydını temizleyin. 4) ${stats.pastDueSubscriptions} ödeme riskini takip edin. Toplam ${riskTotal} kayıt operasyon takibi istiyor.` : "Kritik risk kuyruğu temiz. Sonraki plan: deneme dönüşümü, randevu hacmi ve işletme aktiflik oranını büyütmek.", actions: [{ label: "Komuta merkezini aç", href: "/super-admin" }, { label: "Audit kontrolü", href: "/super-admin/audit-logs" }] };
+    }
     return { body: "Bunu canlı platform verisiyle güvenli bir komuta çevirebilirim. İşletmeler, destek, randevu kalitesi, kullanıcılar, abonelik, moderasyon, sistem sağlığı veya yönetim raporu hakkında sorabilirsiniz.", actions: [{ label: "Platform özeti", href: "/super-admin" }] };
   }
 
