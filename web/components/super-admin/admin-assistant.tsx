@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { collection, collectionGroup, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, collectionGroup, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   ArrowRight, Bot, Building2, CalendarDays, CheckCircle2, Download,
@@ -36,7 +36,7 @@ type AssistantStats = {
 };
 
 type ManagedBusiness = { id: string; name: string; status: string; isSuspended: boolean };
-type BusinessOperation = { businessId: string; businessName: string; operation: "suspend" | "activate" | "approve" };
+type BusinessOperation = { businessId: string; businessName: string; operation: "suspend" | "activate" | "approve" | "plan"; plan?: string };
 type AssistantAction = { label: string; href?: string; report?: boolean; businessOperation?: BusinessOperation };
 type Message = { id: string; role: "assistant" | "user"; body: string; actions?: AssistantAction[]; createdAt: Date };
 
@@ -157,6 +157,11 @@ export function AdminAssistant() {
     if (/teşekkür|sağ ol|eyvallah/.test(text)) return { body: "Rica ederim 🙂 Platformu birlikte daha güçlü hale getiriyoruz. Sıradaki işlemi söylemeniz yeterli." };
 
     const mentionedBusiness = businessRows.find((item) => text.includes(item.name.toLocaleLowerCase("tr-TR")));
+    if (mentionedBusiness && /(paket|plan)/.test(text) && /(güncelle|değiştir|yap|ata)/.test(text)) {
+      const plan = text.match(/\b(free|pro|business|randevugo)\b/i)?.[1]?.toUpperCase();
+      if (plan) return { body: `${mentionedBusiness.name} işletmesinin paketi ${plan} olarak değiştirilecek. Abonelik yetkilerini etkileyen bu işlem için onayınızı bekliyorum.`, actions: [{ label: `${plan} paketine geçir`, businessOperation: { businessId: mentionedBusiness.id, businessName: mentionedBusiness.name, operation: "plan", plan } }, { label: "Abonelikleri incele", href: "/super-admin/abonelikler" }] };
+      return { body: `${mentionedBusiness.name} işletmesini buldum. Hedef paketi FREE, PRO, BUSINESS veya RANDEVUGO olarak belirtin; örneğin “${mentionedBusiness.name} planını PRO yap”.` };
+    }
     if (mentionedBusiness && /(askıya al|pasif yap|durdur|aktif et|yayına al|onayla)/.test(text)) {
       const operation: BusinessOperation["operation"] = /onayla|yayına al/.test(text) && mentionedBusiness.status === "pending_review" ? "approve" : /aktif et|yayına al/.test(text) ? "activate" : "suspend";
       const wording = operation === "approve" ? "onaylanıp yayına alınacak" : operation === "activate" ? "yeniden aktif edilecek" : "askıya alınacak";
@@ -241,14 +246,18 @@ export function AdminAssistant() {
       if (action.operation === "approve") {
         const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "reviewBusiness");
         await callable({ businessId: action.businessId, decision: "approved" });
+      } else if (action.operation === "plan") {
+        const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "assignBusinessPlan");
+        await callable({ businessId: action.businessId, plan: action.plan, status: "active" });
       } else {
         await updateDoc(doc(getDb(), "businesses", action.businessId), {
           isSuspended: action.operation === "suspend",
           status: action.operation === "suspend" ? "suspended" : "active",
           updatedAt: serverTimestamp(),
         });
+        void addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.business_${action.operation}`, businessId: action.businessId, actorSource: "platform_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
       }
-      const result = action.operation === "approve" ? "onaylandı ve yayına alındı" : action.operation === "suspend" ? "askıya alındı" : "aktif edildi";
+      const result = action.operation === "approve" ? "onaylandı ve yayına alındı" : action.operation === "suspend" ? "askıya alındı" : action.operation === "plan" ? `${action.plan} paketine geçirildi` : "aktif edildi";
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `İşlem tamamlandı ✅ ${action.businessName} ${result}. Canlı platform verilerini yeniledim.`, createdAt: new Date(), actions: [{ label: "İşletmeleri kontrol et", href: "/super-admin/isletmeler" }] }]);
       await loadData();
     } catch (error) {
