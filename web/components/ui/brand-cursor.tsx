@@ -11,11 +11,21 @@ export function BrandCursor() {
   const [interactive, setInteractive] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [editable, setEditable] = useState(false);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (!finePointer.matches) return;
+
+    const syncCursor = () => {
+      const stored = window.localStorage.getItem("sr-dashboard-cursor") ?? "orbit";
+      document.documentElement.dataset.dashboardCursor = stored;
+      const active = stored !== "normal";
+      document.documentElement.classList.toggle("has-brand-cursor", active);
+      setEnabled(active);
+      if (!active) setVisible(false);
+    };
 
     function render() {
       const pointer = pointerRef.current;
@@ -40,7 +50,8 @@ export function BrandCursor() {
     function onDown() { setPressed(true); }
     function onUp() { setPressed(false); }
 
-    document.documentElement.classList.add("has-brand-cursor");
+    syncCursor();
+    window.addEventListener("sr-dashboard-cursor-change", syncCursor);
     window.addEventListener("mousemove", onMove, { passive: true });
     document.documentElement.addEventListener("mouseleave", onLeave);
     document.documentElement.addEventListener("mouseenter", onEnter);
@@ -50,6 +61,7 @@ export function BrandCursor() {
 
     return () => {
       document.documentElement.classList.remove("has-brand-cursor");
+      window.removeEventListener("sr-dashboard-cursor-change", syncCursor);
       window.removeEventListener("mousemove", onMove);
       document.documentElement.removeEventListener("mouseleave", onLeave);
       document.documentElement.removeEventListener("mouseenter", onEnter);
@@ -59,6 +71,6 @@ export function BrandCursor() {
     };
   }, []);
 
-  const className = `brand-cursor${visible && !editable ? " is-visible" : ""}${interactive ? " is-interactive" : ""}${pressed ? " is-pressed" : ""}`;
+  const className = `brand-cursor${enabled && visible && !editable ? " is-visible" : ""}${interactive ? " is-interactive" : ""}${pressed ? " is-pressed" : ""}`;
   return <div className={className} aria-hidden="true"><span ref={ringRef} className="brand-cursor-ring"/><span ref={dotRef} className="brand-cursor-dot"/></div>;
 }

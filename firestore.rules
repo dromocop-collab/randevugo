@@ -146,6 +146,12 @@ service cloud.firestore {
       match /favorites/{businessId} {
         allow read, write: if isAuthenticated() && uid() == userId;
       }
+
+      // Tema, panel yerleşimi ve imleç gibi kişisel görünüm tercihleri.
+      // Tercihler işletmeye değil hesaba bağlıdır; farklı cihazlarda aynı kalır.
+      match /preferences/{preferenceId} {
+        allow read, write: if isAuthenticated() && uid() == userId;
+      }
     }
 
     // ────────────────────────────────────────────────
