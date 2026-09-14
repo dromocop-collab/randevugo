@@ -14226,10 +14226,10 @@ a {
   .admin-assistant-page .admin-assistant-hero,.admin-assistant-page>.assistant-command-deck,.admin-assistant-page>.admin-assistant-layout>.admin-assistant-context{display:none}
   .admin-assistant-page{width:100%;min-width:0;margin:-2px -1px 0;min-height:0}
   .admin-assistant-layout{display:block}
-  .admin-assistant-chat{display:flex;width:100%;min-width:0;height:calc(100dvh - 108px);min-height:560px;box-sizing:border-box;flex-direction:column;overflow:hidden;border-radius:24px 24px 0 0;background:#efeae2;padding-bottom:92px;box-shadow:none}
+  .admin-assistant-chat{display:flex;width:100%;min-width:0;height:calc(100dvh - 108px);min-height:560px;box-sizing:border-box;flex-direction:column;overflow:hidden;border-radius:24px 24px 0 0;background:#efeae2;padding-bottom:0;box-shadow:none}
   :root[data-theme="dark"] .admin-assistant-chat{background:#0b141a}
   .admin-assistant-chat>header{flex:0 0 auto;border:0;background:linear-gradient(135deg,#075e54,#128c7e);color:#fff;box-shadow:0 5px 18px rgb(0 0 0/.14)}
-  .admin-assistant-chat>header>div{color:#d9ff7d}.admin-assistant-chat>header b,.admin-assistant-chat>header small{color:#fff}.admin-assistant-chat>header small{opacity:.68}
+  .admin-assistant-chat>header>div{min-width:0;color:#d9ff7d}.admin-assistant-chat>header>div>span{min-width:0}.admin-assistant-chat>header b,.admin-assistant-chat>header small{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}.admin-assistant-chat>header small{opacity:.68}.admin-assistant-chat>header>nav{flex:0 0 auto}
   .admin-assistant-chat>header>nav>button{border-color:rgb(255 255 255/.18);background:rgb(255 255 255/.1);color:#fff}
   .admin-assistant-messages{flex:1;height:auto;min-height:0;background-color:transparent;background-image:radial-gradient(circle at 18px 18px,rgb(7 94 84/.045) 1.5px,transparent 1.6px),radial-gradient(circle at 48px 48px,rgb(7 94 84/.035) 1.5px,transparent 1.6px);background-size:66px 66px;padding:16px 10px 10px}
   .admin-assistant-messages article{margin-bottom:9px;gap:6px}.admin-assistant-messages article>div{position:relative;max-width:82%;border-radius:5px 14px 14px 14px;background:#fff;padding:9px 10px 6px;color:#1f2937;box-shadow:0 1px 2px rgb(0 0 0/.09)}
@@ -14238,9 +14238,9 @@ a {
   :root[data-theme="dark"] .admin-assistant-messages article.user>div{background:#005c4b;color:#e9edef}
   .admin-assistant-messages p{font-size:11px;line-height:1.55}.message-avatar{width:28px;height:28px;border-radius:50%;background:#d9ff7d!important;color:#075e54!important}
   .admin-assistant-messages article>div>footer{margin-top:3px}.admin-assistant-messages time{font-size:7px;color:#667781}.admin-assistant-messages nav a,.admin-assistant-messages nav button{border-color:#d7e8df;background:#f7fffa;color:#087b62;font-size:8px}
-  .admin-assistant-prompts{flex:0 0 auto;border-color:rgb(7 94 84/.12);background:#efeae2;padding:7px 8px}.admin-assistant-prompts button{border-color:rgb(7 94 84/.14);background:#fff;color:#075e54;box-shadow:0 1px 2px rgb(0 0 0/.05)}
+  .admin-assistant-prompts{flex:0 0 auto;border-color:rgb(7 94 84/.12);background:#efeae2;padding:7px 8px;scrollbar-width:none}.admin-assistant-prompts::-webkit-scrollbar{display:none}.admin-assistant-prompts button{border-color:rgb(7 94 84/.14);background:#fff;color:#075e54;box-shadow:0 1px 2px rgb(0 0 0/.05)}
   :root[data-theme="dark"] .admin-assistant-prompts{background:#0b141a}.admin-assistant-chat>form{position:static;z-index:5;width:100%;min-width:0;box-sizing:border-box;flex:0 0 auto;margin:0;border:0;border-radius:0;background:#f0f2f5;padding:7px 8px 9px;overflow:hidden;box-shadow:0 -4px 14px rgb(0 0 0/.04);backdrop-filter:none}
-  :root[data-theme="dark"] .admin-assistant-chat>form{background:#202c33}.admin-assistant-chat>form label{min-width:0;min-height:45px;border-radius:23px;background:#fff;padding:7px 13px;color:#667781}.admin-assistant-chat textarea{min-width:0;font-size:11px}.admin-assistant-chat>form>button{width:45px;height:45px;flex:0 0 45px;border-radius:50%;background:#00a884;box-shadow:none}
+  :root[data-theme="dark"] .admin-assistant-chat>form{background:#202c33}.admin-assistant-chat>form label{width:0;min-width:0;min-height:45px;flex:1 1 0;border-radius:23px;background:#fff;padding:7px 13px;color:#667781;overflow:hidden}.admin-assistant-chat textarea{width:auto;min-width:0;flex:1 1 0;font-size:11px}.admin-assistant-chat>form>button{display:grid!important;width:45px;min-width:45px;height:45px;flex:0 0 45px;place-items:center;border-radius:50%;background:#00a884;box-shadow:none}
   .admin-assistant-chat>footer{display:none}.assistant-thinking{background:#fff!important}
 }
 
