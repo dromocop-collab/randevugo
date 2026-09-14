@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ElementType } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/features/businesses/business-context";
@@ -80,6 +81,26 @@ export function DashboardCommandCenter() {
     return () => window.removeEventListener("keydown", shortcut);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const syncViewport = () => {
+      document.documentElement.style.setProperty("--command-vh", `${window.visualViewport?.height ?? window.innerHeight}px`);
+      document.documentElement.style.setProperty("--command-top", `${window.visualViewport?.offsetTop ?? 0}px`);
+    };
+    document.body.style.overflow = "hidden";
+    syncViewport();
+    window.visualViewport?.addEventListener("resize", syncViewport);
+    window.visualViewport?.addEventListener("scroll", syncViewport);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.style.removeProperty("--command-vh");
+      document.documentElement.style.removeProperty("--command-top");
+      window.visualViewport?.removeEventListener("resize", syncViewport);
+      window.visualViewport?.removeEventListener("scroll", syncViewport);
+    };
+  }, [open]);
+
   function openPalette() {
     setQuery("");
     setActiveIndex(0);
@@ -97,7 +118,7 @@ export function DashboardCommandCenter() {
 
   return <>
     <button type="button" className="command-link dashboard-command-trigger" onClick={openPalette} aria-label="Komuta merkezini aç"><Command size={17}/><span>Komut</span><kbd>⌘K</kbd></button>
-    {open && <div className="dashboard-command-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+    {open && typeof document !== "undefined" && createPortal(<div className="dashboard-command-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section className="dashboard-command-palette" role="dialog" aria-modal="true" aria-label="İşletme komuta merkezi" onKeyDown={(event) => {
         if (event.key === "Escape") setOpen(false);
         if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((value) => Math.min(value + 1, filtered.length - 1)); }
@@ -108,6 +129,6 @@ export function DashboardCommandCenter() {
         <div className="dashboard-command-results">{filtered.length ? filtered.map((command, index) => { const Icon = command.icon; const showGroup = index === 0 || filtered[index - 1].group !== command.group; return <div key={command.id}>{showGroup && <p>{recent.includes(command.id) && !query ? "SON KULLANILANLAR · " : ""}{command.group}</p>}<button type="button" className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => void execute(command)}><i><Icon size={18}/></i><span><b>{command.label}</b><small>{command.description}</small></span>{index === activeIndex && <em><Check size={13}/> Enter</em>}</button></div>; }) : <div className="dashboard-command-empty"><Search size={28}/><b>Sonuç bulunamadı</b><span>Başka bir ifade veya sayfa adı deneyin.</span></div>}</div>
         <footer><span><kbd>↑</kbd><kbd>↓</kbd> gezin</span><span><kbd>↵</kbd> çalıştır</span><span>Güvenli komutlar doğrudan, kritik işlemler onayla çalışır.</span></footer>
       </section>
-    </div>}
+    </div>, document.body)}
   </>;
 }

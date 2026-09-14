@@ -16,7 +16,7 @@ import {
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
-import { Building2, CalendarCog, CheckCircle2, Images, Share2, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { AtSign, Building2, CalendarCog, CheckCircle2, Clock3, Gauge, Globe2, Images, LoaderCircle, MapPin, Save, Search, Share2, ShieldCheck, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import Image from "next/image";
@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("bilgiler");
+  const [settingsSearch, setSettingsSearch] = useState("");
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
 
   // Form states — Tab 1
@@ -75,7 +76,8 @@ export default function SettingsPage() {
   // Tab 4 — Appointment settings
   const [minNotice, setMinNotice] = useState(60);
   const [maxDaysAhead, setMaxDaysAhead] = useState(45);
-  const [bufferMin, setBufferMin] = useState(10);
+  const [bufferBefore, setBufferBefore] = useState(0);
+  const [bufferAfter, setBufferAfter] = useState(10);
   const [slotInterval, setSlotInterval] = useState(15);
   const [allowCancel, setAllowCancel] = useState(true);
   const [allowReschedule, setAllowReschedule] = useState(true);
@@ -101,7 +103,8 @@ export default function SettingsPage() {
       setSocial(biz.socialMedia ?? {});
       setMinNotice(biz.minimumBookingNoticeMinutes);
       setMaxDaysAhead(biz.maximumBookingDaysAhead);
-      setBufferMin(biz.appointmentBufferMinutes);
+      setBufferBefore(biz.bufferBeforeMinutes ?? 0);
+      setBufferAfter(biz.bufferAfterMinutes ?? biz.appointmentBufferMinutes ?? 10);
       setSlotInterval(biz.slotIntervalMinutes ?? 15);
       setAllowCancel(biz.allowCancellation ?? true);
       setAllowReschedule(biz.allowReschedule ?? true);
@@ -145,18 +148,18 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      const updateData: Record<string, string | undefined> = {
+      const updateData: Record<string, unknown> = {
         name: name.trim(),
         category,
+        businessType: businessType || null,
         phone: phone.trim(),
         email: email.trim(),
         address: address.trim(),
         city: city.trim(),
         district: district.trim(),
+        description: description.trim(),
+        website: website.trim(),
       };
-      if (businessType) updateData.businessType = businessType;
-      if (description.trim()) updateData.description = description.trim();
-      if (website.trim()) updateData.website = website.trim();
 
       await updateBusiness(businessId, updateData);
       toast.success("İşletme bilgileri güncellendi.");
@@ -190,12 +193,18 @@ export default function SettingsPage() {
   async function handleSaveAppointment(e: FormEvent) {
     e.preventDefault();
     if (!businessId) return;
+    if (minNotice < 0 || minNotice > 10080) { toast.error("Minimum bildirim süresi 0 ile 10.080 dakika arasında olmalıdır."); return; }
+    if (maxDaysAhead < 1 || maxDaysAhead > 365) { toast.error("Randevu penceresi 1 ile 365 gün arasında olmalıdır."); return; }
+    if (bufferBefore < 0 || bufferBefore > 180 || bufferAfter < 0 || bufferAfter > 180) { toast.error("Hazırlık süreleri en fazla 180 dakika olabilir."); return; }
+    if (cancelDeadline < 0 || cancelDeadline > 10080) { toast.error("İptal süresi 0 ile 10.080 dakika arasında olmalıdır."); return; }
     setSaving(true);
     try {
       await updateBusiness(businessId, {
         minimumBookingNoticeMinutes: minNotice,
         maximumBookingDaysAhead: maxDaysAhead,
-        appointmentBufferMinutes: bufferMin,
+        appointmentBufferMinutes: bufferAfter,
+        bufferBeforeMinutes: bufferBefore,
+        bufferAfterMinutes: bufferAfter,
         slotIntervalMinutes: slotInterval,
         allowCancellation: allowCancel,
         allowReschedule,
@@ -213,12 +222,25 @@ export default function SettingsPage() {
     return <LoadingState title="Ayarlar yükleniyor" description="İşletme bilgileri getiriliyor..." />;
   }
 
-  const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
-    { id: "bilgiler", label: "İşletme Bilgileri", icon: Building2 },
-    { id: "gorseller", label: "Görseller", icon: Images },
-    { id: "sosyal", label: "Sosyal Medya", icon: Share2 },
-    { id: "randevu", label: "Randevu Ayarları", icon: CalendarCog },
+  const TABS: { id: Tab; label: string; note: string; icon: LucideIcon }[] = [
+    { id: "bilgiler", label: "İşletme Bilgileri", note: "Profil, iletişim ve konum", icon: Building2 },
+    { id: "gorseller", label: "Marka Stüdyosu", note: "Logo, kapak ve galeri", icon: Images },
+    { id: "sosyal", label: "Dijital Kanallar", note: "Sosyal medya ve WhatsApp", icon: Share2 },
+    { id: "randevu", label: "Randevu Motoru", note: "Takvim, süre ve müşteri izinleri", icon: CalendarCog },
   ];
+  const filteredTabs = settingsSearch.trim()
+    ? TABS.filter((tab) => `${tab.label} ${tab.note}`.toLocaleLowerCase("tr-TR").includes(settingsSearch.trim().toLocaleLowerCase("tr-TR")))
+    : TABS;
+  const profileSignals = [name, category !== "diger" ? category : "", phone, email, address, city, district, description, business?.logoUrl, business?.coverUrl];
+  const profileScore = Math.round(profileSignals.filter(Boolean).length / profileSignals.length * 100);
+  const socialCount = Object.values(social).filter((value) => value?.trim()).length;
+
+  function applyBookingPreset(preset: "balanced" | "flexible" | "protected") {
+    if (preset === "flexible") { setMinNotice(30); setMaxDaysAhead(60); setBufferBefore(0); setBufferAfter(5); setSlotInterval(15); }
+    if (preset === "balanced") { setMinNotice(60); setMaxDaysAhead(45); setBufferBefore(5); setBufferAfter(10); setSlotInterval(15); }
+    if (preset === "protected") { setMinNotice(180); setMaxDaysAhead(30); setBufferBefore(10); setBufferAfter(15); setSlotInterval(15); }
+    toast.success("Randevu profili uygulandı. Kaydederek etkinleştirebilirsiniz.");
+  }
 
   return (
     <div className="settings-page">
@@ -228,15 +250,18 @@ export default function SettingsPage() {
           <h1>Mağazanı kusursuzlaştır.</h1>
           <p>Profil, marka, iletişim ve randevu kurallarını tek bir akıştan güvenle yönet.</p>
         </div>
-        <div className="settings-command-status">
-          <span><ShieldCheck size={25} /></span>
-          <div><small>AYAR DURUMU</small><b><CheckCircle2 size={15} /> Güvenli ve senkron</b></div>
-        </div>
+        <div className="settings-command-status"><span><ShieldCheck size={25} /></span><div><small>PROFİL SAĞLIĞI</small><b><CheckCircle2 size={15} /> %{profileScore} tamamlandı</b><i><em style={{width:`${profileScore}%`}}/></i></div></div>
+      </section>
+
+      <section className="settings-vitals" aria-label="Ayar özeti">
+        <button type="button" onClick={() => setActiveTab("bilgiler")}><i><MapPin size={18}/></i><span><small>MAĞAZA PROFİLİ</small><b>{city && district ? `${district}, ${city}` : "Konumu tamamlayın"}</b></span><em>{profileScore}%</em></button>
+        <button type="button" onClick={() => setActiveTab("sosyal")}><i><AtSign size={18}/></i><span><small>DİJİTAL ERİŞİM</small><b>{socialCount ? `${socialCount} kanal bağlı` : "Kanallarınızı bağlayın"}</b></span><em>{socialCount}/6</em></button>
+        <button type="button" onClick={() => setActiveTab("randevu")}><i><Clock3 size={18}/></i><span><small>RANDEVU PENCERESİ</small><b>{minNotice} dk → {maxDaysAhead} gün</b></span><em>{slotInterval} dk</em></button>
       </section>
 
       {/* Tab Navigation */}
-      <div className="settings-tabs">
-        {TABS.map((tab) => {
+      <div className="settings-navigator"><label><Search size={17}/><input value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder="Ayarlarda ara…"/></label><div className="settings-tabs">
+        {filteredTabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
@@ -249,17 +274,19 @@ export default function SettingsPage() {
               }`}
             >
               <Icon aria-hidden="true" size={17} strokeWidth={1.9} />
-              {tab.label}
+              <span>{tab.label}<small>{tab.note}</small></span>
             </button>
           );
         })}
-      </div>
+        {!filteredTabs.length && <p className="settings-search-empty">Bu ifadeyle eşleşen ayar bulunamadı.</p>}
+      </div></div>
 
       <div key={activeTab} className="settings-tab-content">
       {/* Tab 1: İşletme Bilgileri */}
       {activeTab === "bilgiler" && (
         <Card title="İşletme Bilgileri" description="İşletmenizin temel bilgilerini düzenleyin.">
-          <form className="space-y-4" onSubmit={handleSaveInfo}>
+          <div className="settings-profile-preview"><div>{business?.logoUrl ? <Image src={business.logoUrl} alt="" width={58} height={58}/> : <Building2 size={24}/>}<span><small>CANLI MAĞAZA KARTI</small><b>{name || "İşletme adınız"}</b><em>{district || "İlçe"}, {city || "Şehir"}</em></span></div><a href={business?.slug ? `/isletme/${business.slug}` : undefined} target="_blank" aria-disabled={!business?.slug}><Globe2 size={15}/> Profili önizle</a></div>
+          <form className="settings-form space-y-4" onSubmit={handleSaveInfo}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 label="İşletme Adı *"
@@ -414,9 +441,10 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Kaydediliyor..." : "💾 Bilgileri Kaydet"}
+            <div className="settings-save-row">
+              <span><ShieldCheck size={15}/> Değişiklikler güvenli olarak mağazanıza uygulanır.</span>
+              <Button type="submit" disabled={saving} className="settings-save-button">
+                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Bilgileri Kaydet</>}
               </Button>
             </div>
           </form>
@@ -426,6 +454,7 @@ export default function SettingsPage() {
       {/* Tab 2: Görseller */}
       {activeTab === "gorseller" && (
         <Card title="Görsel Yönetimi" description="Logo, kapak fotoğrafı ve galeri görselleri yükleyin.">
+          <div className="settings-brand-guide"><Sparkles size={18}/><div><b>Marka kalite rehberi</b><span>Net logo, yatay kapak ve gerçek işletme fotoğrafları keşfet görünümünüzü güçlendirir.</span></div><em>{(business?.galleryUrls?.length ?? 0) + Number(Boolean(business?.logoUrl)) + Number(Boolean(business?.coverUrl))} varlık</em></div>
           <div className="grid gap-6 sm:grid-cols-2">
             <ImageUploader
               label="Logo"
@@ -456,8 +485,9 @@ export default function SettingsPage() {
             <h4 className="text-sm font-semibold text-[var(--text-1)]">Galeri</h4>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
               {(business?.galleryUrls ?? []).map((url, i) => (
-                <div key={i} className="group relative">
+                <div key={url} className="settings-gallery-item group relative">
                   <Image src={url} alt={`Galeri ${i + 1}`} width={160} height={80} className="h-20 w-full rounded-xl object-cover" />
+                  <button type="button" aria-label="Görseli galeriden kaldır" onClick={async () => { if (!businessId) return; const updated = (business?.galleryUrls ?? []).filter((item) => item !== url); try { await updateBusiness(businessId, { galleryUrls: updated }); setBusiness((prev) => prev ? { ...prev, galleryUrls: updated } : prev); refreshBusinesses(); toast.success("Görsel galeriden kaldırıldı."); } catch { toast.error("Görsel kaldırılamadı."); } }}><Trash2 size={14}/></button>
                 </div>
               ))}
               {/* Add Gallery Image */}
@@ -481,8 +511,9 @@ export default function SettingsPage() {
       {/* Tab 3: Sosyal Medya */}
       {activeTab === "sosyal" && (
         <Card title="Sosyal Medya Linkleri" description="Müşterilerinizin sizi sosyal medyada bulmasını sağlayın.">
-          <form className="space-y-4" onSubmit={handleSaveSocial}>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="settings-social-health"><Share2 size={18}/><span><small>DİJİTAL AYAK İZİ</small><b>{socialCount ? `${socialCount} kanal müşterilere açık` : "Henüz kanal bağlanmadı"}</b></span><em><i style={{width:`${socialCount / 6 * 100}%`}}/></em></div>
+          <form className="settings-form space-y-4" onSubmit={handleSaveSocial}>
+            <div className="settings-social-grid grid gap-4 sm:grid-cols-2">
               {([
                 { key: "instagram", label: "Instagram", placeholder: "instagram.com/isletmeniz" },
                 { key: "facebook", label: "Facebook", placeholder: "facebook.com/isletmeniz" },
@@ -491,18 +522,18 @@ export default function SettingsPage() {
                 { key: "youtube", label: "YouTube", placeholder: "youtube.com/@isletmeniz" },
                 { key: "whatsapp", label: "WhatsApp", placeholder: "05XX XXX XX XX" },
               ] as const).map((item) => (
-                <Input
-                  key={item.key}
+                <div key={item.key} data-connected={Boolean(social[item.key]?.trim())}><Input
                   label={item.label}
                   value={social[item.key] ?? ""}
                   onChange={(e) => setSocial({ ...social, [item.key]: e.target.value })}
                   placeholder={item.placeholder}
-                />
+                /><span>{social[item.key]?.trim() ? <><CheckCircle2 size={12}/> Bağlı</> : "Bağlantı bekleniyor"}</span></div>
               ))}
             </div>
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Kaydediliyor..." : "💾 Sosyal Medya Kaydet"}
+            <div className="settings-save-row">
+              <span><Globe2 size={15}/> Dolu kanallar mağaza profilinizde gösterilir.</span>
+              <Button type="submit" disabled={saving} className="settings-save-button">
+                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Kanalları Kaydet</>}
               </Button>
             </div>
           </form>
@@ -512,7 +543,8 @@ export default function SettingsPage() {
       {/* Tab 4: Randevu Ayarları */}
       {activeTab === "randevu" && (
         <Card title="Randevu Ayarları" description="Randevu sisteminizin kurallarını belirleyin.">
-          <form className="space-y-4" onSubmit={handleSaveAppointment}>
+          <div className="settings-preset-grid"><button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={16}/><span><b>Esnek</b><small>Daha fazla müsaitlik</small></span></button><button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={16}/><span><b>Dengeli</b><small>Önerilen çalışma düzeni</small></span></button><button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={16}/><span><b>Korumalı</b><small>Daha geniş hazırlık süresi</small></span></button></div>
+          <form className="settings-form space-y-4" onSubmit={handleSaveAppointment}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Input
@@ -541,16 +573,18 @@ export default function SettingsPage() {
               </div>
               <div>
                 <Input
-                  label="Randevu Arası Buffer (dakika)"
+                  label="Randevu Öncesi Hazırlık (dk)"
                   type="number"
-                  value={String(bufferMin)}
-                  onChange={(e) => setBufferMin(Number(e.target.value))}
+                  value={String(bufferBefore)}
+                  onChange={(e) => setBufferBefore(Math.max(0, Number(e.target.value)))}
                   min={0}
+                  max={180}
                 />
                 <p className="mt-1 text-xs text-[var(--text-3)]">
-                  İki randevu arasındaki minimum boşluk.
+                  Hizmet başlamadan önce takvimde ayrılan süre.
                 </p>
               </div>
+              <div><Input label="Randevu Sonrası Buffer (dk)" type="number" value={String(bufferAfter)} onChange={(e) => setBufferAfter(Math.max(0, Number(e.target.value)))} min={0} max={180}/><p className="mt-1 text-xs text-[var(--text-3)]">Temizlik, hazırlık veya mola için ayrılan süre.</p></div>
               <Select
                 label="Slot Aralığı"
                 value={String(slotInterval)}
@@ -565,26 +599,24 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+            <div className="settings-policy-card space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
               <h4 className="text-sm font-semibold text-[var(--text-1)]">İptal & Yeniden Planlama</h4>
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="flex items-center gap-3 text-sm text-[var(--text-1)]">
+                <label className="settings-switch-row">
                   <input
                     type="checkbox"
                     checked={allowCancel}
                     onChange={(e) => setAllowCancel(e.target.checked)}
-                    className="h-4 w-4 rounded border-[var(--border)] accent-[var(--accent)]"
                   />
-                  İptal izni ver
+                  <i/><span><b>İptal izni</b><small>Müşteri randevuyu iptal edebilir</small></span>
                 </label>
-                <label className="flex items-center gap-3 text-sm text-[var(--text-1)]">
+                <label className="settings-switch-row">
                   <input
                     type="checkbox"
                     checked={allowReschedule}
                     onChange={(e) => setAllowReschedule(e.target.checked)}
-                    className="h-4 w-4 rounded border-[var(--border)] accent-[var(--accent)]"
                   />
-                  Yeniden planlama izni
+                  <i/><span><b>Yeniden planlama</b><small>Müşteri uygun başka saate geçebilir</small></span>
                 </label>
                 <div>
                   <Input
@@ -598,9 +630,11 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Kaydediliyor..." : "💾 Randevu Ayarlarını Kaydet"}
+            <div className="settings-booking-preview"><Clock3 size={18}/><span><small>CANLI KURAL ÖZETİ</small><b>Müşteri en erken {minNotice} dk sonra, en fazla {maxDaysAhead} gün ileriye randevu alabilir.</b><em>{bufferBefore + bufferAfter} dk toplam hazırlık • {slotInterval} dk slot</em></span></div>
+            <div className="settings-save-row">
+              <span><CheckCircle2 size={15}/> Yeni kurallar uygunluk motoruna anında yansır.</span>
+              <Button type="submit" disabled={saving} className="settings-save-button">
+                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Randevu Motorunu Kaydet</>}
               </Button>
             </div>
           </form>
