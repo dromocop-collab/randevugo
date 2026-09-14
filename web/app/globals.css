@@ -14221,7 +14221,8 @@ a {
 .assistant-confirm-action{background:linear-gradient(135deg,#16a36a,#0b7a4c)!important;color:#fff!important;box-shadow:0 7px 18px rgb(11 122 76/.2)}.dashboard-bottom-admin-link{color:#d8b4fe!important}.dashboard-bottom-admin-link .dashboard-bottom-nav-icon{background:rgb(168 85 247/.16)!important;color:#e9d5ff!important}
 
 @media(max-width:700px){
-  .panel-shell:has(.business-assistant-page),.admin-v2:has(.admin-assistant-page){height:100dvh;min-height:0;overflow:hidden;padding:8px 8px 104px!important}
+  .panel-shell:has(.business-assistant-page){height:100dvh;min-height:0;overflow:hidden;padding:8px!important}
+  .admin-v2:has(.admin-assistant-page){height:100dvh;min-height:0;overflow:hidden;padding:8px 8px 104px!important}
   .panel-shell:has(.business-assistant-page)>.min-w-0,.admin-v2:has(.admin-assistant-page)>.min-w-0{height:100%;min-height:0;padding-bottom:0!important}
   .panel-shell:has(.business-assistant-page)>.min-w-0>.mt-5{height:100%;min-height:0;margin-top:0;border:0;border-radius:0;background:transparent;padding:0;overflow:hidden;box-shadow:none}
   .panel-shell:has(.business-assistant-page) .dashboard-topbar{display:none}
@@ -14230,6 +14231,7 @@ a {
   .admin-assistant-page{width:100%;height:100%;min-width:0;min-height:0;margin:0}
   .admin-assistant-layout{display:block;height:100%;min-height:0}
   .admin-assistant-chat{display:flex;width:100%;min-width:0;height:100%;min-height:0;box-sizing:border-box;flex-direction:column;overflow:hidden;border-radius:24px;background:#efeae2;padding-bottom:0;box-shadow:none}
+  .business-assistant-page .admin-assistant-chat{padding-bottom:calc(94px + env(safe-area-inset-bottom))}
   :root[data-theme="dark"] .admin-assistant-chat{background:#0b141a}
   .admin-assistant-chat>header{flex:0 0 auto;border:0;background:linear-gradient(135deg,#075e54,#128c7e);color:#fff;box-shadow:0 5px 18px rgb(0 0 0/.14)}
   .admin-assistant-chat>header>div{min-width:0;color:#d9ff7d}.admin-assistant-chat>header>div>span{min-width:0}.admin-assistant-chat>header b,.admin-assistant-chat>header small{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}.admin-assistant-chat>header small{opacity:.68}.admin-assistant-chat>header>nav{flex:0 0 auto}
