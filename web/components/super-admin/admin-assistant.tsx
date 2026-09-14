@@ -37,7 +37,9 @@ type AssistantStats = {
 
 type ManagedBusiness = { id: string; name: string; status: string; isSuspended: boolean };
 type BusinessOperation = { businessId: string; businessName: string; operation: "suspend" | "activate" | "approve" | "plan"; plan?: string };
-type AssistantAction = { label: string; href?: string; report?: boolean; businessOperation?: BusinessOperation };
+type SupportRow = { id: string; title: string; requesterName: string; status: string };
+type SupportOperation = { ticketId: string; title: string; status: "in_progress" | "resolved" };
+type AssistantAction = { label: string; href?: string; report?: boolean; businessOperation?: BusinessOperation; supportOperation?: SupportOperation };
 type Message = { id: string; role: "assistant" | "user"; body: string; actions?: AssistantAction[]; createdAt: Date };
 
 const QUICK_PROMPTS = [
@@ -80,8 +82,11 @@ export function AdminAssistant() {
   const [messages, setMessages] = useState<Message[]>([initialMessage()]);
   const [copiedId, setCopiedId] = useState("");
   const [businessRows, setBusinessRows] = useState<ManagedBusiness[]>([]);
+  const [supportRows, setSupportRows] = useState<SupportRow[]>([]);
   const [runningAction, setRunningAction] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const lastBusinessId = useRef("");
+  const lastSupportId = useRef("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -98,6 +103,7 @@ export function AdminAssistant() {
     const rows = (index: number) => sources[index].status === "fulfilled" ? sources[index].value.docs : [];
     const businesses = rows(0), appointments = rows(2), subscriptions = rows(3), support = rows(4);
     setBusinessRows(businesses.map((item) => ({ id: item.id, name: String(item.data().name ?? "İsimsiz işletme"), status: String(item.data().status ?? "active"), isSuspended: item.data().isSuspended === true })));
+    setSupportRows(support.map((item) => ({ id: item.id, title: String(item.data().title ?? "Destek kaydı"), requesterName: String(item.data().requesterName ?? item.data().businessName ?? "Kullanıcı"), status: String(item.data().status ?? "open") })));
     const thirtyDaysAgo = Date.now() - 30 * 86_400_000;
     const businessStatus = (status: string) => businesses.filter((item) => {
       const data = item.data();
@@ -156,7 +162,9 @@ export function AdminAssistant() {
     if (/nasılsın|ne haber|naber/.test(text)) return { body: `Gayet iyiyim, teşekkür ederim 🙂 Platformu da kontrol ettim: ${stats.healthySources}/${stats.totalSources} veri kaynağı canlı ve sağlık puanı ${healthScore}/100. İsterseniz size bugünün önceliklerini hemen sıralayayım.` };
     if (/teşekkür|sağ ol|eyvallah/.test(text)) return { body: "Rica ederim 🙂 Platformu birlikte daha güçlü hale getiriyoruz. Sıradaki işlemi söylemeniz yeterli." };
 
-    const mentionedBusiness = businessRows.find((item) => text.includes(item.name.toLocaleLowerCase("tr-TR")));
+    const directBusiness = businessRows.find((item) => text.includes(item.name.toLocaleLowerCase("tr-TR")));
+    if (directBusiness) lastBusinessId.current = directBusiness.id;
+    const mentionedBusiness = directBusiness ?? (/onu|bu işletme|aynı işletme|az önceki/.test(text) ? businessRows.find((item) => item.id === lastBusinessId.current) : undefined);
     if (mentionedBusiness && /(paket|plan)/.test(text) && /(güncelle|değiştir|yap|ata)/.test(text)) {
       const plan = text.match(/\b(free|pro|business|randevugo)\b/i)?.[1]?.toUpperCase();
       if (plan) return { body: `${mentionedBusiness.name} işletmesinin paketi ${plan} olarak değiştirilecek. Abonelik yetkilerini etkileyen bu işlem için onayınızı bekliyorum.`, actions: [{ label: `${plan} paketine geçir`, businessOperation: { businessId: mentionedBusiness.id, businessName: mentionedBusiness.name, operation: "plan", plan } }, { label: "Abonelikleri incele", href: "/super-admin/abonelikler" }] };
@@ -168,6 +176,14 @@ export function AdminAssistant() {
       return { body: `${mentionedBusiness.name} işletmesini buldum. İşletme ${wording}. Bu işlem mağazanın görünürlüğünü etkileyebilir; uygulamadan önce onayınızı bekliyorum.`, actions: [{ label: operation === "suspend" ? "Askıya almayı onayla" : operation === "approve" ? "Onayla ve yayınla" : "Aktif etmeyi onayla", businessOperation: { businessId: mentionedBusiness.id, businessName: mentionedBusiness.name, operation } }, { label: "İşletmeyi incele", href: "/super-admin/isletmeler" }] };
     }
     if (/(işletme|mağaza).*(askıya al|aktif et|onayla)/.test(text) && !mentionedBusiness) return { body: "İşlem yapılacak işletmeyi net bulamadım. İşletmenin panelde görünen tam adını yazın; örneğin “Dromocob işletmesini askıya al”. Uygulamadan önce size onay kartı göstereceğim.", actions: [{ label: "İşletmeleri aç", href: "/super-admin/isletmeler" }] };
+    const directSupport = supportRows.find((item) => text.includes(item.requesterName.toLocaleLowerCase("tr-TR")) || text.includes(item.title.toLocaleLowerCase("tr-TR")));
+    if (directSupport) lastSupportId.current = directSupport.id;
+    const mentionedSupport = directSupport ?? (/onu|bu destek|aynı kayıt|az önceki/.test(text) ? supportRows.find((item) => item.id === lastSupportId.current) : undefined);
+    if (mentionedSupport && /(işleme al|çöz|çözüldü|kapat|tamamla)/.test(text)) {
+      const status: SupportOperation["status"] = /işleme al/.test(text) ? "in_progress" : "resolved";
+      const summary = status === "in_progress" ? "işleme alınacak" : "çözüldü olarak kapatılacak";
+      return { body: `“${mentionedSupport.title}” destek kaydını buldum (${mentionedSupport.requesterName}). Kayıt ${summary}. Onaylıyor musunuz?`, actions: [{ label: status === "in_progress" ? "İşleme almayı onayla" : "Çözümü onayla", supportOperation: { ticketId: mentionedSupport.id, title: mentionedSupport.title, status } }, { label: "Destek kaydını incele", href: "/super-admin/destek" }] };
+    }
     if (/öncelik|ne yap|aksiyon|bugün/.test(text)) {
       const items = [
         { count: stats.pendingBusinesses, label: "işletme başvurusu onay bekliyor", href: "/super-admin/isletmeler" },
@@ -265,6 +281,19 @@ export function AdminAssistant() {
     } finally { setRunningAction(""); }
   }
 
+  async function runSupportOperation(action: SupportOperation) {
+    if (runningAction) return;
+    setRunningAction(action.ticketId);
+    try {
+      await updateDoc(doc(getDb(), "supportTickets", action.ticketId), { status: action.status, updatedAt: serverTimestamp(), assistantManaged: true });
+      void addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.support_${action.status}`, entityId: action.ticketId, actorSource: "platform_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      const summary = action.status === "in_progress" ? "işleme alındı" : "çözüldü olarak kapatıldı";
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamlandı ✅ “${action.title}” destek kaydı ${summary}.`, createdAt: new Date(), actions: [{ label: "Destek merkezini aç", href: "/super-admin/destek" }] }]);
+      await loadData();
+    } catch (error) { setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Destek kaydı güncellenemedi: ${(error as Error).message}`, createdAt: new Date() }]); }
+    finally { setRunningAction(""); }
+  }
+
   const executiveCards = stats ? [
     { icon: ShieldAlert, label: "Aksiyon kuyruğu", value: stats.pendingBusinesses + stats.criticalSupport + stats.pendingReviews + stats.pendingCategories, detail: "onay, destek ve moderasyon", prompt: "Bugün önceliğimiz ne?" },
     { icon: TrendingUp, label: "Büyüme sinyali", value: stats.trialSubscriptions, detail: "dönüşüm bekleyen deneme", prompt: "Büyüme fırsatlarını bul" },
@@ -285,7 +314,7 @@ export function AdminAssistant() {
         <div className="admin-assistant-messages" aria-live="polite">
           {messages.map((message) => <article key={message.id} className={message.role}>
             {message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}
-            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.businessOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.businessOperation && void runBusinessOperation(action.businessOperation)} disabled={Boolean(runningAction)}>{runningAction === action.businessOperation.businessId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
+            <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.businessOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.businessOperation && void runBusinessOperation(action.businessOperation)} disabled={Boolean(runningAction)}>{runningAction === action.businessOperation.businessId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.supportOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.supportOperation && void runSupportOperation(action.supportOperation)} disabled={Boolean(runningAction)}>{runningAction === action.supportOperation.ticketId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
           </article>)}
           {thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}
           <div ref={endRef}/>
