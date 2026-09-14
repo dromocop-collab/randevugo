@@ -200,9 +200,9 @@ export default function AppointmentsPage() {
 
   return (
     <div className="space-y-6 dashboard-appointments-premium">
-      <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(125deg,#082318,#0b6b45)] p-6 text-white shadow-[0_24px_60px_rgba(7,67,43,.2)] sm:p-8">
-        <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10 bg-[#c9f45b]/10"/>
-        <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><span className="flex items-center gap-2 text-[10px] font-black tracking-[.18em] text-[#c9f45b]"><Sparkles size={14}/> OPERASYON MERKEZİ</span><h1 className="mt-3 font-[var(--font-space-grotesk)] text-4xl font-semibold tracking-[-.055em] sm:text-5xl">Randevu akışınız,<br/>kontrolünüz altında.</h1><p className="mt-4 max-w-xl text-sm leading-7 text-white/60">Günün programını izleyin, müşteriye ulaşın ve durumları tek dokunuşla güncelleyin.</p></div><label className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-xl lg:w-[390px]"><Search size={18} className="text-[#c9f45b]"/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Müşteri, hizmet veya telefon ara…" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"/></label></div>
+      <section className="appointments-command-hero relative overflow-hidden rounded-[28px] p-6 text-white sm:p-8">
+        <div className="appointments-command-orb absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10"/>
+        <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><span className="appointments-command-kicker flex items-center gap-2 text-[10px] font-black tracking-[.18em]"><Sparkles size={14}/> OPERASYON MERKEZİ</span><h1 className="mt-3 font-[var(--font-space-grotesk)] text-4xl font-semibold tracking-[-.055em] sm:text-5xl">Randevu akışınız,<br/>kontrolünüz altında.</h1><p className="mt-4 max-w-xl text-sm leading-7 text-white/60">Günün programını izleyin, müşteriye ulaşın ve durumları tek dokunuşla güncelleyin.</p></div><label className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-xl lg:w-[390px]"><Search size={18} className="appointments-command-kicker"/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Müşteri, hizmet veya telefon ara…" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"/></label></div>
       </section>
       {/* ━━━ Stats Header ━━━ */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
@@ -241,7 +241,7 @@ export default function AppointmentsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-200 ${
                 activeTab === tab.key
-                  ? "bg-[#0b6b45] text-white shadow-md shadow-emerald-900/20"
+                  ? "appointment-filter-active text-white shadow-md"
                   : "text-[var(--text-3)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
               }`}
             >
@@ -262,8 +262,8 @@ export default function AppointmentsPage() {
       </div>
 
       <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2"><CalendarDays size={16} className="text-[#0b6b45]"/><label htmlFor="appointment-date-scope" className="text-xs font-bold text-[var(--text-2)]">Tarih aralığı</label><select id="appointment-date-scope" value={dateScope} onChange={(event) => setDateScope(event.target.value as DateScope)} className="rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2 text-xs font-semibold text-[var(--text-1)] outline-none focus:border-[#0b6b45]"><option value="all">Tüm zamanlar</option><option value="today">Bugün</option><option value="upcoming">Yaklaşan</option><option value="past">Geçmiş</option></select><span className="text-[10px] text-[var(--text-3)]">{filtered.length} sonuç</span></div>
-        <button type="button" onClick={exportAppointments} disabled={filtered.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b6b45] px-4 py-2.5 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"><Download size={15}/> CSV dışa aktar</button>
+        <div className="flex items-center gap-2"><CalendarDays size={16} className="text-[var(--accent)]"/><label htmlFor="appointment-date-scope" className="text-xs font-bold text-[var(--text-2)]">Tarih aralığı</label><select id="appointment-date-scope" value={dateScope} onChange={(event) => setDateScope(event.target.value as DateScope)} className="rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2 text-xs font-semibold text-[var(--text-1)] outline-none focus:border-[var(--accent)]"><option value="all">Tüm zamanlar</option><option value="today">Bugün</option><option value="upcoming">Yaklaşan</option><option value="past">Geçmiş</option></select><span className="text-[10px] text-[var(--text-3)]">{filtered.length} sonuç</span></div>
+        <button type="button" onClick={exportAppointments} disabled={filtered.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"><Download size={15}/> CSV dışa aktar</button>
       </div>
 
       {/* ━━━ Appointment Cards ━━━ */}
@@ -287,7 +287,7 @@ export default function AppointmentsPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-1)] py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--surface-2)]">
-            <CalendarDays size={28} className="text-[#0b6b45]"/>
+            <CalendarDays size={28} className="text-[var(--accent)]"/>
           </div>
           <h3 className="mt-4 text-base font-semibold text-[var(--text-1)]">
             Randevu Bulunamadı
@@ -320,7 +320,7 @@ export default function AppointmentsPage() {
                   onClick={() => setExpandedId(expanded ? null : appointment.id)}
                 >
                   {/* Avatar */}
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] bg-[linear-gradient(145deg,#0b6b45,#102b1e)] text-lg font-bold text-white shadow-md shadow-emerald-950/20">
+                  <div className="appointment-customer-avatar flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] text-lg font-bold text-white shadow-md">
                     {appointment.customerName.charAt(0).toUpperCase()}
                   </div>
 

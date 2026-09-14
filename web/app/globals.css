@@ -14318,6 +14318,206 @@ a {
   color: #a5b9ae !important
 }
 
+/* Dashboard skin completion — page-level brand surfaces */
+.dashboard-v2 .dashboard-profile-ready,
+.dashboard-v2 .appointments-command-hero,
+.dashboard-v2 .waitlist-hero,
+.dashboard-v2 .growth-center-hero,
+.dashboard-v2 .settings-command-hero,
+.dashboard-v2 .staff-command-hero,
+.dashboard-v2 .crm-hero,
+.dashboard-v2 .crm-detail-head,
+.dashboard-v2 .support-command-hero,
+.dashboard-v2 .business-assistant-page .admin-assistant-hero {
+  border-color: rgb(var(--dash-rgb)/.22) !important;
+  background:
+    radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--dash-bright) 20%, transparent), transparent 31%),
+    linear-gradient(125deg, var(--dash-deep) 0%, color-mix(in srgb, var(--dash-core) 78%, var(--dash-deep)) 62%, var(--dash-core) 100%) !important;
+  box-shadow: 0 26px 68px rgb(var(--dash-rgb)/.22) !important
+}
+
+.dashboard-v2 .dashboard-profile-ready:after,
+.dashboard-v2 .appointments-command-orb,
+.dashboard-v2 .settings-command-hero:before,
+.dashboard-v2 .staff-command-hero:before,
+.dashboard-v2 .crm-hero:after {
+  background: color-mix(in srgb, var(--dash-bright) 16%, transparent) !important
+}
+
+.dashboard-v2 .appointments-command-kicker,
+.dashboard-v2 .waitlist-hero>div>span,
+.dashboard-v2 .waitlist-hero aside strong,
+.dashboard-v2 .settings-command-copy>span,
+.dashboard-v2 .staff-command-hero>div>span,
+.dashboard-v2 .crm-hero p,
+.dashboard-v2 .crm-hero>i,
+.dashboard-v2 .crm-detail-head>div>small,
+.dashboard-v2 .support-command-hero>div>div>div>span,
+.dashboard-v2 .support-command-hero b,
+.dashboard-v2 .business-assistant-page .admin-assistant-hero>div>span {
+  color: var(--dash-bright) !important
+}
+
+.dashboard-v2 .dashboard-profile-ready__icon,
+.dashboard-v2 .profile-ready-copy,
+.dashboard-v2 .settings-command-status>span,
+.dashboard-v2 .staff-command-hero aside>svg,
+.dashboard-v2 .crm-sync,
+.dashboard-v2 .business-assistant-page .admin-assistant-hero aside>i {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--dash-bright) 86%, #fff), var(--dash-bright)) !important;
+  color: var(--dash-deep) !important;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--dash-bright) 22%, transparent) !important
+}
+
+.dashboard-v2 .profile-ready-view svg:last-child,
+.dashboard-v2 .dashboard-profile-ready__checks span>svg:first-child {
+  color: var(--dash-bright) !important
+}
+
+.dashboard-v2 .appointment-filter-active,
+.dashboard-v2 .waitlist-toolbar button.active,
+.dashboard-v2 .waitlist-grid footer button:nth-child(2),
+.dashboard-v2 .settings-tab.is-active,
+.dashboard-v2 .crm-sort button.active {
+  background: linear-gradient(135deg, var(--dash-core), color-mix(in srgb, var(--dash-core) 78%, var(--dash-bright))) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 24px rgb(var(--dash-rgb)/.22) !important
+}
+
+.dashboard-v2 .appointment-customer-avatar,
+.dashboard-v2 .crm-avatar,
+.dashboard-v2 .crm-detail-avatar {
+  background: linear-gradient(145deg, var(--dash-core), var(--dash-deep)) !important;
+  box-shadow: 0 10px 24px rgb(var(--dash-rgb)/.22) !important
+}
+
+.dashboard-v2 .waitlist-person i,
+.dashboard-v2 .crm-empty i,
+.dashboard-v2 .crm-select-hint i,
+.dashboard-v2 .crm-customer-value b,
+.dashboard-v2 .crm-history h3 span {
+  background: rgb(var(--dash-rgb)/.1) !important;
+  color: var(--dash-core) !important
+}
+
+.dashboard-v2 .waitlist-empty {
+  border-color: rgb(var(--dash-rgb)/.24) !important
+}
+
+.dashboard-v2 .waitlist-empty svg,
+.dashboard-v2 .crm-sort>svg,
+.dashboard-v2 .crm-customer-card:hover .crm-card-arrow,
+.dashboard-v2 .crm-customer-card.active .crm-card-arrow,
+.dashboard-v2 .crm-history h3 svg {
+  color: var(--dash-core) !important
+}
+
+.dashboard-v2 .crm-customer-card:hover,
+.dashboard-v2 .crm-customer-card.active {
+  border-color: rgb(var(--dash-rgb)/.3) !important;
+  background: var(--surface-1) !important;
+  box-shadow: 0 20px 42px rgb(var(--dash-rgb)/.11) !important
+}
+
+.dashboard-v2 .crm-customer-card.active {
+  box-shadow: inset 4px 0 var(--dash-core), 0 20px 42px rgb(var(--dash-rgb)/.11) !important
+}
+
+.dashboard-v2 .crm-metric--emerald,
+.dashboard-v2 .crm-detail-stat--emerald {
+  --crm: var(--dash-rgb);
+  --detail: var(--dash-rgb)
+}
+
+.dashboard-v2 .staff-create-card,
+.dashboard-v2 .settings-tab-content>.premium-card {
+  border-color: var(--dash-border) !important;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--dash-panel) 97%, var(--dash-core) 3%), var(--dash-panel)) !important;
+  box-shadow: 0 20px 52px rgb(var(--dash-rgb)/.09) !important
+}
+
+.dashboard-v2 .settings-tab-content textarea:focus,
+.dashboard-v2 .settings-tab-content input:focus,
+.dashboard-v2 .settings-tab-content select:focus {
+  border-color: var(--dash-core) !important;
+  box-shadow: 0 0 0 4px rgb(var(--dash-rgb)/.1) !important
+}
+
+.dashboard-v2 .business-assistant-page .message-avatar,
+.dashboard-v2 .business-assistant-page .assistant-command-deck>button>span,
+.dashboard-v2 .business-assistant-page .assistant-context-grid span {
+  background: rgb(var(--dash-rgb)/.1) !important;
+  color: var(--dash-core) !important
+}
+
+.dashboard-v2 .business-assistant-page .admin-assistant-chat>header>div,
+.dashboard-v2 .business-assistant-page .admin-assistant-chat>form label,
+.dashboard-v2 .business-assistant-page .admin-assistant-messages nav a,
+.dashboard-v2 .business-assistant-page .admin-assistant-messages nav button {
+  color: var(--dash-core) !important
+}
+
+.dashboard-v2 .business-assistant-page .admin-assistant-messages nav a,
+.dashboard-v2 .business-assistant-page .admin-assistant-messages nav button {
+  border-color: rgb(var(--dash-rgb)/.2) !important
+}
+
+.dashboard-v2 .business-assistant-page .admin-assistant-chat>form>button,
+.dashboard-v2 .business-assistant-page .assistant-report-button {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--dash-core) 76%, var(--dash-bright)), var(--dash-core)) !important;
+  box-shadow: 0 10px 26px rgb(var(--dash-rgb)/.22) !important
+}
+
+.dashboard-v2 .business-assistant-page .assistant-health {
+  background: linear-gradient(135deg, rgb(var(--dash-rgb)/.11), color-mix(in srgb, var(--dash-bright) 8%, transparent)) !important
+}
+
+.dashboard-v2 .business-assistant-page .assistant-health>span {
+  background: conic-gradient(var(--dash-core) var(--score), rgb(148 163 184/.16) 0) !important
+}
+
+.dashboard-v2 .support-command-hero+div button,
+.dashboard-v2 .support-command-hero~section>button,
+.dashboard-v2 .support-command-hero~section button[class*="bg-[#0b6b45]"] {
+  background: var(--dash-core) !important
+}
+
+.dashboard-v2 .services-template-modal-header {
+  background: linear-gradient(120deg, var(--dash-deep), var(--dash-core) 62%, color-mix(in srgb, var(--dash-core) 72%, var(--dash-bright))) !important
+}
+
+.dashboard-v2 .support-thread-header {
+  background: linear-gradient(135deg, var(--dash-deep), var(--dash-core)) !important
+}
+
+@media(max-width:700px) {
+  .dashboard-v2 .business-assistant-page .admin-assistant-chat>header {
+    background: linear-gradient(135deg, var(--dash-deep), var(--dash-core)) !important
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-chat>header>div {
+    color: var(--dash-bright) !important
+  }
+
+  .dashboard-v2 .business-assistant-page .message-avatar {
+    background: var(--dash-bright) !important;
+    color: var(--dash-deep) !important
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-messages article.user>div {
+    background: color-mix(in srgb, var(--dash-bright) 22%, #fff) !important
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-prompts button {
+    border-color: rgb(var(--dash-rgb)/.18) !important;
+    color: var(--dash-core) !important
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-chat>form>button {
+    background: var(--dash-core) !important
+  }
+}
+
 :root[data-theme="dark"] .discover-eyebrow {
   border-color: rgb(105 225 166/.22);
   background: rgb(255 255 255/.045);
