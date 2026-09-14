@@ -9,7 +9,7 @@ import { useBusinessContext } from "@/features/businesses/business-context";
 import {
   BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
-  ShieldCheck, Star, UsersRound, type LucideIcon,
+  ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
 
 const ADMIN_EMAIL = "cihatwin@gmail.com";
@@ -22,6 +22,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing },
   { href: "/dashboard/analitik", label: "Büyüme Analitiği", icon: ChartNoAxesCombined },
   { href: "/dashboard/buyume", label: "Büyüme Merkezi", icon: Rocket },
+  { href: "/dashboard/otomasyonlar", label: "Otomasyonlar", icon: WandSparkles },
   { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors },
   { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: UsersRound },
   { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: Clock3 },

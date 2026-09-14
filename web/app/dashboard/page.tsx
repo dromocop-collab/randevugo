@@ -43,6 +43,10 @@ interface SetupItem {
   icon: LucideIcon;
 }
 
+type DashboardHomeModule = "command" | "insights" | "profile" | "kpis" | "operations";
+type DashboardHomePreference = { id: DashboardHomeModule; enabled: boolean };
+const DEFAULT_HOME_MODULES: DashboardHomePreference[] = ["command", "insights", "profile", "kpis", "operations"].map((id) => ({ id: id as DashboardHomeModule, enabled: true }));
+
 const EMPTY_DATA: DashboardData = {
   todayCount: 0, pending: 0, completed: 0, cancelled: 0,
   customerCount: 0, serviceCount: 0, staffCount: 0, todayRevenue: 0, upcoming: [],
@@ -73,6 +77,26 @@ export default function DashboardHomePage() {
   const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
   const [business, setBusiness] = useState<Business | null>(null);
   const [ready, setReady] = useState(false);
+  const [modulePreferences, setModulePreferences] = useState<DashboardHomePreference[]>(DEFAULT_HOME_MODULES);
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem("sr-dashboard-modules") ?? "[]") as DashboardHomePreference[];
+        const valid = stored.filter((item) => DEFAULT_HOME_MODULES.some((module) => module.id === item.id));
+        const next = valid.length ? [...valid, ...DEFAULT_HOME_MODULES.filter((module) => !valid.some((item) => item.id === module.id))] : DEFAULT_HOME_MODULES;
+        queueMicrotask(() => setModulePreferences(next));
+      } catch { queueMicrotask(() => setModulePreferences(DEFAULT_HOME_MODULES)); }
+    };
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<DashboardHomePreference[]>).detail;
+      if (Array.isArray(detail)) setModulePreferences(detail);
+      else read();
+    };
+    read();
+    window.addEventListener("sr-dashboard-layout-change", changed);
+    return () => window.removeEventListener("sr-dashboard-layout-change", changed);
+  }, []);
 
   useEffect(() => {
     if (!businessId) return;
@@ -187,15 +211,21 @@ export default function DashboardHomePage() {
     { label: "Bugünkü Gelir", value: data.todayRevenue, icon: CircleDollarSign, tone: "gold", note: "Tamamlanan işlemler", currency: true },
   ];
 
+  const moduleProps = (id: DashboardHomeModule) => ({
+    className: "dashboard-home-module",
+    style: { order: Math.max(0, modulePreferences.findIndex((item) => item.id === id)) },
+    hidden: modulePreferences.find((item) => item.id === id)?.enabled === false,
+  });
+
   return (
-    <div className="dashboard-command-home space-y-6">
+    <div className="dashboard-command-home">
       {loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-sm text-rose-600">{loadError}</p>
         </div>
       )}
 
-      <section className="dashboard-ops-hero">
+      <div {...moduleProps("command")}><section className="dashboard-ops-hero">
         <div className="dashboard-ops-orb dashboard-ops-orb-a"/><div className="dashboard-ops-orb dashboard-ops-orb-b"/>
         <div className="dashboard-ops-main">
           <div className="dashboard-ops-copy">
@@ -216,14 +246,15 @@ export default function DashboardHomePage() {
           <span><TrendingUp size={16}/><b>{data.weekRevenue.toLocaleString("tr-TR")} ₺</b><small>Haftalık gerçekleşen</small></span>
           <span><UsersRound size={16}/><b>{data.returningCustomers} sadık müşteri</b><small>Tekrar gelen kitle</small></span>
         </div>
-      </section>
+      </section></div>
 
-      <section className="dashboard-intelligence-row">
+      <section {...moduleProps("insights")}><div className="dashboard-intelligence-row">
         <article className="dashboard-week-pulse"><div><span><BarChart3 size={16}/> 7 GÜNLÜK NABIZ</span><b>{data.weekAppointments} toplam randevu</b></div><div className="dashboard-week-bars">{data.weeklyActivity.map((day) => { const max = Math.max(...data.weeklyActivity.map((item) => item.value), 1); return <span key={day.label}><i style={{height:`${Math.max(day.value ? 18 : 4, day.value / max * 100)}%`}}/><small>{day.label}</small></span>; })}</div></article>
         <Link href="/dashboard/buyume" className="dashboard-ai-brief"><span><Rocket size={20}/></span><div><small>AKILLI İŞLETME ÖZETİ</small><b>Büyüme fırsatlarını keşfet</b><p>Yoğun saat, geri kazanım ve performans önerileri hazır.</p></div><ArrowUpRight size={18}/></Link>
-      </section>
+      </div></section>
 
       {/* Setup Progress */}
+      <section {...moduleProps("profile")}><div className="dashboard-profile-module">
       {setupItems.length > 0 && !allComplete && (
         <div
           className="rounded-2xl border border-[var(--accent)]/20 bg-[var(--surface-1)] p-6 shadow-sm"
@@ -401,9 +432,10 @@ export default function DashboardHomePage() {
           </button>
         </div>
       )}
+      </div></section>
 
       {/* Stats Grid */}
-      <div className="dashboard-kpi-grid">
+      <section {...moduleProps("kpis")}><div className="dashboard-kpi-grid">
         {statCards.map((stat, i) => (
           (() => {
             const StatIcon = stat.icon;
@@ -424,9 +456,9 @@ export default function DashboardHomePage() {
             );
           })()
         ))}
-      </div>
+      </div></section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <section {...moduleProps("operations")}><div className="grid gap-4 lg:grid-cols-2">
         {/* Upcoming Appointments */}
         <div
           className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5"
@@ -521,7 +553,7 @@ export default function DashboardHomePage() {
             ))}
           </div>
         </div>
-      </div>
+      </div></section>
     </div>
   );
 }

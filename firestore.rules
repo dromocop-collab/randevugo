@@ -368,6 +368,12 @@ service cloud.firestore {
         allow write: if isMember(businessId) || isPlatformAdmin();
       }
 
+      // Event-driven business automation rules
+      match /automationRules/{ruleId} {
+        allow read: if canOperate(businessId) || isPlatformAdmin();
+        allow create, update, delete: if canManage(businessId) || isPlatformAdmin();
+      }
+
       // Audit Logs (business-level, server-write only)
       match /auditLogs/{logId} {
         allow read: if canManage(businessId) || isPlatformAdmin();

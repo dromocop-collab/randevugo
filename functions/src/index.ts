@@ -8,7 +8,7 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { createHash, randomUUID, randomInt } from "crypto";
 import { defineSecret } from "firebase-functions/params";
 initializeApp();
@@ -1457,6 +1457,41 @@ export const createAppointment = onCall(
   }
 );
 
+type BusinessAutomationTrigger = "appointment_created" | "appointment_cancelled" | "appointment_completed" | "waitlist_created";
+
+function renderAutomationText(template: unknown, payload: Record<string, unknown>) {
+  return String(template ?? "").replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key: string) => String(payload[key] ?? "—")).slice(0, 500);
+}
+
+async function runBusinessAutomations(businessId: string, trigger: BusinessAutomationTrigger, eventId: string, payload: Record<string, unknown>) {
+  const snapshot = await db.collection(`businesses/${businessId}/automationRules`).where("enabled", "==", true).limit(50).get();
+  const rules = snapshot.docs.filter((item) => item.data().trigger === trigger).slice(0, 20);
+  if (!rules.length) return;
+  const notificationRefs = rules.map((rule) => {
+    const executionId = createHash("sha256").update(`${eventId}:${rule.id}`).digest("hex").slice(0, 32);
+    return db.doc(`businesses/${businessId}/notifications/automation_${executionId}`);
+  });
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.getAll(...notificationRefs);
+    rules.forEach((rule, index) => {
+      if (existing[index].exists) return;
+      const data = rule.data();
+      tx.set(notificationRefs[index], {
+        type: "system",
+        automationRuleId: rule.id,
+        automationEventId: eventId,
+        title: renderAutomationText(data.title, payload) || "Otomasyon bildirimi",
+        body: renderAutomationText(data.message, payload) || "İşletmenizde yeni bir olay gerçekleşti.",
+        relatedAppointmentId: payload.appointmentId ?? null,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.update(rule.ref, { runs: FieldValue.increment(1), lastRunAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    });
+  });
+}
+
 export const appointmentCreated = onDocumentCreated(
   {
     region: "europe-west1",
@@ -1511,6 +1546,29 @@ export const appointmentCreated = onDocumentCreated(
       userId: appointment.customerId ?? null,
       incrementAppointments: true,
     });
+
+    await runBusinessAutomations(businessId, "appointment_created", event.id, { ...appointment, appointmentId });
+  }
+);
+
+export const appointmentAutomationUpdated = onDocumentUpdated(
+  { region: "europe-west1", document: "businesses/{businessId}/appointments/{appointmentId}" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after || before.status === after.status) return;
+    const trigger = after.status === "cancelled" ? "appointment_cancelled" : after.status === "completed" ? "appointment_completed" : null;
+    if (!trigger) return;
+    await runBusinessAutomations(event.params.businessId, trigger, event.id, { ...after, appointmentId: event.params.appointmentId });
+  }
+);
+
+export const waitlistAutomationCreated = onDocumentCreated(
+  { region: "europe-west1", document: "businesses/{businessId}/waitlist/{waitlistId}" },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    await runBusinessAutomations(event.params.businessId, "waitlist_created", event.id, { ...data, waitlistId: event.params.waitlistId });
   }
 );
 

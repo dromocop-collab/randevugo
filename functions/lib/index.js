@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.moderateReview = exports.submitReview = exports.appointmentCreated = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
+exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -1326,6 +1326,39 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
         publicToken,
     };
 });
+function renderAutomationText(template, payload) {
+    return String(template ?? "").replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key) => String(payload[key] ?? "—")).slice(0, 500);
+}
+async function runBusinessAutomations(businessId, trigger, eventId, payload) {
+    const snapshot = await db.collection(`businesses/${businessId}/automationRules`).where("enabled", "==", true).limit(50).get();
+    const rules = snapshot.docs.filter((item) => item.data().trigger === trigger).slice(0, 20);
+    if (!rules.length)
+        return;
+    const notificationRefs = rules.map((rule) => {
+        const executionId = (0, crypto_1.createHash)("sha256").update(`${eventId}:${rule.id}`).digest("hex").slice(0, 32);
+        return db.doc(`businesses/${businessId}/notifications/automation_${executionId}`);
+    });
+    await db.runTransaction(async (tx) => {
+        const existing = await tx.getAll(...notificationRefs);
+        rules.forEach((rule, index) => {
+            if (existing[index].exists)
+                return;
+            const data = rule.data();
+            tx.set(notificationRefs[index], {
+                type: "system",
+                automationRuleId: rule.id,
+                automationEventId: eventId,
+                title: renderAutomationText(data.title, payload) || "Otomasyon bildirimi",
+                body: renderAutomationText(data.message, payload) || "İşletmenizde yeni bir olay gerçekleşti.",
+                relatedAppointmentId: payload.appointmentId ?? null,
+                isRead: false,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            tx.update(rule.ref, { runs: firestore_1.FieldValue.increment(1), lastRunAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        });
+    });
+}
 exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
     region: "europe-west1",
     document: "businesses/{businessId}/appointments/{appointmentId}",
@@ -1375,6 +1408,23 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
             userId: appointment.customerId ?? null,
             incrementAppointments: true,
         });
+    await runBusinessAutomations(businessId, "appointment_created", event.id, { ...appointment, appointmentId });
+});
+exports.appointmentAutomationUpdated = (0, firestore_2.onDocumentUpdated)({ region: "europe-west1", document: "businesses/{businessId}/appointments/{appointmentId}" }, async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after || before.status === after.status)
+        return;
+    const trigger = after.status === "cancelled" ? "appointment_cancelled" : after.status === "completed" ? "appointment_completed" : null;
+    if (!trigger)
+        return;
+    await runBusinessAutomations(event.params.businessId, trigger, event.id, { ...after, appointmentId: event.params.appointmentId });
+});
+exports.waitlistAutomationCreated = (0, firestore_2.onDocumentCreated)({ region: "europe-west1", document: "businesses/{businessId}/waitlist/{waitlistId}" }, async (event) => {
+    const data = event.data?.data();
+    if (!data)
+        return;
+    await runBusinessAutomations(event.params.businessId, "waitlist_created", event.id, { ...data, waitlistId: event.params.waitlistId });
 });
 exports.submitReview = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
     const uid = request.auth?.uid;
