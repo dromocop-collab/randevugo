@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch, type Unsubscribe } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch, type Unsubscribe } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { NotificationItem, NotificationType } from "@/types/notification";
@@ -55,4 +55,18 @@ export async function markAllNotificationsRead(businessId: string): Promise<void
   const batch = writeBatch(db);
   unread.forEach((item) => batch.update(item.ref, { isRead: true, updatedAt: serverTimestamp() }));
   await batch.commit();
+}
+
+export async function deleteNotification(businessId: string, notificationId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), "businesses", businessId, "notifications", notificationId));
+}
+
+export async function deleteAllNotifications(businessId: string): Promise<void> {
+  const db = getDb();
+  const snapshot = await getDocs(collection(db, "businesses", businessId, "notifications"));
+  for (let index = 0; index < snapshot.docs.length; index += 450) {
+    const batch = writeBatch(db);
+    snapshot.docs.slice(index, index + 450).forEach((item) => batch.delete(item.ref));
+    await batch.commit();
+  }
 }
