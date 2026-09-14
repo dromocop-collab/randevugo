@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, limit, query, where, type DocumentData, type Firestore } from "firebase/firestore";
 import {
   Activity, AlertTriangle, ArrowRight, Building2, CalendarDays, CheckCircle2,
   Clock3, Download, Headphones, RefreshCw, ShieldAlert, Sparkles, TrendingUp,
@@ -16,6 +16,7 @@ import { PLAN_PRICE } from "@/constants/plans";
 
 type SourceKey = "businesses" | "users" | "appointments" | "subscriptions" | "support" | "categories" | "reviews";
 type SourceHealth = Record<SourceKey, boolean>;
+type DataDoc = { data: () => DocumentData };
 
 interface PlatformStats {
   totalBusinesses: number; activeBusinesses: number; suspendedBusinesses: number; pendingBusinesses: number;
@@ -45,6 +46,25 @@ function dateFrom(value: unknown): Date | null {
 
 function csvCell(value: string | number) { return `"${String(value).replaceAll('"', '""')}"`; }
 
+async function readBusinessChildren(db: Firestore, businessIds: string[], child: "appointments" | "reviews"): Promise<DataDoc[]> {
+  const settled = await Promise.allSettled(businessIds.map((businessId) => getDocs(collection(db, "businesses", businessId, child))));
+  const rejected = settled.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+  return settled.flatMap((result) => result.status === "fulfilled" ? result.value.docs : []);
+}
+
+async function readBusinessSubscriptions(db: Firestore, businessIds: string[]): Promise<DataDoc[]> {
+  const settled = await Promise.allSettled(businessIds.map((businessId) => getDoc(doc(db, "subscriptions", businessId))));
+  const rejected = settled.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+  return settled.flatMap((result) => result.status === "fulfilled" && result.value.exists() ? [result.value] : []);
+}
+
+async function withFallback(primary: Promise<{ docs: DataDoc[] }>, fallback: () => Promise<DataDoc[]>): Promise<DataDoc[]> {
+  try { return (await primary).docs; }
+  catch { return fallback(); }
+}
+
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,21 +73,41 @@ export default function SuperAdminDashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true); setFatalError(null);
     const db = getDb();
+    let businessDocs: DataDoc[] = [];
+    let businessIds: string[] = [];
+    try {
+      const snapshot = await getDocs(collection(db, "businesses"));
+      businessDocs = snapshot.docs;
+      businessIds = snapshot.docs.map((item) => item.id);
+    } catch (error) {
+      setFatalError((error as Error).message || "İşletme verilerine erişilemedi.");
+      setLoading(false);
+      return;
+    }
     const requests = {
-      businesses: getDocs(collection(db, "businesses")),
-      users: getDocs(collection(db, "users")),
-      appointments: getDocs(query(collectionGroup(db, "appointments"), where("status", "in", ["pending", "confirmed", "completed", "cancelled", "no_show"]))),
-      subscriptions: getDocs(collection(db, "subscriptions")),
-      support: getDocs(query(collection(db, "supportTickets"), where("status", "in", ["open", "in_progress", "waiting_user"]))),
-      categories: getDocs(query(collection(db, "categoryRequests"), where("status", "==", "pending"))),
-      reviews: getDocs(query(collectionGroup(db, "reviews"), where("status", "==", "pending"), limit(250))),
+      businesses: Promise.resolve(businessDocs),
+      users: getDocs(collection(db, "users")).then((snapshot) => snapshot.docs),
+      appointments: withFallback(
+        getDocs(query(collectionGroup(db, "appointments"), where("status", "in", ["pending", "confirmed", "completed", "cancelled", "no_show"]))),
+        () => readBusinessChildren(db, businessIds, "appointments"),
+      ),
+      subscriptions: withFallback(
+        getDocs(collection(db, "subscriptions")),
+        () => readBusinessSubscriptions(db, businessIds),
+      ),
+      support: getDocs(query(collection(db, "supportTickets"), where("status", "in", ["open", "in_progress", "waiting_user"]))).then((snapshot) => snapshot.docs),
+      categories: getDocs(query(collection(db, "categoryRequests"), where("status", "==", "pending"))).then((snapshot) => snapshot.docs),
+      reviews: withFallback(
+        getDocs(query(collectionGroup(db, "reviews"), where("status", "==", "pending"), limit(250))),
+        async () => (await readBusinessChildren(db, businessIds, "reviews")).filter((item) => String(item.data().status ?? "") === "pending").slice(0, 250),
+      ),
     };
     try {
       const keys = Object.keys(requests) as SourceKey[];
       const settled = await Promise.allSettled(keys.map((key) => requests[key]));
       const result = Object.fromEntries(keys.map((key, index) => [key, settled[index]])) as Record<SourceKey, PromiseSettledResult<Awaited<(typeof requests)[SourceKey]>>>;
       const sourceHealth = Object.fromEntries(keys.map((key) => [key, result[key].status === "fulfilled"])) as SourceHealth;
-      const docs = (key: SourceKey) => result[key].status === "fulfilled" ? result[key].value.docs : [];
+      const docs = (key: SourceKey): DataDoc[] => result[key].status === "fulfilled" ? result[key].value : [];
       if (!Object.values(sourceHealth).some(Boolean)) throw new Error("Platform verilerine erişilemedi.");
 
       const businesses = docs("businesses"); const appointments = docs("appointments");
