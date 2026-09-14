@@ -21412,3 +21412,47 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   .discover-category-card-icon { top:57px; right:10px; width:35px; height:35px; border-radius:12px; font-size:16px; }
   .discover-category-rail>.discover-category-card.active { box-shadow:0 20px 42px rgb(11 107 69/.28),0 0 0 4px rgb(201 244 91/.12); }
 }
+
+/* Assistant message contrast must win over dashboard theme typography. */
+.admin-assistant-messages article.user>div,
+.admin-assistant-messages article.user>div>p {
+  color:#fff!important;
+}
+
+.admin-assistant-chat textarea {
+  color:var(--text-1,#10241c)!important;
+  caret-color:var(--dash-core,#0b7a4c);
+  -webkit-text-fill-color:currentColor;
+  opacity:1;
+}
+
+.admin-assistant-chat textarea::placeholder {
+  color:var(--text-3,#718179)!important;
+  -webkit-text-fill-color:currentColor;
+  opacity:.82;
+}
+
+@media(max-width:700px) {
+  .admin-assistant-messages article.user>div,
+  .admin-assistant-messages article.user>div>p {
+    color:#16352b!important;
+  }
+
+  :root[data-theme="dark"] .admin-assistant-chat>form label {
+    background:#2a3942!important;
+  }
+
+  :root[data-theme="dark"] .admin-assistant-chat textarea {
+    color:#f3f7f5!important;
+    caret-color:#25d366;
+  }
+
+  :root[data-theme="dark"] .admin-assistant-chat textarea::placeholder {
+    color:#aebac1!important;
+  }
+
+  :root[data-theme="dark"] .admin-v2 .admin-assistant-messages article.user>div,
+  :root[data-theme="dark"] .admin-v2 .admin-assistant-messages article.user>div>p {
+    color:#e9edef!important;
+  }
+}
