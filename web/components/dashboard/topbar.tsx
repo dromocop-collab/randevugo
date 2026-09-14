@@ -7,8 +7,23 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { useBusinessContext } from "@/features/businesses/business-context";
-import { Check, CirclePlus, Clock3, Compass, ExternalLink, LogOut, Palette, Sparkles, Store, UserRound } from "lucide-react";
+import { Check, CirclePlus, Clock3, Compass, ExternalLink, Gauge, LogOut, Palette, RotateCcw, Sparkles, Store, UserRound, Zap } from "lucide-react";
 import { NotificationCenter } from "@/components/dashboard/notification-center";
+
+const dashboardSkins = [
+  { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#0b6b45", "#bdf65e"] },
+  { id: "midnight", name: "Gece", note: "Odaklı ve güçlü", colors: ["#172554", "#22d3ee"] },
+  { id: "pearl", name: "İnci", note: "Sade ve premium", colors: ["#64748b", "#f59e0b"] },
+  { id: "ocean", name: "Okyanus", note: "Ferah ve berrak", colors: ["#0891b2", "#67e8f9"] },
+  { id: "violet", name: "Lavanta", note: "Yaratıcı ve seçkin", colors: ["#7c3aed", "#c4b5fd"] },
+  { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#ea580c", "#fde047"] },
+  { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#e11d48", "#fda4af"] },
+  { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#334155", "#38bdf8"] },
+] as const;
+
+type DashboardSkin = (typeof dashboardSkins)[number]["id"];
+type DashboardDensity = "comfortable" | "compact";
+type DashboardMotion = "alive" | "calm";
 
 export function DashboardTopBar() {
   const { user } = useAuth();
@@ -17,14 +32,26 @@ export function DashboardTopBar() {
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   const router = useRouter();
   const [skinOpen, setSkinOpen] = useState(false);
-  const [skin, setSkin] = useState("emerald");
+  const [skin, setSkin] = useState<DashboardSkin>("emerald");
+  const [density, setDensity] = useState<DashboardDensity>("comfortable");
+  const [motion, setMotion] = useState<DashboardMotion>("alive");
   const skinPanelRef = useRef<HTMLDivElement>(null);
   const skinReadyRef = useRef(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("sr-dashboard-skin") ?? "emerald";
-    document.documentElement.dataset.dashboardSkin = saved;
-    queueMicrotask(() => { skinReadyRef.current = true; setSkin(saved); });
+    const storedSkin = window.localStorage.getItem("sr-dashboard-skin");
+    const savedSkin = dashboardSkins.some((item) => item.id === storedSkin) ? storedSkin as DashboardSkin : "emerald";
+    const savedDensity = window.localStorage.getItem("sr-dashboard-density") === "compact" ? "compact" : "comfortable";
+    const savedMotion = window.localStorage.getItem("sr-dashboard-motion") === "calm" ? "calm" : "alive";
+    document.documentElement.dataset.dashboardSkin = savedSkin;
+    document.documentElement.dataset.dashboardDensity = savedDensity;
+    document.documentElement.dataset.dashboardMotion = savedMotion;
+    queueMicrotask(() => {
+      skinReadyRef.current = true;
+      setSkin(savedSkin);
+      setDensity(savedDensity);
+      setMotion(savedMotion);
+    });
   }, []);
 
   useEffect(() => {
@@ -34,17 +61,41 @@ export function DashboardTopBar() {
   }, [skin]);
 
   useEffect(() => {
+    if (!skinReadyRef.current) return;
+    document.documentElement.dataset.dashboardDensity = density;
+    window.localStorage.setItem("sr-dashboard-density", density);
+  }, [density]);
+
+  useEffect(() => {
+    if (!skinReadyRef.current) return;
+    document.documentElement.dataset.dashboardMotion = motion;
+    window.localStorage.setItem("sr-dashboard-motion", motion);
+  }, [motion]);
+
+  useEffect(() => {
     if (!skinOpen) return;
     const close = (event: MouseEvent) => {
       if (!skinPanelRef.current?.contains(event.target as Node)) setSkinOpen(false);
     };
+    const closeWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSkinOpen(false);
+    };
     window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
+    window.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", closeWithKeyboard);
+    };
   }, [skinOpen]);
 
-  function chooseSkin(value: string) {
+  function chooseSkin(value: DashboardSkin) {
     setSkin(value);
-    setSkinOpen(false);
+  }
+
+  function resetAppearance() {
+    setSkin("emerald");
+    setDensity("comfortable");
+    setMotion("alive");
   }
 
   return (
@@ -74,9 +125,12 @@ export function DashboardTopBar() {
           {!isStaff && <NotificationCenter key={businessId} businessId={businessId}/>}
           <div className="dashboard-skin-picker" ref={skinPanelRef}>
             <button type="button" className="command-link dashboard-skin-trigger" onClick={() => setSkinOpen((value) => !value)} aria-expanded={skinOpen} aria-label="Panel görünümünü değiştir"><Palette size={17}/><span>Görünüm</span></button>
-            <div className={`dashboard-skin-menu ${skinOpen ? "open" : ""}`}>
-              <header><span><Sparkles size={14}/> Panel atmosferi</span><small>Tercihiniz bu cihazda saklanır</small></header>
-              {[{id:"emerald",name:"Aurora",colors:["#0b6b45","#bdf65e"]},{id:"midnight",name:"Gece",colors:["#172554","#22d3ee"]},{id:"pearl",name:"İnci",colors:["#64748b","#f59e0b"]}].map((item) => <button type="button" key={item.id} onClick={() => chooseSkin(item.id)} className={skin === item.id ? "active" : ""}><i>{item.colors.map((color) => <b key={color} style={{background:color}}/>)}</i><span>{item.name}<small>{item.id === "emerald" ? "Canlı ve enerjik" : item.id === "midnight" ? "Odaklı ve güçlü" : "Sade ve premium"}</small></span>{skin === item.id && <Check size={16}/>}</button>)}
+            <div className={`dashboard-skin-menu ${skinOpen ? "open" : ""}`} role="dialog" aria-label="Panel görünümü ayarları">
+              <header><span><Sparkles size={14}/> Görünüm stüdyosu</span><small>Renk, yerleşim ve hareket tercihlerin bu cihazda saklanır.</small></header>
+              <div className="dashboard-skin-preview" aria-hidden="true"><i/><span><b>{dashboardSkins.find((item) => item.id === skin)?.name}</b><small>Canlı panel önizlemesi</small></span><em><i/><i/><i/></em></div>
+              <section className="dashboard-skin-section"><div className="dashboard-skin-section-title"><Palette size={13}/><span>Renk atmosferi</span><small>{dashboardSkins.length} palet</small></div><div className="dashboard-skin-grid">{dashboardSkins.map((item) => <button type="button" key={item.id} onClick={() => chooseSkin(item.id)} className={skin === item.id ? "active" : ""} aria-pressed={skin === item.id}><i>{item.colors.map((color) => <b key={color} style={{background:color}}/>)}</i><span>{item.name}<small>{item.note}</small></span>{skin === item.id && <Check size={15}/>}</button>)}</div></section>
+              <section className="dashboard-skin-controls"><div><span><Gauge size={13}/> Yerleşim</span><div className="dashboard-segmented"><button type="button" className={density === "comfortable" ? "active" : ""} onClick={() => setDensity("comfortable")}>Rahat</button><button type="button" className={density === "compact" ? "active" : ""} onClick={() => setDensity("compact")}>Kompakt</button></div></div><div><span><Zap size={13}/> Hareket</span><div className="dashboard-segmented"><button type="button" className={motion === "alive" ? "active" : ""} onClick={() => setMotion("alive")}>Canlı</button><button type="button" className={motion === "calm" ? "active" : ""} onClick={() => setMotion("calm")}>Sakin</button></div></div></section>
+              <footer><span><Check size={13}/> Değişiklikler anında uygulandı</span><button type="button" onClick={resetAppearance}><RotateCcw size={13}/> Sıfırla</button></footer>
             </div>
           </div>
           <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
