@@ -158,9 +158,12 @@ export function BookingWizard(props: Props) {
   useEffect(() => {
     if (!serviceId) return;
     let cancelled = false;
-    setSlotsLoading(true);
-    setAvailableSlots([]);
-    listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate })
+    Promise.resolve().then(() => {
+      if (cancelled) return [] as AvailableAppointmentSlot[];
+      setSlotsLoading(true);
+      setAvailableSlots([]);
+      return listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate });
+    })
       .then((rows) => { if (!cancelled) setAvailableSlots(rows); })
       .catch((error) => {
         if (!cancelled) {
