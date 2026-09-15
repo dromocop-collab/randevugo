@@ -4,14 +4,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { doc, getDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { ArrowLeft, BadgeCheck, BriefcaseBusiness, CalendarDays, CheckCircle2, Clock3, MapPin, Navigation, Phone, ShieldCheck, Store, UserRound, WalletCards } from "lucide-react";
-import { getDb } from "@/lib/firebase/firestore";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { LoadingState, ErrorState } from "@/components/ui/states";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import type { Appointment } from "@/types/appointments";
 
 type BusinessInfo = { name:string; address:string; phone:string; slug:string; logoUrl:string };
+type PublicAppointmentResponse = {
+  appointment: Appointment;
+  business: BusinessInfo;
+};
 
 const statusMap: Record<string,{label:string;className:string}> = {
   pending:{label:"Onay bekliyor",className:"pending"}, confirmed:{label:"Onaylandı",className:"confirmed"}, completed:{label:"Tamamlandı",className:"completed"}, cancelled:{label:"İptal edildi",className:"cancelled"}, no_show:{label:"Gerçekleşmedi",className:"no-show"},
@@ -27,16 +31,17 @@ export default function AppointmentDetailPage() {
   useEffect(()=>{
     const token=params.publicToken; if(!token)return; let cancelled=false;
     (async()=>{try{
-      const db=getDb(); const tokenSnap=await getDoc(doc(db,"appointmentTokens",token));
-      if(!tokenSnap.exists()) throw new Error("Randevu bulunamadı veya bağlantının süresi dolmuş olabilir.");
-      const businessId=String(tokenSnap.data().businessId??""); const appointmentId=String(tokenSnap.data().appointmentId??"");
-      if(!businessId||!appointmentId) throw new Error("Randevu bilgilerine ulaşılamadı.");
-      const [appointmentSnap,businessSnap]=await Promise.all([getDoc(doc(db,"businesses",businessId,"appointments",appointmentId)),getDoc(doc(db,"businesses",businessId))]);
-      if(!appointmentSnap.exists()) throw new Error("Randevu kaydı bulunamadı."); if(cancelled)return;
-      const data=appointmentSnap.data();
-      setAppointment({id:appointmentSnap.id,...data,startAt:data.startAt?.toDate?.()?.toISOString?.()??String(data.startAt??""),endAt:data.endAt?.toDate?.()?.toISOString?.()??String(data.endAt??""),createdAt:data.createdAt?.toDate?.()?.toISOString?.()??"",updatedAt:data.updatedAt?.toDate?.()?.toISOString?.()??""} as Appointment);
-      if(businessSnap.exists()){const item=businessSnap.data();setBusiness({name:String(item.name??"İşletme"),address:[item.address,item.district,item.city].filter(Boolean).join(", "),phone:String(item.phone??""),slug:String(item.slug??""),logoUrl:String(item.logoUrl??"")});}
-    }catch(reason){if(!cancelled)setError((reason as Error).message);}finally{if(!cancelled)setLoading(false)}})();
+      const getPublicAppointment = httpsCallable<{ publicToken:string }, PublicAppointmentResponse>(getFunctions(getFirebaseApp(), "europe-west1"), "getAppointmentByPublicToken");
+      const result = await getPublicAppointment({ publicToken: token });
+      if(cancelled)return;
+      setAppointment(result.data.appointment);
+      setBusiness(result.data.business);
+    }catch(reason){
+      if(!cancelled){
+        const message=(reason as {message?:string}).message??"Randevu bilgilerine ulaşılamadı.";
+        setError(message.includes("not-found")?"Randevu bulunamadı veya bağlantının süresi dolmuş olabilir.":message);
+      }
+    }finally{if(!cancelled)setLoading(false)}})();
     return()=>{cancelled=true};
   },[params.publicToken]);
 

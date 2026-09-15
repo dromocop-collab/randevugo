@@ -71,6 +71,9 @@ export interface Business extends EntityBase {
   isPublished: boolean;
   status: BusinessStatus;
   approvalStatus?: "pending" | "approved" | "rejected";
+  profileReviewStatus?: "pending" | "approved" | "rejected";
+  profileReviewRequestId?: string;
+  profileReviewNote?: string;
   storePosition?: number;
   isSuspended?: boolean;
   minimumBookingNoticeMinutes: number;

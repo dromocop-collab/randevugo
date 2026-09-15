@@ -378,6 +378,176 @@ export const reviewBusiness = onCall(
   }
 );
 
+const MODERATED_PROFILE_FIELDS = [
+  "name", "category", "businessType", "phone", "email", "address", "city",
+  "district", "description", "website", "socialMedia", "logoUrl", "coverUrl", "galleryUrls",
+] as const;
+
+type ModeratedProfileField = typeof MODERATED_PROFILE_FIELDS[number];
+
+function cleanProfileText(value: unknown, field: string, maxLength: number, required = false): string {
+  const text = String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  if (required && !text) throw new HttpsError("invalid-argument", `${field} alanı zorunludur.`);
+  if (text.length > maxLength) throw new HttpsError("invalid-argument", `${field} en fazla ${maxLength} karakter olabilir.`);
+  return text;
+}
+
+function cleanProfileUrl(value: unknown, field: string): string {
+  const text = cleanProfileText(value, field, 500);
+  if (!text) return "";
+  const normalized = /^https?:\/\//i.test(text) ? text : `https://${text}`;
+  let parsed: URL;
+  try { parsed = new URL(normalized); } catch { throw new HttpsError("invalid-argument", `${field} geçerli bir bağlantı olmalıdır.`); }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new HttpsError("invalid-argument", `${field} güvenli bir bağlantı olmalıdır.`);
+  return parsed.toString().slice(0, 500);
+}
+
+function sanitizeProfileChanges(raw: unknown): Partial<Record<ModeratedProfileField, unknown>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new HttpsError("invalid-argument", "Değişiklikler geçersiz.");
+  const input = raw as Record<string, unknown>;
+  const unknownKeys = Object.keys(input).filter((key) => !MODERATED_PROFILE_FIELDS.includes(key as ModeratedProfileField));
+  if (unknownKeys.length) throw new HttpsError("invalid-argument", "Bu alan moderasyon akışından güncellenemez.");
+  const output: Partial<Record<ModeratedProfileField, unknown>> = {};
+  if ("name" in input) output.name = cleanProfileText(input.name, "İşletme adı", 100, true);
+  if ("category" in input) output.category = cleanProfileText(input.category, "Kategori", 80, true).toLocaleLowerCase("tr-TR");
+  if ("businessType" in input) {
+    const type = cleanProfileText(input.businessType, "İşletme tipi", 20);
+    if (type && !["kadin", "erkek", "unisex"].includes(type)) throw new HttpsError("invalid-argument", "İşletme tipi geçersiz.");
+    output.businessType = type || null;
+  }
+  if ("phone" in input) output.phone = cleanProfileText(input.phone, "Telefon", 30, true);
+  if ("email" in input) {
+    const email = cleanProfileText(input.email, "E-posta", 160, true).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError("invalid-argument", "Geçerli bir e-posta girin.");
+    output.email = email;
+  }
+  if ("address" in input) output.address = cleanProfileText(input.address, "Adres", 300, true);
+  if ("city" in input) output.city = cleanProfileText(input.city, "Şehir", 80, true);
+  if ("district" in input) output.district = cleanProfileText(input.district, "İlçe", 80, true);
+  if ("description" in input) output.description = cleanProfileText(input.description, "Açıklama", 1500);
+  if ("website" in input) output.website = cleanProfileUrl(input.website, "Web sitesi");
+  if ("logoUrl" in input) output.logoUrl = cleanProfileUrl(input.logoUrl, "Logo");
+  if ("coverUrl" in input) output.coverUrl = cleanProfileUrl(input.coverUrl, "Kapak görseli");
+  if ("galleryUrls" in input) {
+    if (!Array.isArray(input.galleryUrls) || input.galleryUrls.length > 12) throw new HttpsError("invalid-argument", "Galeride en fazla 12 görsel olabilir.");
+    output.galleryUrls = input.galleryUrls.map((url) => cleanProfileUrl(url, "Galeri görseli"));
+  }
+  if ("socialMedia" in input) {
+    const social = input.socialMedia;
+    if (!social || typeof social !== "object" || Array.isArray(social)) throw new HttpsError("invalid-argument", "Sosyal medya bilgileri geçersiz.");
+    const allowed = ["instagram", "facebook", "twitter", "tiktok", "youtube", "whatsapp"];
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(social as Record<string, unknown>)) {
+      if (!allowed.includes(key)) continue;
+      cleaned[key] = key === "whatsapp" ? cleanProfileText(value, "WhatsApp", 40) : cleanProfileUrl(value, key);
+    }
+    output.socialMedia = cleaned;
+  }
+  if (!Object.keys(output).length) throw new HttpsError("invalid-argument", "Onaya gönderilecek bir değişiklik bulunamadı.");
+  return output;
+}
+
+function profileRiskSignals(changes: Partial<Record<ModeratedProfileField, unknown>>): string[] {
+  const text = JSON.stringify(changes).toLocaleLowerCase("tr-TR");
+  const signals: string[] = [];
+  if (/<\/?(?:script|iframe|object|embed)|javascript:|data:text\/html/.test(text)) signals.push("tehlikeli_kod");
+  if (/(kumar|casino|bahis|escort|uyuşturucu|silah)/i.test(text)) signals.push("yüksek_riskli_ifade");
+  if (/(http:\/\/|bit\.ly|tinyurl)/i.test(text)) signals.push("şüpheli_bağlantı");
+  if (/(.)\1{9,}/.test(text)) signals.push("spam_benzeri_içerik");
+  return signals;
+}
+
+export const submitBusinessProfileChange = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireString(request.data?.businessId, "businessId");
+  const current = await requireBusinessManager(uid, businessId);
+  const changes = sanitizeProfileChanges(request.data?.changes);
+  const riskFlags = profileRiskSignals(changes);
+  if (riskFlags.includes("tehlikeli_kod")) throw new HttpsError("invalid-argument", "Güvenli olmayan içerik veya bağlantı algılandı.");
+  const previous: Record<string, unknown> = {};
+  const effective: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(changes)) {
+    if (JSON.stringify(current[key]) === JSON.stringify(value)) continue;
+    previous[key] = current[key] ?? null;
+    effective[key] = value;
+  }
+  if (!Object.keys(effective).length) throw new HttpsError("failed-precondition", "Bu bilgiler zaten yayında.");
+  const requestRef = db.doc(`businessProfileChangeRequests/${businessId}`);
+  await db.runTransaction(async (transaction) => {
+    const existingSnapshot = await transaction.get(requestRef);
+    const existing = existingSnapshot.data() ?? {};
+    const existingChanges = existing.status === "pending" && existing.changes && typeof existing.changes === "object" ? existing.changes : {};
+    const existingPrevious = existing.status === "pending" && existing.previous && typeof existing.previous === "object" ? existing.previous : {};
+    const mergedChanges = { ...existingChanges, ...effective };
+    const mergedPrevious = { ...previous, ...existingPrevious };
+    const mergedRiskFlags = [...new Set([...(Array.isArray(existing.riskFlags) ? existing.riskFlags.map(String) : []), ...riskFlags])];
+    transaction.set(requestRef, {
+      businessId,
+      businessName: String(current.name ?? "İşletme"),
+      ownerUid: String(current.ownerUid ?? ""),
+      submittedBy: uid,
+      status: "pending",
+      previous: mergedPrevious,
+      changes: mergedChanges,
+      changedFields: Object.keys(mergedChanges),
+      riskFlags: mergedRiskFlags,
+      riskLevel: mergedRiskFlags.length ? "review" : "low",
+      submittedAt: existing.status === "pending" && existing.submittedAt ? existing.submittedAt : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    transaction.update(db.doc(`businesses/${businessId}`), {
+      profileReviewStatus: "pending",
+      profileReviewRequestId: businessId,
+      profileReviewSubmittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("platformAuditLogs").doc(), {
+      action: "business.profile_change_submitted", businessId, actorUid: uid,
+      changedFields: Object.keys(effective), riskFlags, createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { success: true, requestId: businessId, riskLevel: riskFlags.length ? "review" : "low" };
+});
+
+export const reviewBusinessProfileChange = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const requestId = requireString(request.data?.requestId, "requestId");
+  const decision = requireString(request.data?.decision, "decision");
+  if (!['approved', 'rejected'].includes(decision)) throw new HttpsError("invalid-argument", "Geçersiz karar.");
+  const note = typeof request.data?.note === "string" ? request.data.note.trim().slice(0, 500) : "";
+  const changeRef = db.doc(`businessProfileChangeRequests/${requestId}`);
+  await db.runTransaction(async (transaction) => {
+    const changeSnapshot = await transaction.get(changeRef);
+    if (!changeSnapshot.exists) throw new HttpsError("not-found", "Değişiklik talebi bulunamadı.");
+    const change = changeSnapshot.data()!;
+    if (change.status !== "pending") throw new HttpsError("failed-precondition", "Bu talep daha önce incelenmiş.");
+    const businessRef = db.doc(`businesses/${String(change.businessId)}`);
+    const businessSnapshot = await transaction.get(businessRef);
+    if (!businessSnapshot.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    const businessUpdate: Record<string, unknown> = {
+      profileReviewStatus: decision,
+      profileReviewedBy: uid,
+      profileReviewedAt: FieldValue.serverTimestamp(),
+      profileReviewNote: note,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (decision === "approved") Object.assign(businessUpdate, change.changes ?? {});
+    transaction.update(businessRef, businessUpdate);
+    transaction.update(changeRef, {
+      status: decision, reviewedBy: uid, reviewedAt: FieldValue.serverTimestamp(), reviewNote: note,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("platformAuditLogs").doc(), {
+      action: `business.profile_change_${decision}`, businessId: change.businessId, requestId,
+      actorUid: uid, changedFields: change.changedFields ?? [], createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { success: true, status: decision };
+});
+
 export const assignBusinessPlan = onCall(
   { region: "europe-west1" },
   async (request) => {
@@ -1539,6 +1709,56 @@ async function runBusinessAutomations(businessId: string, trigger: BusinessAutom
     });
   });
 }
+
+export const getAppointmentByPublicToken = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const token = requireString(request.data?.publicToken, "Randevu bağlantısı");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)) {
+      throw new HttpsError("invalid-argument", "Randevu bağlantısı geçersiz.");
+    }
+
+    const tokenSnapshot = await db.doc(`appointmentTokens/${token}`).get();
+    if (!tokenSnapshot.exists) {
+      throw new HttpsError("not-found", "Randevu bulunamadı veya bağlantının süresi dolmuş olabilir.");
+    }
+
+    const businessId = requireString(tokenSnapshot.data()?.businessId, "businessId");
+    const appointmentId = requireString(tokenSnapshot.data()?.appointmentId, "appointmentId");
+    const [appointmentSnapshot, businessSnapshot] = await Promise.all([
+      db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get(),
+      db.doc(`businesses/${businessId}`).get(),
+    ]);
+    if (!appointmentSnapshot.exists) {
+      throw new HttpsError("not-found", "Randevu kaydı bulunamadı.");
+    }
+
+    const appointment = appointmentSnapshot.data()!;
+    const business = businessSnapshot.data() ?? {};
+    const startAt = appointment.startAt as Timestamp | undefined;
+    const endAt = appointment.endAt as Timestamp | undefined;
+
+    return {
+      appointment: {
+        id: appointmentId,
+        status: String(appointment.status ?? "pending"),
+        serviceName: String(appointment.serviceName ?? ""),
+        staffName: String(appointment.staffName ?? ""),
+        servicePrice: numberOr(appointment.servicePrice, 0),
+        serviceDurationMinutes: normalizedBookingDuration(appointment.serviceDurationMinutes),
+        startAt: startAt?.toDate().toISOString() ?? "",
+        endAt: endAt?.toDate().toISOString() ?? "",
+      },
+      business: {
+        name: String(business.name ?? "İşletme"),
+        address: [business.address, business.district, business.city].filter(Boolean).join(", "),
+        phone: String(business.phone ?? ""),
+        slug: String(business.slug ?? ""),
+        logoUrl: String(business.logoUrl ?? ""),
+      },
+    };
+  }
+);
 
 export const appointmentCreated = onDocumentCreated(
   {

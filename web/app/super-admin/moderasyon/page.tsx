@@ -19,7 +19,12 @@ import {
   updateReviewStatus,
 } from "@/features/reviews/review-repository";
 import type { Review } from "@/types/review";
-import { ArrowRight, Building2, CheckCircle2, Clock3, FolderPlus, XCircle, type LucideIcon } from "lucide-react";
+import {
+  listBusinessProfileChangeRequests,
+  reviewBusinessProfileChange,
+  type BusinessProfileChangeRequest,
+} from "@/features/businesses/business-profile-review-repository";
+import { ArrowRight, Building2, CheckCircle2, Clock3, FolderPlus, ShieldAlert, XCircle, type LucideIcon } from "lucide-react";
 
 type StatusFilter = "pending" | "approved" | "rejected" | "all";
 
@@ -300,8 +305,80 @@ export default function SuperAdminModerationPage() {
         </div>
       </Card>
 
+      <ProfileChangeModerationCard />
+
       <ReviewModerationCard />
     </div>
+  );
+}
+
+const PROFILE_FIELD_LABELS: Record<string, string> = {
+  name: "İşletme adı", category: "Kategori", businessType: "İşletme tipi", phone: "Telefon",
+  email: "E-posta", address: "Adres", city: "Şehir", district: "İlçe", description: "Açıklama",
+  website: "Web sitesi", socialMedia: "Dijital kanallar", logoUrl: "Logo", coverUrl: "Kapak görseli",
+  galleryUrls: "Galeri",
+};
+
+function profileValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (Array.isArray(value)) return value.join(" · ") || "—";
+  if (typeof value === "object") return Object.entries(value as Record<string, unknown>).map(([key, item]) => `${key}: ${String(item)}`).join(" · ") || "—";
+  return String(value);
+}
+
+function ProfileChangeModerationCard() {
+  const [requests, setRequests] = useState<BusinessProfileChangeRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<string | null>(null);
+  const [note, setNote] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    listBusinessProfileChangeRequests()
+      .then((rows) => { if (active) setRequests(rows.filter((row) => row.status === "pending")); })
+      .catch(() => { if (active) toast.error("Profil değişiklikleri yüklenemedi."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  async function decide(item: BusinessProfileChangeRequest, decision: "approved" | "rejected") {
+    setProcessing(item.id);
+    try {
+      await reviewBusinessProfileChange(item.id, decision, note[item.id] ?? "");
+      setRequests((current) => current.filter((row) => row.id !== item.id));
+      toast.success(decision === "approved" ? "Profil değişiklikleri yayına alındı." : "Profil değişiklikleri reddedildi.");
+    } catch (error) {
+      toast.error((error as Error)?.message || "İnceleme tamamlanamadı.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  return (
+    <Card title={`Profil yayın kuyruğu · ${requests.length}`} description="İşletme bilgilerindeki değişiklikleri yayına girmeden önce karşılaştırın ve denetleyin.">
+      {loading ? <LoadingState title="Yükleniyor" description="Profil talepleri denetleniyor..." /> : requests.length === 0 ? (
+        <EmptyState title="Bekleyen profil değişikliği yok" description="Yeni işletme düzenlemeleri güvenli yayın kuyruğunda burada görünecek." />
+      ) : <div className="space-y-4">{requests.map((item) => (
+        <article key={item.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-sm">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-2)] px-5 py-4">
+            <div><p className="font-bold text-[var(--text-1)]">{item.businessName}</p><p className="mt-1 text-xs text-[var(--text-3)]">{item.changedFields.length} alan değişiyor · {item.submittedAt ? new Date(item.submittedAt).toLocaleString("tr-TR") : "Şimdi"}</p></div>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold ${item.riskLevel === "review" ? "bg-amber-500/10 text-amber-700" : "bg-emerald-500/10 text-emerald-700"}`}><ShieldAlert size={14}/>{item.riskLevel === "review" ? "Dikkatli incele" : "Düşük risk"}</span>
+          </header>
+          <div className="grid gap-3 p-5">{item.changedFields.map((field) => (
+            <div key={field} className="grid gap-2 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[140px_1fr_24px_1fr] md:items-center">
+              <b className="text-xs text-[var(--text-1)]">{PROFILE_FIELD_LABELS[field] ?? field}</b>
+              <span className="break-all rounded-lg bg-rose-500/5 px-3 py-2 text-xs text-[var(--text-3)]">{profileValue(item.previous[field])}</span>
+              <ArrowRight className="hidden text-[var(--text-3)] md:block" size={15}/>
+              <span className="break-all rounded-lg bg-emerald-500/8 px-3 py-2 text-xs font-medium text-[var(--text-1)]">{profileValue(item.changes[field])}</span>
+            </div>
+          ))}</div>
+          <footer className="flex flex-col gap-3 border-t border-[var(--border)] p-4 sm:flex-row sm:items-center">
+            <input value={note[item.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={500} placeholder="İşletmeye inceleme notu (isteğe bağlı)" className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text-1)] outline-none focus:border-[var(--accent)]"/>
+            <div className="flex gap-2"><Button variant="danger" disabled={processing === item.id} onClick={() => decide(item, "rejected")}><XCircle size={15}/> Reddet</Button><Button disabled={processing === item.id} onClick={() => decide(item, "approved")}><CheckCircle2 size={15}/> Onayla ve yayınla</Button></div>
+          </footer>
+        </article>
+      ))}</div>}
+    </Card>
   );
 }
 

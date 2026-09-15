@@ -78,6 +78,8 @@ export function BookingWizard(props: Props) {
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [availableSlots, setAvailableSlots] = useState<AvailableAppointmentSlot[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
@@ -133,7 +135,8 @@ export function BookingWizard(props: Props) {
       } else if (staffRows[0]) {
         setStaffId(staffRows[0].id);
       }
-    });
+    }).catch(() => toast.error("Randevu seçenekleri yüklenemedi."))
+      .finally(() => setCatalogLoading(false));
   }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
 
   useEffect(() => {
@@ -155,6 +158,8 @@ export function BookingWizard(props: Props) {
   useEffect(() => {
     if (!serviceId) return;
     let cancelled = false;
+    setSlotsLoading(true);
+    setAvailableSlots([]);
     listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate })
       .then((rows) => { if (!cancelled) setAvailableSlots(rows); })
       .catch((error) => {
@@ -163,6 +168,7 @@ export function BookingWizard(props: Props) {
           toast.error((error as Error).message || "Uygun saatler alınamadı.");
         }
       })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
   }, [appointmentsDate, props.businessId, serviceId, staffId]);
 
@@ -201,34 +207,28 @@ export function BookingWizard(props: Props) {
     finally { setWaitlistBusy(false); }
   }
 
-  const currentStepIndex = STEPS.indexOf(step);
+  const activeSteps = useMemo(() => filteredStaff.length ? STEPS : STEPS.filter((item) => item !== "staff"), [filteredStaff.length]);
+  const currentStepIndex = Math.max(0, activeSteps.indexOf(step));
+  const progressPercent = Math.round(((currentStepIndex + 1) / activeSteps.length) * 100);
 
   function goNext() {
     if (step === "success") return;
-    const idx = STEPS.indexOf(step);
-    let nextIdx = idx + 1;
-    // Skip staff step if no staff available
-    if (STEPS[nextIdx] === "staff" && filteredStaff.length === 0) {
-      nextIdx++;
-    }
-    if (nextIdx < STEPS.length) {
-      setStep(STEPS[nextIdx]);
+    const idx = activeSteps.indexOf(step);
+    const nextIdx = idx + 1;
+    if (nextIdx < activeSteps.length) {
+      setStep(activeSteps[nextIdx]);
       // Auto-send code when entering verify step
-      if (STEPS[nextIdx] === "verify" && !codeSent && customerPhone) {
+      if (activeSteps[nextIdx] === "verify" && !codeSent && customerPhone) {
         handleSendCode();
       }
     }
   }
 
   function goBack() {
-    const idx = STEPS.indexOf(step);
-    let prevIdx = idx - 1;
-    // Skip staff step if no staff available
-    if (STEPS[prevIdx] === "staff" && filteredStaff.length === 0) {
-      prevIdx--;
-    }
+    const idx = activeSteps.indexOf(step);
+    const prevIdx = idx - 1;
     if (prevIdx >= 0) {
-      setStep(STEPS[prevIdx]);
+      setStep(activeSteps[prevIdx]);
     }
   }
 
@@ -458,11 +458,12 @@ export function BookingWizard(props: Props) {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent)] text-white"><Sparkles size={18} /></span>
-            <div><small className="font-bold uppercase tracking-[.16em] text-[var(--accent)]">Adım {currentStepIndex + 1} / {STEPS.length}</small><p className="text-sm font-bold text-[var(--text-1)]">{STEP_LABELS[step]}</p></div>
+            <div><small className="font-bold uppercase tracking-[.16em] text-[var(--accent)]">Adım {currentStepIndex + 1} / {activeSteps.length}</small><p className="text-sm font-bold text-[var(--text-1)]">{STEP_LABELS[step]}</p></div>
           </div>
-          <span className="text-xs font-bold text-[var(--text-3)]">%{Math.round(((currentStepIndex + 1) / STEPS.length) * 100)}</span>
+          <span className="text-xs font-bold text-[var(--text-3)]">%{progressPercent}</span>
         </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]"><i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),#79d8a6)] transition-all duration-500" style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }} /></div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]"><i className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent),#79d8a6)] transition-all duration-500" style={{ width: `${progressPercent}%` }} /></div>
+        <ol className="booking-step-rail" aria-label="Randevu adımları">{activeSteps.map((item, index) => <li key={item} className={index < currentStepIndex ? "is-done" : index === currentStepIndex ? "is-current" : ""} aria-current={index === currentStepIndex ? "step" : undefined}><span>{index < currentStepIndex ? <CheckCircle2 size={13}/> : index + 1}</span>{STEP_LABELS[item]}</li>)}</ol>
       </div>
 
       {/* ━━━ Step Content ━━━ */}
@@ -483,6 +484,7 @@ export function BookingWizard(props: Props) {
               </div>
             </div>
             <div className="mt-5 space-y-2.5">
+              {catalogLoading && Array.from({ length: 3 }).map((_, index) => <div key={index} className="booking-choice-skeleton" aria-hidden="true" />)}
               {services.map((service, idx) => (
                 <label
                   key={service.id}
@@ -659,7 +661,9 @@ export function BookingWizard(props: Props) {
                   )}
                 </div>
 
-                {availableSlots.length === 0 ? (
+                {slotsLoading ? (
+                  <div className="booking-slot-skeleton" aria-label="Müsait saatler yükleniyor">{Array.from({ length: 12 }).map((_, index) => <i key={index}/>)}</div>
+                ) : availableSlots.length === 0 ? (
                   <div className="mt-4 flex flex-col items-center rounded-2xl border border-amber-200/60 bg-amber-50/50 p-8 text-center">
                     <span className="text-4xl animate-bounce">📭</span>
                     <p className="mt-3 text-sm font-semibold text-amber-800">

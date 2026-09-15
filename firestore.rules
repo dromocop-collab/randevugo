@@ -68,6 +68,23 @@ service cloud.firestore {
           "approvalStatus", "storePosition", "reviewedBy", "reviewedAt", "plan"]));
     }
 
+    // Public storefront identity is published only after platform moderation.
+    // Operational settings remain editable by authorized business managers.
+    function moderatedProfileFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "name", "category", "businessType", "phone", "email", "address", "city",
+        "district", "description", "website", "socialMedia", "logoUrl", "coverUrl",
+        "galleryUrls", "profileReviewStatus", "profileReviewRequestId",
+        "profileReviewSubmittedAt", "profileReviewedBy", "profileReviewedAt", "profileReviewNote"
+      ]);
+    }
+
+    function moderatedProfileChangeAllowedBeforeFirstApproval() {
+      return resource.data.approvalStatus == "pending" &&
+        request.resource.data.approvalStatus == "pending" &&
+        request.resource.data.isPublished == false;
+    }
+
     // ────────────────────────────────────────────────
     // Platform Admin Collections
     // ────────────────────────────────────────────────
@@ -84,6 +101,14 @@ service cloud.firestore {
     // API anahtarları yalnızca callable Cloud Functions tarafından okunur/yazılır.
     match /platformPrivateSettings/{doc} {
       allow read, write: if false;
+    }
+
+    match /businessProfileChangeRequests/{requestId} {
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && (
+          resource.data.ownerUid == uid() || isMember(resource.data.businessId)
+        ));
+      allow write: if false;
     }
 
     match /platformPlans/{planId} {
@@ -280,8 +305,10 @@ service cloud.firestore {
       allow create: if false;
       // Owner or manager can update but cannot change protected fields
       allow update: if isPlatformAdmin() ||
-        (isBusinessOwner(businessId) && protectedFieldsUnchanged()) ||
-        (canManage(businessId) && protectedFieldsUnchanged());
+        (isBusinessOwner(businessId) && protectedFieldsUnchanged() &&
+          (moderatedProfileFieldsUnchanged() || moderatedProfileChangeAllowedBeforeFirstApproval())) ||
+        (canManage(businessId) && protectedFieldsUnchanged() &&
+          (moderatedProfileFieldsUnchanged() || moderatedProfileChangeAllowedBeforeFirstApproval()));
       allow delete: if isPlatformAdmin();
 
       // Members

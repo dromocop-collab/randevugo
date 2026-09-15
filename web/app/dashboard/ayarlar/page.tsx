@@ -13,11 +13,11 @@ import {
   getBusinessById,
   updateBusiness,
 } from "@/features/businesses/business-repository";
+import { submitBusinessProfileChange } from "@/features/businesses/business-profile-review-repository";
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
 import { AtSign, Building2, CalendarCog, CheckCircle2, Clock3, Gauge, Globe2, Images, LoaderCircle, MapPin, Save, Search, Share2, ShieldCheck, Sparkles, Trash2, type LucideIcon } from "lucide-react";
-import { useBusinessContext } from "@/features/businesses/business-context";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import Image from "next/image";
 
@@ -47,7 +47,6 @@ type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu";
 
 export default function SettingsPage() {
   const { businessId } = useBusiness();
-  const { refreshBusinesses } = useBusinessContext();
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -161,8 +160,9 @@ export default function SettingsPage() {
         website: website.trim(),
       };
 
-      await updateBusiness(businessId, updateData);
-      toast.success("İşletme bilgileri güncellendi.");
+      await submitBusinessProfileChange(businessId, updateData);
+      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      toast.success("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır.");
     } catch (err) {
       console.error("updateBusiness error:", err);
       const msg = (err as Error)?.message ?? "";
@@ -181,8 +181,9 @@ export default function SettingsPage() {
     if (!businessId) return;
     setSaving(true);
     try {
-      await updateBusiness(businessId, { socialMedia: social });
-      toast.success("Sosyal medya linkleri güncellendi.");
+      await submitBusinessProfileChange(businessId, { socialMedia: social });
+      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      toast.success("Dijital kanallar süper admin onayına gönderildi.");
     } catch {
       toast.error("Güncelleme başarısız.");
     } finally {
@@ -258,6 +259,10 @@ export default function SettingsPage() {
         <button type="button" onClick={() => setActiveTab("sosyal")}><i><AtSign size={18}/></i><span><small>DİJİTAL ERİŞİM</small><b>{socialCount ? `${socialCount} kanal bağlı` : "Kanallarınızı bağlayın"}</b></span><em>{socialCount}/6</em></button>
         <button type="button" onClick={() => setActiveTab("randevu")}><i><Clock3 size={18}/></i><span><small>RANDEVU PENCERESİ</small><b>{minNotice} dk → {maxDaysAhead} gün</b></span><em>{slotInterval} dk</em></button>
       </section>
+
+      {business?.profileReviewStatus === "pending" && (
+        <div className="settings-review-banner" role="status"><ShieldCheck size={18}/><div><b>Yayın öncesi inceleme sürüyor</b><span>Gönderdiğiniz profil değişiklikleri güvenlik ve içerik kontrolünden sonra yayına alınacak. Bu sırada mevcut profiliniz kesintisiz görünür.</span></div></div>
+      )}
 
       {/* Tab Navigation */}
       <div className="settings-navigator"><label><Search size={17}/><input value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder="Ayarlarda ara…"/></label><div className="settings-tabs">
@@ -442,9 +447,9 @@ export default function SettingsPage() {
             </div>
 
             <div className="settings-save-row">
-              <span><ShieldCheck size={15}/> Değişiklikler güvenli olarak mağazanıza uygulanır.</span>
+              <span><ShieldCheck size={15}/> Değişiklikler onaylanana kadar mevcut profil yayında kalır.</span>
               <Button type="submit" disabled={saving} className="settings-save-button">
-                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Bilgileri Kaydet</>}
+                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Gönderiliyor</> : <><Save size={16}/> Onaya Gönder</>}
               </Button>
             </div>
           </form>
@@ -462,9 +467,9 @@ export default function SettingsPage() {
               shape="square"
               uploadFn={(file) => uploadBusinessImage(businessId!, "logo", file)}
               onUpload={async (url) => {
-                await updateBusiness(businessId!, { logoUrl: url });
-                setBusiness((prev) => prev ? { ...prev, logoUrl: url } : prev);
-                refreshBusinesses();
+                await submitBusinessProfileChange(businessId!, { logoUrl: url });
+                setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                toast.success("Yeni logo onaya gönderildi.");
               }}
             />
             <ImageUploader
@@ -473,9 +478,9 @@ export default function SettingsPage() {
               shape="wide"
               uploadFn={(file) => uploadBusinessImage(businessId!, "cover", file)}
               onUpload={async (url) => {
-                await updateBusiness(businessId!, { coverUrl: url });
-                setBusiness((prev) => prev ? { ...prev, coverUrl: url } : prev);
-                refreshBusinesses();
+                await submitBusinessProfileChange(businessId!, { coverUrl: url });
+                setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                toast.success("Yeni kapak görseli onaya gönderildi.");
               }}
             />
           </div>
@@ -487,7 +492,7 @@ export default function SettingsPage() {
               {(business?.galleryUrls ?? []).map((url, i) => (
                 <div key={url} className="settings-gallery-item group relative">
                   <Image src={url} alt={`Galeri ${i + 1}`} width={160} height={80} className="h-20 w-full rounded-xl object-cover" />
-                  <button type="button" aria-label="Görseli galeriden kaldır" onClick={async () => { if (!businessId) return; const updated = (business?.galleryUrls ?? []).filter((item) => item !== url); try { await updateBusiness(businessId, { galleryUrls: updated }); setBusiness((prev) => prev ? { ...prev, galleryUrls: updated } : prev); refreshBusinesses(); toast.success("Görsel galeriden kaldırıldı."); } catch { toast.error("Görsel kaldırılamadı."); } }}><Trash2 size={14}/></button>
+                  <button type="button" aria-label="Görseli galeriden kaldır" onClick={async () => { if (!businessId) return; const updated = (business?.galleryUrls ?? []).filter((item) => item !== url); try { await submitBusinessProfileChange(businessId, { galleryUrls: updated }); setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev); toast.success("Galeri değişikliği onaya gönderildi."); } catch { toast.error("Değişiklik gönderilemedi."); } }}><Trash2 size={14}/></button>
                 </div>
               ))}
               {/* Add Gallery Image */}
@@ -498,9 +503,9 @@ export default function SettingsPage() {
                 onUpload={async (url) => {
                   const current = business?.galleryUrls ?? [];
                   const updated = [...current, url];
-                  await updateBusiness(businessId!, { galleryUrls: updated });
-                  setBusiness((prev) => prev ? { ...prev, galleryUrls: updated } : prev);
-                  refreshBusinesses();
+                  await submitBusinessProfileChange(businessId!, { galleryUrls: updated });
+                  setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                  toast.success("Galeri görseli onaya gönderildi.");
                 }}
               />
             </div>
@@ -531,9 +536,9 @@ export default function SettingsPage() {
               ))}
             </div>
             <div className="settings-save-row">
-              <span><Globe2 size={15}/> Dolu kanallar mağaza profilinizde gösterilir.</span>
+              <span><Globe2 size={15}/> Kanallar kontrol sonrası mağaza profilinde yayınlanır.</span>
               <Button type="submit" disabled={saving} className="settings-save-button">
-                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Kanalları Kaydet</>}
+                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Gönderiliyor</> : <><Save size={16}/> Onaya Gönder</>}
               </Button>
             </div>
           </form>

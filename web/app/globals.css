@@ -11781,6 +11781,103 @@ a {
   }
 }
 
+/* Moderated settings feedback */
+.settings-review-banner {
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  border:1px solid rgb(245 158 11/.25);
+  border-radius:18px;
+  background:linear-gradient(135deg,rgb(255 251 235/.94),rgb(254 243 199/.58));
+  padding:14px 16px;
+  color:#92400e;
+  box-shadow:0 12px 32px rgb(146 64 14/.07);
+}
+.settings-review-banner>svg { flex:0 0 auto; margin-top:1px; }
+.settings-review-banner>div { display:grid; gap:3px; }
+.settings-review-banner b { font-size:12px; }
+.settings-review-banner span { color:#a16207; font-size:9px; line-height:1.6; }
+:root[data-theme="dark"] .settings-review-banner { background:linear-gradient(135deg,rgb(120 53 15/.28),rgb(69 26 3/.22)); color:#fde68a; }
+:root[data-theme="dark"] .settings-review-banner span { color:#fcd34d; }
+
+/* Premium booking wizard navigation and perceptual-loading states */
+.booking-step-rail {
+  display:flex;
+  gap:7px;
+  margin-top:13px;
+  overflow-x:auto;
+  padding-bottom:2px;
+  scrollbar-width:none;
+}
+.booking-step-rail::-webkit-scrollbar { display:none; }
+.booking-step-rail li {
+  display:flex;
+  min-width:max-content;
+  align-items:center;
+  gap:6px;
+  border:1px solid rgb(18 55 37/.09);
+  border-radius:999px;
+  background:rgb(255 255 255/.48);
+  padding:5px 9px;
+  color:var(--text-3);
+  font-size:8px;
+  font-weight:750;
+  transition:.3s ease;
+}
+.booking-step-rail li>span { display:grid; width:20px; height:20px; place-items:center; border-radius:50%; background:var(--surface-3); font-size:8px; }
+.booking-step-rail li.is-current { border-color:rgb(11 107 69/.24); background:rgb(11 107 69/.08); color:#0b6b45; transform:translateY(-1px); }
+.booking-step-rail li.is-current>span { background:#0b6b45; color:#fff; box-shadow:0 5px 14px rgb(11 107 69/.22); }
+.booking-step-rail li.is-done { color:#15805a; }
+.booking-step-rail li.is-done>span { background:#dcfce7; color:#15805a; }
+.booking-choice-skeleton { height:78px; overflow:hidden; border-radius:16px; background:linear-gradient(100deg,rgb(226 232 240/.55) 20%,rgb(255 255 255/.9) 40%,rgb(226 232 240/.55) 60%); background-size:220% 100%; animation:bookingSkeleton 1.25s ease-in-out infinite; }
+.booking-slot-skeleton { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:16px; }
+.booking-slot-skeleton i { height:40px; border-radius:11px; background:linear-gradient(100deg,rgb(226 232 240/.55) 20%,rgb(255 255 255/.9) 40%,rgb(226 232 240/.55) 60%); background-size:220% 100%; animation:bookingSkeleton 1.25s ease-in-out infinite; }
+.booking-slot-skeleton i:nth-child(3n+2),.booking-choice-skeleton:nth-child(2) { animation-delay:.12s; }
+@keyframes bookingSkeleton { to { background-position:-220% 0; } }
+@media(max-width:520px) {
+  .booking-wizard { padding-inline:2px; }
+  .booking-progress { position:sticky; top:8px; z-index:18; padding:13px!important; }
+  .booking-step-panel { min-height:310px; padding:18px!important; }
+  .booking-step-rail li { padding:4px 8px; }
+  .booking-slot-skeleton { grid-template-columns:repeat(3,1fr); }
+}
+
+/* Branded route transition */
+.brand-page-loader {
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:grid;
+  place-content:center;
+  place-items:center;
+  overflow:hidden;
+  background:radial-gradient(circle at 18% 18%,rgb(201 244 91/.2),transparent 28%),radial-gradient(circle at 82% 72%,rgb(34 211 238/.18),transparent 30%),linear-gradient(145deg,#f8f7f0,#edf6f0 55%,#f7f7ef);
+  color:#082d20;
+}
+.brand-loader-aurora { position:absolute; inset:0; pointer-events:none; }
+.brand-loader-aurora i { position:absolute; width:38vw; height:38vw; border-radius:50%; filter:blur(70px); opacity:.2; animation:brandAurora 5s ease-in-out infinite alternate; }
+.brand-loader-aurora i:nth-child(1) { left:-12%; top:-16%; background:#c9f45b; }
+.brand-loader-aurora i:nth-child(2) { right:-12%; bottom:-18%; background:#22d3ee; animation-delay:-1.4s; }
+.brand-loader-aurora i:nth-child(3) { left:42%; top:35%; background:#8b5cf6; animation-delay:-2.7s; }
+.brand-loader-mark { position:relative; width:120px; height:120px; }
+.brand-loader-logo { position:absolute; inset:24px; display:grid; place-items:center; overflow:hidden; border:1px solid rgb(255 255 255/.8); border-radius:24px; background:rgb(255 255 255/.82); box-shadow:0 18px 50px rgb(11 107 69/.16),inset 0 1px 0 #fff; animation:brandLogoPulse 1.8s ease-in-out infinite; }
+.brand-loader-logo img { width:58px; height:58px; object-fit:contain; }
+.brand-loader-ring { position:absolute; inset:3px; border:3px solid transparent; border-top-color:#0b7a4c; border-right-color:#c9f45b; border-radius:50%; animation:brandSpin 1.4s linear infinite; }
+.brand-loader-ring.ring-two { inset:13px; border-width:2px; border-top-color:#22d3ee; border-right-color:#8b5cf6; animation-direction:reverse; animation-duration:1.9s; }
+.brand-page-loader>strong { margin-top:18px; font:650 25px/1 var(--font-space-grotesk); letter-spacing:-.045em; }
+.brand-page-loader>strong span { color:#0b7a4c; }
+.brand-page-loader>p { margin-top:8px; color:#60756b; font-size:10px; }
+.brand-loader-track { width:190px; height:4px; margin-top:18px; overflow:hidden; border-radius:999px; background:rgb(11 107 69/.09); }
+.brand-loader-track i { display:block; width:45%; height:100%; border-radius:inherit; background:linear-gradient(90deg,#0b7a4c,#c9f45b,#22d3ee); animation:brandTrack 1.3s ease-in-out infinite; }
+@keyframes brandSpin { to { transform:rotate(360deg); } }
+@keyframes brandLogoPulse { 50% { transform:scale(1.045); box-shadow:0 22px 60px rgb(11 107 69/.23),inset 0 1px 0 #fff; } }
+@keyframes brandAurora { to { transform:translate3d(8%,6%,0) scale(1.12); } }
+@keyframes brandTrack { 0% { transform:translateX(-110%); } 100% { transform:translateX(330%); } }
+:root[data-theme="dark"] .brand-page-loader { background:radial-gradient(circle at 20% 20%,rgb(201 244 91/.1),transparent 30%),radial-gradient(circle at 80% 70%,rgb(34 211 238/.1),transparent 30%),#071a13; color:#f0fdf4; }
+:root[data-theme="dark"] .brand-loader-logo { border-color:rgb(255 255 255/.1); background:rgb(10 42 31/.86); }
+:root[data-theme="dark"] .brand-page-loader>p { color:#a7b9af; }
+@media(prefers-reduced-motion:reduce) { .brand-loader-ring,.brand-loader-logo,.brand-loader-aurora i,.brand-loader-track i,.booking-choice-skeleton,.booking-slot-skeleton i { animation-duration:.001ms!important; animation-iteration-count:1!important; } }
+
 /* Dashboard customization, command center and automation studio */
 .dashboard-module-editor { margin-top:14px; border-top:1px solid var(--border); padding-top:13px; }
 .dashboard-module-editor>div:last-child { display:grid; gap:5px; }.dashboard-module-editor article { display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:8px; min-height:39px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); padding:4px 5px; }.dashboard-module-editor article>button,.dashboard-module-editor article>div button { display:grid; width:29px; height:29px; place-items:center; border:0; border-radius:8px; background:var(--surface-1); color:var(--dash-core); cursor:pointer; }.dashboard-module-editor article>span { color:var(--text-2); font-size:8px; font-weight:800; }.dashboard-module-editor article>div { display:flex; gap:3px; }.dashboard-module-editor button:disabled { opacity:.25; cursor:not-allowed; }
@@ -21693,4 +21790,40 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 @media(max-width:1180px) { .business-assistant-page .admin-assistant-layout { grid-template-columns:minmax(0,1fr) 320px; }.business-live-cockpit { padding:16px; } }
 @media(max-width:1000px) { .business-assistant-page .admin-assistant-layout { grid-template-columns:1fr; }.business-assistant-page .admin-assistant-chat { height:min(760px,72vh); min-height:620px; }.business-live-cockpit { min-height:auto; }.business-score-card { display:grid; grid-template-columns:minmax(230px,.8fr) 1.2fr; gap:18px; }.business-signal-chart { margin-top:0; border-top:0; border-left:1px solid rgb(var(--assistant-rgb)/.12); padding-top:0; padding-left:18px; }.business-cockpit-actions { margin-top:0; } }
 @media(max-width:700px) { .business-assistant-page .admin-assistant-chat { height:100%; min-height:0; max-height:none; }.business-assistant-page .admin-assistant-messages { min-height:0!important; }.business-assistant-page .admin-assistant-chat>form { position:relative; bottom:auto; }.business-live-cockpit { display:none; } }
+
+/* Business assistant mobile safety layer: keep the composer above the floating
+   dashboard navigation and preserve readable contrast in every atmosphere. */
+@media(max-width:700px) {
+  .dashboard-v2 .business-assistant-page .admin-assistant-chat {
+    padding-bottom:calc(126px + env(safe-area-inset-bottom))!important;
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-chat>form {
+    position:relative!important;
+    z-index:8;
+    flex:0 0 auto;
+    margin:0 7px 8px!important;
+    border:1px solid rgb(var(--assistant-rgb)/.2)!important;
+    border-radius:24px!important;
+    background:color-mix(in srgb,var(--surface-1) 96%,transparent)!important;
+    box-shadow:0 14px 38px rgb(var(--assistant-rgb)/.15)!important;
+    backdrop-filter:blur(20px) saturate(1.15);
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-messages article.user>div {
+    background:linear-gradient(135deg,color-mix(in srgb,var(--dash-core) 86%,var(--dash-bright)),var(--dash-core))!important;
+    color:#fff!important;
+    box-shadow:0 10px 24px rgb(var(--dash-rgb)/.22)!important;
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-messages article.user>div>p {
+    color:#fff!important;
+    -webkit-text-fill-color:#fff!important;
+    opacity:1!important;
+  }
+
+  .dashboard-v2 .business-assistant-page .admin-assistant-messages article.user time {
+    color:rgb(255 255 255/.78)!important;
+  }
+}
 @media(prefers-reduced-motion:reduce) { .business-live-cockpit:before,.business-cockpit-aura,.business-live-header>div>span i,.business-score-card .assistant-health>span,.business-score-card .assistant-health>span:before,.business-signal-chart i>span,.business-progress-panel>div>div>i>span { animation:none!important; } }
