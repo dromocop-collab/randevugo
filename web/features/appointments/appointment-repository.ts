@@ -96,10 +96,10 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     businessId: input.businessId,
     staffId: input.staffId,
     serviceId: input.serviceId,
-    customerName: input.customerName,
+    ...(input.customerName ? { customerName: input.customerName } : {}),
     customerPhone: input.customerPhone,
-    customerEmail: input.customerEmail,
-    notes: input.notes,
+    ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
+    ...(input.notes ? { notes: input.notes } : {}),
     startAtMillis: input.startAtMillis,
   });
 

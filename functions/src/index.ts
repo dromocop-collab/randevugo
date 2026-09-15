@@ -26,6 +26,7 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const MUTLUCELL_SEND_URL =
   "https://smsgw.mutlucell.com/smsgw-ws/sndblkex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
+const BOOKING_FIELD_SETTINGS_PATH = "platformPrivateSettings/bookingFields";
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicCallableOptions = {
   region: "europe-west1",
@@ -46,6 +47,57 @@ function requireString(value: unknown, name: string): string {
   }
   return value.trim();
 }
+
+type BookingFieldSettings = {
+  collectName: boolean;
+  collectEmail: boolean;
+  collectNotes: boolean;
+};
+
+const DEFAULT_BOOKING_FIELD_SETTINGS: BookingFieldSettings = {
+  collectName: true,
+  collectEmail: true,
+  collectNotes: true,
+};
+
+async function loadBookingFieldSettings(): Promise<BookingFieldSettings> {
+  const snapshot = await db.doc(BOOKING_FIELD_SETTINGS_PATH).get();
+  const data = snapshot.data() ?? {};
+  return {
+    collectName: typeof data.collectName === "boolean" ? data.collectName : DEFAULT_BOOKING_FIELD_SETTINGS.collectName,
+    collectEmail: typeof data.collectEmail === "boolean" ? data.collectEmail : DEFAULT_BOOKING_FIELD_SETTINGS.collectEmail,
+    collectNotes: typeof data.collectNotes === "boolean" ? data.collectNotes : DEFAULT_BOOKING_FIELD_SETTINGS.collectNotes,
+  };
+}
+
+export const getBookingFieldSettings = onCall(publicCallableOptions, async () => ({
+  ...await loadBookingFieldSettings(),
+  phoneRequired: true,
+  phoneVerificationRequired: true,
+}));
+
+export const updateBookingFieldSettings = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const settings: BookingFieldSettings = {
+    collectName: request.data?.collectName !== false,
+    collectEmail: request.data?.collectEmail !== false,
+    collectNotes: request.data?.collectNotes !== false,
+  };
+  await db.doc(BOOKING_FIELD_SETTINGS_PATH).set({
+    ...settings,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  }, { merge: true });
+  await db.collection("platformAuditLogs").add({
+    action: "booking.fields_updated",
+    actorUid: uid,
+    settings,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, ...settings };
+});
 
 function htmlSafe(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -1300,26 +1352,27 @@ export const createAppointment = onCall(
       ? data.staffId.trim()
       : null;
     const serviceId = requireString(data.serviceId, "serviceId");
-    const customerName = requireString(data.customerName, "customerName");
+    const bookingFields = await loadBookingFieldSettings();
+    const suppliedCustomerName = typeof data.customerName === "string" ? data.customerName.trim() : "";
     const customerPhone = typeof data.customerPhone === "string" && data.customerPhone.trim()
       ? normalizePhone(data.customerPhone)
       : null;
-    if (customerName.length < 2 || customerName.length > 80) {
+    if (bookingFields.collectName && (suppliedCustomerName.length < 2 || suppliedCustomerName.length > 80)) {
       throw new HttpsError("invalid-argument", "Müşteri adı 2–80 karakter olmalıdır.");
     }
-    if (customerPhone && !/^\+90\d{10}$/.test(customerPhone)) {
+    if (!customerPhone || !/^\+90\d{10}$/.test(customerPhone)) {
       throw new HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
-    if (!request.auth?.uid && !customerPhone) {
-      throw new HttpsError("unauthenticated", "Misafir randevusu için doğrulanmış telefon numarası zorunludur.");
-    }
-    const customerEmail = typeof data.customerEmail === "string" && data.customerEmail.trim()
+    const customerName = bookingFields.collectName
+      ? suppliedCustomerName
+      : `Telefon müşterisi • ${customerPhone.slice(-4)}`;
+    const customerEmail = bookingFields.collectEmail && typeof data.customerEmail === "string" && data.customerEmail.trim()
       ? data.customerEmail.trim().toLowerCase()
       : null;
     if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       throw new HttpsError("invalid-argument", "E-posta adresi geçersiz.");
     }
-    const notes = typeof data.notes === "string" ? data.notes.trim() : null;
+    const notes = bookingFields.collectNotes && typeof data.notes === "string" ? data.notes.trim() : null;
     if (notes && notes.length > 1000) {
       throw new HttpsError("invalid-argument", "Randevu notu 1000 karakteri geçemez.");
     }
@@ -1363,9 +1416,7 @@ export const createAppointment = onCall(
       .where("startAt", "<", Timestamp.fromMillis(dayEndMs));
 
     const publicToken = randomUUID();
-    const verificationRef = !request.auth?.uid && customerPhone
-      ? db.doc(`verificationCodes/${customerPhone}`)
-      : null;
+    const verificationRef = db.doc(`verificationCodes/${customerPhone}`);
 
     const result = await db.runTransaction(async (tx) => {
       {
@@ -1400,13 +1451,11 @@ export const createAppointment = onCall(
         }
       }
 
-      if (verificationRef) {
-        const verificationSnap = await tx.get(verificationRef);
-        const verification = verificationSnap.data();
-        const verifiedAt = verification?.verifiedAt as Timestamp | undefined;
-        if (!verificationSnap.exists || verification?.verified !== true || !verifiedAt || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
-          throw new HttpsError("unauthenticated", "Telefon doğrulaması eksik veya süresi dolmuş.");
-        }
+      const verificationSnap = await tx.get(verificationRef);
+      const verification = verificationSnap.data();
+      const verifiedAt = verification?.verifiedAt as Timestamp | undefined;
+      if (!verificationSnap.exists || verification?.verified !== true || !verifiedAt || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
+        throw new HttpsError("unauthenticated", "Telefon doğrulaması eksik veya süresi dolmuş.");
       }
 
       const appointmentRef = appointments.doc();
@@ -1443,9 +1492,7 @@ export const createAppointment = onCall(
         appointmentId: appointmentRef.id,
         createdAt: FieldValue.serverTimestamp(),
       });
-      if (verificationRef) {
-        tx.update(verificationRef, { verified: false, consumedAt: FieldValue.serverTimestamp() });
-      }
+      tx.update(verificationRef, { verified: false, consumedAt: FieldValue.serverTimestamp() });
 
       return appointmentRef.id;
     });
@@ -1971,6 +2018,7 @@ export const updateMutlucellSettings = onCall(
       senderTitle,
       enabled,
       fallbackEnabled,
+      ...(senderTitle !== String(existing.data()?.senderTitle ?? "").trim() ? { lastTest: FieldValue.delete() } : {}),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: uid,
       ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
@@ -2006,6 +2054,7 @@ export const testMutlucellSettings = onCall(
         lastTest: {
           success: true,
           phone,
+          senderTitle: config.senderTitle,
           providerMessageId,
           testedAt: FieldValue.serverTimestamp(),
           testedBy: uid,
@@ -2018,6 +2067,7 @@ export const testMutlucellSettings = onCall(
         lastTest: {
           success: false,
           phone,
+          senderTitle: config.senderTitle,
           error: message,
           testedAt: FieldValue.serverTimestamp(),
           testedBy: uid,

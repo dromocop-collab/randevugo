@@ -4,6 +4,7 @@ import { getFirebaseApp } from "@/lib/firebase/client";
 export type MutlucellLastTest = {
   success: boolean;
   phone?: string;
+  senderTitle?: string;
   providerMessageId?: string;
   error?: string;
   testedAt?: { seconds?: number } | null;

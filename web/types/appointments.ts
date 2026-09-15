@@ -36,7 +36,7 @@ export interface AppointmentCreateInput {
   businessId: string;
   staffId: string;
   serviceId: string;
-  customerName: string;
+  customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
   notes?: string;

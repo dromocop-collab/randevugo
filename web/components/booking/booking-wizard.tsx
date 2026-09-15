@@ -19,6 +19,11 @@ import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import {
+  DEFAULT_BOOKING_FIELD_SETTINGS,
+  getBookingFieldSettings,
+  type BookingFieldSettings,
+} from "@/features/booking/booking-field-settings-repository";
+import {
   ArrowLeft, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2,
   CircleDollarSign, Clock3, FileCheck2, Mail, MessageSquareText, Phone,
   Send, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
@@ -85,6 +90,7 @@ export function BookingWizard(props: Props) {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [bookingFields, setBookingFields] = useState<BookingFieldSettings>(DEFAULT_BOOKING_FIELD_SETTINGS);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistBusy, setWaitlistBusy] = useState(false);
@@ -129,6 +135,22 @@ export function BookingWizard(props: Props) {
       }
     });
   }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
+
+  useEffect(() => {
+    let active = true;
+    getBookingFieldSettings()
+      .then((settings) => {
+        if (!active) return;
+        setBookingFields(settings);
+        if (!settings.collectName) setCustomerName("");
+        if (!settings.collectEmail) setCustomerEmail("");
+        if (!settings.collectNotes) setNotes("");
+      })
+      .catch(() => {
+        if (active) setBookingFields(DEFAULT_BOOKING_FIELD_SETTINGS);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!serviceId) return;
@@ -325,10 +347,10 @@ export function BookingWizard(props: Props) {
         businessId: props.businessId,
         staffId: selectedSlot.staffId ?? selectedStaff?.id ?? "",
         serviceId: selectedService.id,
-        customerName,
+        customerName: bookingFields.collectName ? customerName.trim() : undefined,
         customerPhone,
-        customerEmail,
-        notes,
+        customerEmail: bookingFields.collectEmail ? customerEmail.trim() : undefined,
+        notes: bookingFields.collectNotes ? notes.trim() : undefined,
         startAtMillis: selectedSlot.startAtMillis,
       });
 
@@ -759,11 +781,11 @@ export function BookingWizard(props: Props) {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-1)]">İletişim Bilgileriniz</h2>
-                <p className="text-xs text-[var(--text-3)]">Randevu onayı için bilgilerinizi girin</p>
+                <p className="text-xs text-[var(--text-3)]">{bookingFields.collectName || bookingFields.collectEmail || bookingFields.collectNotes ? "Randevu onayı için gerekli bilgileri girin" : "Telefonunuzu doğrulayarak hızlıca randevu alın"}</p>
               </div>
             </div>
             <div className="mt-5 space-y-4">
-              <div className="animate-[fadeSlideIn_0.3s_ease]">
+              {bookingFields.collectName && <div className="animate-[fadeSlideIn_0.3s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
                   <UserRound size={14} /> Ad Soyad <span className="text-red-400">*</span>
                 </label>
@@ -775,7 +797,7 @@ export function BookingWizard(props: Props) {
                   required
                   className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
                 />
-              </div>
+              </div>}
               <div className="animate-[fadeSlideIn_0.35s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
                   <Phone size={14} /> Telefon <span className="text-red-400">*</span>
@@ -789,7 +811,7 @@ export function BookingWizard(props: Props) {
                   className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
                 />
               </div>
-              <div className="animate-[fadeSlideIn_0.4s_ease]">
+              {bookingFields.collectEmail && <div className="animate-[fadeSlideIn_0.4s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
                   <Mail size={14} /> E-posta
                 </label>
@@ -800,8 +822,8 @@ export function BookingWizard(props: Props) {
                   placeholder="ornek@mail.com"
                   className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
                 />
-              </div>
-              <div className="animate-[fadeSlideIn_0.45s_ease]">
+              </div>}
+              {bookingFields.collectNotes && <div className="animate-[fadeSlideIn_0.45s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
                   <MessageSquareText size={14} /> Not
                 </label>
@@ -812,7 +834,7 @@ export function BookingWizard(props: Props) {
                   placeholder="Eklemek istediğiniz not..."
                   className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg resize-none"
                 />
-              </div>
+              </div>}
               <label className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]/40 p-4 cursor-pointer transition-all duration-300 hover:bg-[var(--surface-2)] animate-[fadeSlideIn_0.5s_ease]">
                 <input
                   type="checkbox"
@@ -958,10 +980,10 @@ export function BookingWizard(props: Props) {
                 value={selectedService ? `${selectedService.price.toLocaleString("tr-TR")} ₺` : ""}
               />
               <hr className="border-[var(--border)]" />
-              <SummaryRow icon={UserRound} label="Ad Soyad" value={customerName} delay={300} />
+              {bookingFields.collectName && <SummaryRow icon={UserRound} label="Ad Soyad" value={customerName} delay={300} />}
               <SummaryRow icon={Phone} label="Telefon" value={customerPhone} delay={350} />
-              {customerEmail && <SummaryRow icon={Mail} label="E-posta" value={customerEmail} delay={400} />}
-              {notes && <SummaryRow icon={MessageSquareText} label="Not" value={notes} delay={450} />}
+              {bookingFields.collectEmail && customerEmail && <SummaryRow icon={Mail} label="E-posta" value={customerEmail} delay={400} />}
+              {bookingFields.collectNotes && notes && <SummaryRow icon={MessageSquareText} label="Not" value={notes} delay={450} />}
             </div>
           </div>
         )}
@@ -1011,7 +1033,7 @@ export function BookingWizard(props: Props) {
                 (step === "service" && !serviceId) ||
                 (step === "staff" && !staffId) ||
                 (step === "datetime" && !slot) ||
-                (step === "info" && (!customerName || !customerPhone || !privacyAccepted))
+                (step === "info" && (!customerPhone || !privacyAccepted || (bookingFields.collectName && customerName.trim().length < 2)))
               }
               className="group flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-7 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition-all duration-300 hover:shadow-xl hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >

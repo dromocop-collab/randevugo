@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = void 0;
+exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -21,6 +21,7 @@ const MUTLUCELL_API_KEY = (0, params_1.defineSecret)("MUTLUCELL_API_KEY");
 const GEMINI_API_KEY = (0, params_1.defineSecret)("GEMINI_API_KEY");
 const MUTLUCELL_SEND_URL = "https://smsgw.mutlucell.com/smsgw-ws/sndblkex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
+const BOOKING_FIELD_SETTINGS_PATH = "platformPrivateSettings/bookingFields";
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicCallableOptions = {
     region: "europe-west1",
@@ -40,6 +41,48 @@ function requireString(value, name) {
     }
     return value.trim();
 }
+const DEFAULT_BOOKING_FIELD_SETTINGS = {
+    collectName: true,
+    collectEmail: true,
+    collectNotes: true,
+};
+async function loadBookingFieldSettings() {
+    const snapshot = await db.doc(BOOKING_FIELD_SETTINGS_PATH).get();
+    const data = snapshot.data() ?? {};
+    return {
+        collectName: typeof data.collectName === "boolean" ? data.collectName : DEFAULT_BOOKING_FIELD_SETTINGS.collectName,
+        collectEmail: typeof data.collectEmail === "boolean" ? data.collectEmail : DEFAULT_BOOKING_FIELD_SETTINGS.collectEmail,
+        collectNotes: typeof data.collectNotes === "boolean" ? data.collectNotes : DEFAULT_BOOKING_FIELD_SETTINGS.collectNotes,
+    };
+}
+exports.getBookingFieldSettings = (0, https_1.onCall)(publicCallableOptions, async () => ({
+    ...await loadBookingFieldSettings(),
+    phoneRequired: true,
+    phoneVerificationRequired: true,
+}));
+exports.updateBookingFieldSettings = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const settings = {
+        collectName: request.data?.collectName !== false,
+        collectEmail: request.data?.collectEmail !== false,
+        collectNotes: request.data?.collectNotes !== false,
+    };
+    await db.doc(BOOKING_FIELD_SETTINGS_PATH).set({
+        ...settings,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedBy: uid,
+    }, { merge: true });
+    await db.collection("platformAuditLogs").add({
+        action: "booking.fields_updated",
+        actorUid: uid,
+        settings,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true, ...settings };
+});
 function htmlSafe(value) {
     return String(value ?? "").replace(/[&<>"']/g, (character) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
@@ -1197,26 +1240,27 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
         ? data.staffId.trim()
         : null;
     const serviceId = requireString(data.serviceId, "serviceId");
-    const customerName = requireString(data.customerName, "customerName");
+    const bookingFields = await loadBookingFieldSettings();
+    const suppliedCustomerName = typeof data.customerName === "string" ? data.customerName.trim() : "";
     const customerPhone = typeof data.customerPhone === "string" && data.customerPhone.trim()
         ? normalizePhone(data.customerPhone)
         : null;
-    if (customerName.length < 2 || customerName.length > 80) {
+    if (bookingFields.collectName && (suppliedCustomerName.length < 2 || suppliedCustomerName.length > 80)) {
         throw new https_1.HttpsError("invalid-argument", "Müşteri adı 2–80 karakter olmalıdır.");
     }
-    if (customerPhone && !/^\+90\d{10}$/.test(customerPhone)) {
+    if (!customerPhone || !/^\+90\d{10}$/.test(customerPhone)) {
         throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
-    if (!request.auth?.uid && !customerPhone) {
-        throw new https_1.HttpsError("unauthenticated", "Misafir randevusu için doğrulanmış telefon numarası zorunludur.");
-    }
-    const customerEmail = typeof data.customerEmail === "string" && data.customerEmail.trim()
+    const customerName = bookingFields.collectName
+        ? suppliedCustomerName
+        : `Telefon müşterisi • ${customerPhone.slice(-4)}`;
+    const customerEmail = bookingFields.collectEmail && typeof data.customerEmail === "string" && data.customerEmail.trim()
         ? data.customerEmail.trim().toLowerCase()
         : null;
     if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
         throw new https_1.HttpsError("invalid-argument", "E-posta adresi geçersiz.");
     }
-    const notes = typeof data.notes === "string" ? data.notes.trim() : null;
+    const notes = bookingFields.collectNotes && typeof data.notes === "string" ? data.notes.trim() : null;
     if (notes && notes.length > 1000) {
         throw new https_1.HttpsError("invalid-argument", "Randevu notu 1000 karakteri geçemez.");
     }
@@ -1248,9 +1292,7 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
         .where("startAt", ">=", firestore_1.Timestamp.fromMillis(dayStartMs))
         .where("startAt", "<", firestore_1.Timestamp.fromMillis(dayEndMs));
     const publicToken = (0, crypto_1.randomUUID)();
-    const verificationRef = !request.auth?.uid && customerPhone
-        ? db.doc(`verificationCodes/${customerPhone}`)
-        : null;
+    const verificationRef = db.doc(`verificationCodes/${customerPhone}`);
     const result = await db.runTransaction(async (tx) => {
         {
             const conflictSnap = await tx.get(conflictQuery);
@@ -1277,13 +1319,11 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
                 throw new https_1.HttpsError("already-exists", "Seçilen saat artık müsait değil.");
             }
         }
-        if (verificationRef) {
-            const verificationSnap = await tx.get(verificationRef);
-            const verification = verificationSnap.data();
-            const verifiedAt = verification?.verifiedAt;
-            if (!verificationSnap.exists || verification?.verified !== true || !verifiedAt || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
-                throw new https_1.HttpsError("unauthenticated", "Telefon doğrulaması eksik veya süresi dolmuş.");
-            }
+        const verificationSnap = await tx.get(verificationRef);
+        const verification = verificationSnap.data();
+        const verifiedAt = verification?.verifiedAt;
+        if (!verificationSnap.exists || verification?.verified !== true || !verifiedAt || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
+            throw new https_1.HttpsError("unauthenticated", "Telefon doğrulaması eksik veya süresi dolmuş.");
         }
         const appointmentRef = appointments.doc();
         tx.set(appointmentRef, {
@@ -1316,9 +1356,7 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
             appointmentId: appointmentRef.id,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
         });
-        if (verificationRef) {
-            tx.update(verificationRef, { verified: false, consumedAt: firestore_1.FieldValue.serverTimestamp() });
-        }
+        tx.update(verificationRef, { verified: false, consumedAt: firestore_1.FieldValue.serverTimestamp() });
         return appointmentRef.id;
     });
     return {
@@ -1729,6 +1767,7 @@ exports.updateMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", 
         senderTitle,
         enabled,
         fallbackEnabled,
+        ...(senderTitle !== String(existing.data()?.senderTitle ?? "").trim() ? { lastTest: firestore_1.FieldValue.delete() } : {}),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
         updatedBy: uid,
         ...(!existing.exists ? { createdAt: firestore_1.FieldValue.serverTimestamp() } : {}),
@@ -1757,6 +1796,7 @@ exports.testMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", se
             lastTest: {
                 success: true,
                 phone,
+                senderTitle: config.senderTitle,
                 providerMessageId,
                 testedAt: firestore_1.FieldValue.serverTimestamp(),
                 testedBy: uid,
@@ -1770,6 +1810,7 @@ exports.testMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", se
             lastTest: {
                 success: false,
                 phone,
+                senderTitle: config.senderTitle,
                 error: message,
                 testedAt: firestore_1.FieldValue.serverTimestamp(),
                 testedBy: uid,

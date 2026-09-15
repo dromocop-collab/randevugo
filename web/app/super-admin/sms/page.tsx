@@ -65,13 +65,15 @@ export default function SmsCenterPage() {
     if (!settings.username || !settings.hasApiKey) return { tone: "danger", title: "Kimlik bilgileri eksik", detail: "Kullanıcı adı ve API anahtarını tamamlayın." };
     if (!settings.senderTitle) return { tone: "warn", title: "Gönderici başlığı bekleniyor", detail: "Mutlucell tarafından onaylanan başlığı girin." };
     if (!settings.enabled) return { tone: "warn", title: "SMS gönderimi duraklatıldı", detail: "Kod fallback sistemi çalışmaya devam eder." };
-    return { tone: "success", title: "Gönderime hazır", detail: "Kimlik bilgileri ve gönderici başlığı tanımlı." };
+    if (!settings.lastTest || settings.lastTest.senderTitle !== settings.senderTitle) return { tone: "warn", title: "Başlık onayı test bekliyor", detail: "Mutlucell başlığı onayladıktan sonra gerçek test SMS'i göndererek bağlantıyı doğrulayın." };
+    if (!settings.lastTest.success) return { tone: "danger", title: "Canlı SMS testi başarısız", detail: settings.lastTest.error || "Başlık veya bağlantı Mutlucell tarafından henüz kabul edilmedi." };
+    return { tone: "success", title: "Canlı SMS doğrulandı", detail: `${settings.senderTitle} başlığı gerçek gönderimde Mutlucell tarafından kabul edildi.` };
   }, [settings]);
 
   const healthChecks = useMemo(() => [
     { label: "Kullanıcı hesabı", ok: Boolean(settings?.username), detail: settings?.username || "Kullanıcı adı girilmedi" },
     { label: "API kimlik doğrulama", ok: Boolean(settings?.hasApiKey), detail: settings?.hasApiKey ? settings.apiKeyMasked : "API anahtarı eksik" },
-    { label: "Gönderici başlığı", ok: Boolean(settings?.senderTitle), detail: settings?.senderTitle || "Mutlucell onaylı başlık bekleniyor" },
+    { label: "Gönderici başlığı", ok: Boolean(settings?.senderTitle && settings.lastTest?.success && settings.lastTest.senderTitle === settings.senderTitle), detail: !settings?.senderTitle ? "Mutlucell onaylı başlık bekleniyor" : settings.lastTest?.success && settings.lastTest.senderTitle === settings.senderTitle ? `${settings.senderTitle} · gerçek gönderim onaylandı` : `${settings.senderTitle} · canlı test bekleniyor` },
     { label: "Canlı gönderim", ok: Boolean(settings?.enabled), detail: settings?.enabled ? "Gönderim açık" : "Süper admin tarafından duraklatıldı" },
     { label: "Arıza güvenliği", ok: Boolean(settings?.fallbackEnabled), detail: settings?.fallbackEnabled ? "SMS hatasında kod ekranda gösterilir" : "Fallback kapalı" },
     { label: "Son uçtan uca test", ok: settings?.lastTest?.success === true, detail: !settings?.lastTest ? "Henüz gerçek test yapılmadı" : settings.lastTest.success ? `Başarılı · ${settings.lastTest.providerMessageId ?? "paket alındı"}` : settings.lastTest.error || "Mutlucell testi başarısız" },
