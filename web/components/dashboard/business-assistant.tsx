@@ -27,6 +27,7 @@ type ServicePatch = Partial<Pick<Service, "price" | "durationMinutes" | "isActiv
 type WaitlistRow = { id: string; customerName: string; status: string };
 type Action = { label: string; href?: string; report?: boolean; staffUpdate?: { staffId: string; staffName: string; patch: StaffPatch; summary: string }; serviceUpdate?: { serviceId: string; serviceName: string; patch: ServicePatch; summary: string }; appointmentUpdate?: { appointmentId: string; customerName: string; status: AppointmentStatus; summary: string }; waitlistUpdate?: { itemId: string; customerName: string; status: string; summary: string } };
 type Message = { id: string; role: "assistant" | "user"; body: string; actions?: Action[]; time: Date };
+type AssistantConnection = "ready" | "thinking" | "fallback";
 
 const prompts = ["Bugün beni ne bekliyor?", "İşletmemi analiz et", "Gelir raporu", "Müşteri kaybı riski", "Ekip performansı", "Büyüme önerisi", "Yönetim raporu hazırla"];
 const welcome = (): Message => ({ id: "welcome", role: "assistant", body: "Merhaba! Ben işletme asistanınızım. Seçili mağazanızın randevu, gelir, müşteri, ekip, hizmet ve bekleme listesi verilerini analiz edip size uygulanabilir öneriler sunabilirim.", time: new Date() });
@@ -45,7 +46,8 @@ export function BusinessAssistant() {
   const [appointmentRows, setAppointmentRows] = useState<Appointment[]>([]);
   const [waitlistRows, setWaitlistRows] = useState<WaitlistRow[]>([]);
   const [runningAction, setRunningAction] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const [connection, setConnection] = useState<AssistantConnection>("ready");
+  const messagesRef = useRef<HTMLDivElement>(null);
   const lastStaffId = useRef("");
   const lastServiceId = useRef("");
   const lastAppointmentId = useRef("");
@@ -110,7 +112,14 @@ export function BusinessAssistant() {
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [access?.role, businessId]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
+  useEffect(() => {
+    const viewport = messagesRef.current;
+    if (!viewport) return;
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: messages.length > 1 ? "smooth" : "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, thinking]);
 
   const score = useMemo(() => {
     if (!stats) return 0;
@@ -208,6 +217,7 @@ export function BusinessAssistant() {
     const history = messages.slice(-6).map((item) => ({ role: item.role, body: item.body }));
     const deterministic = answer(clean);
     setInput(""); setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", body: clean, time: new Date() }]); setThinking(true);
+    setConnection("thinking");
     try {
       const response = await askSmartAssistant({
         scope: "business",
@@ -239,9 +249,13 @@ export function BusinessAssistant() {
           } : null,
         },
       });
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: response.body, actions: deterministic.actions, time: new Date() }]);
+      const body = response.body?.trim();
+      if (!body) throw new Error("Asistan boş yanıt döndürdü.");
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body, actions: deterministic.actions, time: new Date() }]);
+      setConnection("ready");
     } catch {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", time: new Date(), ...deterministic }]);
+      setConnection("fallback");
     } finally {
       setThinking(false);
     }
@@ -337,7 +351,7 @@ export function BusinessAssistant() {
   return <main className="admin-assistant-page business-assistant-page">
     <section className="admin-assistant-hero"><div><span><Sparkles size={15}/> İŞLETME ZEKÂ MERKEZİ</span><h2>İşletmeni sorarak<br/>yönet.</h2><p>{business?.name ?? "Mağazanız"} için randevudan gelire, ekipten müşteri sadakatine canlı operasyon asistanı.</p></div><aside><i className={loading ? "is-loading" : ""}><Bot size={30}/></i><div><small>MAĞAZA ASİSTANI</small><b>{loading ? "Analiz hazırlanıyor" : "Canlı ve hazır"}</b><span>{stats ? `${stats.healthySources}/6 veri kaynağı bağlı` : "Güvenli bağlantı kuruluyor"}</span></div><button type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""}/></button></aside></section>
     <section className="assistant-command-deck" aria-label="İşletme brifingi">{briefing.map((card) => <button type="button" key={card.label} onClick={() => send(card.prompt)}><span><card.icon size={18}/></span><div><small>{card.label}</small><b>{card.value}</b><p>{card.detail}</p></div><ArrowRight size={15}/></button>)}</section>
-    <section className="admin-assistant-layout"><div className="admin-assistant-chat"><header><div><Bot size={20}/><span><b>{business?.name ?? "İşletme"} Asistanı</b><small>Size özel operasyon yardımcısı</small></span></div><nav><i><span/> ÇEVRİMİÇİ</i><button type="button" onClick={() => void clearConversation()} aria-label="Sohbeti temizle"><Trash2 size={14}/></button></nav></header><div className="admin-assistant-messages" aria-live="polite">{messages.map((message) => <article key={message.id} className={message.role}>{message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}<div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.staffUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.staffUpdate && void runStaffUpdate(action.staffUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.staffUpdate.staffId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.serviceUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.serviceUpdate && void runServiceUpdate(action.serviceUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.serviceUpdate.serviceId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.appointmentUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.appointmentUpdate && void runAppointmentUpdate(action.appointmentUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.appointmentUpdate.appointmentId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.waitlistUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.waitlistUpdate && void runWaitlistUpdate(action.waitlistUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.waitlistUpdate.itemId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.time.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div></article>)}{thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}<div ref={endRef}/></div><div className="admin-assistant-prompts">{prompts.map((prompt) => <button key={prompt} onClick={() => void send(prompt)} disabled={loading || thinking}>{prompt}</button>)}</div><form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><label><Sparkles size={17}/><textarea rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Mesaj yazın…" disabled={loading}/></label><button disabled={loading || thinking || !input.trim()}><Send size={19}/></button></form><footer><ShieldCheck size={13}/> Veriler yalnız seçili mağazanızdan okunur; kritik değişiklikler yönetim ekranında onaylanır.</footer></div>
+    <section className="admin-assistant-layout"><div className="admin-assistant-chat"><header><div><Bot size={20}/><span><b>{business?.name ?? "İşletme"} Asistanı</b><small>Size özel operasyon yardımcısı</small></span></div><nav><i className={`assistant-connection is-${connection}`}><span/> {connection === "thinking" ? "DÜŞÜNÜYOR" : connection === "fallback" ? "GÜVENLİ MOD" : "GEMINI BAĞLI"}</i><button type="button" onClick={() => void clearConversation()} aria-label="Sohbeti temizle"><Trash2 size={14}/></button></nav></header><div ref={messagesRef} className="admin-assistant-messages" aria-live="polite">{messages.map((message) => <article key={message.id} className={message.role}>{message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}<div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.staffUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.staffUpdate && void runStaffUpdate(action.staffUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.staffUpdate.staffId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.serviceUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.serviceUpdate && void runServiceUpdate(action.serviceUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.serviceUpdate.serviceId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.appointmentUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.appointmentUpdate && void runAppointmentUpdate(action.appointmentUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.appointmentUpdate.appointmentId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.waitlistUpdate ? <button className="assistant-confirm-action" key={action.label} onClick={() => action.waitlistUpdate && void runWaitlistUpdate(action.waitlistUpdate)} disabled={Boolean(runningAction)}>{runningAction === action.waitlistUpdate.itemId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.time.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div></article>)}{thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}</div><div className="admin-assistant-prompts">{prompts.map((prompt) => <button key={prompt} onClick={() => void send(prompt)} disabled={loading || thinking}>{prompt}</button>)}</div><form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><label><Sparkles size={17}/><textarea rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Mesaj yazın…" disabled={loading}/></label><button disabled={loading || thinking || !input.trim()}><Send size={19}/></button></form><footer><ShieldCheck size={13}/> Veriler yalnız seçili mağazanızdan okunur; kritik değişiklikler yönetim ekranında onaylanır.</footer></div>
     <aside className="admin-assistant-context business-live-cockpit">
       <i className="business-cockpit-aura" aria-hidden="true"/>
       <header className="business-live-header"><div><span><i/> CANLI MAĞAZA</span><b>{business?.name ?? "İşletme özeti"}</b><small>{stats?.updatedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) ?? "—"} itibarıyla güncel</small></div><em><Activity size={12}/> Canlı</em></header>

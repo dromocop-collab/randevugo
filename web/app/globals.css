@@ -21633,7 +21633,12 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 }
 
 /* Business assistant — live intelligence cockpit */
-.business-assistant-page .admin-assistant-layout { align-items:stretch; grid-template-columns:minmax(0,1fr) 352px; }
+.business-assistant-page .admin-assistant-layout { align-items:start; grid-template-columns:minmax(0,1fr) 352px; }
+.business-assistant-page .admin-assistant-chat { display:flex; min-height:680px; height:clamp(680px,72vh,790px); flex-direction:column; align-self:start; }
+.business-assistant-page .admin-assistant-messages { flex:1; height:auto; min-height:0; scroll-behavior:smooth; }
+.assistant-connection.is-thinking span { background:var(--assistant-bright)!important; box-shadow:0 0 0 4px rgb(255 255 255/.11)!important; animation:assistant-pulse 1.25s ease-in-out infinite; }
+.assistant-connection.is-fallback { color:#fff4c2!important; }
+.assistant-connection.is-fallback span { background:#fbbf24!important; box-shadow:0 0 0 4px rgb(251 191 36/.16)!important; }
 .business-live-cockpit { position:relative; isolation:isolate; display:flex; min-height:100%; flex-direction:column; border-color:rgb(var(--assistant-rgb)/.18); background:linear-gradient(155deg,color-mix(in srgb,var(--surface-1) 97%,var(--assistant-core) 3%),var(--surface-1) 48%,color-mix(in srgb,var(--surface-2) 92%,var(--assistant-bright) 8%)); padding:20px; box-shadow:0 24px 65px rgb(var(--assistant-rgb)/.12),inset 0 1px 0 rgb(255 255 255/.72); }
 .business-live-cockpit:before { position:absolute; z-index:-1; right:-74px; top:-82px; width:220px; height:220px; border:1px solid rgb(var(--assistant-rgb)/.14); border-radius:50%; background:radial-gradient(circle,rgb(var(--assistant-rgb)/.12),transparent 66%); content:""; animation:business-cockpit-float 8s ease-in-out infinite; }
 .business-cockpit-aura { position:absolute; z-index:-1; left:-55px; bottom:12%; width:170px; height:170px; border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--assistant-bright) 16%,transparent),transparent 68%); filter:blur(10px); animation:business-cockpit-float 10s ease-in-out -3s infinite reverse; }
@@ -21686,6 +21691,6 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 @keyframes business-bar-rise { from { transform:scaleY(0); opacity:.2; } }
 @keyframes business-progress-grow { from { transform:scaleX(0); } }
 @media(max-width:1180px) { .business-assistant-page .admin-assistant-layout { grid-template-columns:minmax(0,1fr) 320px; }.business-live-cockpit { padding:16px; } }
-@media(max-width:1000px) { .business-assistant-page .admin-assistant-layout { grid-template-columns:1fr; }.business-live-cockpit { min-height:auto; }.business-score-card { display:grid; grid-template-columns:minmax(230px,.8fr) 1.2fr; gap:18px; }.business-signal-chart { margin-top:0; border-top:0; border-left:1px solid rgb(var(--assistant-rgb)/.12); padding-top:0; padding-left:18px; }.business-cockpit-actions { margin-top:0; } }
-@media(max-width:700px) { .business-live-cockpit { display:none; } }
+@media(max-width:1000px) { .business-assistant-page .admin-assistant-layout { grid-template-columns:1fr; }.business-assistant-page .admin-assistant-chat { height:min(760px,72vh); min-height:620px; }.business-live-cockpit { min-height:auto; }.business-score-card { display:grid; grid-template-columns:minmax(230px,.8fr) 1.2fr; gap:18px; }.business-signal-chart { margin-top:0; border-top:0; border-left:1px solid rgb(var(--assistant-rgb)/.12); padding-top:0; padding-left:18px; }.business-cockpit-actions { margin-top:0; } }
+@media(max-width:700px) { .business-assistant-page .admin-assistant-chat { height:100%; min-height:0; max-height:none; }.business-assistant-page .admin-assistant-messages { min-height:0!important; }.business-assistant-page .admin-assistant-chat>form { position:relative; bottom:auto; }.business-live-cockpit { display:none; } }
 @media(prefers-reduced-motion:reduce) { .business-live-cockpit:before,.business-cockpit-aura,.business-live-header>div>span i,.business-score-card .assistant-health>span,.business-score-card .assistant-health>span:before,.business-signal-chart i>span,.business-progress-panel>div>div>i>span { animation:none!important; } }

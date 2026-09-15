@@ -85,7 +85,7 @@ export function AdminAssistant() {
   const [businessRows, setBusinessRows] = useState<ManagedBusiness[]>([]);
   const [supportRows, setSupportRows] = useState<SupportRow[]>([]);
   const [runningAction, setRunningAction] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const lastBusinessId = useRef("");
   const lastSupportId = useRef("");
 
@@ -154,7 +154,14 @@ export function AdminAssistant() {
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
+  useEffect(() => {
+    const viewport = messagesRef.current;
+    if (!viewport) return;
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: messages.length > 1 ? "smooth" : "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, thinking]);
 
   const healthScore = useMemo(() => {
     if (!stats) return 0;
@@ -361,13 +368,12 @@ export function AdminAssistant() {
     <section className="admin-assistant-layout">
       <div className="admin-assistant-chat">
         <header><div><Bot size={20}/><span><b>SR Platform Asistanı</b><small>Gerçek zamanlı yönetim yardımcısı</small></span></div><nav><i><span/> ÇEVRİMİÇİ</i><button type="button" onClick={() => void clearConversation()} aria-label="Sohbeti temizle" title="Sohbeti temizle"><Trash2 size={14}/></button></nav></header>
-        <div className="admin-assistant-messages" aria-live="polite">
+        <div ref={messagesRef} className="admin-assistant-messages" aria-live="polite">
           {messages.map((message) => <article key={message.id} className={message.role}>
             {message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}
             <div><p>{message.body}</p>{message.actions && <nav>{message.actions.map((action) => action.href ? <Link key={action.label} href={action.href}>{action.label}<ArrowRight size={13}/></Link> : action.businessOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.businessOperation && void runBusinessOperation(action.businessOperation)} disabled={Boolean(runningAction)}>{runningAction === action.businessOperation.businessId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : action.supportOperation ? <button className="assistant-confirm-action" key={action.label} type="button" onClick={() => action.supportOperation && void runSupportOperation(action.supportOperation)} disabled={Boolean(runningAction)}>{runningAction === action.supportOperation.ticketId ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle2 size={13}/>} {action.label}</button> : <button key={action.label} type="button" onClick={exportReport}><Download size={13}/>{action.label}</button>)}</nav>}<footer><time>{message.createdAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</time>{message.role === "assistant" && <button type="button" onClick={() => void copyMessage(message)} aria-label="Yanıtı kopyala">{copiedId === message.id ? <CheckCircle2 size={12}/> : <Copy size={12}/>}</button>}</footer></div>
           </article>)}
           {thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}
-          <div ref={endRef}/>
         </div>
         <div className="admin-assistant-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => void submit(prompt)} disabled={loading || thinking}>{prompt}</button>)}</div>
         <form onSubmit={(event: FormEvent) => { event.preventDefault(); void submit(); }}><label><Sparkles size={17}/><textarea rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder="Platform hakkında bir şey sorun veya komut verin…" disabled={loading}/></label><button type="submit" disabled={loading || thinking || !input.trim()} aria-label="Gönder">{thinking ? <LoaderCircle size={19} className="animate-spin"/> : <Send size={19}/>}</button></form>
