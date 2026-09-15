@@ -11,6 +11,7 @@ import {
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { PLAN_PRICE } from "@/constants/plans";
+import { askSmartAssistant, clearSmartAssistantHistory, getSmartAssistantHistory } from "@/features/assistant/assistant-repository";
 
 type AssistantStats = {
   businesses: number;
@@ -142,6 +143,17 @@ export function AdminAssistant() {
   }, []);
 
   useEffect(() => { queueMicrotask(() => { void loadData(); }); }, [loadData]);
+  useEffect(() => {
+    let cancelled = false;
+    void getSmartAssistantHistory("platform").then((history) => {
+      if (cancelled || history.length === 0) return;
+      setMessages(history.map((item) => {
+        const parsed = new Date(item.createdAt);
+        return { id: item.id, role: item.role, body: item.body, createdAt: Number.isNaN(parsed.getTime()) ? new Date() : parsed };
+      }));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, thinking]);
 
   const healthScore = useMemo(() => {
@@ -227,17 +239,55 @@ export function AdminAssistant() {
     return { body: "Bunu canlı platform verisiyle güvenli bir komuta çevirebilirim. İşletmeler, destek, randevu kalitesi, kullanıcılar, abonelik, moderasyon, sistem sağlığı veya yönetim raporu hakkında sorabilirsiniz.", actions: [{ label: "Platform özeti", href: "/super-admin" }] };
   }
 
-  function submit(raw = input) {
+  async function submit(raw = input) {
     const clean = raw.trim();
     if (!clean || thinking) return;
+    const history = messages.slice(-6).map((item) => ({ role: item.role, body: item.body }));
+    const deterministic = createAnswer(clean);
     setInput("");
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", body: clean, createdAt: new Date() }]);
     setThinking(true);
-    window.setTimeout(() => {
-      const answer = createAnswer(clean);
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", createdAt: new Date(), ...answer }]);
+    try {
+      const response = await askSmartAssistant({
+        scope: "platform",
+        message: clean,
+        history,
+        context: {
+          healthScore,
+          metrics: stats ? {
+            businesses: stats.businesses,
+            activeBusinesses: stats.activeBusinesses,
+            pendingBusinesses: stats.pendingBusinesses,
+            suspendedBusinesses: stats.suspendedBusinesses,
+            users: stats.users,
+            appointments: stats.appointments,
+            appointmentsLast30Days: stats.appointments30d,
+            completedAppointments: stats.completed,
+            cancelledAppointments: stats.cancelled,
+            noShowAppointments: stats.noShow,
+            activeSubscriptions: stats.activeSubscriptions,
+            trialSubscriptions: stats.trialSubscriptions,
+            pastDueSubscriptions: stats.pastDueSubscriptions,
+            openSupportTickets: stats.openSupport,
+            criticalSupportTickets: stats.criticalSupport,
+            pendingReviews: stats.pendingReviews,
+            pendingCategories: stats.pendingCategories,
+            healthyDataSources: stats.healthySources,
+            totalDataSources: stats.totalSources,
+          } : null,
+        },
+      });
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: response.body, actions: deterministic.actions, createdAt: new Date() }]);
+    } catch {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", createdAt: new Date(), ...deterministic }]);
+    } finally {
       setThinking(false);
-    }, 420);
+    }
+  }
+
+  async function clearConversation() {
+    setMessages([initialMessage()]);
+    await clearSmartAssistantHistory("platform").catch(() => undefined);
   }
 
   function exportReport() {
@@ -310,7 +360,7 @@ export function AdminAssistant() {
 
     <section className="admin-assistant-layout">
       <div className="admin-assistant-chat">
-        <header><div><Bot size={20}/><span><b>SR Platform Asistanı</b><small>Gerçek zamanlı yönetim yardımcısı</small></span></div><nav><i><span/> ÇEVRİMİÇİ</i><button type="button" onClick={() => setMessages([initialMessage()])} aria-label="Sohbeti temizle" title="Sohbeti temizle"><Trash2 size={14}/></button></nav></header>
+        <header><div><Bot size={20}/><span><b>SR Platform Asistanı</b><small>Gerçek zamanlı yönetim yardımcısı</small></span></div><nav><i><span/> ÇEVRİMİÇİ</i><button type="button" onClick={() => void clearConversation()} aria-label="Sohbeti temizle" title="Sohbeti temizle"><Trash2 size={14}/></button></nav></header>
         <div className="admin-assistant-messages" aria-live="polite">
           {messages.map((message) => <article key={message.id} className={message.role}>
             {message.role === "assistant" && <span className="message-avatar"><Bot size={16}/></span>}
@@ -319,8 +369,8 @@ export function AdminAssistant() {
           {thinking && <article className="assistant"><span className="message-avatar"><Bot size={16}/></span><div className="assistant-thinking"><i/><i/><i/></div></article>}
           <div ref={endRef}/>
         </div>
-        <div className="admin-assistant-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => submit(prompt)} disabled={loading || thinking}>{prompt}</button>)}</div>
-        <form onSubmit={(event: FormEvent) => { event.preventDefault(); submit(); }}><label><Sparkles size={17}/><textarea rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder="Platform hakkında bir şey sorun veya komut verin…" disabled={loading}/></label><button type="submit" disabled={loading || thinking || !input.trim()} aria-label="Gönder">{thinking ? <LoaderCircle size={19} className="animate-spin"/> : <Send size={19}/>}</button></form>
+        <div className="admin-assistant-prompts">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => void submit(prompt)} disabled={loading || thinking}>{prompt}</button>)}</div>
+        <form onSubmit={(event: FormEvent) => { event.preventDefault(); void submit(); }}><label><Sparkles size={17}/><textarea rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder="Platform hakkında bir şey sorun veya komut verin…" disabled={loading}/></label><button type="submit" disabled={loading || thinking || !input.trim()} aria-label="Gönder">{thinking ? <LoaderCircle size={19} className="animate-spin"/> : <Send size={19}/>}</button></form>
         <footer><ShieldAlert size={13}/> Kritik yönetim işlemleri asistan tarafından doğrudan uygulanmaz; güvenli yönetim ekranında onayınız istenir.</footer>
       </div>
 
