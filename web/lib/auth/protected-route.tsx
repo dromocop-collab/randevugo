@@ -3,7 +3,7 @@
 import { ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LoadingState } from "@/components/ui/states";
+import { BrandPageLoader } from "@/components/ui/brand-page-loader";
 
 export function ProtectedRoute({
   children,
@@ -24,11 +24,11 @@ export function ProtectedRoute({
   }, [loginPath, pathname, router, status]);
 
   if (status === "loading") {
-    return <LoadingState title="Oturum kontrol ediliyor" description="Paneliniz yukleniyor." />;
+    return <BrandPageLoader title="Oturumunuz güvenle doğrulanıyor" label="Kişisel çalışma alanınız ve tercihleriniz hazırlanıyor." eyebrow="GÜVENLİ PANEL BAĞLANTISI" securityMode />;
   }
 
   if (status === "unauthenticated") {
-    return <LoadingState title="Girişe yönlendiriliyor" description="Güvenli giriş ekranı hazırlanıyor." />;
+    return <BrandPageLoader title="Girişe yönlendiriliyorsunuz" label="Güvenli giriş ekranı hazırlanıyor." eyebrow="GÜVENLİ YÖNLENDİRME" securityMode />;
   }
 
   return <>{children}</>;

@@ -7,7 +7,8 @@ import { getDb } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { AdminMobileNav, AdminSidebar } from "@/components/super-admin/admin-sidebar";
-import { LoadingState, EmptyState } from "@/components/ui/states";
+import { EmptyState } from "@/components/ui/states";
+import { BrandPageLoader } from "@/components/ui/brand-page-loader";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/auth-service";
 
@@ -42,9 +43,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   if (status === "loading" || status === "unauthenticated" || allowed === null) {
     return (
-      <LoadingState
-        title={status === "unauthenticated" ? "Girişe yönlendiriliyor" : "Yetki kontrol ediliyor"}
-        description={status === "unauthenticated" ? "Güvenli giriş ekranı hazırlanıyor..." : "Platform admin erişimi doğrulanıyor..."}
+      <BrandPageLoader
+        title={status === "unauthenticated" ? "Girişe yönlendiriliyorsunuz" : "Yetkiniz güvenle doğrulanıyor"}
+        label={status === "unauthenticated" ? "Güvenli giriş ekranı hazırlanıyor." : "Platform yönetim alanınız ve erişim izinleriniz hazırlanıyor."}
+        eyebrow="PLATFORM GÜVENLİK KATMANI"
+        securityMode
       />
     );
   }
