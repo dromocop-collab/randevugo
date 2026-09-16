@@ -21,6 +21,21 @@ export type MutlucellSettings = {
   lastTest: MutlucellLastTest | null;
 };
 
+export type SmsOperation = {
+  id: string;
+  type: "confirmation" | "reminder" | "cancellation" | "reschedule";
+  phoneMasked: string;
+  status: "accepted" | "pending" | "delivered" | "failed";
+  statusLabel: string;
+  credits: number;
+  sentAt: string | null;
+};
+
+export type SmsOperationsResult = {
+  rows: SmsOperation[];
+  summary: { total: number; delivered: number; pending: number; failed: number; credits: number };
+};
+
 function callable<TInput, TOutput>(name: string) {
   return httpsCallable<TInput, TOutput>(
     getFunctions(getFirebaseApp(), "europe-west1"),
@@ -48,4 +63,9 @@ export async function testMutlucellSettings(phone: string): Promise<{ providerMe
     "testMutlucellSettings"
   )({ phone });
   return { providerMessageId: result.data.providerMessageId };
+}
+
+export async function getSmsOperations(): Promise<SmsOperationsResult> {
+  const result = await callable<Record<string, never>, SmsOperationsResult>("getSmsOperations")({});
+  return result.data;
 }

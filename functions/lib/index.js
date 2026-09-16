@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -21,6 +21,7 @@ const MUTLUCELL_USERNAME = (0, params_1.defineSecret)("MUTLUCELL_USERNAME");
 const MUTLUCELL_API_KEY = (0, params_1.defineSecret)("MUTLUCELL_API_KEY");
 const GEMINI_API_KEY = (0, params_1.defineSecret)("GEMINI_API_KEY");
 const MUTLUCELL_SEND_URL = "https://smsgw.mutlucell.com/smsgw-ws/sndblkex";
+const MUTLUCELL_REPORT_URL = "https://smsgw.mutlucell.com/smsgw-ws/gtblkrprtex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
 const BOOKING_FIELD_SETTINGS_PATH = "platformPrivateSettings/bookingFields";
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
@@ -36,6 +37,25 @@ const publicCallableOptions = {
     ],
 };
 const protectedCallableOptions = { region: "europe-west1", enforceAppCheck };
+async function consumeSecurityLimit(key, limit, windowMs) {
+    const id = (0, crypto_1.createHash)("sha256").update(key).digest("hex");
+    const ref = db.doc(`securityRateLimits/${id}`);
+    await db.runTransaction(async (tx) => {
+        const snapshot = await tx.get(ref);
+        const data = snapshot.data() ?? {};
+        const windowStartedAt = data.windowStartedAt;
+        const expired = !windowStartedAt || Date.now() - windowStartedAt.toMillis() >= windowMs;
+        const count = expired ? 0 : Number(data.count ?? 0);
+        if (count >= limit)
+            throw new https_1.HttpsError("resource-exhausted", "Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin.");
+        tx.set(ref, {
+            count: count + 1,
+            windowStartedAt: expired ? firestore_1.Timestamp.now() : windowStartedAt,
+            expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + windowMs * 2),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    });
+}
 function requireString(value, name) {
     if (typeof value !== "string" || value.trim().length === 0) {
         throw new https_1.HttpsError("invalid-argument", `${name} alanı zorunludur.`);
@@ -1697,7 +1717,11 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
     await processAppointmentSmsJob(appointmentSmsJobRef(businessId, appointmentId, "confirmation"));
     await runBusinessAutomations(businessId, "appointment_created", event.id, { ...appointment, appointmentId });
 });
-exports.appointmentAutomationUpdated = (0, firestore_2.onDocumentUpdated)({ region: "europe-west1", document: "businesses/{businessId}/appointments/{appointmentId}" }, async (event) => {
+exports.appointmentAutomationUpdated = (0, firestore_2.onDocumentUpdated)({
+    region: "europe-west1",
+    document: "businesses/{businessId}/appointments/{appointmentId}",
+    secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY],
+}, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after)
@@ -1706,6 +1730,12 @@ exports.appointmentAutomationUpdated = (0, firestore_2.onDocumentUpdated)({ regi
     const afterStart = after.startAt instanceof firestore_1.Timestamp ? after.startAt.toMillis() : 0;
     if (beforeStart !== afterStart || before.customerPhone !== after.customerPhone || before.status !== after.status) {
         await syncAppointmentReminderJob(event.params.businessId, event.params.appointmentId, after);
+    }
+    if (before.status !== "cancelled" && after.status === "cancelled") {
+        await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "cancellation");
+    }
+    else if (beforeStart !== afterStart && ["pending", "confirmed"].includes(String(after.status))) {
+        await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "reschedule");
     }
     if (before.status === after.status)
         return;
@@ -1918,7 +1948,7 @@ async function getMutlucellConfiguration() {
         apiKey: storedApiKey || secretApiKey,
         senderTitle: String(data.senderTitle ?? "").trim(),
         enabled: data.enabled !== false,
-        fallbackEnabled: data.fallbackEnabled !== false,
+        fallbackEnabled: false,
         source: hasStoredConfiguration ? "admin" : hasSecretCredentials ? "secret" : "none",
     };
 }
@@ -1974,6 +2004,38 @@ async function sendMutlucellSms(phone, message, configuration) {
     }
     return result;
 }
+function mutlucellPacketId(providerMessageId) {
+    return providerMessageId.replace(/^\$/, "").split("#")[0]?.trim() ?? "";
+}
+function mutlucellCredits(providerMessageId) {
+    return Number(providerMessageId.split("#")[1] ?? 0) || 0;
+}
+async function getMutlucellDeliveryStatus(providerMessageId, configuration) {
+    const config = configuration ?? await getMutlucellConfiguration();
+    const packetId = mutlucellPacketId(providerMessageId);
+    if (!packetId)
+        throw new Error("Mutlucell paket numarası geçersiz.");
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><smsrapor ka="${xmlEscape(config.username)}" pwd="${xmlEscape(config.apiKey)}" id="${xmlEscape(packetId)}" />`;
+    const response = await fetch(MUTLUCELL_REPORT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/xml; charset=UTF-8" },
+        body: xml,
+        signal: AbortSignal.timeout(15_000),
+    });
+    const result = (await response.text()).trim();
+    if (!response.ok || ["20", "23", "30"].includes(result))
+        throw new Error(mutlucellErrorMessage(result));
+    const statuses = result.split(/\r?\n/).map((line) => line.trim().split(/\s+/)).filter((parts) => parts.length >= 2);
+    const code = statuses[0]?.[statuses[0].length - 1] ?? "11";
+    const labels = {
+        "0": "Gönderilmedi", "1": "İşleniyor", "2": "Operatöre gönderildi", "3": "Teslim edildi",
+        "4": "Beklemede", "5": "Zaman aşımı", "6": "Başarısız", "7": "Reddedildi", "11": "Bilinmiyor",
+        "12": "Hat yok", "13": "Hatalı numara", "15": "Kullanılmayan numara", "16": "SMS alımına kapalı",
+        "17": "Mesaj hafızası dolu", "18": "Roaming", "19": "Teleservis kapalı", "20": "Taşınacak numara",
+        "21": "Kara liste", "22": "İYS ret",
+    };
+    return { code, label: labels[code] ?? `Durum ${code}`, terminal: !["1", "2", "4"].includes(code), delivered: code === "3" };
+}
 function appointmentSmsJobRef(businessId, appointmentId, type) {
     const id = (0, crypto_1.createHash)("sha256").update(`${businessId}:${appointmentId}:${type}`).digest("hex").slice(0, 40);
     return db.doc(`appointmentSmsJobs/${id}`);
@@ -2016,6 +2078,25 @@ async function enqueueAppointmentSmsJobs(businessId, appointmentId, appointment)
         scheduledAt: firestore_1.Timestamp.fromMillis(startAt.toMillis() - 60 * 60_000),
     }, { merge: true });
     await batch.commit();
+}
+async function enqueueImmediateAppointmentSms(businessId, appointmentId, appointment, type) {
+    const phone = typeof appointment.customerPhone === "string" ? appointment.customerPhone : "";
+    if (!phone)
+        return;
+    const ref = appointmentSmsJobRef(businessId, appointmentId, type);
+    await ref.set({
+        businessId,
+        appointmentId,
+        appointmentPath: `businesses/${businessId}/appointments/${appointmentId}`,
+        phone,
+        type,
+        status: "pending",
+        attempts: 0,
+        scheduledAt: firestore_1.Timestamp.now(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await processAppointmentSmsJob(ref);
 }
 async function syncAppointmentReminderJob(businessId, appointmentId, appointment) {
     const ref = appointmentSmsJobRef(businessId, appointmentId, "reminder");
@@ -2071,7 +2152,11 @@ async function processAppointmentSmsJob(ref) {
             return;
         }
         const appointment = appointmentSnapshot.data();
-        if (!["pending", "confirmed"].includes(String(appointment.status))) {
+        const appointmentStatus = String(appointment.status);
+        const allowedStatus = type === "cancellation"
+            ? appointmentStatus === "cancelled"
+            : ["pending", "confirmed"].includes(appointmentStatus);
+        if (!allowedStatus) {
             await ref.delete();
             return;
         }
@@ -2088,6 +2173,11 @@ async function processAppointmentSmsJob(ref) {
             }
         }
         const business = businessSnapshot.data() ?? {};
+        const smsPreferences = (business.smsPreferences ?? {});
+        if (smsPreferences[type] === false) {
+            await ref.delete();
+            return;
+        }
         const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
         const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
         const staffName = String(appointment.staffName ?? "").trim().slice(0, 70);
@@ -2099,14 +2189,36 @@ async function processAppointmentSmsJob(ref) {
             : "";
         const message = type === "confirmation"
             ? `Randevunuz başarıyla oluşturuldu. ${businessName} | ${serviceName} | ${dateText}${staffText}.${detailsUrl}`
-            : `Hatırlatma: ${businessName} randevunuza 1 saat kaldı. ${serviceName} | ${dateText}${staffText}.${detailsUrl}`;
+            : type === "reminder"
+                ? `Hatırlatma: ${businessName} randevunuza 1 saat kaldı. ${serviceName} | ${dateText}${staffText}.${detailsUrl}`
+                : type === "cancellation"
+                    ? `Randevunuz iptal edildi. ${businessName} | ${serviceName} | ${dateText}${staffText}.`
+                    : `Randevunuz yeniden planlandı. ${businessName} | ${serviceName} | Yeni tarih: ${dateText}${staffText}.${detailsUrl}`;
         const providerMessageId = await sendMutlucellSms(String(appointment.customerPhone ?? data.phone), message.slice(0, 480));
         const batch = db.batch();
+        const packetId = mutlucellPacketId(providerMessageId);
+        const logId = (0, crypto_1.createHash)("sha256").update(`${providerMessageId}:${businessId}:${appointmentId}:${type}`).digest("hex").slice(0, 40);
+        const logRef = db.doc(`smsOperationsLogs/${logId}`);
+        const deliveryRef = db.doc(`smsDeliveryChecks/${logId}`);
         batch.delete(ref);
         batch.update(appointmentRef, {
             [`sms.${type}.status`]: "sent",
             [`sms.${type}.providerMessageId`]: providerMessageId,
             [`sms.${type}.sentAt`]: firestore_1.FieldValue.serverTimestamp(),
+        });
+        batch.set(logRef, {
+            businessId, appointmentId, type, packetId, providerMessageId,
+            phoneMasked: `******${String(appointment.customerPhone ?? data.phone).slice(-4)}`,
+            status: "accepted", statusLabel: "Mutlucell tarafından kabul edildi",
+            credits: mutlucellCredits(providerMessageId),
+            sentAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 90 * 86_400_000),
+        });
+        batch.set(deliveryRef, {
+            logId, businessId, appointmentId, type, providerMessageId,
+            attempts: 0,
+            nextCheckAt: firestore_1.Timestamp.fromMillis(Date.now() + 2 * 60_000),
+            createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         await batch.commit();
     }
@@ -2115,11 +2227,24 @@ async function processAppointmentSmsJob(ref) {
         const message = error instanceof Error ? error.message.slice(0, 300) : "SMS gönderilemedi.";
         if (attempts >= 5) {
             const batch = db.batch();
+            const failureId = (0, crypto_1.createHash)("sha256").update(`failed:${businessId}:${appointmentId}:${type}`).digest("hex").slice(0, 40);
             batch.delete(ref);
             batch.update(appointmentRef, {
                 [`sms.${type}.status`]: "failed",
                 [`sms.${type}.error`]: message,
                 [`sms.${type}.failedAt`]: firestore_1.FieldValue.serverTimestamp(),
+            });
+            batch.set(db.doc(`smsOperationsLogs/${failureId}`), {
+                businessId, appointmentId, type,
+                phoneMasked: `******${String(data.phone ?? "").slice(-4)}`,
+                status: "failed", statusLabel: message, credits: 0,
+                sentAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 90 * 86_400_000),
+            });
+            batch.set(db.collection("platformAlerts").doc(), {
+                severity: "critical", category: "sms", title: "SMS gönderimi kalıcı olarak başarısız",
+                message, businessId, appointmentId, type, isRead: false,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
             });
             await batch.commit();
             console.error(`Appointment ${type} SMS permanently failed`, { businessId, appointmentId, message });
@@ -2152,6 +2277,97 @@ exports.sendAppointmentSmsJobs = (0, scheduler_1.onSchedule)({
         await processAppointmentSmsJob(document.ref);
     }
 });
+exports.checkMutlucellDeliveryReports = (0, scheduler_1.onSchedule)({
+    region: "europe-west1",
+    schedule: "every 15 minutes",
+    timeZone: "Europe/Istanbul",
+    secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY],
+    maxInstances: 1,
+}, async () => {
+    const snapshot = await db.collection("smsDeliveryChecks")
+        .where("nextCheckAt", "<=", firestore_1.Timestamp.now())
+        .orderBy("nextCheckAt", "asc")
+        .limit(100)
+        .get();
+    const config = await getMutlucellConfiguration();
+    for (const document of snapshot.docs) {
+        const data = document.data();
+        const attempts = Number(data.attempts ?? 0) + 1;
+        try {
+            const report = await getMutlucellDeliveryStatus(String(data.providerMessageId ?? ""), config);
+            const logRef = db.doc(`smsOperationsLogs/${String(data.logId)}`);
+            const appointmentRef = db.doc(`businesses/${String(data.businessId)}/appointments/${String(data.appointmentId)}`);
+            const status = report.delivered ? "delivered" : report.terminal ? "failed" : "pending";
+            const batch = db.batch();
+            batch.set(logRef, {
+                status, statusCode: report.code, statusLabel: report.label,
+                deliveredAt: report.delivered ? firestore_1.FieldValue.serverTimestamp() : null,
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            batch.update(appointmentRef, {
+                [`sms.${String(data.type)}.deliveryStatus`]: status,
+                [`sms.${String(data.type)}.deliveryStatusLabel`]: report.label,
+                [`sms.${String(data.type)}.deliveryCheckedAt`]: firestore_1.FieldValue.serverTimestamp(),
+            });
+            if (report.terminal || attempts >= 96)
+                batch.delete(document.ref);
+            else
+                batch.update(document.ref, {
+                    attempts,
+                    nextCheckAt: firestore_1.Timestamp.fromMillis(Date.now() + 15 * 60_000),
+                    updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                });
+            await batch.commit();
+        }
+        catch (error) {
+            console.warn("Mutlucell delivery report check failed", { logId: data.logId, attempts, error: error instanceof Error ? error.message : "unknown" });
+            if (attempts >= 96)
+                await document.ref.delete();
+            else
+                await document.ref.update({ attempts, nextCheckAt: firestore_1.Timestamp.fromMillis(Date.now() + 15 * 60_000), updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        }
+    }
+});
+exports.cleanupExpiredOperationalData = (0, scheduler_1.onSchedule)({ region: "europe-west1", schedule: "every day 04:15", timeZone: "Europe/Istanbul", maxInstances: 1 }, async () => {
+    for (const collectionName of ["smsOperationsLogs", "securityRateLimits"]) {
+        const snapshot = await db.collection(collectionName).where("expiresAt", "<=", firestore_1.Timestamp.now()).limit(400).get();
+        if (snapshot.empty)
+            continue;
+        const batch = db.batch();
+        snapshot.docs.forEach((document) => batch.delete(document.ref));
+        await batch.commit();
+    }
+});
+exports.getSmsOperations = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const snapshot = await db.collection("smsOperationsLogs").orderBy("sentAt", "desc").limit(60).get();
+    const rows = snapshot.docs.map((document) => {
+        const data = document.data();
+        const sentAt = data.sentAt;
+        return {
+            id: document.id,
+            type: String(data.type ?? ""),
+            phoneMasked: String(data.phoneMasked ?? ""),
+            status: String(data.status ?? "accepted"),
+            statusLabel: String(data.statusLabel ?? ""),
+            credits: Number(data.credits ?? 0),
+            sentAt: sentAt?.toDate().toISOString() ?? null,
+        };
+    });
+    return {
+        rows,
+        summary: {
+            total: rows.length,
+            delivered: rows.filter((row) => row.status === "delivered").length,
+            pending: rows.filter((row) => ["accepted", "pending"].includes(row.status)).length,
+            failed: rows.filter((row) => row.status === "failed").length,
+            credits: rows.reduce((total, row) => total + row.credits, 0),
+        },
+    };
+});
 exports.getMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] }, async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
@@ -2183,7 +2399,7 @@ exports.updateMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", 
     const senderTitle = String(request.data?.senderTitle ?? "").trim().slice(0, 30);
     const apiKey = String(request.data?.apiKey ?? "").trim();
     const enabled = request.data?.enabled !== false;
-    const fallbackEnabled = request.data?.fallbackEnabled !== false;
+    const fallbackEnabled = false;
     const ref = db.doc(MUTLUCELL_SETTINGS_PATH);
     const existing = await ref.get();
     const currentApiKey = String(existing.data()?.apiKey ?? "").trim();
@@ -2265,6 +2481,14 @@ exports.sendVerificationCode = (0, https_1.onCall)({
     if (!/^\+90\d{10}$/.test(phone)) {
         throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
+    const forwardedFor = String(request.rawRequest.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    const requestIp = forwardedFor || request.rawRequest.ip || "unknown";
+    await Promise.all([
+        consumeSecurityLimit(`otp:phone:hour:${phone}`, 5, 60 * 60_000),
+        consumeSecurityLimit(`otp:phone:day:${phone}`, 10, 24 * 60 * 60_000),
+        consumeSecurityLimit(`otp:ip:hour:${requestIp}`, 20, 60 * 60_000),
+        consumeSecurityLimit(`otp:ip:day:${requestIp}`, 60, 24 * 60 * 60_000),
+    ]);
     const codeDocRef = db.doc(`verificationCodes/${phone}`);
     const existing = await codeDocRef.get();
     // 60 saniyelik tekrar gönderme limiti
@@ -2301,8 +2525,8 @@ exports.sendVerificationCode = (0, https_1.onCall)({
                     : "SMS gönderimi başarısız.";
         }
     }
-    // SMS sağlayıcısı ulaşılamazsa yapılandırılmış kurtarma akışı devreye girer.
-    if (!smsDelivered && !isEmulator && mutlucellConfiguration?.fallbackEnabled === false) {
+    // Üretimde doğrulama kodu hiçbir koşulda istemciye dönmez.
+    if (!smsDelivered && !isEmulator) {
         throw new https_1.HttpsError("unavailable", "SMS şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin.");
     }
     await codeDocRef.set({
@@ -2333,13 +2557,7 @@ exports.sendVerificationCode = (0, https_1.onCall)({
             message: "Doğrulama kodu telefonunuza gönderildi.",
         };
     }
-    console.warn(`[OTP recovery] SMS delivery failed for ${phone}; recovery flow enabled.`);
-    return {
-        success: true,
-        smsDelivered: false,
-        fallbackCode: code,
-        message: "SMS iletilemedi. Geçici doğrulama kodu hazırlandı.",
-    };
+    throw new https_1.HttpsError("unavailable", "SMS şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin.");
 });
 exports.verifyPhoneCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const data = request.data ?? {};

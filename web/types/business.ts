@@ -33,6 +33,13 @@ export interface SocialMediaLinks {
   whatsapp?: string;
 }
 
+export interface SmsPreferences {
+  confirmation?: boolean;
+  reminder?: boolean;
+  cancellation?: boolean;
+  reschedule?: boolean;
+}
+
 export interface DaySchedule {
   day: number;
   isOpen: boolean;
@@ -85,6 +92,7 @@ export interface Business extends EntityBase {
   allowCancellation?: boolean;
   allowReschedule?: boolean;
   cancellationDeadlineMinutes?: number;
+  smsPreferences?: SmsPreferences;
   rating: number;
   reviewCount: number;
   plan: AnyPlanType;

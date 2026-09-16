@@ -127,6 +127,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /platformAlerts/{alertId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
     // Anonymous, privacy-safe traffic events. The client may only create a
     // tightly constrained page-view row; only platform admins can read it.
     match /platformAnalyticsEvents/{eventId} {

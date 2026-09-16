@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/states";
 import {
   getMutlucellSettings,
+  getSmsOperations,
   testMutlucellSettings,
   updateMutlucellSettings,
   type MutlucellSettings,
+  type SmsOperationsResult,
 } from "@/features/mutlucell/mutlucell-repository";
 
 function errorMessage(error: unknown) {
@@ -47,15 +49,16 @@ export default function SmsCenterPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [operations, setOperations] = useState<SmsOperationsResult>({ rows: [], summary: { total: 0, delivered: 0, pending: 0, failed: 0, credits: 0 } });
 
   async function refresh() {
-    const current = await getMutlucellSettings();
-    setSettings(current);
+    const [current, currentOperations] = await Promise.all([getMutlucellSettings(), getSmsOperations()]);
+    setSettings(current); setOperations(currentOperations);
   }
 
   useEffect(() => {
-    getMutlucellSettings()
-      .then(setSettings)
+    Promise.all([getMutlucellSettings(), getSmsOperations()])
+      .then(([current, currentOperations]) => { setSettings(current); setOperations(currentOperations); })
       .catch((error) => toast.error(errorMessage(error)))
       .finally(() => setLoading(false));
   }, []);
@@ -64,7 +67,7 @@ export default function SmsCenterPage() {
     if (!settings) return { tone: "warn", title: "Kontrol ediliyor", detail: "Mutlucell bilgileri okunuyor." };
     if (!settings.username || !settings.hasApiKey) return { tone: "danger", title: "Kimlik bilgileri eksik", detail: "Kullanıcı adı ve API anahtarını tamamlayın." };
     if (!settings.senderTitle) return { tone: "warn", title: "Gönderici başlığı bekleniyor", detail: "Mutlucell tarafından onaylanan başlığı girin." };
-    if (!settings.enabled) return { tone: "warn", title: "SMS gönderimi duraklatıldı", detail: "Kod fallback sistemi çalışmaya devam eder." };
+    if (!settings.enabled) return { tone: "warn", title: "SMS gönderimi duraklatıldı", detail: "Doğrulama güvenliği nedeniyle kod ekranda gösterilmez." };
     if (!settings.lastTest || settings.lastTest.senderTitle !== settings.senderTitle) return { tone: "warn", title: "Başlık onayı test bekliyor", detail: "Mutlucell başlığı onayladıktan sonra gerçek test SMS'i göndererek bağlantıyı doğrulayın." };
     if (!settings.lastTest.success) return { tone: "danger", title: "Canlı SMS testi başarısız", detail: settings.lastTest.error || "Başlık veya bağlantı Mutlucell tarafından henüz kabul edilmedi." };
     return { tone: "success", title: "Canlı SMS doğrulandı", detail: `${settings.senderTitle} başlığı gerçek gönderimde Mutlucell tarafından kabul edildi.` };
@@ -75,7 +78,7 @@ export default function SmsCenterPage() {
     { label: "API kimlik doğrulama", ok: Boolean(settings?.hasApiKey), detail: settings?.hasApiKey ? settings.apiKeyMasked : "API anahtarı eksik" },
     { label: "Gönderici başlığı", ok: Boolean(settings?.senderTitle && settings.lastTest?.success && settings.lastTest.senderTitle === settings.senderTitle), detail: !settings?.senderTitle ? "Mutlucell onaylı başlık bekleniyor" : settings.lastTest?.success && settings.lastTest.senderTitle === settings.senderTitle ? `${settings.senderTitle} · gerçek gönderim onaylandı` : `${settings.senderTitle} · canlı test bekleniyor` },
     { label: "Canlı gönderim", ok: Boolean(settings?.enabled), detail: settings?.enabled ? "Gönderim açık" : "Süper admin tarafından duraklatıldı" },
-    { label: "Arıza güvenliği", ok: Boolean(settings?.fallbackEnabled), detail: settings?.fallbackEnabled ? "SMS hatasında kod ekranda gösterilir" : "Fallback kapalı" },
+    { label: "OTP güvenliği", ok: settings?.fallbackEnabled === false, detail: settings?.fallbackEnabled ? "Güvensiz fallback açık" : "Kod yalnızca SMS ile teslim edilir" },
     { label: "Son uçtan uca test", ok: settings?.lastTest?.success === true, detail: !settings?.lastTest ? "Henüz gerçek test yapılmadı" : settings.lastTest.success ? `Başarılı · ${settings.lastTest.providerMessageId ?? "paket alındı"}` : settings.lastTest.error || "Mutlucell testi başarısız" },
   ], [settings]);
 
@@ -171,7 +174,7 @@ export default function SmsCenterPage() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"><div><p className="text-sm font-medium text-[var(--text-1)]">SMS gönderimi</p><p className="text-xs text-[var(--text-3)]">Canlı Mutlucell gönderimini açar.</p></div><Switch label="SMS gönderimi" checked={settings.enabled} onChange={(enabled) => setSettings({ ...settings, enabled })} /></div>
-            <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"><div><p className="text-sm font-medium text-[var(--text-1)]">Kod fallback</p><p className="text-xs text-[var(--text-3)]">SMS hatasında kodu ekranda gösterir.</p></div><Switch label="Kod fallback" checked={settings.fallbackEnabled} onChange={(fallbackEnabled) => setSettings({ ...settings, fallbackEnabled })} /></div>
+            <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="text-sm font-medium text-emerald-950">Güvenli OTP modu</p><p className="text-xs text-emerald-800/70">Kod ekranda gösterilmez; SMS başarısızsa işlem güvenle durur.</p></div><ShieldCheck className="text-emerald-600" /></div>
           </div>
           <div className="mt-5 flex justify-end"><Button onClick={save} disabled={saving}>{saving ? <LoaderCircle className="animate-spin" size={17} /> : <Save size={17} />}{saving ? "Kaydediliyor" : "Ayarları kaydet"}</Button></div>
         </section>
@@ -186,6 +189,11 @@ export default function SmsCenterPage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-semibold text-[var(--text-1)]">SMS teslim operasyonu</h2><p className="text-xs text-[var(--text-3)]">Mutlucell teslim raporları 15 dakikalık güvenli aralıklarla güncellenir.</p></div><div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{operations.summary.delivered} teslim</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{operations.summary.pending} bekliyor</span><span className="rounded-full bg-rose-100 px-3 py-1.5 text-rose-800">{operations.summary.failed} başarısız</span><span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">{operations.summary.credits} kredi</span></div></div>
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-3)]"><tr><th className="py-3">Tür</th><th>Telefon</th><th>Durum</th><th>Kredi</th><th>Tarih</th></tr></thead><tbody>{operations.rows.map((row) => <tr key={row.id} className="border-b border-[var(--border)]/70"><td className="py-3 font-medium text-[var(--text-1)]">{{confirmation:"Onay",reminder:"Hatırlatma",cancellation:"İptal",reschedule:"Saat değişikliği"}[row.type] ?? row.type}</td><td className="text-[var(--text-2)]">{row.phoneMasked}</td><td><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${row.status === "delivered" ? "bg-emerald-100 text-emerald-800" : row.status === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{row.statusLabel}</span></td><td>{row.credits}</td><td className="text-xs text-[var(--text-3)]">{row.sentAt ? new Date(row.sentAt).toLocaleString("tr-TR") : "—"}</td></tr>)}</tbody></table>{!operations.rows.length && <p className="py-8 text-center text-sm text-[var(--text-3)]">Yeni SMS gönderimleri burada teslim durumlarıyla görünecek.</p>}</div>
+      </section>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import {
 import { submitBusinessProfileChange } from "@/features/businesses/business-profile-review-repository";
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
-import type { Business, BusinessCategory, BusinessType, SocialMediaLinks } from "@/types/business";
+import type { Business, BusinessCategory, BusinessType, SmsPreferences, SocialMediaLinks } from "@/types/business";
 import { AtSign, Building2, CalendarCog, CheckCircle2, Clock3, Gauge, Globe2, Images, LoaderCircle, MapPin, Save, Search, Share2, ShieldCheck, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import Image from "next/image";
@@ -81,6 +81,7 @@ export default function SettingsPage() {
   const [allowCancel, setAllowCancel] = useState(true);
   const [allowReschedule, setAllowReschedule] = useState(true);
   const [cancelDeadline, setCancelDeadline] = useState(60);
+  const [smsPreferences, setSmsPreferences] = useState<SmsPreferences>({ confirmation: true, reminder: true, cancellation: true, reschedule: true });
 
   useEffect(() => {
     if (!businessId) return;
@@ -108,6 +109,12 @@ export default function SettingsPage() {
       setAllowCancel(biz.allowCancellation ?? true);
       setAllowReschedule(biz.allowReschedule ?? true);
       setCancelDeadline(biz.cancellationDeadlineMinutes ?? 60);
+      setSmsPreferences({
+        confirmation: biz.smsPreferences?.confirmation !== false,
+        reminder: biz.smsPreferences?.reminder !== false,
+        cancellation: biz.smsPreferences?.cancellation !== false,
+        reschedule: biz.smsPreferences?.reschedule !== false,
+      });
       setLoading(false);
     }).catch(() => {
       if (!cancelled) setLoading(false);
@@ -210,6 +217,7 @@ export default function SettingsPage() {
         allowCancellation: allowCancel,
         allowReschedule,
         cancellationDeadlineMinutes: cancelDeadline,
+        smsPreferences,
       });
       toast.success("Randevu ayarları güncellendi.");
     } catch {
@@ -632,6 +640,23 @@ export default function SettingsPage() {
                     min={0}
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="settings-policy-card space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <div><h4 className="text-sm font-semibold text-[var(--text-1)]">Müşteri SMS bildirimleri</h4><p className="mt-1 text-xs text-[var(--text-3)]">Müşteriye hangi operasyon mesajlarının gönderileceğini seçin. Doğrulama kodu güvenlik nedeniyle her zaman açıktır.</p></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  ["confirmation", "Randevu onayı", "Randevu oluştuğunda bilgi verir"],
+                  ["reminder", "1 saat önce hatırlatma", "Randevu öncesinde otomatik gönderilir"],
+                  ["cancellation", "İptal bildirimi", "İptal edilen randevuyu müşteriye bildirir"],
+                  ["reschedule", "Saat değişikliği", "Yeni tarih ve saati müşteriye iletir"],
+                ] as const).map(([key, label, note]) => (
+                  <label key={key} className="settings-switch-row">
+                    <input type="checkbox" checked={smsPreferences[key] !== false} onChange={(event) => setSmsPreferences((current) => ({ ...current, [key]: event.target.checked }))}/>
+                    <i/><span><b>{label}</b><small>{note}</small></span>
+                  </label>
+                ))}
               </div>
             </div>
 
