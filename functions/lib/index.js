@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -8,6 +8,7 @@ const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const firestore_2 = require("firebase-functions/v2/firestore");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const crypto_1 = require("crypto");
 const params_1 = require("firebase-functions/params");
 (0, app_1.initializeApp)();
@@ -1645,6 +1646,7 @@ exports.getAppointmentByPublicToken = (0, https_1.onCall)(publicCallableOptions,
 exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
     region: "europe-west1",
     document: "businesses/{businessId}/appointments/{appointmentId}",
+    secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY],
 }, async (event) => {
     const snapshot = event.data;
     if (!snapshot)
@@ -1691,12 +1693,21 @@ exports.appointmentCreated = (0, firestore_2.onDocumentCreated)({
             userId: appointment.customerId ?? null,
             incrementAppointments: true,
         });
+    await enqueueAppointmentSmsJobs(businessId, appointmentId, appointment);
+    await processAppointmentSmsJob(appointmentSmsJobRef(businessId, appointmentId, "confirmation"));
     await runBusinessAutomations(businessId, "appointment_created", event.id, { ...appointment, appointmentId });
 });
 exports.appointmentAutomationUpdated = (0, firestore_2.onDocumentUpdated)({ region: "europe-west1", document: "businesses/{businessId}/appointments/{appointmentId}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
-    if (!before || !after || before.status === after.status)
+    if (!before || !after)
+        return;
+    const beforeStart = before.startAt instanceof firestore_1.Timestamp ? before.startAt.toMillis() : 0;
+    const afterStart = after.startAt instanceof firestore_1.Timestamp ? after.startAt.toMillis() : 0;
+    if (beforeStart !== afterStart || before.customerPhone !== after.customerPhone || before.status !== after.status) {
+        await syncAppointmentReminderJob(event.params.businessId, event.params.appointmentId, after);
+    }
+    if (before.status === after.status)
         return;
     const trigger = after.status === "cancelled" ? "appointment_cancelled" : after.status === "completed" ? "appointment_completed" : null;
     if (!trigger)
@@ -1963,6 +1974,184 @@ async function sendMutlucellSms(phone, message, configuration) {
     }
     return result;
 }
+function appointmentSmsJobRef(businessId, appointmentId, type) {
+    const id = (0, crypto_1.createHash)("sha256").update(`${businessId}:${appointmentId}:${type}`).digest("hex").slice(0, 40);
+    return db.doc(`appointmentSmsJobs/${id}`);
+}
+function appointmentSmsDate(value, timeZone) {
+    return new Intl.DateTimeFormat("tr-TR", {
+        timeZone,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(value.toDate());
+}
+async function enqueueAppointmentSmsJobs(businessId, appointmentId, appointment) {
+    const phone = typeof appointment.customerPhone === "string" ? appointment.customerPhone : "";
+    const startAt = appointment.startAt;
+    if (!phone || !startAt)
+        return;
+    const base = {
+        businessId,
+        appointmentId,
+        appointmentPath: `businesses/${businessId}/appointments/${appointmentId}`,
+        phone,
+        status: "pending",
+        attempts: 0,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    };
+    const batch = db.batch();
+    batch.set(appointmentSmsJobRef(businessId, appointmentId, "confirmation"), {
+        ...base,
+        type: "confirmation",
+        scheduledAt: firestore_1.Timestamp.now(),
+    }, { merge: true });
+    batch.set(appointmentSmsJobRef(businessId, appointmentId, "reminder"), {
+        ...base,
+        type: "reminder",
+        scheduledAt: firestore_1.Timestamp.fromMillis(startAt.toMillis() - 60 * 60_000),
+    }, { merge: true });
+    await batch.commit();
+}
+async function syncAppointmentReminderJob(businessId, appointmentId, appointment) {
+    const ref = appointmentSmsJobRef(businessId, appointmentId, "reminder");
+    const startAt = appointment.startAt;
+    const phone = typeof appointment.customerPhone === "string" ? appointment.customerPhone : "";
+    if (!startAt || !phone || !["pending", "confirmed"].includes(String(appointment.status))) {
+        await ref.delete();
+        return;
+    }
+    await ref.set({
+        businessId,
+        appointmentId,
+        appointmentPath: `businesses/${businessId}/appointments/${appointmentId}`,
+        phone,
+        type: "reminder",
+        status: "pending",
+        scheduledAt: firestore_1.Timestamp.fromMillis(startAt.toMillis() - 60 * 60_000),
+        leaseUntil: firestore_1.FieldValue.delete(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+}
+async function processAppointmentSmsJob(ref) {
+    let job = null;
+    await db.runTransaction(async (tx) => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists)
+            return;
+        const data = snapshot.data();
+        const leaseUntil = data.leaseUntil;
+        if (data.status === "processing" && leaseUntil && leaseUntil.toMillis() > Date.now())
+            return;
+        job = data;
+        tx.update(ref, {
+            status: "processing",
+            leaseUntil: firestore_1.Timestamp.fromMillis(Date.now() + 2 * 60_000),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    });
+    if (!job)
+        return;
+    const data = job;
+    const businessId = String(data.businessId ?? "");
+    const appointmentId = String(data.appointmentId ?? "");
+    const type = data.type;
+    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    try {
+        const [appointmentSnapshot, businessSnapshot] = await Promise.all([
+            appointmentRef.get(),
+            db.doc(`businesses/${businessId}`).get(),
+        ]);
+        if (!appointmentSnapshot.exists) {
+            await ref.delete();
+            return;
+        }
+        const appointment = appointmentSnapshot.data();
+        if (!["pending", "confirmed"].includes(String(appointment.status))) {
+            await ref.delete();
+            return;
+        }
+        const startAt = appointment.startAt;
+        if (!startAt) {
+            await ref.delete();
+            return;
+        }
+        if (type === "reminder") {
+            const intendedAt = startAt.toMillis() - 60 * 60_000;
+            if (intendedAt > Date.now() + 30_000) {
+                await ref.update({ status: "pending", scheduledAt: firestore_1.Timestamp.fromMillis(intendedAt), leaseUntil: firestore_1.FieldValue.delete() });
+                return;
+            }
+        }
+        const business = businessSnapshot.data() ?? {};
+        const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
+        const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
+        const staffName = String(appointment.staffName ?? "").trim().slice(0, 70);
+        const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+        const dateText = appointmentSmsDate(startAt, timeZone);
+        const staffText = staffName ? `, ${staffName}` : "";
+        const detailsUrl = appointment.publicToken
+            ? ` https://seninrandevun.com/randevu/${String(appointment.publicToken)}`
+            : "";
+        const message = type === "confirmation"
+            ? `Randevunuz başarıyla oluşturuldu. ${businessName} | ${serviceName} | ${dateText}${staffText}.${detailsUrl}`
+            : `Hatırlatma: ${businessName} randevunuza 1 saat kaldı. ${serviceName} | ${dateText}${staffText}.${detailsUrl}`;
+        const providerMessageId = await sendMutlucellSms(String(appointment.customerPhone ?? data.phone), message.slice(0, 480));
+        const batch = db.batch();
+        batch.delete(ref);
+        batch.update(appointmentRef, {
+            [`sms.${type}.status`]: "sent",
+            [`sms.${type}.providerMessageId`]: providerMessageId,
+            [`sms.${type}.sentAt`]: firestore_1.FieldValue.serverTimestamp(),
+        });
+        await batch.commit();
+    }
+    catch (error) {
+        const attempts = Number(data.attempts ?? 0) + 1;
+        const message = error instanceof Error ? error.message.slice(0, 300) : "SMS gönderilemedi.";
+        if (attempts >= 5) {
+            const batch = db.batch();
+            batch.delete(ref);
+            batch.update(appointmentRef, {
+                [`sms.${type}.status`]: "failed",
+                [`sms.${type}.error`]: message,
+                [`sms.${type}.failedAt`]: firestore_1.FieldValue.serverTimestamp(),
+            });
+            await batch.commit();
+            console.error(`Appointment ${type} SMS permanently failed`, { businessId, appointmentId, message });
+            return;
+        }
+        await ref.update({
+            status: "pending",
+            attempts,
+            lastError: message,
+            scheduledAt: firestore_1.Timestamp.fromMillis(Date.now() + Math.min(60, 2 ** attempts) * 60_000),
+            leaseUntil: firestore_1.FieldValue.delete(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        console.warn(`Appointment ${type} SMS will be retried`, { businessId, appointmentId, attempts, message });
+    }
+}
+exports.sendAppointmentSmsJobs = (0, scheduler_1.onSchedule)({
+    region: "europe-west1",
+    schedule: "every 1 minutes",
+    timeZone: "Europe/Istanbul",
+    secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY],
+    maxInstances: 1,
+}, async () => {
+    const snapshot = await db.collection("appointmentSmsJobs")
+        .where("scheduledAt", "<=", firestore_1.Timestamp.now())
+        .orderBy("scheduledAt", "asc")
+        .limit(100)
+        .get();
+    for (const document of snapshot.docs) {
+        await processAppointmentSmsJob(document.ref);
+    }
+});
 exports.getMutlucellSettings = (0, https_1.onCall)({ region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] }, async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
