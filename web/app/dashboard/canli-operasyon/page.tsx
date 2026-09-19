@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Activity, ArrowRight, CalendarClock, Pause, Play, RefreshCw, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -22,6 +21,7 @@ import type { Business } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import { waitEstimateLabel, type LiveWaitEstimate } from "@/features/live-queue/wait-estimate";
+import { LiveQueueSettings } from "@/features/live-queue/live-queue-settings";
 
 const ACTION_LABELS: Record<string, string> = {
   called: "Müşteriyi Çağır", in_service: "İşleme Başla", completed: "İşlemi Tamamla",
@@ -185,13 +185,16 @@ export default function LiveOperationsPage() {
         <h1 className="mt-2 text-2xl font-extrabold text-[var(--text-1)]">Canlı Sıra</h1>
         <p className="mt-1 text-sm text-[var(--text-3)]">{business.name} için güncel sıra ve randevu görünümü.</p></div>
       <div className="flex flex-wrap gap-2">
-        {!businessEnabled ? <Link className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-1)]" href="/dashboard/ayarlar">Canlı Sırayı aç →</Link> :
+        {!businessEnabled ? <a className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-1)]" href="#canli-sira-ayari">Canlı Sırayı aç →</a> :
           <Button variant="secondary" disabled={!!busy} onClick={() => void togglePause()}
             iconLeft={business.liveQueueIntakePaused ? <Play size={16}/> : <Pause size={16}/> }>
             {business.liveQueueIntakePaused ? "Alımı Devam Ettir" : "Yeni Alımı Duraklat"}</Button>}
         <Button variant="ghost" onClick={() => setRevision((value) => value + 1)} iconLeft={<RefreshCw size={16}/>}>Yenile</Button>
       </div>
     </header>
+
+    {!businessEnabled && <div id="canli-sira-ayari"><LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
+      setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} /></div>}
 
     {(!businessEnabled || business.liveQueueIntakePaused) && <div role="status" className="rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm text-amber-900">
       {businessEnabled ? "Yeni müşteri alımı durduruldu. Mevcut müşterileri işlemeye devam edebilirsiniz." :
