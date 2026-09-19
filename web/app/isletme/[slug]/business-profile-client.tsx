@@ -26,6 +26,9 @@ import type { Review } from "@/types/review";
 import type { ServiceCategory } from "@/types/service-category";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
+import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
+import { listLiveDiscovery } from "@/features/live-queue/customer-queue-repository";
+import { waitEstimateLabel, type LiveWaitEstimate } from "@/features/live-queue/wait-estimate";
 import { useAuth } from "@/hooks/use-auth";
 import { addFavoriteBusiness, isFavoriteBusiness, removeFavoriteBusiness } from "@/features/customers/favorite-repository";
 import { toast } from "sonner";
@@ -33,7 +36,7 @@ import { userFacingError } from "@/lib/errors/user-facing-error";
 import {
   ArrowRight, ArrowUpRight, CalendarCheck2, GalleryHorizontalEnd,
   Globe2, Heart, LoaderCircle, Mail, MapPin, MessageCircleMore, Phone, Star,
-  UsersRound, WandSparkles, type LucideIcon,
+  UsersRound, WandSparkles, Zap, type LucideIcon,
 } from "lucide-react";
 
 type Tab = "hizmetler" | "ekip" | "galeri" | "yorumlar" | "iletisim";
@@ -70,6 +73,24 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   const [activeTab, setActiveTab] = useState<Tab>("hizmetler");
   const [favorite, setFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
+  const [liveEligible, setLiveEligible] = useState(false);
+  const [liveEarliestWait, setLiveEarliestWait] = useState<(LiveWaitEstimate & { serviceName: string }) | null>(null);
+
+  useEffect(() => subscribeLiveFeatureAvailability((flags) =>
+    setLiveEnabled(flags.isLiveAvailabilityEnabled && flags.isLiveQueueEnabled && flags.isLiveOperationsEnabled)), []);
+  useEffect(() => {
+    if (!liveEnabled || !business?.id) { queueMicrotask(() => { setLiveEligible(false); setLiveEarliestWait(null); }); return; }
+    let cancelled = false;
+    const refresh = () => { if (!cancelled) setLiveEarliestWait(null); return listLiveDiscovery(business.id).then((rows) => {
+      if (!cancelled) { const row = rows.find((item) => item.id === business.id); setLiveEligible(!!row); setLiveEarliestWait(row?.earliestWait ?? null); }
+    }).catch(() => { if (!cancelled) { setLiveEligible(false); setLiveEarliestWait(null); } }); };
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 180_000);
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [liveEnabled, business?.id]);
 
   useEffect(() => {
     if (!user || !initialBusiness.id) return;
@@ -198,6 +219,11 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
           galleryCount={(business.galleryUrls ?? []).length}
           bookingHref={`/isletme/${params.slug}/randevu`}
         />
+
+        {liveEligible && <section className="my-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
+          <div><span className="flex items-center gap-2 text-sm font-semibold"><Zap size={17} aria-hidden="true" /> CANLI SIRA</span><h2 className="mt-1 text-lg font-bold">Şu anda yeni müşteri kabul ediyor</h2><p className="text-sm">{liveEarliestWait ? `En erken ${liveEarliestWait.serviceName}: ${waitEstimateLabel(liveEarliestWait)}. ` : ""}Hizmete özel tahmin için sıraya katılmayı seç. Planlı randevu seçeneğin de açık.</p></div>
+          <Link href={`/isletme/${params.slug}/canli-sira`} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-5 font-semibold text-white">Sıraya Katıl <ArrowRight size={17} /></Link>
+        </section>}
 
         {/* ━━━ TAB NAVIGATION ━━━ */}
         <nav className="storefront-tabs" aria-label="Mağaza bölümleri">

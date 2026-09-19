@@ -441,7 +441,7 @@ export default function AppointmentsPage() {
 
                     {/* Action Buttons */}
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {canManageStatus && appointment.status !== "confirmed" && appointment.status !== "completed" && (
+                      {canManageStatus && appointment.status === "pending" && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "confirmed")}
                           disabled={isUpdating}
@@ -450,7 +450,7 @@ export default function AppointmentsPage() {
                           <BadgeCheck size={15}/> Onayla
                         </ActionButton>
                       )}
-                      {canManageStatus && appointment.status !== "completed" && (
+                      {canManageStatus && ["pending", "confirmed"].includes(appointment.status) && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "completed")}
                           disabled={isUpdating}
@@ -459,7 +459,7 @@ export default function AppointmentsPage() {
                           <Check size={15}/> Tamamla
                         </ActionButton>
                       )}
-                      {canManageStatus && appointment.status !== "cancelled" && (
+                      {canManageStatus && ["pending", "confirmed"].includes(appointment.status) && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "cancelled")}
                           disabled={isUpdating}

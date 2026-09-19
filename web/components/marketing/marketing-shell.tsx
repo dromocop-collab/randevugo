@@ -31,6 +31,7 @@ export function MarketingHeader() {
         </Link>
         <nav className="marketing-links" aria-label="Ana menü">
           {productLinks.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+          {signedIn && <Link href="/siram">Sıram</Link>}
         </nav>
         <div className="marketing-actions">
           <button type="button" onClick={toggleTheme} className="icon-action" aria-label={theme === "light" ? "Karanlık temayı aç" : "Açık temayı aç"}>{theme === "light" ? <MoonStar size={17} /> : <SunMedium size={17} />}</button>
@@ -40,7 +41,7 @@ export function MarketingHeader() {
       </div>
       <div id="mobile-customer-menu" className={`marketing-mobile-menu ${menuOpen ? "open" : ""}`} aria-hidden={!menuOpen}>
         <div className="marketing-mobile-menu__head"><span><Sparkles size={15} /> Hızlı erişim</span><small>Randevun birkaç dokunuş uzağında</small></div>
-        <nav aria-label="Mobil ana menü">{productLinks.map((item, index) => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}><i>0{index + 1}</i><span>{item.label}</span><ArrowRight size={16} /></Link>)}</nav>
+        <nav aria-label="Mobil ana menü">{productLinks.map((item, index) => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}><i>0{index + 1}</i><span>{item.label}</span><ArrowRight size={16} /></Link>)}{signedIn && <Link href="/siram" onClick={() => setMenuOpen(false)}><i>06</i><span>Sıram</span><ArrowRight size={16} /></Link>}</nav>
         <div className="marketing-mobile-menu__actions"><button type="button" onClick={toggleTheme}>{theme === "light" ? <MoonStar size={17} /> : <SunMedium size={17} />} Tema</button>{signedIn ? <Link href="/hesabim">Hesabımı aç <ArrowUpRight size={15} /></Link> : <><Link href="/musteri/giris"><LogIn size={16} /> Müşteri girişi</Link><Link href="/isletmeler">İşletmeler için <ArrowUpRight size={15} /></Link></>}</div>
       </div>
     </header>

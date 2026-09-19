@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
+import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-operations-available";
 import {
-  BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
+  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays },
   { href: "/dashboard/randevular", label: "Randevular", icon: MessageSquareText },
   { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing },
+  { href: "/dashboard/canli-operasyon", label: "Canlı Operasyon", icon: Activity },
   { href: "/dashboard/analitik", label: "Büyüme Analitiği", icon: ChartNoAxesCombined },
   { href: "/dashboard/buyume", label: "Büyüme Merkezi", icon: Rocket },
   { href: "/dashboard/otomasyonlar", label: "Otomasyonlar", icon: WandSparkles },
@@ -37,6 +39,7 @@ export function DashboardSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { businesses, businessId, access } = useBusinessContext();
+  const showLiveOperations = useLiveOperationsAvailable();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
   
   const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
@@ -57,7 +60,8 @@ export function DashboardSidebar() {
         </Link>
       </div>
       <nav className="space-y-0.5">
-        {navItems.filter((item) => access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href)).map((item) => {
+        {navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
+          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href))).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"
@@ -99,13 +103,15 @@ export function DashboardBottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { access } = useBusinessContext();
+  const showLiveOperations = useLiveOperationsAvailable();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
   return (
     <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
       <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
       <ul className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {navItems.filter((item) => access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href)).map((item) => {
+        {navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
+          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href))).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"

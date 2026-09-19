@@ -173,6 +173,12 @@ service cloud.firestore {
       allow update: if isAuthenticated() && uid() == userId;
       allow delete: if false;
 
+      // Created and removed only by queue Cloud Functions. The callable returns
+      // pointers for the authenticated customer without exposing other users.
+      match /activeQueueEntries/{businessId} {
+        allow read, write: if false;
+      }
+
       match /favorites/{businessId} {
         allow read, write: if isAuthenticated() && uid() == userId;
       }
@@ -299,6 +305,36 @@ service cloud.firestore {
     // ────────────────────────────────────────────────
     // Businesses
     // ────────────────────────────────────────────────
+    match /liveQueueDiscovery/{businessId} {
+      allow read, write: if false;
+    }
+
+    match /liveQueueWaitSummaries/{businessId} {
+      allow read, write: if false;
+    }
+
+    // Server-owned transactional queue push outbox; it contains recipient IDs and delivery state.
+    match /liveQueueNotificationEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /availabilityAlerts/{alertId} {
+      allow read: if isAuthenticated() && resource.data.userId == uid();
+      allow write: if false;
+    }
+
+    match /availabilityAlertKeys/{scopeId} {
+      allow read, write: if false;
+    }
+
+    match /availabilityNotificationEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /lastMinuteOpenings/{openingId} {
+      allow read, write: if false;
+    }
+
     match /businesses/{businessId} {
       // Public read for published businesses, members, owner, or admin
       allow read: if resource.data.isPublished == true ||
@@ -369,12 +405,37 @@ service cloud.firestore {
         allow update: if isPlatformAdmin() ||
           (canManage(businessId) &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["status", "paymentStatus", "updatedAt"])) ||
+             .hasOnly(["status", "paymentStatus", "updatedAt"]) &&
+           request.resource.data.status in ["pending", "confirmed", "completed", "cancelled", "no_show"] &&
+           (request.resource.data.status == resource.data.status ||
+             resource.data.status in ["pending", "confirmed"])) ||
           (staffPermission(businessId, "manageAppointments") &&
            resource.data.staffId == getMember(businessId).data.staffId &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["status", "updatedAt"]));
+             .hasOnly(["status", "updatedAt"]) &&
+           request.resource.data.status in ["pending", "confirmed", "completed", "cancelled", "no_show"] &&
+           (request.resource.data.status == resource.data.status ||
+             resource.data.status in ["pending", "confirmed"]));
         allow delete: if false;
+      }
+
+      match /bookingDayLocks/{dateKey} {
+        allow read, write: if false;
+      }
+
+      // Live Queue mutations and membership markers are server-only.
+      match /queueEntries/{entryId} {
+        allow read: if isBusinessOwner(businessId) || canManage(businessId) ||
+          (isAuthenticated() && resource.data.customerId == uid());
+        allow write: if false;
+      }
+
+      match /queueMembers/{customerId} {
+        allow read, write: if false;
+      }
+
+      match /queueStaffLocks/{staffId} {
+        allow read, write: if false;
       }
 
       match /waitlist/{waitlistId} {

@@ -6,6 +6,8 @@ import { AppStoreButton } from "@/components/marketing/app-store-button";
 import { IosAppVisual } from "@/components/marketing/ios-app-visual";
 import { APP_STORE_URL } from "@/lib/app-store";
 import { HomeInteractive } from "./home-client";
+import { CustomerLiveHome } from "@/features/live-queue/customer-live-home";
+import { LastMinuteHome } from "@/features/availability/last-minute-home";
 
 const CUSTOMER_FAQ = [
   ["Randevu almak ücretli mi?", "Hayır. İşletme keşfetmek ve online randevu oluşturmak müşteriler için tamamen ücretsizdir."],
@@ -46,6 +48,9 @@ export default function HomePage() {
 
         <HomeInteractive />
       </section>
+
+      <CustomerLiveHome />
+      <LastMinuteHome />
 
       <section className="customer-live-section">
         <div className="customer-live-copy">

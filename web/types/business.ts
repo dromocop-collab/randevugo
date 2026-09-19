@@ -83,6 +83,12 @@ export interface Business extends EntityBase {
   profileReviewNote?: string;
   storePosition?: number;
   isSuspended?: boolean;
+  /** Opt-in for Live Queue. Missing means disabled. */
+  liveQueueEnabled?: boolean;
+  /** Temporary intake pause. Existing queue entries stay active. */
+  liveQueueIntakePaused?: boolean;
+  availabilityAlertsEnabled?: boolean;
+  lastMinuteSlotsEnabled?: boolean;
   minimumBookingNoticeMinutes: number;
   maximumBookingDaysAhead: number;
   appointmentBufferMinutes: number;

@@ -18,6 +18,11 @@ export default function BookingPage() {
   const searchParams = useSearchParams();
   const [preselectedServiceId] = useState<string | null>(searchParams.get("service"));
   const [preselectedStaffId] = useState<string | null>(searchParams.get("staff"));
+  const [preselectedDate] = useState<string | null>(searchParams.get("date"));
+  const [preselectedStartAtMillis] = useState<number | null>(() => {
+    const value = Number(searchParams.get("start"));
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  });
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [workingHours, setWorkingHours] = useState<DaySchedule[]>([]);
@@ -138,6 +143,9 @@ export default function BookingPage() {
           slotIntervalMinutes={business.slotIntervalMinutes ?? 15}
           preselectedServiceId={preselectedServiceId}
           preselectedStaffId={preselectedStaffId}
+          preselectedDate={preselectedDate && /^\d{4}-\d{2}-\d{2}$/.test(preselectedDate) ? preselectedDate : null}
+          preselectedStartAtMillis={preselectedStartAtMillis}
+          businessAlertsEnabled={business.availabilityAlertsEnabled === true}
         />
       </main>
     </div>

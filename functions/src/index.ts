@@ -8,10 +8,15 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { createHash, randomUUID, randomInt } from "crypto";
 import { defineSecret } from "firebase-functions/params";
+import { logger } from "firebase-functions";
+import { ACTIVE_QUEUE_STATUSES, canTransitionQueue, isActiveQueueStatus, isQueueStatus, isSameActiveJoin, liveOperationsGate, liveQueueGate, operatorQueueTransitions, queueIntakeOpen, validateQueueSelection, type QueueStatus } from "./live-queue-domain.js";
+import { appointmentBlocksWait, calculateLiveQueueWait, type WaitInput, type WaitResult, type WaitInterval } from "./live-queue-wait-engine.js";
+import { CALLED_GRACE_MINUTES, isCalledOverdue, isDeclaredEta, noticeCopy, shouldExpirePreviousBusinessDay, shouldSendAlmostReady, statusNotice, type QueueNoticeKind } from "./live-queue-notifications.js";
+import { LAST_MINUTE_WINDOW_HOURS, alertCoversSlot, isNewAlertMatch, liveModuleEnabled } from "./availability-alert-domain.js";
 initializeApp();
 
 const db = getFirestore();
@@ -30,6 +35,12 @@ const MUTLUCELL_REPORT_URL =
   "https://smsgw.mutlucell.com/smsgw-ws/gtblkrprtex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
 const BOOKING_FIELD_SETTINGS_PATH = "platformPrivateSettings/bookingFields";
+const LIVE_FEATURE_KEYS = [
+  "liveFeaturesMaster", "liveAvailability", "liveQueue", "lastMinuteSlots",
+  "availabilityAlerts", "liveOperations",
+] as const;
+type LiveFeatureKey = typeof LIVE_FEATURE_KEYS[number];
+const PLATFORM_SETTINGS_PATH = "platformSettings/global";
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicCallableOptions = {
   region: "europe-west1",
@@ -121,6 +132,55 @@ export const updateBookingFieldSettings = onCall(protectedCallableOptions, async
   return { success: true, ...settings };
 });
 
+export const updateLiveFeatureFlags = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+
+  const changes = request.data?.changes;
+  const keys = changes && typeof changes === "object" && !Array.isArray(changes)
+    ? Object.keys(changes) : [];
+  if (keys.length === 0 || keys.some((key) =>
+    !LIVE_FEATURE_KEYS.includes(key as LiveFeatureKey) || typeof changes[key] !== "boolean"
+  )) {
+    throw new HttpsError("invalid-argument", "Canlı özellik ayarları geçersiz.");
+  }
+
+  const settingsRef = db.doc(PLATFORM_SETTINGS_PATH);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(settingsRef);
+    const data = snapshot.data() ?? {};
+    const storedFlags = data.featureFlags && typeof data.featureFlags === "object" && !Array.isArray(data.featureFlags)
+      ? data.featureFlags as Record<string, unknown> : {};
+    const validPrevious = LIVE_FEATURE_KEYS.every((key) => typeof storedFlags[key] === "boolean");
+    const previous = Object.fromEntries(LIVE_FEATURE_KEYS.map((key) => [key, validPrevious && storedFlags[key] === true])) as Record<LiveFeatureKey, boolean>;
+    const next = { ...previous };
+    for (const key of keys as LiveFeatureKey[]) next[key] = changes[key];
+
+    tx.set(settingsRef, {
+      featureFlags: { ...storedFlags, ...next },
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(!snapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+    }, { merge: true });
+
+    for (const key of keys as LiveFeatureKey[]) {
+      if (previous[key] === next[key]) continue;
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "platform.live_feature_changed",
+        entityType: "platformFeatureFlag",
+        entityId: key,
+        feature: key,
+        previousValue: previous[key],
+        newValue: next[key],
+        actorUid: uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
+
+  return { success: true };
+});
+
 function htmlSafe(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
@@ -157,7 +217,8 @@ async function sendTokenBatches(
   tokens: Awaited<ReturnType<typeof tokensForUsers>>,
   title: string,
   body: string,
-  data: Record<string, string>
+  data: Record<string, string>,
+  collapseId?: string
 ) {
   let successCount = 0;
   let failureCount = 0;
@@ -167,7 +228,8 @@ async function sendTokenBatches(
       tokens: batch.map((item) => item.token),
       notification: { title, body },
       data,
-      apns: { payload: { aps: { sound: "default", badge: 1 } } },
+      apns: { ...(collapseId ? { headers: { "apns-collapse-id": collapseId } } : {}),
+        payload: { aps: { sound: "default", badge: 1 } } },
     });
     successCount += response.successCount;
     failureCount += response.failureCount;
@@ -883,7 +945,7 @@ async function loadBookingContext(businessId: string, serviceId: string, staffId
     serviceRef.get(),
     staffRef?.get() ?? Promise.resolve(null),
     db.collection(`businesses/${businessId}/workingHours`).get(),
-    db.collection(`businesses/${businessId}/specialDays`).get(),
+    db.collection(`businesses/${businessId}/specialDays`).limit(501).get(),
   ]);
 
   if (!businessSnap.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
@@ -922,7 +984,7 @@ async function loadBookingContext(businessId: string, serviceId: string, staffId
 }
 
 function effectiveSchedule(
-  context: Awaited<ReturnType<typeof loadBookingContext>>,
+  context: Pick<Awaited<ReturnType<typeof loadBookingContext>>, "business" | "service" | "staff" | "businessHours" | "specialDays">,
   dateKey: string,
   weekday: number,
   staffId: string | null
@@ -1211,8 +1273,13 @@ export const rescheduleAppointment = onCall(
     const conflicts = db.collection(`businesses/${businessId}/appointments`)
       .where("startAt", ">=", Timestamp.fromMillis(dayStart))
       .where("startAt", "<", Timestamp.fromMillis(dayEnd));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
     await db.runTransaction(async (tx) => {
+      const [bookingLock, currentAppointment] = await Promise.all([tx.get(bookingLockRef), tx.get(appointmentRef)]);
+      if (!currentAppointment.exists || !["pending", "confirmed"].includes(String(currentAppointment.data()?.status))) {
+        throw new HttpsError("failed-precondition", "Randevu artık yeniden planlanamaz.");
+      }
       const conflictSnapshot = await tx.get(conflicts);
       const bufferBefore = Math.max(0, numberOr(context.business.bufferBeforeMinutes, 0));
       const bufferAfter = Math.max(0, numberOr(context.business.bufferAfterMinutes, numberOr(context.business.appointmentBufferMinutes, 0)));
@@ -1228,6 +1295,8 @@ export const rescheduleAppointment = onCall(
           && existingEnd.toMillis() > startAt.toMillis() - bufferBefore * 60_000;
       });
       if (collision) throw new HttpsError("already-exists", "Seçilen saat artık müsait değil.");
+      tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEnd + 7 * 86_400_000) }, { merge: true });
       tx.update(appointmentRef, {
         staffId,
         staffName: String(context.staff?.fullName ?? context.business.name ?? "İşletme"),
@@ -1606,11 +1675,13 @@ export const createAppointment = onCall(
     const conflictQuery = appointments
       .where("startAt", ">=", Timestamp.fromMillis(dayStartMs))
       .where("startAt", "<", Timestamp.fromMillis(dayEndMs));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
     const publicToken = randomUUID();
     const verificationRef = db.doc(`verificationCodes/${customerPhone}`);
 
     const result = await db.runTransaction(async (tx) => {
+      const bookingLock = await tx.get(bookingLockRef);
       {
         const conflictSnap = await tx.get(conflictQuery);
 
@@ -1651,6 +1722,8 @@ export const createAppointment = onCall(
       }
 
       const appointmentRef = appointments.doc();
+      tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000) }, { merge: true });
 
       tx.set(appointmentRef, {
         businessId,
@@ -2575,12 +2648,62 @@ export const checkMutlucellDeliveryReports = onSchedule(
 export const cleanupExpiredOperationalData = onSchedule(
   { region: "europe-west1", schedule: "every day 04:15", timeZone: "Europe/Istanbul", maxInstances: 1 },
   async () => {
-    for (const collectionName of ["smsOperationsLogs", "securityRateLimits"]) {
+    for (const collectionName of ["smsOperationsLogs", "securityRateLimits", "liveQueueNotificationEvents",
+      "availabilityNotificationEvents", "lastMinuteOpenings"]) {
       const snapshot = await db.collection(collectionName).where("expiresAt", "<=", Timestamp.now()).limit(400).get();
       if (snapshot.empty) continue;
       const batch = db.batch();
       snapshot.docs.forEach((document) => batch.delete(document.ref));
       await batch.commit();
+    }
+    const expiredAlerts = await db.collection("availabilityAlerts")
+      .where("status", "in", ["active", "matched"])
+      .where("expiresAt", "<=", Timestamp.now()).limit(400).get();
+    if (!expiredAlerts.empty) {
+      const batch = db.batch();
+      expiredAlerts.docs.forEach((document) => batch.update(document.ref, {
+        status: "expired", expiredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      }));
+      await batch.commit();
+    }
+    const expiredBookingLocks = await db.collectionGroup("bookingDayLocks")
+      .where("expiresAt", "<=", Timestamp.now()).limit(400).get();
+    if (!expiredBookingLocks.empty) {
+      const batch = db.batch();
+      expiredBookingLocks.docs.forEach((document) => batch.delete(document.ref));
+      await batch.commit();
+    }
+    // Only prior business-day waiting/called entries expire. Running services remain operator-controlled.
+    const todayUTC = new Date().toISOString().slice(0, 10);
+    const stale = await db.collectionGroup("queueEntries")
+      .where("status", "in", ["waiting", "on_the_way", "called"])
+      .where("businessDayKey", "<", todayUTC).limit(200).get();
+    const businesses = new Map<string, FirebaseFirestore.DocumentData | undefined>();
+    for (const document of stale.docs) {
+      const businessId = document.ref.parent.parent?.id;
+      if (!businessId) continue;
+      if (!businesses.has(businessId)) businesses.set(businessId, (await db.doc(`businesses/${businessId}`).get()).data());
+      const business = businesses.get(businessId);
+      let today: string;
+      try { today = localParts(new Date(), typeof business?.timeZone === "string" ? business.timeZone : "Europe/Istanbul").dateKey; }
+      catch { continue; }
+      const row = document.data();
+      if (!isQueueStatus(row.status) || !shouldExpirePreviousBusinessDay(row.status, String(row.businessDayKey ?? ""), today)) continue;
+      await db.runTransaction(async (tx) => {
+        const entry = await tx.get(document.ref);
+        const current = entry.data();
+        if (!current || !isQueueStatus(current.status) ||
+            !shouldExpirePreviousBusinessDay(current.status, String(current.businessDayKey ?? ""), today)) return;
+        const uid = String(current.customerId ?? "");
+        const markerRef = queueMarker(businessId, uid);
+        const pointerRef = customerQueuePointer(uid, businessId);
+        const lockRef = typeof current.assignedStaffId === "string" ? queueStaffLock(businessId, current.assignedStaffId) : null;
+        const [marker, pointer, lock] = await Promise.all([tx.get(markerRef), tx.get(pointerRef), lockRef ? tx.get(lockRef) : Promise.resolve(null)]);
+        tx.update(document.ref, { status: "expired", expiredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        if (marker.data()?.entryId === document.id) tx.delete(markerRef);
+        if (pointer.data()?.entryId === document.id) tx.delete(pointerRef);
+        if (lockRef && lock?.data()?.entryId === document.id) tx.delete(lockRef);
+      });
     }
   }
 );
@@ -3461,3 +3584,1335 @@ export const clearAssistantHistory = onCall(
     return { success: true };
   }
 );
+
+// Live Queue is separate from appointments. No queue write reserves a booking slot.
+const queueEntries = (businessId: string) => db.collection(`businesses/${businessId}/queueEntries`);
+const queueMarker = (businessId: string, uid: string) => db.doc(`businesses/${businessId}/queueMembers/${uid}`);
+const queueStaffLock = (businessId: string, staffId: string) => db.doc(`businesses/${businessId}/queueStaffLocks/${staffId}`);
+const customerQueuePointer = (uid: string, businessId: string) => db.doc(`users/${uid}/activeQueueEntries/${businessId}`);
+const discoveryRef = (businessId: string) => db.doc(`liveQueueDiscovery/${businessId}`);
+const waitSummaryRef = (businessId: string) => db.doc(`liveQueueWaitSummaries/${businessId}`);
+
+function unavailableWait(now: number, reason: string): WaitResult {
+  return { status: "insufficient_data", minWaitMinutes: null, maxWaitMinutes: null,
+    estimatedServiceStart: null, peopleAhead: null, eligibleStaffCount: 0,
+    reason, calculatedAt: new Date(now).toISOString() };
+}
+
+/** One bounded snapshot per business. The appointment and queue collections are read once, not per staff. */
+async function readLiveWaitInput(businessId: string, now: number): Promise<WaitInput | null> {
+  const business = (await db.doc(`businesses/${businessId}`).get()).data();
+  if (!business || business.status !== "active" || business.isPublished !== true || business.isSuspended === true) return null;
+  const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+  let local;
+  try { local = localParts(new Date(now), timeZone); } catch { return null; }
+  const nextDate = new Date(Date.UTC(local.year, local.month - 1, local.day + 1)).toISOString().slice(0, 10);
+  const dayStart = zonedTimeToMillis(local.dateKey, 0, timeZone);
+  const dayEnd = zonedTimeToMillis(nextDate, 0, timeZone);
+  const [services, staff, hours, specialDays, activeQueue, appointments] = await Promise.all([
+    db.collection(`businesses/${businessId}/services`).limit(101).get(),
+    db.collection(`businesses/${businessId}/staff`).limit(101).get(),
+    db.collection(`businesses/${businessId}/workingHours`).get(),
+    db.collection(`businesses/${businessId}/specialDays`).where("date", "==", local.dateKey).get(),
+    queueEntries(businessId).where("status", "in", ACTIVE_QUEUE_STATUSES as unknown as string[])
+      .orderBy("joinedAt", "asc").limit(201).get(),
+    db.collection(`businesses/${businessId}/appointments`)
+      .where("startAt", ">=", Timestamp.fromMillis(dayStart)).where("startAt", "<", Timestamp.fromMillis(dayEnd))
+      .limit(501).get(),
+  ]);
+  if (services.size > 100 || staff.size > 100 || activeQueue.size > 200 || appointments.size > 500) return null;
+  const staffRows = staff.docs.filter((item) => item.data().isActive === true && !item.data().archivedAt);
+  const serviceRows = services.docs.map((item) => ({ id: item.id, data: item.data() }));
+  const businessHours = hours.docs.map((item) => scheduleFromData(item.data())).filter((item): item is Schedule => item !== null);
+  const specialRows = specialDays.docs.map((item) => item.data());
+  const bufferBefore = Math.max(0, numberOr(business.bufferBeforeMinutes, 0)) * 60_000;
+  const bufferAfterMinutes = Math.max(0, numberOr(business.bufferAfterMinutes,
+    numberOr(business.appointmentBufferMinutes, 0)));
+  const bufferAfter = bufferAfterMinutes * 60_000;
+  const blockedAppointments = appointments.docs.flatMap((item) => {
+    const row = item.data();
+    if (!appointmentBlocksWait(row.status)) return [];
+    const start = row.startAt instanceof Timestamp ? row.startAt.toMillis() : NaN;
+    const end = row.endAt instanceof Timestamp ? row.endAt.toMillis() : NaN;
+    return [{ staffId: typeof row.staffId === "string" ? row.staffId : null,
+      start: Number.isFinite(start) ? start - bufferBefore : dayStart,
+      end: Number.isFinite(end) ? end + bufferAfter : dayEnd }];
+  });
+  const staffInput = staffRows.map((person) => {
+    const row = person.data();
+    const schedule = effectiveSchedule({ business, service: {}, staff: row, businessHours,
+      specialDays: specialRows }, local.dateKey, local.weekday, person.id);
+    const windows: WaitInterval[] = schedule ? [{ start: zonedTimeToMillis(local.dateKey, timeToMinutes(schedule.start)!, timeZone),
+      end: zonedTimeToMillis(local.dateKey, timeToMinutes(schedule.end)!, timeZone) }] : [];
+    const breaks: WaitInterval[] = [
+      [schedule?.breakStart, schedule?.breakEnd],
+      ...(Array.isArray(row.breakSchedule) ? row.breakSchedule.filter((item: FirebaseFirestore.DocumentData) => item.day === local.weekday)
+        .map((item: FirebaseFirestore.DocumentData) => [item.breakStart, item.breakEnd]) : []),
+    ].flatMap(([start, end]) => {
+      const from = timeToMinutes(start);
+      const to = timeToMinutes(end);
+      return from !== null && to !== null && to > from
+        ? [{ start: zonedTimeToMillis(local.dateKey, from, timeZone), end: zonedTimeToMillis(local.dateKey, to, timeZone) }] : [];
+    });
+    return { id: person.id, windows, blocks: breaks,
+      appointmentBlocks: blockedAppointments.filter((item) => !item.staffId || item.staffId === person.id)
+        .map(({ start, end }) => ({ start, end })) };
+  });
+  const serviceInput = serviceRows.map((service) => {
+    const eligible = staffRows.filter((person) => !validateQueueSelection(business, service.data, person.data(), service.id, person.id));
+    return { id: service.id, durationMinutes: service.data.durationMinutes,
+      eligibleStaffIds: eligible.map((person) => person.id),
+      durationByStaff: Object.fromEntries(eligible.map((person) => [person.id,
+        applyStaffServiceOverride(service.data, person.data(), service.id).durationMinutes])) };
+  });
+  const queueInput = activeQueue.docs.map((item) => {
+    const row = item.data();
+    const joinedAt = row.joinedAt instanceof Timestamp ? row.joinedAt.toMillis() : NaN;
+    return { id: item.id, serviceId: String(row.serviceId ?? ""), status: row.status,
+      joinedAt, assignmentMode: row.assignmentMode === "specific_staff" ? "specific_staff" as const : "first_available" as const,
+      requestedStaffId: typeof row.requestedStaffId === "string" ? row.requestedStaffId : null,
+      assignedStaffId: typeof row.assignedStaffId === "string" ? row.assignedStaffId : null,
+      serviceStartedAt: row.serviceStartedAt instanceof Timestamp ? row.serviceStartedAt.toMillis() : null };
+  });
+  if (queueInput.some((entry) => !Number.isFinite(entry.joinedAt))) return null;
+  return { now, services: serviceInput, staff: staffInput, queue: queueInput, target: { serviceId: "" }, bufferAfterMinutes };
+}
+
+export const getLiveQueueWaitEstimate = onCall(publicCallableOptions, async (request) => {
+  const now = Date.now();
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
+  const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
+  const entryId = request.data?.entryId == null ? null : requireQueueId(request.data.entryId, "entryId");
+  const [settings, business] = await Promise.all([
+    db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(`businesses/${businessId}`).get(),
+  ]);
+  const flags = settings.data()?.featureFlags;
+  if (!flags || typeof flags !== "object" || (flags as Record<string, unknown>).liveAvailability !== true ||
+      !liveOperationsGate(flags)) return unavailableWait(now, "FEATURE_DISABLED");
+  if (!business.exists || business.data()?.liveQueueEnabled !== true ||
+      (!entryId && business.data()?.liveQueueIntakePaused === true))
+    return unavailableWait(now, "INTAKE_CLOSED");
+  if (entryId) {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const entry = (await queueEntries(businessId).doc(entryId).get()).data();
+    if (!entry || entry.customerId !== uid || entry.serviceId !== serviceId)
+      throw new HttpsError("permission-denied", "Bu sıra kaydına erişim yetkiniz yok.");
+    if (!isActiveQueueStatus(entry.status)) return unavailableWait(now, "QUEUE_FINISHED");
+  }
+  const input = await readLiveWaitInput(businessId, now);
+  return input ? calculateLiveQueueWait({ ...input, target: { serviceId, staffId, entryId } })
+    : unavailableWait(now, "DATA_UNAVAILABLE");
+});
+
+export const getLiveQueueWaitOptions = onCall(publicCallableOptions, async (request) => {
+  const now = Date.now();
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
+  const [settings, business] = await Promise.all([
+    db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(`businesses/${businessId}`).get(),
+  ]);
+  const flags = settings.data()?.featureFlags;
+  if (!flags || typeof flags !== "object" || (flags as Record<string, unknown>).liveAvailability !== true ||
+      !liveOperationsGate(flags) || business.data()?.liveQueueEnabled !== true ||
+      business.data()?.liveQueueIntakePaused === true) return { firstAvailable: unavailableWait(now, "FEATURE_DISABLED"), byStaff: {} };
+  const input = await readLiveWaitInput(businessId, now);
+  if (!input) return { firstAvailable: unavailableWait(now, "DATA_UNAVAILABLE"), byStaff: {} };
+  const selected = input.services.find((service) => service.id === serviceId);
+  const byStaff: Record<string, WaitResult> = {};
+  for (const staffId of selected?.eligibleStaffIds ?? []) {
+    byStaff[staffId] = calculateLiveQueueWait({ ...input, target: { serviceId, staffId } });
+  }
+  return { firstAvailable: calculateLiveQueueWait({ ...input, target: { serviceId } }), byStaff };
+});
+
+export const getBusinessLiveWaitEstimates = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  await requireBusinessManager(uid, businessId);
+  const settings = await db.doc(PLATFORM_SETTINGS_PATH).get();
+  if (!liveOperationsGate(settings.data()?.featureFlags)) throw new HttpsError("failed-precondition", "FEATURE_DISABLED");
+  const now = Date.now();
+  const input = await readLiveWaitInput(businessId, now);
+  if (!input) return { estimates: {} };
+  const estimates: Record<string, WaitResult> = {};
+  for (const entry of input.queue) {
+    if (entry.status === "waiting" || entry.status === "on_the_way")
+      estimates[entry.id] = calculateLiveQueueWait({ ...input,
+        target: { serviceId: entry.serviceId, entryId: entry.id } });
+  }
+  return { estimates };
+});
+
+// Event-driven and bounded: one summary write after a meaningful source change, never a timer.
+async function rebuildLiveQueueWaitSummary(businessId: string) {
+  const businessRef = db.doc(`businesses/${businessId}`);
+  const summaryRef = waitSummaryRef(businessId);
+  const now = Date.now();
+  const business = (await businessRef.get()).data();
+  if (!business || business.liveQueueEnabled !== true || business.liveQueueIntakePaused === true ||
+      business.status !== "active" || business.isPublished !== true || business.isSuspended === true) {
+    await db.runTransaction(async (tx) => {
+      const [currentBusiness, summary] = await Promise.all([tx.get(businessRef), tx.get(summaryRef)]);
+      const current = currentBusiness.data();
+      const stillDisabled = !current || current.liveQueueEnabled !== true || current.liveQueueIntakePaused === true ||
+        current.status !== "active" || current.isPublished !== true || current.isSuspended === true;
+      if (stillDisabled && summary.exists && Number(summary.data()?.calculatedAtMs ?? 0) <= now) tx.delete(summaryRef);
+    });
+    return;
+  }
+  const input = await readLiveWaitInput(businessId, now);
+  if (!input) {
+    await db.runTransaction(async (tx) => {
+      const summary = await tx.get(summaryRef);
+      if (summary.exists && Number(summary.data()?.calculatedAtMs ?? 0) <= now) tx.delete(summaryRef);
+    });
+    return;
+  }
+  let best: { serviceId: string; estimate: WaitResult } | null = null;
+  for (const service of input.services) {
+    if (service.eligibleStaffIds.length === 0) continue;
+    const estimate = calculateLiveQueueWait({ ...input, target: { serviceId: service.id } });
+    if (estimate.minWaitMinutes !== null && (!best || estimate.minWaitMinutes < best.estimate.minWaitMinutes! ||
+        estimate.minWaitMinutes === best.estimate.minWaitMinutes && service.id < best.serviceId)) {
+      best = { serviceId: service.id, estimate };
+    }
+  }
+  await db.runTransaction(async (tx) => {
+    const [currentBusiness, currentSummary] = await Promise.all([tx.get(businessRef), tx.get(summaryRef)]);
+    const row = currentBusiness.data();
+    if (!row || row.liveQueueEnabled !== true || row.liveQueueIntakePaused === true ||
+        row.status !== "active" || row.isPublished !== true || row.isSuspended === true) {
+      if (currentSummary.exists) tx.delete(summaryRef);
+      return;
+    }
+    if (Number(currentSummary.data()?.calculatedAtMs ?? 0) > now) return;
+    if (best) tx.set(summaryRef, { businessId, serviceId: best.serviceId,
+      estimate: best.estimate, calculatedAtMs: now });
+    else if (currentSummary.exists) tx.delete(summaryRef);
+  });
+}
+
+export const liveQueueWaitQueueChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/queueEntries/{entryId}", region: "europe-west1" },
+  async (event) => { await rebuildLiveQueueWaitSummary(event.params.businessId); });
+
+const queueNoticeRef = (businessId: string, entryId: string, kind: QueueNoticeKind) =>
+  db.doc(`liveQueueNotificationEvents/${createHash("sha256").update(`${businessId}/${entryId}/${kind}`).digest("hex")}`);
+
+async function createQueueNotice(businessId: string, entryId: string, kind: QueueNoticeKind) {
+  const ref = queueNoticeRef(businessId, entryId, kind);
+  await db.runTransaction(async (tx) => {
+    const [existing, settings, entry] = await Promise.all([
+      tx.get(ref), tx.get(db.doc(PLATFORM_SETTINGS_PATH)), tx.get(queueEntries(businessId).doc(entryId)),
+    ]);
+    const row = entry.data();
+    if (existing.exists || !row || !liveQueueGate(settings.data()?.featureFlags, true)) return;
+    const matching = kind === "almost_ready" ? ["waiting", "on_the_way"].includes(row.status)
+      : kind === "business_cancelled" ? row.status === "cancelled" && row.cancelledBy === "business"
+        : row.status === kind;
+    if (!matching || typeof row.customerId !== "string" ||
+        (kind === "almost_ready" && row.presenceConfirmedAt instanceof Timestamp)) return;
+    tx.create(ref, { businessId, entryId, customerId: row.customerId, kind,
+      state: "pending", attempts: 0, sentTokenHashes: [], nextAttemptAt: Timestamp.now(),
+      createdAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60_000) });
+  });
+}
+
+export const liveQueueNoticeQueueChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/queueEntries/{entryId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after || !isQueueStatus(after.status)) return;
+    const { businessId, entryId } = event.params;
+    const kind = statusNotice(isQueueStatus(before?.status) ? before.status : null, after.status,
+      typeof after.cancelledBy === "string" ? after.cancelledBy : undefined);
+    if (kind) await createQueueNotice(businessId, entryId, kind);
+    const settings = await db.doc(PLATFORM_SETTINGS_PATH).get();
+    if (!liveQueueGate(settings.data()?.featureFlags, true)) return;
+    const input = await readLiveWaitInput(businessId, Date.now());
+    if (!input) return;
+    for (const entry of input.queue) {
+      if (entry.status !== "waiting" && entry.status !== "on_the_way") continue;
+      const estimate = calculateLiveQueueWait({ ...input, target: { serviceId: entry.serviceId, entryId: entry.id } });
+      if (shouldSendAlmostReady(entry.status, estimate))
+        await createQueueNotice(businessId, entry.id, "almost_ready");
+    }
+  });
+
+async function deliverQueueNotice(ref: FirebaseFirestore.DocumentReference) {
+  const now = Date.now();
+  const claimed = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const row = snapshot.data();
+    const due = row?.nextAttemptAt instanceof Timestamp && row.nextAttemptAt.toMillis() <= now;
+    if (!row || !due || row.state === "delivered" || row.state === "suppressed") return null;
+    if (Number(row.attempts ?? 0) >= 5) {
+      tx.update(ref, { state: "failed", nextAttemptAt: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+      return null;
+    }
+    tx.update(ref, { state: "processing", attempts: Number(row.attempts ?? 0) + 1,
+      nextAttemptAt: Timestamp.fromMillis(now + 5 * 60_000), updatedAt: FieldValue.serverTimestamp() });
+    return row;
+  });
+  if (!claimed) return;
+  const businessId = String(claimed.businessId ?? "");
+  const entryId = String(claimed.entryId ?? "");
+  const customerId = String(claimed.customerId ?? "");
+  const kind = claimed.kind as QueueNoticeKind;
+  try {
+    const [settings, entry, pointer] = await Promise.all([
+      db.doc(PLATFORM_SETTINGS_PATH).get(), queueEntries(businessId).doc(entryId).get(),
+      customerQueuePointer(customerId, businessId).get(),
+    ]);
+    const row = entry.data();
+    const stillRelevant = kind === "almost_ready" ? ["waiting", "on_the_way"].includes(String(row?.status))
+      : kind === "business_cancelled" ? row?.status === "cancelled" : row?.status === kind;
+    if (!liveQueueGate(settings.data()?.featureFlags, true) || !row || row.customerId !== customerId || !stillRelevant ||
+        (kind === "almost_ready" && row.presenceConfirmedAt instanceof Timestamp) ||
+        (kind === "expired" && pointer.exists && pointer.data()?.entryId !== entryId)) {
+      await ref.update({ state: "suppressed", nextAttemptAt: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+      return;
+    }
+    const devices = await tokensForUsers([customerId]);
+    const copy = noticeCopy(kind);
+    let failures = 0;
+    for (const device of devices) {
+      const hash = createHash("sha256").update(device.token).digest("hex");
+      if ((claimed.sentTokenHashes as string[] | undefined)?.includes(hash)) continue;
+      const result = await sendTokenBatches([device], copy.title, copy.body,
+        { kind: "live_queue", eventKind: kind, destination: "my_queue", businessId, entryId, eventId: ref.id }, ref.id);
+      if (result.successCount > 0) {
+        await ref.update({ sentTokenHashes: FieldValue.arrayUnion(hash), updatedAt: FieldValue.serverTimestamp() });
+      } else failures++;
+    }
+    if (failures) {
+      await ref.update({ state: "retry", nextAttemptAt: Timestamp.fromMillis(Date.now() + 5 * 60_000),
+        updatedAt: FieldValue.serverTimestamp() });
+      logger.warn("Live queue push retry scheduled", { businessId, entryId, kind, category: "delivery_failed" });
+    } else {
+      await ref.update({ state: "delivered", nextAttemptAt: FieldValue.delete(),
+        deliveredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    }
+  } catch (error) {
+    await ref.update({ state: "retry", nextAttemptAt: Timestamp.fromMillis(Date.now() + 5 * 60_000),
+      updatedAt: FieldValue.serverTimestamp() });
+    logger.warn("Live queue push retry scheduled", { businessId, entryId, kind,
+      category: error instanceof Error ? error.name : "internal" });
+  }
+}
+
+export const liveQueueNoticeCreated = onDocumentCreated(
+  { document: "liveQueueNotificationEvents/{eventId}", region: "europe-west1" },
+  async (event) => { if (event.data) await deliverQueueNotice(event.data.ref); });
+
+export const retryLiveQueueNotices = onSchedule(
+  { region: "europe-west1", schedule: "every 5 minutes", maxInstances: 1 }, async () => {
+    const due = await db.collection("liveQueueNotificationEvents")
+      .where("nextAttemptAt", "<=", Timestamp.now()).limit(50).get();
+    for (const item of due.docs) await deliverQueueNotice(item.ref);
+    const alertDue = await db.collection("availabilityNotificationEvents")
+      .where("nextAttemptAt", "<=", Timestamp.now()).limit(50).get();
+    for (const item of alertDue.docs) await deliverAvailabilityNotice(item.ref);
+  });
+export const liveQueueWaitAppointmentChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/appointments/{appointmentId}", region: "europe-west1" },
+  async (event) => { await rebuildLiveQueueWaitSummary(event.params.businessId); });
+
+// Availability alerts are customer-owned requests, never reservations. A business-local
+// date and the existing booking slot engine are the only sources of bookability.
+async function availabilityGate(businessId: string, module: "availabilityAlerts" | "lastMinuteSlots") {
+  const [settings, business] = await Promise.all([
+    db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(`businesses/${businessId}`).get(),
+  ]);
+  const row = business.data();
+  if (typeof row?.timeZone === "string") {
+    try { new Intl.DateTimeFormat("en-US", { timeZone: row.timeZone }); }
+    catch { return null; }
+  }
+  return !!row && row.status === "active" && row.isPublished === true && row.isSuspended !== true &&
+    liveModuleEnabled(settings.data()?.featureFlags, module, row[`${module}Enabled`]) ? row : null;
+}
+
+function alertMinutes(value: unknown, fallback: number) {
+  if (value === undefined) return fallback;
+  const minute = Number(value);
+  return Number.isInteger(minute) && minute >= 0 && minute <= 1440 ? minute : NaN;
+}
+
+type BookingCheckCache = {
+  contexts: Map<string, Promise<Awaited<ReturnType<typeof loadBookingContext>>>>;
+  windows: Map<string, Promise<AppointmentWindow[]>>;
+};
+
+async function bookableOpening(businessId: string, serviceId: string, staffId: string | null,
+  startAtMillis: number, cache?: BookingCheckCache) {
+  try {
+    const contextKey = `${businessId}|${serviceId}|${staffId ?? ""}`;
+    let contextPromise = cache?.contexts.get(contextKey);
+    if (!contextPromise) {
+      contextPromise = loadBookingContext(businessId, serviceId, staffId);
+      cache?.contexts.set(contextKey, contextPromise);
+    }
+    const context = await contextPromise;
+    if (context.service.isBookableOnline === false ||
+        (staffId && Array.isArray(context.service.assignableStaffIds) && context.service.assignableStaffIds.length > 0 &&
+          !context.service.assignableStaffIds.includes(staffId))) return null;
+    const zone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+    const dateKey = localParts(new Date(startAtMillis), zone).dateKey;
+    const nextDay = new Date(`${dateKey}T00:00:00.000Z`);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const windowKey = `${businessId}|${dateKey}|${staffId ?? ""}`;
+    let blockedPromise = cache?.windows.get(windowKey);
+    if (!blockedPromise) {
+      blockedPromise = appointmentWindows(businessId, zonedTimeToMillis(dateKey, 0, zone),
+        zonedTimeToMillis(nextDay.toISOString().slice(0, 10), 0, zone), staffId);
+      cache?.windows.set(windowKey, blockedPromise);
+    }
+    const blocked = await blockedPromise;
+    return buildSlots(context, dateKey, staffId, blocked).includes(startAtMillis) ? context : null;
+  } catch (error) {
+    if (error instanceof HttpsError) return null;
+    throw error;
+  }
+}
+
+export const createAvailabilityAlert = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Bildirim için giriş yapmalısınız.");
+  const data = request.data ?? {};
+  const businessId = requireString(data.businessId, "businessId");
+  const serviceId = requireString(data.serviceId, "serviceId");
+  const dateKey = requireString(data.dateKey, "dateKey");
+  const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
+  const startMinute = alertMinutes(data.startMinute, 0);
+  const endMinute = alertMinutes(data.endMinute, 1440);
+  if (!isValidDateKey(dateKey) || !Number.isInteger(startMinute) || !Number.isInteger(endMinute) ||
+      startMinute >= endMinute || endMinute > 1440) {
+    throw new HttpsError("invalid-argument", "Müsaitlik aralığı geçersiz.");
+  }
+  const business = await availabilityGate(businessId, "availabilityAlerts");
+  if (!business) throw new HttpsError("failed-precondition", "FEATURE_DISABLED");
+  const context = await loadBookingContext(businessId, serviceId, staffId);
+  if (context.service.isBookableOnline === false ||
+      (staffId && Array.isArray(context.service.assignableStaffIds) && context.service.assignableStaffIds.length > 0 &&
+        !context.service.assignableStaffIds.includes(staffId)))
+    throw new HttpsError("failed-precondition", "Hizmet seçilen personelle online randevuya açık değil.");
+  const zone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+  const expiry = zonedTimeToMillis(dateKey, endMinute, zone);
+  const dayStart = zonedTimeToMillis(dateKey, 0, zone);
+  const maxDays = Math.max(1, numberOr(business.maximumBookingDaysAhead, 30));
+  if (expiry <= Date.now() || dayStart > Date.now() + (maxDays + 1) * 86_400_000) {
+    throw new HttpsError("failed-precondition", "Bu tarih için bildirim oluşturulamaz.");
+  }
+  const scope = createHash("sha256").update([uid, businessId, serviceId, staffId ?? "", dateKey,
+    startMinute, endMinute].join("|")).digest("hex");
+  const keyRef = db.doc(`availabilityAlertKeys/${scope}`);
+  const result = await db.runTransaction(async (tx) => {
+    const key = await tx.get(keyRef);
+    const oldRef = typeof key.data()?.alertId === "string" ? db.doc(`availabilityAlerts/${key.data()!.alertId}`) : null;
+    const old = oldRef ? await tx.get(oldRef) : null;
+    if (old?.exists && ["active", "matched"].includes(String(old.data()?.status)) &&
+        (old.data()?.expiresAt as Timestamp | undefined)?.toMillis()! > Date.now()) {
+      return { alertId: old.id, alreadyExists: true };
+    }
+    const ref = db.collection("availabilityAlerts").doc();
+    tx.set(ref, { userId: uid, businessId, serviceId, staffId, dateKey, startMinute, endMinute,
+      status: "active", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(expiry), lastMatchedAt: null, lastMatchedStartAt: null });
+    tx.set(keyRef, { alertId: ref.id, updatedAt: FieldValue.serverTimestamp() });
+    return { alertId: ref.id, alreadyExists: false };
+  });
+  return result;
+});
+
+export const cancelAvailabilityAlert = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const alertId = requireString(request.data?.alertId, "alertId");
+  const ref = db.doc(`availabilityAlerts/${alertId}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.userId !== uid) throw new HttpsError("permission-denied", "Bildirim bulunamadı.");
+    if (["cancelled", "expired", "claimed"].includes(String(snap.data()?.status))) return { success: true };
+    tx.update(ref, { status: "cancelled", cancelledAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp() });
+    return { success: true };
+  });
+});
+
+async function matchAvailabilityAt(businessId: string, startAtMillis: number, staffId: string | null,
+  sourceId: string, onlyServiceId?: string) {
+  const business = await availabilityGate(businessId, "availabilityAlerts");
+  if (!business) return;
+  const zone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+  const local = localParts(new Date(startAtMillis), zone);
+  const minute = local.hour * 60 + local.minute;
+  let query: FirebaseFirestore.Query = db.collection("availabilityAlerts")
+    .where("businessId", "==", businessId).where("dateKey", "==", local.dateKey)
+    .where("status", "in", ["active", "matched"]);
+  if (onlyServiceId) query = query.where("serviceId", "==", onlyServiceId);
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  const checked = new Map<string, boolean>();
+  for (;;) {
+    const page = await (cursor ? query.startAfter(cursor) : query).limit(100).get();
+    if (page.empty) break;
+    for (const snap of page.docs) {
+      const row = snap.data();
+      if (!(row.expiresAt instanceof Timestamp) || row.expiresAt.toMillis() <= Date.now() ||
+          !alertCoversSlot({ dateKey: String(row.dateKey), startMinute: Number(row.startMinute),
+            endMinute: Number(row.endMinute), staffId: row.staffId ?? null }, local.dateKey, minute, staffId)) continue;
+      const key = `${row.serviceId}|${staffId ?? ""}`;
+      if (!checked.has(key)) checked.set(key, !!await bookableOpening(businessId, String(row.serviceId), staffId, startAtMillis));
+      if (!checked.get(key)) continue;
+      const noticeRef = db.doc(`availabilityNotificationEvents/${createHash("sha256")
+        .update(`${snap.id}|${sourceId}|${startAtMillis}`).digest("hex")}`);
+      await db.runTransaction(async (tx) => {
+        const [latest, notice] = await Promise.all([tx.get(snap.ref), tx.get(noticeRef)]);
+        const current = latest.data();
+        if (!current || notice.exists || !["active", "matched"].includes(String(current.status)) ||
+            !isNewAlertMatch((current.lastMatchedAt as Timestamp | undefined)?.toMillis() ?? null,
+              (current.lastMatchedStartAt as Timestamp | undefined)?.toMillis() ?? null,
+              startAtMillis, Date.now())) return;
+        tx.update(snap.ref, { status: "matched", lastMatchedAt: FieldValue.serverTimestamp(),
+          lastMatchedStartAt: Timestamp.fromMillis(startAtMillis), updatedAt: FieldValue.serverTimestamp() });
+        tx.create(noticeRef, { alertId: snap.id, userId: current.userId, businessId,
+          serviceId: current.serviceId, staffId, startAt: Timestamp.fromMillis(startAtMillis),
+          state: "pending", attempts: 0, sentTokenHashes: [], nextAttemptAt: Timestamp.now(),
+          expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000), createdAt: FieldValue.serverTimestamp() });
+      });
+    }
+    if (page.size < 100) break;
+    cursor = page.docs[page.docs.length - 1];
+  }
+}
+
+async function matchAlertsAfterScheduleChange(businessId: string, sourceId: string,
+  dateKeyFilter?: string, staffIdFilter?: string, serviceIdFilter?: string) {
+  const business = await availabilityGate(businessId, "availabilityAlerts");
+  if (!business) return;
+  const zone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+  const staffSnapshot = staffIdFilter ? null : await db.collection(`businesses/${businessId}/staff`)
+    .where("isActive", "==", true).limit(101).get();
+  if (staffSnapshot && staffSnapshot.size > 100) return;
+  const staffIds = staffIdFilter ? [staffIdFilter] : staffSnapshot?.docs.map((item) => item.id) ?? [];
+  const slotsCache = new Map<string, Promise<number[]>>();
+  const processed = new Set<string>();
+  let base: FirebaseFirestore.Query = db.collection("availabilityAlerts")
+    .where("businessId", "==", businessId).where("status", "in", ["active", "matched"]);
+  if (dateKeyFilter) base = base.where("dateKey", "==", dateKeyFilter);
+  if (serviceIdFilter) base = base.where("serviceId", "==", serviceIdFilter);
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (;;) {
+    const page = await (cursor ? base.startAfter(cursor) : base).limit(100).get();
+    if (page.empty) break;
+    for (const snap of page.docs) {
+      const row = snap.data();
+      if (!(row.expiresAt instanceof Timestamp) || row.expiresAt.toMillis() <= Date.now() ||
+          !isValidDateKey(String(row.dateKey))) continue;
+      const candidates = typeof row.staffId === "string" ? [row.staffId] : staffIds.length ? staffIds : [null];
+      for (const candidate of candidates) {
+        if (staffIdFilter && candidate !== staffIdFilter) continue;
+        const key = `${row.serviceId}|${row.dateKey}|${candidate ?? ""}`;
+        if (!slotsCache.has(key)) slotsCache.set(key, (async () => {
+          try {
+            const context = await loadBookingContext(businessId, String(row.serviceId), candidate);
+            if (context.service.isBookableOnline === false ||
+                (candidate && Array.isArray(context.service.assignableStaffIds) && context.service.assignableStaffIds.length > 0 &&
+                  !context.service.assignableStaffIds.includes(candidate))) return [];
+            const next = new Date(`${row.dateKey}T00:00:00.000Z`);
+            next.setUTCDate(next.getUTCDate() + 1);
+            const blocked = await appointmentWindows(businessId, zonedTimeToMillis(row.dateKey, 0, zone),
+              zonedTimeToMillis(next.toISOString().slice(0, 10), 0, zone), candidate);
+            return buildSlots(context, row.dateKey, candidate, blocked);
+          } catch (error) {
+            if (error instanceof HttpsError) return [];
+            throw error;
+          }
+        })());
+        const slots = await slotsCache.get(key)!;
+        const opening = slots.find((start) => {
+          const local = localParts(new Date(start), zone);
+          return alertCoversSlot({ dateKey: row.dateKey, startMinute: Number(row.startMinute),
+            endMinute: Number(row.endMinute), staffId: row.staffId ?? null }, local.dateKey,
+          local.hour * 60 + local.minute, candidate);
+        });
+        if (opening) {
+          const matchKey = `${opening}|${candidate ?? ""}`;
+          if (!processed.has(matchKey)) {
+            processed.add(matchKey);
+            await matchAvailabilityAt(businessId, opening, candidate, sourceId, serviceIdFilter);
+          }
+          break;
+        }
+      }
+    }
+    if (page.size < 100) break;
+    cursor = page.docs[page.docs.length - 1];
+  }
+}
+
+export const availabilityWorkingHoursChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/workingHours/{hourId}", region: "europe-west1", retry: true },
+  async (event) => { await matchAlertsAfterScheduleChange(event.params.businessId, event.id); });
+
+export const availabilitySpecialDayChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/specialDays/{dayId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const dateKey = String(event.data?.after.data()?.date ?? event.data?.before.data()?.date ?? "");
+    if (isValidDateKey(dateKey)) await matchAlertsAfterScheduleChange(event.params.businessId, event.id, dateKey);
+  });
+
+export const availabilityStaffChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/staff/{staffId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const relevant = ["isActive", "workingHours", "breakSchedule", "leaveDates", "serviceIds", "specialtyCategoryIds"];
+    if (relevant.every((key) => JSON.stringify(before?.[key]) === JSON.stringify(after?.[key]))) return;
+    await matchAlertsAfterScheduleChange(event.params.businessId, event.id, undefined, event.params.staffId);
+  });
+
+export const availabilityServiceChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/services/{serviceId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const relevant = ["isActive", "isBookableOnline", "durationMinutes", "assignableStaffIds"];
+    if (relevant.every((key) => JSON.stringify(before?.[key]) === JSON.stringify(after?.[key]))) return;
+    await matchAlertsAfterScheduleChange(event.params.businessId, event.id, undefined, undefined, event.params.serviceId);
+  });
+
+export const availabilityBusinessScheduleChanged = onDocumentWritten(
+  { document: "businesses/{businessId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const relevant = ["status", "isPublished", "isSuspended", "timeZone", "slotIntervalMinutes",
+      "minimumBookingNoticeMinutes", "maximumBookingDaysAhead", "bufferBeforeMinutes", "bufferAfterMinutes",
+      "appointmentBufferMinutes", "availabilityAlertsEnabled"];
+    if (relevant.every((key) => JSON.stringify(before?.[key]) === JSON.stringify(after?.[key]))) return;
+    await matchAlertsAfterScheduleChange(event.params.businessId, event.id);
+  });
+
+export const availabilityAppointmentChanged = onDocumentWritten(
+  { document: "businesses/{businessId}/appointments/{appointmentId}", region: "europe-west1", retry: true },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const { businessId, appointmentId } = event.params;
+    // A successful booking may claim the customer's own matching alert; a push never does.
+    if (!before && after && ["pending", "confirmed"].includes(String(after.status)) &&
+        typeof after.customerId === "string" && !after.customerId.startsWith("guest_") &&
+        after.startAt instanceof Timestamp) {
+      const business = await db.doc(`businesses/${businessId}`).get();
+      const zone = typeof business.data()?.timeZone === "string" ? business.data()!.timeZone : "Europe/Istanbul";
+      const local = localParts(after.startAt.toDate(), zone);
+      const matches = await db.collection("availabilityAlerts").where("userId", "==", after.customerId)
+        .where("businessId", "==", businessId).where("dateKey", "==", local.dateKey).get();
+      for (const snap of matches.docs) {
+        const row = snap.data();
+        if (row.serviceId !== after.serviceId || !["active", "matched"].includes(String(row.status)) ||
+            !alertCoversSlot({ dateKey: row.dateKey, startMinute: row.startMinute, endMinute: row.endMinute,
+              staffId: row.staffId ?? null }, local.dateKey, local.hour * 60 + local.minute, after.staffId ?? null)) continue;
+        await db.runTransaction(async (tx) => {
+          const current = await tx.get(snap.ref);
+          if (["active", "matched"].includes(String(current.data()?.status)))
+            tx.update(snap.ref, { status: "claimed", appointmentId, claimedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp() });
+        });
+      }
+    }
+    if (!before || !after || !["pending", "confirmed"].includes(String(before.status)) ||
+        !(before.startAt instanceof Timestamp)) return;
+    const released = after.status === "cancelled" || after.status === "no_show" ||
+      (after.startAt instanceof Timestamp && after.startAt.toMillis() !== before.startAt.toMillis()) ||
+      after.staffId !== before.staffId;
+    if (!released) return;
+    const startAtMillis = before.startAt.toMillis();
+    const staffId = typeof before.staffId === "string" ? before.staffId : null;
+    if (startAtMillis <= Date.now()) return;
+    const sourceId = event.id;
+    await matchAvailabilityAt(businessId, startAtMillis, staffId, sourceId);
+    const business = await availabilityGate(businessId, "lastMinuteSlots");
+    if (!business || startAtMillis > Date.now() + LAST_MINUTE_WINDOW_HOURS * 60 * 60_000 ||
+        typeof before.serviceId !== "string") return;
+    const context = await bookableOpening(businessId, before.serviceId, staffId, startAtMillis);
+    if (!context) return;
+    const ref = db.doc(`lastMinuteOpenings/${createHash("sha256").update(`${appointmentId}|${sourceId}`)
+      .digest("hex")}`);
+    await ref.set({ businessId, serviceId: before.serviceId, staffId, startAt: Timestamp.fromMillis(startAtMillis),
+      businessName: String(business.name ?? "İşletme"), businessSlug: String(business.slug ?? ""),
+      serviceName: String(context.service.name ?? "Hizmet"), staffName: String(context.staff?.fullName ?? ""),
+      expiresAt: Timestamp.fromMillis(startAtMillis), createdAt: FieldValue.serverTimestamp() });
+  });
+
+export const listLastMinuteOpenings = onCall(publicCallableOptions, async () => {
+  const flags = (await db.doc(PLATFORM_SETTINGS_PATH).get()).data()?.featureFlags;
+  if (!liveModuleEnabled(flags, "lastMinuteSlots", true)) return { openings: [] };
+  const now = Date.now();
+  const query = db.collection("lastMinuteOpenings").where("startAt", ">", Timestamp.fromMillis(now))
+    .where("startAt", "<=", Timestamp.fromMillis(now + LAST_MINUTE_WINDOW_HOURS * 60 * 60_000))
+    .orderBy("startAt");
+  const result = [];
+  const seen = new Set<string>();
+  const businessCache = new Map<string, Promise<FirebaseFirestore.DocumentData | null>>();
+  const bookingCache: BookingCheckCache = { contexts: new Map(), windows: new Map() };
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (let page = 0; page < 4 && result.length < 6; page++) {
+    const snapshot = await (cursor ? query.startAfter(cursor) : query).limit(15).get();
+    if (snapshot.empty) break;
+    for (const item of snapshot.docs) {
+    const row = item.data();
+    if (!(row.startAt instanceof Timestamp)) continue;
+    const key = `${row.businessId}|${row.serviceId}|${row.staffId ?? ""}|${row.startAt.toMillis()}`;
+    if (seen.has(key)) continue;
+    const businessId = String(row.businessId);
+    if (!businessCache.has(businessId))
+      businessCache.set(businessId, availabilityGate(businessId, "lastMinuteSlots"));
+    const business = await businessCache.get(businessId)!;
+    if (!business || !row.startAt || !await bookableOpening(String(row.businessId), String(row.serviceId),
+      typeof row.staffId === "string" ? row.staffId : null, row.startAt.toMillis(), bookingCache)) continue;
+    seen.add(key);
+    const zone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    result.push({ id: item.id, businessId: row.businessId, businessName: row.businessName,
+      businessSlug: row.businessSlug, serviceId: row.serviceId, serviceName: row.serviceName,
+      staffId: row.staffId, staffName: row.staffName, startAtMillis: row.startAt.toMillis(),
+      dateKey: localParts(row.startAt.toDate(), zone).dateKey, timeZone: zone });
+    if (result.length >= 6) break;
+    }
+    if (snapshot.size < 15) break;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+  }
+  return { openings: result };
+});
+
+async function deliverAvailabilityNotice(ref: FirebaseFirestore.DocumentReference) {
+  const now = Date.now();
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const row = snap.data();
+    if (!row || !(row.nextAttemptAt instanceof Timestamp) || row.nextAttemptAt.toMillis() > now ||
+        ["delivered", "suppressed"].includes(String(row.state))) return null;
+    if (Number(row.attempts ?? 0) >= 5) {
+      tx.update(ref, { state: "failed", nextAttemptAt: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+      return null;
+    }
+    tx.update(ref, { state: "processing", attempts: Number(row.attempts ?? 0) + 1,
+      nextAttemptAt: Timestamp.fromMillis(now + 5 * 60_000), updatedAt: FieldValue.serverTimestamp() });
+    return row;
+  });
+  if (!claimed) return;
+  const businessId = String(claimed.businessId ?? "");
+  const alertId = String(claimed.alertId ?? "");
+  try {
+    const [business, alert] = await Promise.all([
+      availabilityGate(businessId, "availabilityAlerts"), db.doc(`availabilityAlerts/${alertId}`).get(),
+    ]);
+    const row = alert.data();
+    const startAtMillis = (claimed.startAt as Timestamp).toMillis();
+    if (!business || !row || row.userId !== claimed.userId ||
+        !["active", "matched"].includes(String(row.status)) ||
+        (row.expiresAt as Timestamp | undefined)?.toMillis()! <= Date.now() ||
+        !await bookableOpening(businessId, String(claimed.serviceId),
+          typeof claimed.staffId === "string" ? claimed.staffId : null, startAtMillis)) {
+      await ref.update({ state: "suppressed", nextAttemptAt: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+      return;
+    }
+    const tokens = await tokensForUsers([String(claimed.userId)]);
+    const zone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const dateKey = localParts(new Date(startAtMillis), zone).dateKey;
+    let failures = 0;
+    for (const device of tokens) {
+      const hash = createHash("sha256").update(device.token).digest("hex");
+      if ((claimed.sentTokenHashes as string[] | undefined)?.includes(hash)) continue;
+      const sent = await sendTokenBatches([device], "Müsaitlik oluştu",
+        "İstediğin saat aralığında uygunluk var. Randevu almak için kontrol et.",
+        { kind: "availability_alert", destination: "booking", businessId, alertId,
+          serviceId: String(claimed.serviceId), staffId: String(claimed.staffId ?? ""),
+          startAtMillis: String(startAtMillis), dateKey, businessSlug: String(business.slug ?? ""), eventId: ref.id }, ref.id);
+      if (sent.successCount > 0)
+        await ref.update({ sentTokenHashes: FieldValue.arrayUnion(hash), updatedAt: FieldValue.serverTimestamp() });
+      else failures++;
+    }
+    await ref.update(failures ? { state: "retry", nextAttemptAt: Timestamp.fromMillis(Date.now() + 5 * 60_000),
+      updatedAt: FieldValue.serverTimestamp() } : { state: "delivered", nextAttemptAt: FieldValue.delete(),
+      deliveredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  } catch (error) {
+    await ref.update({ state: "retry", nextAttemptAt: Timestamp.fromMillis(Date.now() + 5 * 60_000),
+      updatedAt: FieldValue.serverTimestamp() });
+    logger.warn("Availability push retry scheduled", { businessId, alertId,
+      category: error instanceof Error ? error.name : "internal" });
+  }
+}
+
+export const availabilityNoticeCreated = onDocumentCreated(
+  { document: "availabilityNotificationEvents/{eventId}", region: "europe-west1" },
+  async (event) => { if (event.data) await deliverAvailabilityNotice(event.data.ref); });
+
+// Updated only after business capability/config changes; read once per discovery page.
+async function rebuildLiveQueueDiscovery(businessId: string) {
+  const businessRef = db.doc(`businesses/${businessId}`);
+  const business = await businessRef.get();
+  const row = business.data();
+  async function persist(value: FirebaseFirestore.DocumentData | null) {
+    await db.runTransaction(async (tx) => {
+      const latest = await tx.get(businessRef);
+      // Older trigger executions must never overwrite a newer intake state.
+      if (!latest.updateTime?.isEqual(business.updateTime!)) return;
+      if (value) tx.set(discoveryRef(businessId), value);
+      else tx.delete(discoveryRef(businessId));
+    });
+  }
+  if (!row || row.liveQueueEnabled !== true || row.liveQueueIntakePaused === true ||
+      row.status !== "active" || row.isPublished !== true || row.isSuspended === true ||
+      typeof row.slug !== "string" || row.slug.trim().length === 0) {
+    await persist(null);
+    return;
+  }
+  const [services, staff, hours, specialDays] = await Promise.all([
+    db.collection(`businesses/${businessId}/services`).limit(101).get(),
+    db.collection(`businesses/${businessId}/staff`).limit(101).get(),
+    db.collection(`businesses/${businessId}/workingHours`).get(),
+    db.collection(`businesses/${businessId}/specialDays`).get(),
+  ]);
+  // A projection that cannot be kept small is absent, never advertised.
+  if (services.size > 100 || staff.size > 100 || specialDays.size > 500) { await persist(null); return; }
+  const serviceRows = services.docs.filter((item) => !validateQueueSelection(row, item.data(), null, item.id, null))
+    .map((item) => ({ id: item.id, name: String(item.data().name ?? "Hizmet"), category: String(item.data().category ?? ""),
+      durationMinutes: item.data().durationMinutes, isActive: true, isBookableOnline: true,
+      assignableStaffIds: Array.isArray(item.data().assignableStaffIds) ? item.data().assignableStaffIds : [] }));
+  const staffRows = staff.docs.filter((item) => item.data().isActive === true && !item.data().archivedAt)
+    .map((item) => ({ id: item.id, isActive: true,
+      serviceIds: Array.isArray(item.data().serviceIds) ? item.data().serviceIds : [],
+      specialtyCategoryIds: Array.isArray(item.data().specialtyCategoryIds) ? item.data().specialtyCategoryIds : [],
+      workingHours: Array.isArray(item.data().workingHours) ? item.data().workingHours : [],
+      breakSchedule: Array.isArray(item.data().breakSchedule) ? item.data().breakSchedule : [],
+      leaveDates: Array.isArray(item.data().leaveDates) ? item.data().leaveDates : [] }));
+  const eligibleServices = serviceRows.filter((service) => staffRows.some((person) =>
+    !validateQueueSelection(row, service, person, service.id, person.id)));
+  if (eligibleServices.length === 0) {
+    await persist(null); return;
+  }
+  const projection = {
+    businessId, name: String(row.name ?? "İşletme"), slug: String(row.slug ?? ""),
+    category: String(row.category ?? ""), city: String(row.city ?? ""), district: String(row.district ?? ""),
+    logoUrl: typeof row.logoUrl === "string" ? row.logoUrl : null,
+    timeZone: typeof row.timeZone === "string" ? row.timeZone : "Europe/Istanbul",
+    services: eligibleServices, staff: staffRows,
+    businessHours: hours.docs.map((item) => scheduleFromData(item.data())).filter((item): item is Schedule => item !== null)
+      .map((item) => ({ day: item.day, isOpen: item.isOpen, start: item.start, end: item.end,
+        breakStart: item.breakStart ?? null, breakEnd: item.breakEnd ?? null })),
+    specialDays: specialDays.docs.map((item) => ({ date: item.data().date, type: item.data().type,
+      staffId: item.data().staffId ?? null, start: item.data().start ?? null, end: item.data().end ?? null })),
+    accepting: true, updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (Buffer.byteLength(JSON.stringify(projection)) > 800_000) { await persist(null); return; }
+  await persist(projection);
+}
+
+export const liveQueueDiscoveryBusinessUpdated = onDocumentUpdated(
+  { document: "businesses/{businessId}", region: "europe-west1" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const relevant = ["liveQueueEnabled", "liveQueueIntakePaused", "status", "isPublished", "isSuspended",
+      "name", "slug", "category", "city", "district", "logoUrl", "timeZone",
+      "bufferBeforeMinutes", "bufferAfterMinutes", "appointmentBufferMinutes"];
+    if (relevant.every((key) => before?.[key] === after?.[key])) return;
+    await Promise.all([rebuildLiveQueueDiscovery(event.params.businessId), rebuildLiveQueueWaitSummary(event.params.businessId)]);
+  });
+export const liveQueueDiscoveryServicesUpdated = onDocumentWritten(
+  { document: "businesses/{businessId}/services/{serviceId}", region: "europe-west1" },
+  async (event) => { await Promise.all([rebuildLiveQueueDiscovery(event.params.businessId), rebuildLiveQueueWaitSummary(event.params.businessId)]); });
+export const liveQueueDiscoveryStaffUpdated = onDocumentWritten(
+  { document: "businesses/{businessId}/staff/{staffId}", region: "europe-west1" },
+  async (event) => { await Promise.all([rebuildLiveQueueDiscovery(event.params.businessId), rebuildLiveQueueWaitSummary(event.params.businessId)]); });
+export const liveQueueDiscoveryHoursUpdated = onDocumentWritten(
+  { document: "businesses/{businessId}/workingHours/{dayId}", region: "europe-west1" },
+  async (event) => { await Promise.all([rebuildLiveQueueDiscovery(event.params.businessId), rebuildLiveQueueWaitSummary(event.params.businessId)]); });
+export const liveQueueDiscoverySpecialDaysUpdated = onDocumentWritten(
+  { document: "businesses/{businessId}/specialDays/{dayId}", region: "europe-west1" },
+  async (event) => { await Promise.all([rebuildLiveQueueDiscovery(event.params.businessId), rebuildLiveQueueWaitSummary(event.params.businessId)]); });
+
+export const listLiveQueueDiscovery = onCall(publicCallableOptions, async (request) => {
+  const settings = await db.doc(PLATFORM_SETTINGS_PATH).get();
+  const flags = settings.data()?.featureFlags;
+  if (!flags || typeof flags !== "object" || (flags as Record<string, unknown>).liveAvailability !== true ||
+      !liveOperationsGate(flags)) return { businesses: [] };
+  const selectedId = request.data?.businessId == null ? null : requireQueueId(request.data.businessId, "businessId");
+  if (selectedId) {
+    const current = (await db.doc(`businesses/${selectedId}`).get()).data();
+    if (!current || current.liveQueueEnabled !== true || current.liveQueueIntakePaused === true ||
+        current.status !== "active" || current.isPublished !== true || current.isSuspended === true) {
+      return { businesses: [] };
+    }
+  }
+  const snapshot = selectedId
+    ? [await discoveryRef(selectedId).get()]
+    : (await db.collection("liveQueueDiscovery").where("accepting", "==", true).limit(50).get()).docs;
+  const now = new Date();
+  const businesses = snapshot.flatMap((item) => {
+    const data = item.data();
+    if (!data) return [];
+    const business = { status: "active", isPublished: true };
+    const services = Array.isArray(data.services) ? data.services : [];
+    const staff = Array.isArray(data.staff) ? data.staff : [];
+    const context = { business: { timeZone: data.timeZone }, businessHours: data.businessHours ?? [],
+      specialDays: data.specialDays ?? [], service: null, staff: null };
+    const open = services.some((service: FirebaseFirestore.DocumentData) =>
+      staff.some((person: FirebaseFirestore.DocumentData) =>
+        !validateQueueSelection(business, service, person, service.id, person.id) &&
+        queueOpenNow({ ...context, service, staff: person }, person.id, now)));
+    return open ? [{ id: item.id, name: data.name, slug: data.slug, category: data.category,
+      city: data.city, district: data.district, logoUrl: data.logoUrl,
+      serviceCount: services.length, updatedAt: data.updatedAt?.toDate?.().toISOString() ?? null }] : [];
+  });
+  businesses.sort((a, b) => String(a.name).localeCompare(String(b.name), "tr"));
+  const summaries = businesses.length > 0 ? await db.getAll(...businesses.map((item) => waitSummaryRef(item.id))) : [];
+  const summaryById = new Map(summaries.map((item) => [item.id, item.data()]));
+  return { businesses: businesses.map((item) => {
+    const summary = summaryById.get(item.id);
+    const source = snapshot.find((doc) => doc.id === item.id)?.data();
+    const service = Array.isArray(source?.services)
+      ? source.services.find((row: FirebaseFirestore.DocumentData) => row.id === summary?.serviceId) : null;
+    const fresh = Number.isFinite(summary?.calculatedAtMs) && now.getTime() - summary!.calculatedAtMs < 5 * 60_000;
+    return { ...item, earliestWait: fresh && service ? { ...summary!.estimate, serviceName: service.name } : null };
+  }) };
+});
+
+function requireQueueId(value: unknown, name: string): string {
+  const id = requireString(value, name);
+  if (id.length > 128 || id.includes("/")) throw new HttpsError("invalid-argument", `${name} geçersiz.`);
+  return id;
+}
+
+function assertQueueGate(flags: unknown, businessEnabled: unknown, paused: unknown, purpose: "join" | "customer" | "operations") {
+  const enabled = purpose === "join" ? queueIntakeOpen(flags, businessEnabled, paused)
+    : purpose === "operations" ? liveOperationsGate(flags) : liveQueueGate(flags, true);
+  if (!enabled) {
+    throw new HttpsError("failed-precondition", "FEATURE_DISABLED");
+  }
+}
+
+async function readQueueGate(businessId: string, purpose: "join" | "customer" | "operations") {
+  const [settings, business] = await Promise.all([
+    db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(`businesses/${businessId}`).get(),
+  ]);
+  if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+  assertQueueGate(settings.data()?.featureFlags, business.data()?.liveQueueEnabled, business.data()?.liveQueueIntakePaused, purpose);
+  return business;
+}
+
+function queueOpenNow(context: Pick<Awaited<ReturnType<typeof loadBookingContext>>, "business" | "service" | "staff" | "businessHours" | "specialDays">, staffId: string | null, now: Date) {
+  const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+  let local;
+  try { local = localParts(now, timeZone); } catch { return false; }
+  const schedule = effectiveSchedule(context, local.dateKey, local.weekday, staffId);
+  if (!schedule) return false;
+  const minute = local.hour * 60 + local.minute;
+  const start = timeToMinutes(schedule.start);
+  const end = timeToMinutes(schedule.end);
+  const duration = Number(context.service.durationMinutes);
+  if (start === null || end === null || minute < start || minute + duration > end) return false;
+  const breakStart = timeToMinutes(schedule.breakStart);
+  const breakEnd = timeToMinutes(schedule.breakEnd);
+  if (breakStart !== null && breakEnd !== null && minute < breakEnd && minute + duration > breakStart) return false;
+  const staffBreaks = Array.isArray(context.staff?.breakSchedule) ? context.staff.breakSchedule : [];
+  return !staffBreaks.some((item: FirebaseFirestore.DocumentData) => item.day === local.weekday &&
+    minute < (timeToMinutes(item.breakEnd) ?? -1) &&
+    minute + duration > (timeToMinutes(item.breakStart) ?? Infinity));
+}
+
+async function queueStaffCanStartNow(context: Awaited<ReturnType<typeof loadBookingContext>>, businessId: string, staffId: string) {
+  const now = Date.now();
+  if (!queueOpenNow(context, staffId, new Date(now))) return false;
+  const duration = normalizedBookingDuration(context.service.durationMinutes);
+  const notice = Math.max(0, numberOr(context.business.minimumBookingNoticeMinutes, 30));
+  const buffer = Math.max(0, numberOr(context.business.bufferAfterMinutes,
+    numberOr(context.business.appointmentBufferMinutes, 0)));
+  if (notice < duration + buffer) return false;
+  const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+  const local = localParts(new Date(now), timeZone);
+  const nextDay = new Date(Date.UTC(local.year, local.month - 1, local.day + 1)).toISOString().slice(0, 10);
+  const appointments = await appointmentWindows(businessId,
+    zonedTimeToMillis(local.dateKey, 0, timeZone), zonedTimeToMillis(nextDay, 0, timeZone), staffId);
+  return !appointments.some((item) => overlaps(now, now + duration * 60_000, item));
+}
+
+export const joinQueue = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
+  const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
+  const mode = staffId ? "specific_staff" : "first_available";
+  await readQueueGate(businessId, "join");
+
+  const context = await loadBookingContext(businessId, serviceId, staffId);
+  if (validateQueueSelection(context.business, context.service, context.staff, serviceId, staffId)) {
+    throw new HttpsError("failed-precondition", "İşletme, hizmet veya çalışan canlı sıra için uygun değil.");
+  }
+  const now = new Date();
+  let capable = staffId ? queueOpenNow(context, staffId, now) : false;
+  if (!staffId) {
+    const staffRows = await db.collection(`businesses/${businessId}/staff`).where("isActive", "==", true).limit(100).get();
+    capable = staffRows.docs.some((row) =>
+      !validateQueueSelection(context.business, context.service, row.data(), serviceId, row.id) &&
+      queueOpenNow({ ...context, staff: row.data() }, row.id, now));
+  }
+  if (!capable) throw new HttpsError("failed-precondition", "İşletme şu anda canlı sıra kabul etmiyor.");
+
+  const markerRef = queueMarker(businessId, uid);
+  const entryRef = queueEntries(businessId).doc();
+  const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+  const businessDayKey = localParts(now, timeZone).dateKey;
+  try {
+    return await db.runTransaction(async (tx) => {
+      const [settings, business, service, staff, marker] = await Promise.all([
+        tx.get(db.doc(PLATFORM_SETTINGS_PATH)), tx.get(db.doc(`businesses/${businessId}`)),
+        tx.get(db.doc(`businesses/${businessId}/services/${serviceId}`)),
+        staffId ? tx.get(db.doc(`businesses/${businessId}/staff/${staffId}`)) : Promise.resolve(null),
+        tx.get(markerRef),
+      ]);
+      assertQueueGate(settings.data()?.featureFlags, business.data()?.liveQueueEnabled, business.data()?.liveQueueIntakePaused, "join");
+      const invalid = validateQueueSelection(business.data() ?? null, service.data() ?? null, staff?.data() ?? null, serviceId, staffId);
+      if (invalid) throw new HttpsError("failed-precondition", `${invalid} canlı sıra için uygun değil.`);
+      const oldId = typeof marker.data()?.entryId === "string" ? marker.data()!.entryId : null;
+      const oldRef = oldId ? queueEntries(businessId).doc(oldId) : null;
+      const old = oldRef ? await tx.get(oldRef) : null;
+      const oldData = old?.data();
+      if (oldData && isActiveQueueStatus(oldData.status)) {
+        if (oldData.businessDayKey === businessDayKey) {
+          if (isSameActiveJoin(oldData, uid, serviceId, staffId)) {
+            tx.set(customerQueuePointer(uid, businessId), { entryId: old!.id, updatedAt: FieldValue.serverTimestamp() });
+            return { entryId: old!.id, status: oldData.status, existing: true };
+          }
+          throw new HttpsError("already-exists", "Bu işletmede zaten aktif bir canlı sıra kaydınız var.");
+        }
+        // Queue services fit within one workday; any previous-day active entry is stale.
+        if (typeof oldData.assignedStaffId === "string") {
+          const oldLockRef = queueStaffLock(businessId, oldData.assignedStaffId);
+          const oldLock = await tx.get(oldLockRef);
+          if (oldLock.data()?.entryId === oldRef!.id) tx.delete(oldLockRef);
+        }
+        tx.update(oldRef!, { status: "expired", expiredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      }
+      tx.set(entryRef, {
+        businessId, customerId: uid, serviceId, assignmentMode: mode,
+        requestedStaffId: staffId, assignedStaffId: staffId, status: "waiting",
+        businessDayKey, source: "app", joinedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(markerRef, { entryId: entryRef.id, serviceId, updatedAt: FieldValue.serverTimestamp() });
+      tx.set(customerQueuePointer(uid, businessId), { entryId: entryRef.id, updatedAt: FieldValue.serverTimestamp() });
+      return { entryId: entryRef.id, status: "waiting", existing: false };
+    });
+  } catch (error) {
+    logger.warn("Live queue join failed", { operation: "joinQueue", businessId, category: error instanceof HttpsError ? error.code : "internal" });
+    throw error;
+  }
+});
+
+export const getMyActiveQueueEntry = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const business = await db.doc(`businesses/${businessId}`).get();
+  const marker = await queueMarker(businessId, uid).get();
+  const entryId = marker.data()?.entryId;
+  if (typeof entryId !== "string") return { entry: null };
+  const snapshot = await queueEntries(businessId).doc(entryId).get();
+  const entry = snapshot.data();
+  const timeZone = typeof business.data()?.timeZone === "string" ? business.data()!.timeZone : "Europe/Istanbul";
+  const today = localParts(new Date(), timeZone).dateKey;
+  return { entry: entry?.customerId === uid && entry.businessDayKey === today && isActiveQueueStatus(entry.status)
+    ? { id: snapshot.id, ...entry } : null };
+});
+
+// One small, server-maintained pointer per active business. No cross-business queue scan.
+export const getMyActiveQueueEntries = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const pointers = await db.collection(`users/${uid}/activeQueueEntries`).get();
+  const snapshots = await Promise.all(pointers.docs.map(async (pointer) => {
+    const entryId = pointer.data().entryId;
+    if (typeof entryId !== "string") return null;
+    const entry = await queueEntries(pointer.id).doc(entryId).get();
+    const row = entry.data();
+    return row?.customerId === uid && isActiveQueueStatus(row.status)
+      ? { businessId: pointer.id, entryId: entry.id, status: row.status } : null;
+  }));
+  return { entries: snapshots.filter((entry) => entry !== null) };
+});
+
+async function customerQueueTransition(uid: string, businessId: string, entryId: string, to: "cancelled" | "on_the_way", etaMinutes: number | null = null) {
+  const ref = queueEntries(businessId).doc(entryId);
+  const markerRef = queueMarker(businessId, uid);
+  return db.runTransaction(async (tx) => {
+    const [settings, business, snapshot, marker] = await Promise.all([
+      tx.get(db.doc(PLATFORM_SETTINGS_PATH)), tx.get(db.doc(`businesses/${businessId}`)), tx.get(ref), tx.get(markerRef),
+    ]);
+    // A customer may always leave their own existing queue when intake is disabled.
+    if (to !== "cancelled") assertQueueGate(settings.data()?.featureFlags, business.data()?.liveQueueEnabled, business.data()?.liveQueueIntakePaused, "customer");
+    if (!snapshot.exists) throw new HttpsError("not-found", "Canlı sıra kaydı bulunamadı.");
+    const entry = snapshot.data()!;
+    if (entry.customerId !== uid) throw new HttpsError("permission-denied", "Bu sıra kaydına erişim yetkiniz yok.");
+    if (entry.status === to) return { entryId, status: to, existing: true };
+    if (to === "on_the_way" && ["called", "in_service"].includes(String(entry.status))) {
+      return { entryId, status: entry.status, existing: true };
+    }
+    if (to === "cancelled" && ["cancelled", "completed", "expired", "no_show"].includes(String(entry.status))) {
+      return { entryId, status: entry.status, existing: true };
+    }
+    if (!isQueueStatus(entry.status) || !canTransitionQueue(entry.status, to) || entry.status === "in_service") {
+      throw new HttpsError("failed-precondition", "Bu sıra durumu değiştirilemez.");
+    }
+    if (to === "cancelled" && typeof entry.assignedStaffId === "string") {
+      const lockRef = queueStaffLock(businessId, entry.assignedStaffId);
+      const lock = await tx.get(lockRef);
+      if (lock.data()?.entryId === entryId) tx.delete(lockRef);
+    }
+    tx.update(ref, { status: to, updatedAt: FieldValue.serverTimestamp(),
+      ...(to === "cancelled" ? { cancelledAt: FieldValue.serverTimestamp(), cancelledBy: "customer" } :
+        { onTheWayAt: FieldValue.serverTimestamp(), declaredEtaMinutes: etaMinutes,
+          expectedArrivalAt: etaMinutes === null ? null : Timestamp.fromMillis(Date.now() + etaMinutes * 60_000) }) });
+    if (to === "cancelled" && marker.data()?.entryId === entryId) tx.delete(markerRef);
+    if (to === "cancelled") tx.delete(customerQueuePointer(uid, businessId));
+    return { entryId, status: to, existing: false };
+  });
+}
+
+export const leaveQueue = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  return customerQueueTransition(uid, requireQueueId(request.data?.businessId, "businessId"), requireQueueId(request.data?.entryId, "entryId"), "cancelled");
+});
+
+export const markOnTheWay = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const eta = request.data?.etaMinutes;
+  if (eta !== null && eta !== undefined && !isDeclaredEta(eta))
+    throw new HttpsError("invalid-argument", "Tahmini varış seçeneği geçersiz.");
+  return customerQueueTransition(uid, requireQueueId(request.data?.businessId, "businessId"), requireQueueId(request.data?.entryId, "entryId"), "on_the_way", eta ?? null);
+});
+
+export const confirmQueuePresence = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const entryId = requireQueueId(request.data?.entryId, "entryId");
+  const ref = queueEntries(businessId).doc(entryId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const row = snapshot.data();
+    if (!row || row.customerId !== uid) throw new HttpsError("permission-denied", "Bu sıra kaydına erişim yetkiniz yok.");
+    if (row.status !== "waiting" && row.status !== "on_the_way")
+      throw new HttpsError("failed-precondition", "Bu sırada varış onayı verilemez.");
+    const prior = row.presenceConfirmedAt instanceof Timestamp ? row.presenceConfirmedAt.toMillis() : 0;
+    if (Date.now() - prior < 60_000) return { confirmed: true, existing: true };
+    tx.update(ref, { presenceConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    return { confirmed: true, existing: false };
+  });
+});
+
+export const transitionQueueEntry = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const entryId = requireQueueId(request.data?.entryId, "entryId");
+  const to = request.data?.status;
+  if (!isQueueStatus(to) || !["called", "in_service", "completed", "cancelled", "expired", "no_show"].includes(to)) {
+    throw new HttpsError("invalid-argument", "Sıra durumu geçersiz.");
+  }
+  await requireBusinessManager(uid, businessId);
+  await readQueueGate(businessId, "operations");
+  const ref = queueEntries(businessId).doc(entryId);
+  // Operational transitions check today's real schedule; they never reserve or change appointments.
+  let operationalContext: Awaited<ReturnType<typeof loadBookingContext>> | null = null;
+  if (to === "called" || to === "in_service") {
+    const preflight = await ref.get();
+    if (!preflight.exists) throw new HttpsError("not-found", "Canlı sıra kaydı bulunamadı.");
+    const row = preflight.data()!;
+    const staffId = row.assignedStaffId ?? row.requestedStaffId ?? request.data?.staffId;
+    if (typeof staffId !== "string" || !staffId || staffId.includes("/")) throw new HttpsError("invalid-argument", "Çalışan seçilmelidir.");
+    operationalContext = await loadBookingContext(businessId, String(row.serviceId), staffId);
+    if (!await queueStaffCanStartNow(operationalContext, businessId, staffId)) {
+      throw new HttpsError("failed-precondition", "Çalışan şu anda bu hizmeti güvenle başlatamıyor.");
+    }
+    if (to === "called" && (await findNextQueueCandidate(businessId, staffId))?.id !== entryId) {
+      throw new HttpsError("failed-precondition", "Bu çalışan için sıradaki uygun müşteri farklı. Listeyi yenileyin.");
+    }
+  }
+  return db.runTransaction(async (tx) => {
+    const [settings, business, snapshot] = await Promise.all([
+      tx.get(db.doc(PLATFORM_SETTINGS_PATH)), tx.get(db.doc(`businesses/${businessId}`)), tx.get(ref),
+    ]);
+    assertQueueGate(settings.data()?.featureFlags, business.data()?.liveQueueEnabled, business.data()?.liveQueueIntakePaused, "operations");
+    if (!snapshot.exists) throw new HttpsError("not-found", "Canlı sıra kaydı bulunamadı.");
+    const entry = snapshot.data()!;
+    if (entry.businessId !== businessId || !isQueueStatus(entry.status)) throw new HttpsError("failed-precondition", "Sıra kaydı geçersiz.");
+    if (entry.status === to) return { entryId, status: to, existing: true };
+    if (!canTransitionQueue(entry.status, to)) throw new HttpsError("failed-precondition", "Geçersiz sıra geçişi.");
+    if (to === "no_show" && !isCalledOverdue(entry.calledAt instanceof Timestamp ? entry.calledAt.toMillis() : null, Date.now())) {
+      throw new HttpsError("failed-precondition", "Müşterinin çağrı bekleme süresi henüz dolmadı.");
+    }
+    if ((to === "called" || to === "in_service") && entry.businessDayKey !==
+      localParts(new Date(), typeof business.data()?.timeZone === "string" ? business.data()!.timeZone : "Europe/Istanbul").dateKey) {
+      throw new HttpsError("failed-precondition", "Önceki iş gününün sıra kaydı çağrılamaz.");
+    }
+    const markerRef = queueMarker(businessId, String(entry.customerId));
+    const marker = await tx.get(markerRef);
+    const stampField: Partial<Record<QueueStatus, string>> = {
+      called: "calledAt", in_service: "serviceStartedAt", completed: "completedAt",
+      cancelled: "cancelledAt", expired: "expiredAt", no_show: "noShowAt",
+    };
+    const update: Record<string, unknown> = { status: to, updatedAt: FieldValue.serverTimestamp() };
+    if (stampField[to]) update[stampField[to]!] = FieldValue.serverTimestamp();
+    if (to === "cancelled") update.cancelledBy = "business";
+    let lockRef: ReturnType<typeof queueStaffLock> | null = null;
+    let lockEntryId: unknown = null;
+    if (to === "called" || to === "in_service") {
+      const staffId = entry.assignedStaffId ?? entry.requestedStaffId ?? request.data?.staffId;
+      if (typeof staffId !== "string" || !staffId || staffId.includes("/")) throw new HttpsError("invalid-argument", "Çalışan seçilmelidir.");
+      const staff = await tx.get(db.doc(`businesses/${businessId}/staff/${staffId}`));
+      const service = await tx.get(db.doc(`businesses/${businessId}/services/${entry.serviceId}`));
+      if (validateQueueSelection(business.data() ?? null, service.data() ?? null, staff.data() ?? null, String(entry.serviceId), staffId)) {
+        throw new HttpsError("failed-precondition", "Çalışan veya hizmet uygun değil.");
+      }
+      if (entry.assignedStaffId && entry.assignedStaffId !== staffId) throw new HttpsError("failed-precondition", "Atanan çalışan değiştirilemez.");
+      lockRef = queueStaffLock(businessId, staffId);
+      lockEntryId = (await tx.get(lockRef)).data()?.entryId;
+      if (lockEntryId && lockEntryId !== entryId) throw new HttpsError("already-exists", "Çalışanın devam eden canlı işlemi var.");
+      update.assignedStaffId = staffId;
+      if (to === "in_service" && operationalContext) {
+        const now = Date.now();
+        const timeZone = typeof operationalContext.business.timeZone === "string" ? operationalContext.business.timeZone : "Europe/Istanbul";
+        const local = localParts(new Date(now), timeZone);
+        const nextDay = new Date(Date.UTC(local.year, local.month - 1, local.day + 1)).toISOString().slice(0, 10);
+        const dayStart = zonedTimeToMillis(local.dateKey, 0, timeZone);
+        const dayEnd = zonedTimeToMillis(nextDay, 0, timeZone);
+        const duration = normalizedBookingDuration(operationalContext.service.durationMinutes);
+        const notice = Math.max(0, numberOr(business.data()?.minimumBookingNoticeMinutes, 30));
+        const bufferAfter = Math.max(0, numberOr(business.data()?.bufferAfterMinutes,
+          numberOr(business.data()?.appointmentBufferMinutes, 0)));
+        // Existing booking validation only excludes appointments, not a running queue service.
+        // Require its earliest newly bookable slot to start after this service and buffer.
+        if (notice < duration + bufferAfter) {
+          throw new HttpsError("failed-precondition", "Randevu bildirim süresi bu hizmet için güvenli değil.");
+        }
+        const schedule = effectiveSchedule(operationalContext, local.dateKey, local.weekday, staffId);
+        if (!schedule || local.hour * 60 + local.minute + duration > (timeToMinutes(schedule.end) ?? 0)) {
+          throw new HttpsError("failed-precondition", "Hizmet çalışma saatleri içinde tamamlanamaz.");
+        }
+        const appointmentQuery = db.collection(`businesses/${businessId}/appointments`)
+          .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+          .where("startAt", "<", Timestamp.fromMillis(dayEnd));
+        const appointments = await tx.get(appointmentQuery);
+        const collision = appointments.docs.some((item) => {
+          const appointment = item.data();
+          if (!["pending", "confirmed"].includes(String(appointment.status))) return false;
+          if (appointment.staffId && appointment.staffId !== staffId) return false;
+          const startAt = appointment.startAt as Timestamp | undefined;
+          const endAt = appointment.endAt as Timestamp | undefined;
+          return !!startAt && !!endAt && startAt.toMillis() < now + duration * 60_000 && endAt.toMillis() > now;
+        });
+        if (collision) throw new HttpsError("failed-precondition", "Çalışanın mevcut randevusu hizmete başlamayı engelliyor.");
+      }
+    }
+    if (!isActiveQueueStatus(to) && typeof entry.assignedStaffId === "string") {
+      lockRef = queueStaffLock(businessId, entry.assignedStaffId);
+      lockEntryId = (await tx.get(lockRef)).data()?.entryId;
+    }
+    tx.update(ref, update);
+    if (to === "called" && lockRef) tx.set(lockRef, { entryId, updatedAt: FieldValue.serverTimestamp() });
+    if (!isActiveQueueStatus(to) && lockRef && lockEntryId === entryId) tx.delete(lockRef);
+    if (!isActiveQueueStatus(to) && marker.data()?.entryId === entryId) tx.delete(markerRef);
+    if (!isActiveQueueStatus(to)) tx.delete(customerQueuePointer(String(entry.customerId), businessId));
+    return { entryId, status: to, existing: false };
+  });
+});
+
+async function findNextQueueCandidate(businessId: string, staffId: string): Promise<FirebaseFirestore.QueryDocumentSnapshot | null> {
+  const candidates = await queueEntries(businessId)
+    .where("status", "in", ["waiting", "on_the_way"])
+    .orderBy("joinedAt", "asc").limit(100).get();
+  const serviceEligible = new Map<string, boolean>();
+  for (const candidate of candidates.docs) {
+    const row = candidate.data();
+    if (row.requestedStaffId && row.requestedStaffId !== staffId) continue;
+    const serviceId = String(row.serviceId);
+    if (serviceEligible.get(serviceId) === true) return candidate;
+    if (serviceEligible.get(serviceId) === false) continue;
+    try {
+      const context = await loadBookingContext(businessId, serviceId, staffId);
+      const invalid = validateQueueSelection(context.business, context.service, context.staff, serviceId, staffId);
+      if (invalid) { serviceEligible.set(serviceId, false); continue; }
+      const eligible = await queueStaffCanStartNow(context, businessId, staffId);
+      serviceEligible.set(serviceId, eligible);
+      if (eligible) return candidate;
+    } catch (error) {
+      serviceEligible.set(serviceId, false);
+      logger.warn("Live queue candidate skipped", { operation: "findNextQueueCandidate", businessId,
+        entryId: candidate.id, category: error instanceof HttpsError ? error.code : "internal" });
+    }
+  }
+  return null;
+}
+
+export const getLiveOperationsCapabilities = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  await requireBusinessManager(uid, businessId);
+  await readQueueGate(businessId, "operations");
+  const statuses: QueueStatus[] = ["waiting", "on_the_way", "called", "in_service", "completed", "cancelled", "expired", "no_show"];
+  return { activeStatuses: ACTIVE_QUEUE_STATUSES,
+    transitions: Object.fromEntries(statuses.map((status) => [status, operatorQueueTransitions(status)])),
+    calledGraceMinutes: CALLED_GRACE_MINUTES };
+});
+
+export const callNextCustomer = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireQueueId(request.data?.businessId, "businessId");
+  const staffId = requireQueueId(request.data?.staffId, "staffId");
+  await requireBusinessManager(uid, businessId);
+  await readQueueGate(businessId, "operations");
+  if ((await queueStaffLock(businessId, staffId).get()).exists) {
+    throw new HttpsError("already-exists", "Çalışanın devam eden canlı işlemi var.");
+  }
+  const selected = await findNextQueueCandidate(businessId, staffId);
+  if (!selected) throw new HttpsError("not-found", "Bu çalışan için çağrılabilecek müşteri bulunamadı.");
+
+  const entryRef = selected.ref;
+  const lockRef = queueStaffLock(businessId, staffId);
+  return db.runTransaction(async (tx) => {
+    const [settings, business, entry, lock, staff, service] = await Promise.all([
+      tx.get(db.doc(PLATFORM_SETTINGS_PATH)), tx.get(db.doc(`businesses/${businessId}`)),
+      tx.get(entryRef), tx.get(lockRef), tx.get(db.doc(`businesses/${businessId}/staff/${staffId}`)),
+      tx.get(db.doc(`businesses/${businessId}/services/${selected!.data().serviceId}`)),
+    ]);
+    assertQueueGate(settings.data()?.featureFlags, business.data()?.liveQueueEnabled, business.data()?.liveQueueIntakePaused, "operations");
+    if (lock.exists) throw new HttpsError("already-exists", "Çalışanın devam eden canlı işlemi var.");
+    const row = entry.data();
+    if (!row || !["waiting", "on_the_way"].includes(String(row.status)) ||
+      (row.requestedStaffId && row.requestedStaffId !== staffId)) {
+      throw new HttpsError("failed-precondition", "Sıra değişti; listeyi yenileyin.");
+    }
+    if (validateQueueSelection(business.data() ?? null, service.data() ?? null, staff.data() ?? null, String(row.serviceId), staffId)) {
+      throw new HttpsError("failed-precondition", "Hizmet veya çalışan uygun değil.");
+    }
+    const timeZone = typeof business.data()?.timeZone === "string" ? business.data()!.timeZone : "Europe/Istanbul";
+    if (row.businessDayKey !== localParts(new Date(), timeZone).dateKey) {
+      throw new HttpsError("failed-precondition", "Önceki iş gününün sıra kaydı çağrılamaz.");
+    }
+    tx.update(entryRef, { status: "called", assignedStaffId: staffId,
+      calledAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.set(lockRef, { entryId: entryRef.id, updatedAt: FieldValue.serverTimestamp() });
+    return { entryId: entryRef.id, status: "called" };
+  });
+});

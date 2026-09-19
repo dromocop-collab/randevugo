@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/states";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useBusiness } from "@/hooks/use-business";
+import { LiveQueueSettings } from "@/features/live-queue/live-queue-settings";
+import { BusinessAvailabilitySettings } from "@/features/availability/business-availability-settings";
 import {
   getBusinessById,
   updateBusiness,
@@ -670,6 +672,12 @@ export default function SettingsPage() {
           </form>
         </Card>
       )}
+      {activeTab === "randevu" && business &&
+        <LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
+          setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} />}
+      {activeTab === "randevu" && business &&
+        <BusinessAvailabilitySettings business={business} onChanged={(setting, value) =>
+          setBusiness((current) => current ? { ...current, [setting]: value } : current)} />}
       </div>
     </div>
   );

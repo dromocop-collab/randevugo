@@ -1,6 +1,15 @@
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, type Unsubscribe } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import type { PlatformSettings } from "@/types/platform";
+import {
+  DISABLED_LIVE_FEATURE_FLAGS,
+  loadLiveFeatureAvailability,
+  parseLiveFeatureFlags,
+  resolveLiveFeatureAvailability,
+  type LiveFeatureFlags,
+} from "@/features/platform/live-feature-flags";
 
 const SETTINGS_DOC_ID = "global";
 
@@ -18,6 +27,7 @@ const DEFAULT_SETTINGS: Omit<PlatformSettings, "id" | "createdAt" | "updatedAt">
     allowAnonymousReviews: true,
     showPricingPage: true,
     showDiscoveryPage: true,
+    ...DISABLED_LIVE_FEATURE_FLAGS,
   },
   seo: {
     metaTitle: "SeninRandevun — Online Randevu Sistemi",
@@ -65,7 +75,12 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     registrationOpen: data.registrationOpen ?? DEFAULT_SETTINGS.registrationOpen,
     bookingOpen: data.bookingOpen ?? DEFAULT_SETTINGS.bookingOpen,
     defaultPlan: data.defaultPlan ?? DEFAULT_SETTINGS.defaultPlan,
-    featureFlags: { ...DEFAULT_SETTINGS.featureFlags, ...(data.featureFlags ?? {}) },
+    featureFlags: {
+      ...DEFAULT_SETTINGS.featureFlags,
+      ...(data.featureFlags && typeof data.featureFlags === "object" && !Array.isArray(data.featureFlags)
+        ? data.featureFlags : {}),
+      ...parseLiveFeatureFlags(data.featureFlags),
+    },
     seo: { ...DEFAULT_SETTINGS.seo, ...(data.seo ?? {}) },
     social: { ...DEFAULT_SETTINGS.social, ...(data.social ?? {}) },
     announcement: { ...DEFAULT_SETTINGS.announcement, ...(data.announcement ?? {}) },
@@ -92,4 +107,63 @@ export async function updatePlatformSettings(
     },
     { merge: true }
   );
+}
+
+let liveFeatureCache: { expiresAt: number; value: ReturnType<typeof resolveLiveFeatureAvailability> } | null = null;
+let liveFeatureRequest: Promise<ReturnType<typeof resolveLiveFeatureAvailability>> | null = null;
+const liveSubscribers = new Set<(value: ReturnType<typeof resolveLiveFeatureAvailability>) => void>();
+let liveUnsubscribe: Unsubscribe | null = null;
+let liveObserved: ReturnType<typeof resolveLiveFeatureAvailability> | null = null;
+
+/** A single shared settings listener, regardless of how many business surfaces subscribe. */
+export function subscribeLiveFeatureAvailability(listener: (value: ReturnType<typeof resolveLiveFeatureAvailability>) => void): Unsubscribe {
+  liveSubscribers.add(listener);
+  if (liveUnsubscribe && liveObserved) listener(liveObserved);
+  if (!liveUnsubscribe) {
+    liveUnsubscribe = onSnapshot(doc(getDb(), "platformSettings", SETTINGS_DOC_ID), (snapshot) => {
+      const value = resolveLiveFeatureAvailability(snapshot.exists() ? snapshot.data().featureFlags : null);
+      liveObserved = value;
+      liveFeatureCache = { value, expiresAt: Date.now() + 30_000 };
+      liveSubscribers.forEach((subscriber) => subscriber(value));
+    }, () => {
+      const value = resolveLiveFeatureAvailability(null);
+      liveObserved = value;
+      liveFeatureCache = { value, expiresAt: Date.now() + 30_000 };
+      liveSubscribers.forEach((subscriber) => subscriber(value));
+    });
+  }
+  return () => {
+    liveSubscribers.delete(listener);
+    if (liveSubscribers.size === 0) { liveUnsubscribe?.(); liveUnsubscribe = null; liveObserved = null; }
+  };
+}
+
+/** One shared, fail-closed read path for future customer and business screens. */
+export async function getLiveFeatureAvailability(): Promise<ReturnType<typeof resolveLiveFeatureAvailability>> {
+  if (liveFeatureCache && liveFeatureCache.expiresAt > Date.now()) return liveFeatureCache.value;
+  if (liveFeatureRequest) return liveFeatureRequest;
+
+  liveFeatureRequest = (async () => {
+    try {
+      const value = await loadLiveFeatureAvailability(async () => {
+        const snapshot = await getDoc(doc(getDb(), "platformSettings", SETTINGS_DOC_ID));
+        return snapshot.exists() ? snapshot.data().featureFlags : null;
+      });
+      liveFeatureCache = { value, expiresAt: Date.now() + 30_000 };
+      return value;
+    } finally {
+      liveFeatureRequest = null;
+    }
+  })();
+
+  return liveFeatureRequest;
+}
+
+export async function updateLiveFeatureFlags(changes: Partial<LiveFeatureFlags>): Promise<void> {
+  const callable = httpsCallable<{ changes: Partial<LiveFeatureFlags> }, { success: boolean }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "updateLiveFeatureFlags"
+  );
+  await callable({ changes });
+  liveFeatureCache = null;
 }

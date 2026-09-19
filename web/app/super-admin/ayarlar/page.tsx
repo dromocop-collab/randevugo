@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LoadingState } from "@/components/ui/states";
+import { ErrorState, LoadingState } from "@/components/ui/states";
 import {
   getPlatformSettings,
   updatePlatformSettings,
+  updateLiveFeatureFlags,
 } from "@/features/platform/platform-settings-repository";
+import { LIVE_FEATURE_KEYS, type LiveFeatureFlags } from "@/features/platform/live-feature-flags";
 import type { PlatformSettings } from "@/types/platform";
 import { Activity, Blocks, Check, CheckCircle2, Globe2, LoaderCircle, Megaphone, PlugZap, RotateCcw, Save, Search, Settings2, Share2, type LucideIcon } from "lucide-react";
 
@@ -16,7 +18,34 @@ const FEATURE_FLAG_LABELS: Record<string, string> = {
   allowAnonymousReviews: "Girişsiz Yorum (isim yeterli)",
   showPricingPage: "Fiyatlar Sayfası Aktif",
   showDiscoveryPage: "Keşfet Sayfası Aktif",
+  liveFeaturesMaster: "Canlı Özellikler",
+  liveAvailability: "Şimdi Müsait",
+  liveQueue: "Canlı Sıra",
+  lastMinuteSlots: "Boşluk Yakala",
+  availabilityAlerts: "Müsait Olunca Haber Ver",
+  liveOperations: "Canlı Operasyon",
 };
+
+const LIVE_FEATURE_FLAG_KEYS = new Set<string>(LIVE_FEATURE_KEYS);
+
+function settingsInput(value: PlatformSettings) {
+  return {
+    platformName: value.platformName,
+    supportEmail: value.supportEmail,
+    supportPhone: value.supportPhone,
+    defaultTimezone: value.defaultTimezone,
+    defaultCurrency: value.defaultCurrency,
+    maintenanceMode: value.maintenanceMode,
+    registrationOpen: value.registrationOpen,
+    bookingOpen: value.bookingOpen,
+    defaultPlan: value.defaultPlan,
+    featureFlags: Object.fromEntries(Object.entries(value.featureFlags).filter(([key]) => !LIVE_FEATURE_FLAG_KEYS.has(key))),
+    seo: value.seo,
+    social: value.social,
+    announcement: value.announcement,
+    analytics: value.analytics,
+  };
+}
 
 const SOCIAL_LABELS: { key: keyof PlatformSettings["social"]; label: string; placeholder: string }[] = [
   { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/..." },
@@ -32,6 +61,7 @@ const TABS = [
   { key: "genel", label: "Genel", icon: Settings2 },
   { key: "sistem", label: "Sistem Durumu", icon: Activity },
   { key: "ozellikler", label: "Özellikler", icon: Blocks },
+  { key: "canli", label: "Canlı Özellikler", icon: Activity },
   { key: "seo", label: "SEO & Marka", icon: Search },
   { key: "iletisim", label: "İletişim & Sosyal", icon: Share2 },
   { key: "duyuru", label: "Duyuru Banner", icon: Megaphone },
@@ -73,6 +103,7 @@ function ToggleRow({
 export default function SuperAdminSettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<TabKey>("genel");
   const [savedSettings, setSavedSettings] = useState<PlatformSettings | null>(null);
@@ -82,43 +113,66 @@ export default function SuperAdminSettingsPage() {
   useEffect(() => {
     getPlatformSettings()
       .then((value) => { setSettings(value); setSavedSettings(structuredClone(value)); })
-      .catch(() => toast.error("Platform ayarları yüklenemedi."))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSave() {
+  async function reloadSettings() {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const value = await getPlatformSettings();
+      setSettings(value);
+      setSavedSettings(structuredClone(value));
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function setFeatureFlag(key: string, value: boolean) {
     if (!settings) return;
+    if (key === "liveFeaturesMaster" && !value && settings.featureFlags.liveFeaturesMaster === true &&
+      !window.confirm("Canlı özellikler devre dışı kalacak. Normal randevu sistemi etkilenmez. Devam edilsin mi?")) return;
+    setSettings({ ...settings, featureFlags: { ...settings.featureFlags, [key]: value } });
+  }
+
+  async function handleSave() {
+    if (!settings || !savedSettings || saving) return;
+    const regularInput = settingsInput(settings);
+    const regularChanged = JSON.stringify(regularInput) !== JSON.stringify(settingsInput(savedSettings));
+    const liveChanges = Object.fromEntries(LIVE_FEATURE_KEYS
+      .filter((key) => settings.featureFlags[key] !== savedSettings.featureFlags[key])
+      .map((key) => [key, settings.featureFlags[key] === true])) as Partial<LiveFeatureFlags>;
     setSaving(true);
     try {
-      await updatePlatformSettings({
-        platformName: settings.platformName,
-        supportEmail: settings.supportEmail,
-        supportPhone: settings.supportPhone,
-        defaultTimezone: settings.defaultTimezone,
-        defaultCurrency: settings.defaultCurrency,
-        maintenanceMode: settings.maintenanceMode,
-        registrationOpen: settings.registrationOpen,
-        bookingOpen: settings.bookingOpen,
-        defaultPlan: settings.defaultPlan,
-        featureFlags: settings.featureFlags,
-        seo: settings.seo,
-        social: settings.social,
-        announcement: settings.announcement,
-        analytics: settings.analytics,
-      });
+      if (regularChanged) await updatePlatformSettings(regularInput);
+      if (Object.keys(liveChanges).length > 0) await updateLiveFeatureFlags(liveChanges);
       setSavedSettings(structuredClone(settings));
       setJustSaved(true);
       window.setTimeout(() => setJustSaved(false), 1800);
-      toast.success("Platform ayarları kaydedildi. Değişiklikler tüm siteye yansıyacak.");
+      toast.success("Platform ayarları kaydedildi.");
     } catch {
-      toast.error("Kaydetme başarısız oldu.");
+      try {
+        const persisted = await getPlatformSettings();
+        setSettings(persisted);
+        setSavedSettings(structuredClone(persisted));
+      } catch {
+        setSettings(structuredClone(savedSettings));
+      }
+      toast.error("Kaydetme başarısız oldu. Ayarlar son kayıtlı duruma döndürüldü.");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading || !settings) {
+  if (loading) {
     return <LoadingState title="Yükleniyor" description="Platform ayarları çekiliyor..." />;
+  }
+
+  if (loadError || !settings) {
+    return <ErrorState title="Platform ayarları yüklenemedi" description="Canlı özellikler kapalı kalır. Ayarları yeniden yüklemeyi deneyin." action={<button type="button" onClick={() => void reloadSettings()}>Yeniden dene</button>} />;
   }
 
   return (
@@ -211,17 +265,41 @@ export default function SuperAdminSettingsPage() {
       {tab === "ozellikler" && (
         <Card title="Özellik Bayrakları (Feature Flags)" description="Platform genelindeki özellikleri aç/kapat">
           <div className="space-y-3">
-            {Object.entries(settings.featureFlags).map(([key, value]) => (
+            {Object.entries(settings.featureFlags).filter(([key]) => !LIVE_FEATURE_FLAG_KEYS.has(key)).map(([key, value]) => (
               <ToggleRow
                 key={key}
                 label={FEATURE_FLAG_LABELS[key] ?? key}
                 checked={value}
-                onChange={(v) =>
-                  setSettings({
-                    ...settings,
-                    featureFlags: { ...settings.featureFlags, [key]: v },
-                  })
-                }
+                onChange={(v) => setFeatureFlag(key, v)}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {tab === "canli" && (
+        <Card title="Canlı Özellikler" description="Canlı modülleri platform genelinde yönetin">
+          <div className="space-y-3">
+            <div className="pt-1">
+              <h3 className="text-sm font-semibold text-[var(--text-1)]">CANLI ÖZELLİKLER</h3>
+              <p className="mt-1 text-xs text-[var(--text-3)]">Ana kontrol ve modül tercihleri birlikte değerlendirilir. Normal randevu sistemi etkilenmez.</p>
+            </div>
+            <ToggleRow
+              label="Ana Kontrol — Canlı Özellikler"
+              description="Kapalıyken aşağıdaki modüllerin kayıtlı tercihleri korunur, ancak hiçbiri etkin sayılmaz."
+              checked={settings.featureFlags.liveFeaturesMaster === true}
+              onChange={(value) => setFeatureFlag("liveFeaturesMaster", value)}
+            />
+            <p className="text-xs font-semibold text-[var(--text-3)]">MODÜLLER</p>
+            {LIVE_FEATURE_KEYS.filter((key) => key !== "liveFeaturesMaster").map((key) => (
+              <ToggleRow
+                key={key}
+                label={FEATURE_FLAG_LABELS[key]}
+                description={settings.featureFlags.liveFeaturesMaster === true
+                  ? "İşletme katılımı ve uygunluk koşulları da geçerlidir."
+                  : "Ana kontrol kapalı; bu tercih kayıtlı olsa da modül etkin değildir."}
+                checked={settings.featureFlags[key] === true}
+                onChange={(value) => setFeatureFlag(key, value)}
               />
             ))}
           </div>

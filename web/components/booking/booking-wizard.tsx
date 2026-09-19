@@ -18,6 +18,7 @@ import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import { userFacingError } from "@/lib/errors/user-facing-error";
+import { AvailabilityAlertAction } from "@/features/availability/availability-alert-action";
 import {
   DEFAULT_BOOKING_FIELD_SETTINGS,
   getBookingFieldSettings,
@@ -43,6 +44,9 @@ interface Props {
   slotIntervalMinutes: number;
   preselectedServiceId?: string | null;
   preselectedStaffId?: string | null;
+  preselectedDate?: string | null;
+  preselectedStartAtMillis?: number | null;
+  businessAlertsEnabled?: boolean;
 }
 
 type WizardStep =
@@ -85,7 +89,7 @@ export function BookingWizard(props: Props) {
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
   const [staffId, setStaffId] = useState(props.preselectedStaffId ?? "");
   const [appointmentsDate, setAppointmentsDate] = useState(
-    new Date().toISOString().slice(0, 10)
+    props.preselectedDate ?? new Date().toISOString().slice(0, 10)
   );
   const [slot, setSlot] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -164,7 +168,14 @@ export function BookingWizard(props: Props) {
       setAvailableSlots([]);
       return listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate });
     })
-      .then((rows) => { if (!cancelled) setAvailableSlots(rows); })
+      .then((rows) => { if (!cancelled) {
+        setAvailableSlots(rows);
+        if (props.preselectedStartAtMillis && appointmentsDate === props.preselectedDate) {
+          const selected = rows.find((item) => item.startAtMillis === props.preselectedStartAtMillis);
+          if (selected) setSlot(selected.label);
+          else toast.info("Bu saat artık uygun değil. Diğer uygun saatleri görebilirsin.");
+        }
+      } })
       .catch((error) => {
         if (!cancelled) {
           setAvailableSlots([]);
@@ -173,7 +184,7 @@ export function BookingWizard(props: Props) {
       })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
-  }, [appointmentsDate, props.businessId, serviceId, staffId]);
+  }, [appointmentsDate, props.businessId, props.preselectedDate, props.preselectedStartAtMillis, serviceId, staffId]);
 
   const selectedService = useMemo(
     () => services.find((item) => item.id === serviceId),
@@ -775,6 +786,9 @@ export function BookingWizard(props: Props) {
                   </div>
                 )}
               </div>
+              <AvailabilityAlertAction businessId={props.businessId} serviceId={serviceId}
+                staffId={staffId || null} dateKey={appointmentsDate}
+                businessEnabled={props.businessAlertsEnabled === true} />
             </div>
           </div>
         )}
