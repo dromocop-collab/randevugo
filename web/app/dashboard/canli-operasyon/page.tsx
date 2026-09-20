@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Activity, ArrowRight, CalendarClock, Pause, Play, RefreshCw, UsersRound } from "lucide-react";
+import { Activity, ArrowRight, CalendarClock, CheckCircle2, Clock3, Pause, Play, RefreshCw, Settings2, Ticket, UserRound, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
@@ -179,65 +179,63 @@ export default function LiveOperationsPage() {
   if (!business) return <LoadingState title="Canlı operasyon yükleniyor" description="İşletme durumu kontrol ediliyor..." />;
   if (loading) return <LoadingState title="Canlı operasyon yükleniyor" description="Sıra ve takvim durumu hazırlanıyor..." />;
 
-  return <div className="space-y-5 pb-12">
-    <header className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6">
-      <div><span className="flex items-center gap-2 text-xs font-bold tracking-widest text-[var(--accent)]"><Activity size={16}/> CANLI OPERASYON</span>
-        <h1 className="mt-2 text-2xl font-extrabold text-[var(--text-1)]">Canlı Sıra</h1>
-        <p className="mt-1 text-sm text-[var(--text-3)]">{business.name} için güncel sıra ve randevu görünümü.</p></div>
-      <div className="flex flex-wrap gap-2">
-        {!businessEnabled ? <a className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-1)]" href="#canli-sira-ayari">Canlı Sırayı aç →</a> :
-          <Button variant="secondary" disabled={!!busy} onClick={() => void togglePause()}
-            iconLeft={business.liveQueueIntakePaused ? <Play size={16}/> : <Pause size={16}/> }>
-            {business.liveQueueIntakePaused ? "Alımı Devam Ettir" : "Yeni Alımı Duraklat"}</Button>}
-        <Button variant="ghost" onClick={() => setRevision((value) => value + 1)} iconLeft={<RefreshCw size={16}/>}>Yenile</Button>
+  return <div className="business-queue-page space-y-5 pb-12">
+    <header className="business-queue-hero">
+      <div className="business-queue-hero__copy"><span className="business-queue-eyebrow"><Activity size={16}/> CANLI OPERASYON MERKEZİ</span>
+        <h1>Canlı <em>Sıra.</em></h1>
+        <p>{business.name} için müşterileri, personeli ve yaklaşan randevuları tek ekrandan yönet.</p>
+        <span className="business-queue-live-state"><i />{!businessEnabled ? "Canlı sıra kapalı" : business.liveQueueIntakePaused ? "Yeni müşteri alımı duraklatıldı" : "Yeni müşteri kabul ediliyor"}</span></div>
+      <div className="business-queue-hero__actions">
+        {!businessEnabled ? <a className="business-queue-hero__button" href="#canli-sira-ayari"><Settings2 size={16}/> Canlı Sırayı aç</a> :
+          <button type="button" className="business-queue-hero__button" disabled={!!busy} onClick={() => void togglePause()}>
+            {business.liveQueueIntakePaused ? <Play size={16}/> : <Pause size={16}/>}
+            {business.liveQueueIntakePaused ? "Alımı Devam Ettir" : "Yeni Alımı Duraklat"}</button>}
+        <button type="button" className="business-queue-hero__refresh" onClick={() => setRevision((value) => value + 1)} aria-label="Canlı sıra verilerini yenile"><RefreshCw size={17}/></button>
       </div>
     </header>
-
-    {!businessEnabled && <div id="canli-sira-ayari"><LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
-      setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} /></div>}
 
     {(!businessEnabled || business.liveQueueIntakePaused) && <div role="status" className="rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm text-amber-900">
       {businessEnabled ? "Yeni müşteri alımı durduruldu. Mevcut müşterileri işlemeye devam edebilirsiniz." :
         "Canlı Sıra işletmeniz için kapalı. Yeni katılım alınmıyor; mevcut kayıtlar korunur ve tamamlanabilir."}
     </div>}
 
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Operasyon özeti">
+    <section className="business-queue-metrics grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Operasyon özeti">
       {[
-        { label: "Sırada", value: entries.filter((item) => ["waiting", "on_the_way"].includes(item.status)).length, icon: UsersRound },
-        { label: "Çağrılan", value: entries.filter((item) => item.status === "called").length, icon: ArrowRight },
-        { label: "İşlemde", value: entries.filter((item) => item.status === "in_service").length, icon: Activity },
-        { label: "Yaklaşan Randevu", value: upcoming[0] ? timeLabel(upcoming[0].startAt) : "—", icon: CalendarClock },
-      ].map((metric) => <Card key={metric.label}><div className="flex items-center justify-between"><span className="text-xs font-semibold text-[var(--text-3)]">{metric.label}</span><metric.icon size={18} className="text-[var(--accent)]"/></div>
-        <strong className="mt-2 block text-2xl text-[var(--text-1)]">{metric.value}</strong></Card>)}
+        { label: "Sırada", value: entries.filter((item) => ["waiting", "on_the_way"].includes(item.status)).length, icon: UsersRound, note: "Yeni hizmet bekliyor" },
+        { label: "Çağrılan", value: entries.filter((item) => item.status === "called").length, icon: Ticket, note: "Müşteri çağrıldı" },
+        { label: "İşlemde", value: entries.filter((item) => item.status === "in_service").length, icon: Activity, note: "Hizmet sürüyor" },
+        { label: "Yaklaşan Randevu", value: upcoming[0] ? timeLabel(upcoming[0].startAt) : "—", icon: CalendarClock, note: "Planlı randevu" },
+      ].map((metric) => <Card key={metric.label} className="business-queue-metric"><div className="business-queue-metric__top"><span>{metric.label}</span><span className="business-queue-metric__icon"><metric.icon size={19}/></span></div>
+        <strong>{metric.value}</strong><small>{metric.note}</small></Card>)}
     </section>
 
-    <Card title="Sıradaki Müşteriler" description="Sıralama sunucunun katılım zamanına göre belirlenir.">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label className="text-sm font-semibold text-[var(--text-2)]" htmlFor="queue-staff">Personel</label>
-        <select id="queue-staff" className="min-h-10 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm text-[var(--text-1)]"
-          value={effectiveSelectedStaffId} onChange={(event) => setSelectedStaffId(event.target.value)}>
+    <Card className="business-queue-list-card">
+      <div className="business-queue-section-head"><div><span className="business-queue-kicker"><i/> ANLIK SIRA</span><h2>Sıradaki Müşteriler</h2><p>Katılım sırası sunucu zamanına göre belirlenir.</p></div><span className="business-queue-count">{entries.length} aktif kayıt</span></div>
+      <div className="business-queue-toolbar">
+        <label htmlFor="queue-staff">Çağıracak personel</label>
+        <select id="queue-staff" value={effectiveSelectedStaffId} onChange={(event) => setSelectedStaffId(event.target.value)}>
           {staff.filter((item) => item.isActive && !item.archivedAt).map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
         </select>
         <Button size="sm" disabled={!eligible || !effectiveSelectedStaffId || !!busy || entries.every((item) => !["waiting", "on_the_way"].includes(item.status))}
-          loading={busy === "next"} onClick={() => void callNext()}>Sonraki Müşteriyi Çağır</Button>
+          loading={busy === "next"} onClick={() => void callNext()} iconLeft={<ArrowRight size={16}/>}>Sonraki Müşteriyi Çağır</Button>
       </div>
       {entries.length === 0 ? <EmptyState title="Şu anda sırada bekleyen müşteri yok" description="Yeni katılımlar olduğunda burada görünür."/> :
-        <ol className="space-y-3">{entries.map((entry) => {
+        <ol className="business-queue-list">{entries.map((entry, index) => {
           const requested = entry.requestedStaffId ? staffById.get(entry.requestedStaffId)?.fullName ?? "Seçili personel" : "İlk müsait personel";
           const assigned = entry.assignedStaffId ? staffById.get(entry.assignedStaffId)?.fullName : null;
           const actions = (capabilities?.transitions[entry.status] ?? []).filter((status) => ACTION_LABELS[status]);
           const calledOverdue = entry.status === "called" && !!entry.calledAt && !!capabilities?.calledGraceMinutes &&
             Date.parse(entry.calledAt) + capabilities.calledGraceMinutes * 60_000 <= clock;
-          return <li key={entry.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="text-sm text-[var(--text-1)]">Müşteri · {entry.id.slice(0, 6)}</strong>
-              <p className="mt-1 text-xs text-[var(--text-3)]">{serviceById.get(entry.serviceId)?.name ?? "Hizmet"} · {requested}{assigned && assigned !== requested ? ` · Atanan: ${assigned}` : ""}</p>
-              <p className="mt-1 text-xs text-[var(--text-3)]">Katılım: {timeLabel(entry.joinedAt)}</p>
-              {entry.status === "on_the_way" && <p className="mt-1 text-xs font-semibold text-[var(--accent)]">🚶 Yola çıktı{entry.declaredEtaMinutes ? ` · Yaklaşık geliş: ${entry.declaredEtaMinutes}${entry.declaredEtaMinutes === 20 ? "+" : ""} dk` : ""}</p>}
-              {entry.presenceConfirmedAt && ["waiting", "on_the_way"].includes(entry.status) && <p className="mt-1 text-xs text-[var(--accent)]">✅ Geliyorum onayı verildi</p>}
-              {entry.status === "called" && <p className="mt-1 text-xs text-[var(--text-3)]">{calledOverdue ? "Çağrıldı — bekleme süresi aşıldı. Gelmedi kararı operatöre ait." : `Çağrıldı · ${capabilities?.calledGraceMinutes ?? 10} dk bekleme süresi`}</p>}
-              {["waiting", "on_the_way"].includes(entry.status) && waitEstimates[entry.id] && <p className="mt-1 text-xs text-[var(--text-3)]">{waitEstimateLabel(waitEstimates[entry.id])}</p>}</div>
-              <span className="rounded-full bg-[var(--surface-3)] px-3 py-1 text-xs font-semibold text-[var(--text-1)]">{STATUS_LABELS[entry.status] ?? entry.status}</span></div>
-            <div className="mt-3 flex flex-wrap gap-2">{actions.map((status) =>
+          return <li key={entry.id} className="business-queue-row">
+            <div className="business-queue-row__main"><span className="business-queue-row__number">{String(index + 1).padStart(2, "0")}</span><span className="business-queue-row__avatar"><UserRound size={22}/></span><div className="business-queue-row__details"><strong>Müşteri · {entry.id.slice(0, 6)}</strong>
+              <p>{serviceById.get(entry.serviceId)?.name ?? "Hizmet"} · {requested}{assigned && assigned !== requested ? ` · Atanan: ${assigned}` : ""}</p>
+              <span className="business-queue-row__time"><Clock3 size={13}/> Katılım {timeLabel(entry.joinedAt)}</span>
+              {entry.status === "on_the_way" && <span className="business-queue-row__notice"><ArrowRight size={14}/> Yola çıktı{entry.declaredEtaMinutes ? ` · Yaklaşık geliş: ${entry.declaredEtaMinutes}${entry.declaredEtaMinutes === 20 ? "+" : ""} dk` : ""}</span>}
+              {entry.presenceConfirmedAt && ["waiting", "on_the_way"].includes(entry.status) && <span className="business-queue-row__notice"><CheckCircle2 size={14}/> Geliyorum onayı verildi</span>}
+              {entry.status === "called" && <span className="business-queue-row__time">{calledOverdue ? "Çağrıldı — bekleme süresi aşıldı. Gelmedi kararı operatöre ait." : `Çağrıldı · ${capabilities?.calledGraceMinutes ?? 10} dk bekleme süresi`}</span>}
+              {["waiting", "on_the_way"].includes(entry.status) && waitEstimates[entry.id] && <span className="business-queue-row__time">{waitEstimateLabel(waitEstimates[entry.id])}</span>}</div>
+              <span className={`business-queue-row__status status-${entry.status}`}>{STATUS_LABELS[entry.status] ?? entry.status}</span></div>
+            <div className="business-queue-row__actions">{actions.map((status) =>
               <Button key={status} size="sm" variant={status === "cancelled" || status === "no_show" ? "secondary" : "primary"}
                 disabled={!!busy || (status === "no_show" && !calledOverdue) || (!eligible && ["called", "in_service"].includes(status))}
                 loading={busy === entry.id} onClick={() => void perform(entry, status)}
@@ -246,19 +244,22 @@ export default function LiveOperationsPage() {
         })}</ol>}
     </Card>
 
-    <Card title="Personel ve Randevu Bağlamı" description="Durumlar canlı sıra ve mevcut randevu kayıtlarından türetilir.">
+    <Card className="business-queue-team-card">
+      <div className="business-queue-section-head"><div><span className="business-queue-kicker"><i/> EKİP DURUMU</span><h2>Personel ve Randevular</h2><p>Durumlar canlı sıra ve mevcut randevu kayıtlarından türetilir.</p></div></div>
       {staff.length === 0 ? <p className="text-sm text-[var(--text-3)]">Aktif personel bulunamadı.</p> :
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{staff.map((person) => {
+        <div className="business-queue-team-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">{staff.map((person) => {
           const activeQueue = entries.find((entry) => entry.assignedStaffId === person.id && ["called", "in_service"].includes(entry.status));
           const currentAppointment = activeAppointments.find((item) => item.staffId === person.id && Date.parse(item.startAt) <= now && Date.parse(item.endAt) > now);
           const next = upcoming.find((item) => item.staffId === person.id);
           const status = !person.isActive || person.archivedAt ? "Çalışmıyor" : activeQueue?.status === "in_service" ? "Canlı işlemde" : activeQueue ? "Müşteri çağrıldı" : currentAppointment ? "Randevuda" : next && Date.parse(next.startAt) - now <= 60 * 60_000 ? "Yaklaşan randevu" : "Takvimi kontrol edin";
-          return <div key={person.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-            <strong className="text-sm text-[var(--text-1)]">{person.fullName}</strong><p className="mt-1 text-xs font-semibold text-[var(--accent)]">{status}</p>
+          return <div key={person.id} className="business-queue-team-member">
+            <span className="business-queue-team-member__icon"><UserRound size={19}/></span><div><strong>{person.fullName}</strong><p>{status}</p></div>
             {activeQueue && <p className="mt-2 text-xs text-[var(--text-3)]">{serviceById.get(activeQueue.serviceId)?.name ?? "Canlı hizmet"}</p>}
             {next && <p className="mt-2 text-xs text-[var(--text-3)]">Sonraki randevu: {timeLabel(next.startAt)} · {next.serviceName ?? serviceById.get(next.serviceId)?.name ?? "Hizmet"}</p>}
           </div>;
         })}</div>}
     </Card>
+    <div id="canli-sira-ayari"><LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
+      setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} /></div>
   </div>;
 }

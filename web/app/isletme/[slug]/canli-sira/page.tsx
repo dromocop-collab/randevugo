@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, LoaderCircle, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Clock3, LoaderCircle, ShieldCheck, Sparkles, Ticket, UserRound, UsersRound } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessBySlug } from "@/features/businesses/business-repository";
@@ -50,7 +50,7 @@ export default function CustomerJoinQueuePage() {
       setBusiness(row);
       setEligible(discovery.some((item) => item.id === row.id));
       const activeStaff = staffRows.filter((item) => !item.archivedAt);
-      setServices(serviceRows.filter((item) => item.isBookableOnline && item.durationMinutes >= 5 &&
+      setServices(serviceRows.filter((item) => item.isBookableOnline && Number.isFinite(item.durationMinutes) && item.durationMinutes >= 5 && item.durationMinutes <= 480 &&
         activeStaff.some((person) =>
           (!Array.isArray(item.assignableStaffIds) || item.assignableStaffIds.length === 0 || item.assignableStaffIds.includes(person.id)) &&
           (!Array.isArray(person.serviceIds) || person.serviceIds.length === 0 || person.serviceIds.includes(item.id)) &&
@@ -112,21 +112,30 @@ export default function CustomerJoinQueuePage() {
     } finally { setBusy(false); }
   }
 
-  return <div className="marketing-page min-h-screen bg-[var(--bg-1)]"><MarketingHeader />
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link href={business ? `/isletme/${slug}` : "/simdi-musait"} className="text-sm text-[var(--accent)]">← İşletmeye dön</Link>
-      <div className="mt-7"><span className="flex items-center gap-2 text-sm font-semibold text-[var(--accent)]"><Ticket size={17} /> CANLI SIRA</span><h1 className="mt-2 text-3xl font-bold text-[var(--text-1)]">Sıraya Katıl</h1><p className="mt-2 text-[var(--text-2)]">Normal randevu almak istersen işletme sayfasındaki Randevu Al seçeneğini kullanabilirsin.</p></div>
-      {loading || enabled === null ? <p className="mt-8" role="status">Canlı sıra kontrol ediliyor…</p> : !enabled || !eligible ?
-        <div className="mt-8 rounded-2xl border border-[var(--border)] p-6">İşletme şu anda yeni canlı sıra müşterisi kabul etmiyor. <Link href="/simdi-musait" className="text-[var(--accent)]">Diğer işletmeleri gör</Link></div> : <>
-        {active && <div className="mt-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 dark:border-emerald-800 dark:bg-emerald-950"><strong>Bu işletmede zaten aktif sıran var.</strong><Link className="mt-2 flex items-center gap-1 text-[var(--accent)]" href={`/siram?businessId=${encodeURIComponent(active.businessId)}&entryId=${encodeURIComponent(active.entryId)}`}>Sıramı gör <ArrowRight size={16} /></Link></div>}
-        {!active && <section className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-sm">
-          <p className="text-sm font-semibold text-[var(--accent)]">{step}/3 · {step === 1 ? "Hizmet seç" : step === 2 ? "Personel tercihi" : "Onayla"}</p>
-          {step === 1 && <div className="mt-4 space-y-2">{services.map((service) => <button key={service.id} type="button" onClick={() => { setServiceId(service.id); setStaffId(""); setStep(2); }} className="flex min-h-12 w-full items-center justify-between rounded-xl border border-[var(--border)] p-3 text-left"><span>{service.name}</span><ArrowRight size={17} /></button>)}</div>}
-          {step === 2 && <div className="mt-4 space-y-2">{waitLoading && <p role="status" className="text-sm text-[var(--text-3)]">Tahminler hesaplanıyor…</p>}<button type="button" className="flex min-h-12 w-full items-center justify-between rounded-xl border border-[var(--border)] p-3 text-left" onClick={() => { setStaffId(""); setStep(3); }}><span>İlk müsait personel</span><small>{waitEstimateLabel(waitOptions?.firstAvailable ?? null)}</small></button>{eligibleStaff.map((person) => <button key={person.id} type="button" className="flex min-h-12 w-full items-center justify-between rounded-xl border border-[var(--border)] p-3 text-left" onClick={() => { setStaffId(person.id); setStep(3); }}><span>{person.fullName}</span><small>{waitEstimateLabel(waitOptions?.byStaff[person.id] ?? null)}</small></button>)}</div>}
-          {step === 3 && <div className="mt-4"><dl className="space-y-3 text-sm"><div><dt className="text-[var(--text-3)]">İşletme</dt><dd className="font-semibold">{business?.name}</dd></div><div><dt className="text-[var(--text-3)]">Hizmet</dt><dd className="font-semibold">{selectedService?.name}</dd></div><div><dt className="text-[var(--text-3)]">Personel</dt><dd className="font-semibold">{staffId ? staff.find((item) => item.id === staffId)?.fullName : "İlk müsait personel"}</dd></div></dl><div className="mt-5 rounded-xl border border-[var(--border)] p-4"><strong>{waitEstimateLabel(selectedWait)}</strong>{selectedWait?.peopleAhead !== null && selectedWait?.peopleAhead !== undefined && <p className="mt-1 text-sm">Önünde {selectedWait.peopleAhead} kişi var</p>}<small className="text-[var(--text-3)]">Tahmindir; kesin sıra saati değildir.</small></div><p className="mt-5 text-sm text-[var(--text-2)]">Katılım sırasında işletmenin güncel durumu yeniden doğrulanır.</p><button type="button" disabled={busy} onClick={submit} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 font-semibold text-white disabled:opacity-60">{busy && <LoaderCircle size={17} className="animate-spin" />} Sıraya katıl</button></div>}
-          {step > 1 && <button type="button" disabled={busy} onClick={() => setStep((value) => value - 1)} className="mt-4 text-sm text-[var(--accent)]">Önceki adıma dön</button>}
+  return <div className="marketing-page live-join-page"><MarketingHeader />
+    <main className="live-join-main">
+      <Link href={business ? `/isletme/${slug}` : "/simdi-musait"} className="live-join-back"><ArrowLeft size={16} /> İşletmeye dön</Link>
+      <header className="live-join-hero">
+        <div><span className="live-join-eyebrow"><Ticket size={16} /> CANLI SIRA</span><h1>Sıraya <em>katıl.</em></h1><p>Hizmetini ve personel tercihini seç. Sıranı buradan kolayca takip et.</p></div>
+        <span className="live-join-hero__icon" aria-hidden="true"><Sparkles size={44} /></span>
+      </header>
+      {loading || enabled === null ? <div className="live-join-state" role="status"><LoaderCircle size={20} className="animate-spin" /> Canlı sıra kontrol ediliyor…</div> : !enabled || !eligible ?
+        <div className="live-join-state">İşletme şu anda yeni canlı sıra müşterisi kabul etmiyor. <Link href="/simdi-musait">Diğer işletmeleri gör <ArrowRight size={16} /></Link></div> : <>
+        {active && <div className="live-join-active"><Ticket size={22} /><div><strong>Bu işletmede zaten aktif sıran var.</strong><Link href={`/siram?businessId=${encodeURIComponent(active.businessId)}&entryId=${encodeURIComponent(active.entryId)}`}>Sıramı gör <ArrowRight size={16} /></Link></div></div>}
+        {!active && <section className="live-join-panel" aria-label="Canlı sıraya katılma adımları">
+          <div className="live-join-progress" aria-label={`Adım ${step} / 3`}>
+            {["Hizmet", "Personel", "Onay"].map((label, index) => <div key={label} className={`live-join-progress__step ${step === index + 1 ? "is-current" : ""} ${step > index + 1 ? "is-done" : ""}`} aria-current={step === index + 1 ? "step" : undefined}><span>{step > index + 1 ? <Check size={15} /> : String(index + 1).padStart(2, "0")}</span><strong>{label}</strong></div>)}
+          </div>
+          <div className="live-join-panel__body">
+            <div className="live-join-heading"><span>ADIM {String(step).padStart(2, "0")} / 03</span><h2>{step === 1 ? "Hangi hizmeti almak istersin?" : step === 2 ? "Personel tercihin var mı?" : "Sıran için her şey hazır."}</h2><p>{step === 1 ? "Canlı sıraya uygun hizmetlerden birini seç." : step === 2 ? "İlk müsait personeli veya tercih ettiğin uzmanı seç." : "Bilgileri kontrol edip sıraya katılabilirsin."}</p></div>
+            {step === 1 && <div className="live-join-options">{services.map((service) => <button key={service.id} type="button" onClick={() => { setServiceId(service.id); setStaffId(""); setStep(2); }} className="live-join-option"><span className="live-join-option__icon"><BriefcaseBusiness size={20} /></span><span className="live-join-option__copy"><strong>{service.name}</strong><small>{service.durationMinutes} dk · Canlı sıra</small></span><ArrowRight size={19} /></button>)}</div>}
+            {step === 2 && <div className="live-join-options">{waitLoading && <p role="status" className="live-join-loading"><LoaderCircle size={15} className="animate-spin" /> Tahminler hesaplanıyor…</p>}<button type="button" className="live-join-option" onClick={() => { setStaffId(""); setStep(3); }}><span className="live-join-option__icon"><UsersRound size={20} /></span><span className="live-join-option__copy"><strong>İlk müsait personel</strong><small>{waitEstimateLabel(waitOptions?.firstAvailable ?? null)}</small></span><ArrowRight size={19} /></button>{eligibleStaff.map((person) => <button key={person.id} type="button" className="live-join-option" onClick={() => { setStaffId(person.id); setStep(3); }}><span className="live-join-option__icon"><UserRound size={20} /></span><span className="live-join-option__copy"><strong>{person.fullName}</strong><small>{waitEstimateLabel(waitOptions?.byStaff[person.id] ?? null)}</small></span><ArrowRight size={19} /></button>)}</div>}
+            {step === 3 && <div className="live-join-review"><dl className="live-join-summary"><div><dt><BriefcaseBusiness size={17} /> İşletme</dt><dd>{business?.name}</dd></div><div><dt><Sparkles size={17} /> Hizmet</dt><dd>{selectedService?.name}</dd></div><div><dt><UserRound size={17} /> Personel</dt><dd>{staffId ? staff.find((item) => item.id === staffId)?.fullName : "İlk müsait personel"}</dd></div></dl><div className="live-join-wait"><span className="live-join-wait__icon"><Clock3 size={22} /></span><div><small>GÜNCEL BEKLEME</small><strong>{waitEstimateLabel(selectedWait)}</strong>{selectedWait?.peopleAhead !== null && selectedWait?.peopleAhead !== undefined && <p>Önünde {selectedWait.peopleAhead} kişi var</p>}<span>Tahmindir; kesin sıra saati değildir.</span></div></div><p className="live-join-assurance"><ShieldCheck size={17} /> Katılım sırasında işletmenin güncel durumu yeniden doğrulanır.</p><button type="button" disabled={busy} onClick={submit} className="live-join-submit">{busy ? <LoaderCircle size={18} className="animate-spin" /> : <Ticket size={18} />} Sıraya katıl <ArrowRight size={18} /></button></div>}
+            {step > 1 && <button type="button" disabled={busy} onClick={() => setStep((value) => value - 1)} className="live-join-previous"><ArrowLeft size={16} /> Önceki adıma dön</button>}
+          </div>
         </section>}
       </>}
-      {error && <p className="mt-4 rounded-xl border border-red-300 p-4 text-red-700" role="alert">{error}</p>}
+      {error && <p className="live-join-error" role="alert">{error}</p>}
+      <p className="live-join-footer-note">İleri tarihli randevu almak istersen <Link href={business ? `/isletme/${slug}` : "/kesfet"}>işletme sayfasından Randevu Al</Link> seçeneğini kullanabilirsin.</p>
     </main><MarketingFooter /></div>;
 }

@@ -287,6 +287,11 @@ function StaffCard({
       toast.error("En az bir branş seçmelisiniz.");
       return;
     }
+    const invalidDay = staffHours.find((day) => day.isOpen && day.end <= day.start);
+    if (invalidDay) {
+      toast.error(`${DAY_NAMES[invalidDay.day]} için bitiş saati başlangıçtan sonra olmalı. Gece yarısını geçen vardiyaları ayrı günlere bölün.`);
+      return;
+    }
     setSaving(true);
     try {
       await updateStaff(businessId, item.id, {
@@ -559,6 +564,8 @@ function StaffCard({
                 </div>
               ))}
             </div>
+            {staffHours.some((day) => day.isOpen && day.end <= day.start) &&
+              <p className="mt-2 text-sm text-rose-600" role="alert">Bitiş saati başlangıçtan sonra olmalı. Gece yarısını geçen vardiyaları günlere bölün.</p>}
           </section>
 
           {/* Leave Dates */}
