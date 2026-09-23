@@ -65,7 +65,9 @@ service cloud.firestore {
     function protectedFieldsUnchanged() {
       return (!request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(["rating", "reviewCount", "isVerified", "status", "isSuspended",
-          "approvalStatus", "storePosition", "reviewedBy", "reviewedAt", "plan"]));
+          "approvalStatus", "storePosition", "reviewedBy", "reviewedAt", "plan",
+          "organizationId", "organizationName", "headquartersBusinessId", "branchNumber",
+          "branchCode", "isHeadquarters"]));
     }
 
     // Public storefront identity is published only after platform moderation.
@@ -124,6 +126,13 @@ service cloud.firestore {
 
     match /platformAuditLogs/{docId} {
       allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
+    // Company-level identity and branch limits are maintained by Cloud Functions.
+    match /businessOrganizations/{organizationId} {
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && resource.data.ownerUid == uid());
       allow write: if false;
     }
 
@@ -341,7 +350,7 @@ service cloud.firestore {
         (isAuthenticated() && resource.data.ownerUid == uid()) ||
         isMember(businessId) ||
         isPlatformAdmin();
-      // Business creation is server-only so the three-store limit and mandatory
+      // Business creation is server-only so the company branch limit and mandatory
       // approval workflow cannot be bypassed by a direct client write.
       allow create: if false;
       // Owner or manager can update but cannot change protected fields

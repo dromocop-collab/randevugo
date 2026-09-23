@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-operations-available";
 import {
-  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, Headphones, Rocket,
+  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, GitBranch, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -17,6 +17,7 @@ const ADMIN_EMAIL = "cihatwin@gmail.com";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Genel Bakış", icon: LayoutDashboard },
+  { href: "/dashboard/subeler", label: "Şubeler", icon: GitBranch },
   { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot },
   { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays },
   { href: "/dashboard/randevular", label: "Randevular", icon: MessageSquareText },

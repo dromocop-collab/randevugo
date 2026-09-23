@@ -231,7 +231,7 @@ export function DashboardTopBar() {
               ))}
             </select>
           )}
-          {!isStaff && businesses.length < 3 && <Link href="/onboarding" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni mağaza</span></Link>}
+          {!isStaff && businesses.length < 10 && <Link href="/dashboard/subeler" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni şube</span></Link>}
           {activeBusiness?.status === "pending_review" && <span className="command-link command-pending text-amber-700"><Clock3 size={16} /><span>Süper admin onayı bekleniyor</span></span>}
           {!isStaff && <NotificationCenter key={businessId} businessId={businessId}/>}
           <DashboardCommandCenter />

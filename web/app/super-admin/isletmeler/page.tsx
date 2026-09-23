@@ -21,6 +21,10 @@ import { EmptyState } from "@/components/ui/states";
 
 interface BusinessItem {
   id: string;
+  organizationId?: string;
+  organizationName?: string;
+  branchNumber?: number;
+  isHeadquarters?: boolean;
   name: string;
   ownerUid: string;
   status: string;
@@ -54,6 +58,10 @@ export default function SuperAdminBusinessesPage() {
           const d = doc.data();
           return {
             id: doc.id,
+            organizationId: typeof d.organizationId === "string" ? d.organizationId : undefined,
+            organizationName: typeof d.organizationName === "string" ? d.organizationName : undefined,
+            branchNumber: Number(d.branchNumber ?? d.storePosition ?? 1),
+            isHeadquarters: d.isHeadquarters === true,
             name: String(d.name ?? "İsimsiz"),
             ownerUid: String(d.ownerUid ?? ""),
             status: String(d.status ?? "active"),
@@ -88,6 +96,10 @@ export default function SuperAdminBusinessesPage() {
         const d = doc.data();
         return {
           id: doc.id,
+          organizationId: typeof d.organizationId === "string" ? d.organizationId : undefined,
+          organizationName: typeof d.organizationName === "string" ? d.organizationName : undefined,
+          branchNumber: Number(d.branchNumber ?? d.storePosition ?? 1),
+          isHeadquarters: d.isHeadquarters === true,
           name: String(d.name ?? "İsimsiz"),
           ownerUid: String(d.ownerUid ?? ""),
           status: String(d.status ?? "active"),
@@ -169,6 +181,7 @@ export default function SuperAdminBusinessesPage() {
       const q = searchText.toLowerCase();
       return (
         b.name.toLowerCase().includes(q) ||
+        (b.organizationName ?? "").toLowerCase().includes(q) ||
         b.id.toLowerCase().includes(q) ||
         b.city.toLowerCase().includes(q)
       );
@@ -181,6 +194,8 @@ export default function SuperAdminBusinessesPage() {
     PRO: "bg-sky-100 text-sky-700",
     BUSINESS: "bg-violet-100 text-violet-700",
   };
+  const networkCount = new Set(businesses.map((business) => business.organizationId ?? `legacy:${business.ownerUid}`)).size;
+  const pendingCount = businesses.filter((business) => business.status === "pending_review").length;
 
   function exportBusinesses() {
     const rows = [
@@ -199,7 +214,12 @@ export default function SuperAdminBusinessesPage() {
   return (
     <div className="space-y-4">
       <section className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(125deg,#111827,#173a46_58%,#155e75)] px-6 py-6 text-white shadow-xl shadow-slate-950/10"><div className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><span className="text-[10px] font-bold tracking-[.18em] text-cyan-200">MAĞAZA OPERASYONU</span><h1 className="mt-3 text-2xl font-semibold">İşletme ağı kontrolü</h1><p className="mt-1 text-sm text-cyan-50/60">Onay, paket, yayın ve risk durumlarını tek merkezden yönetin.</p></div><div className="flex gap-2"><button type="button" onClick={exportBusinesses} disabled={filtered.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold disabled:opacity-40"><Download size={14}/> CSV</button><button type="button" onClick={() => void loadBusinesses()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-60"><RefreshCw size={14} className={loading ? "animate-spin" : ""}/> Yenile</button></div></div></section>
-      <Card title="İşletme Yönetimi" description={`Toplam ${businesses.length} işletme`}>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><small className="text-[10px] font-bold tracking-wider text-[var(--text-3)]">FİRMA AĞI</small><b className="mt-1 block text-2xl text-[var(--text-1)]">{networkCount}</b></div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><small className="text-[10px] font-bold tracking-wider text-[var(--text-3)]">TOPLAM ŞUBE</small><b className="mt-1 block text-2xl text-[var(--text-1)]">{businesses.length}</b></div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><small className="text-[10px] font-bold tracking-wider text-[var(--text-3)]">ONAY BEKLEYEN ŞUBE</small><b className="mt-1 block text-2xl text-amber-600">{pendingCount}</b></div>
+      </section>
+      <Card title="Firma ve Şube Yönetimi" description={`${networkCount} firma ağı altında ${businesses.length} şube`}>
         <div className="mb-4 grid gap-3 md:grid-cols-6">
           <div className="md:col-span-2">
             <Input
@@ -250,9 +270,9 @@ export default function SuperAdminBusinessesPage() {
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-[var(--text-3)]">
-                      {biz.storePosition}. mağaza · {biz.city} · {biz.category} · {biz.createdAt ?? "—"}
+                      {biz.organizationName ?? biz.name} · {biz.isHeadquarters ? "Merkez" : `${biz.branchNumber ?? biz.storePosition ?? 1}. şube`} · {biz.city} · {biz.category} · {biz.createdAt ?? "—"}
                     </p>
-                    <p className="text-xs text-[var(--text-3)]">ID: {biz.id}</p>
+                    <p className="text-xs text-[var(--text-3)]">Şube ID: {biz.id}{biz.organizationId ? ` · Firma ID: ${biz.organizationId}` : " · Eski tek şube kaydı"}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {biz.slug && <Link href={`/isletme/${biz.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-xs font-bold text-[var(--text-2)] transition hover:text-[var(--accent)]">Mağazayı aç <ExternalLink size={13}/></Link>}

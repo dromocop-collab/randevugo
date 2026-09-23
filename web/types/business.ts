@@ -60,6 +60,13 @@ export interface SpecialDay extends EntityBase {
 
 export interface Business extends EntityBase {
   ownerUid: string;
+  /** Parent company. Legacy businesses may not have this until their first branch is added. */
+  organizationId?: string;
+  organizationName?: string;
+  headquartersBusinessId?: string;
+  branchNumber?: number;
+  branchCode?: string;
+  isHeadquarters?: boolean;
   slug: string;
   name: string;
   description?: string;

@@ -200,6 +200,14 @@ async function sendTokenBatches(tokens, title, body, data, collapseId) {
             tokens: batch.map((item) => item.token),
             notification: { title, body },
             data,
+            android: {
+                priority: "high",
+                notification: {
+                    channelId: "senin_randevun_updates",
+                    sound: "default",
+                    clickAction: "OPEN_SENIN_RANDEVUN",
+                },
+            },
             apns: { ...(collapseId ? { headers: { "apns-collapse-id": collapseId } } : {}),
                 payload: { aps: { sound: "default", badge: 1 } } },
         });
@@ -307,9 +315,12 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
     }
     const slugRef = db.doc(`businessSlugs/${slug}`);
     const businessRef = db.collection("businesses").doc();
+    const fallbackOrganizationRef = db.collection("businessOrganizations").doc();
     const accountRef = db.doc(`businessAccounts/${uid}`);
     const workingHours = Array.isArray(data.workingHours) ? data.workingHours.slice(0, 7) : [];
+    const parentBusinessId = typeof data.parentBusinessId === "string" ? data.parentBusinessId.trim() : "";
     let position = 0;
+    let organizationId = "";
     await db.runTransaction(async (transaction) => {
         const ownedQuery = db.collection("businesses").where("ownerUid", "==", uid);
         const [account, owned, slugSnapshot] = await Promise.all([
@@ -319,19 +330,67 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         ]);
         if (slugSnapshot.exists)
             throw new https_1.HttpsError("already-exists", "Bu mağaza adresi zaten kullanılıyor.");
+        const parent = parentBusinessId ? owned.docs.find((document) => document.id === parentBusinessId) : undefined;
+        if (parentBusinessId && !parent) {
+            throw new https_1.HttpsError("permission-denied", "Yalnızca sahibi olduğunuz firmaya şube ekleyebilirsiniz.");
+        }
         const reservedCount = Math.max(Number(account.data()?.storeCount ?? 0), owned.size);
-        if (reservedCount >= 3)
-            throw new https_1.HttpsError("resource-exhausted", "Bir hesap en fazla 3 mağaza açabilir.");
+        if (reservedCount >= 10)
+            throw new https_1.HttpsError("resource-exhausted", "Firma başına en fazla 10 şube açılabilir.");
         position = reservedCount + 1;
+        organizationId = String(parent?.data().organizationId ?? account.data()?.organizationId ?? fallbackOrganizationRef.id);
+        const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
+        const organization = await transaction.get(organizationRef);
+        const orderedOwned = [...owned.docs].sort((left, right) => Number(left.data().storePosition ?? 999) - Number(right.data().storePosition ?? 999));
+        const existingHeadquarters = orderedOwned.find((document) => document.data().isHeadquarters === true);
+        const sourceBusiness = parent ?? existingHeadquarters ?? orderedOwned[0];
+        const inheritedSubscription = sourceBusiness
+            ? await transaction.get(db.doc(`subscriptions/${sourceBusiness.id}`))
+            : null;
+        if (organization.exists && organization.data()?.ownerUid !== uid) {
+            throw new https_1.HttpsError("permission-denied", "Firma ağına şube ekleme yetkiniz yok.");
+        }
+        const headquartersBusinessId = String(sourceBusiness?.data().headquartersBusinessId ?? existingHeadquarters?.id ?? sourceBusiness?.id ?? businessRef.id);
+        const organizationName = String(organization.data()?.name ?? sourceBusiness?.data().organizationName ?? sourceBusiness?.data().name ?? name).slice(0, 100);
+        const inheritedPlan = String(sourceBusiness?.data().plan ?? "RANDEVUGO");
         // Every storefront must pass platform review before becoming public.
         // This includes the account's first store.
         const needsApproval = true;
         transaction.set(accountRef, {
-            ownerUid: uid, storeCount: position, updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            ownerUid: uid, organizationId, storeCount: position, updatedAt: firestore_1.FieldValue.serverTimestamp(),
             createdAt: account.data()?.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
+        transaction.set(organizationRef, {
+            ownerUid: uid,
+            name: organizationName,
+            headquartersBusinessId,
+            branchCount: position,
+            maxBranches: 10,
+            status: organization.data()?.status ?? "active",
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            createdAt: organization.data()?.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        orderedOwned.forEach((document, index) => {
+            if (document.data().organizationId === organizationId)
+                return;
+            transaction.set(document.ref, {
+                organizationId,
+                organizationName,
+                headquartersBusinessId,
+                branchNumber: Number(document.data().branchNumber ?? document.data().storePosition ?? index + 1),
+                branchCode: String(document.data().branchCode ?? `SUBE-${String(index + 1).padStart(2, "0")}`),
+                isHeadquarters: document.id === headquartersBusinessId,
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        });
         transaction.set(businessRef, {
             ownerUid: uid,
+            organizationId,
+            organizationName,
+            headquartersBusinessId,
+            branchNumber: position,
+            branchCode: `SUBE-${String(position).padStart(2, "0")}`,
+            isHeadquarters: businessRef.id === headquartersBusinessId,
             name,
             slug,
             category: requireString(data.category, "Kategori").slice(0, 60),
@@ -353,7 +412,7 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             minimumBookingNoticeMinutes: 60,
             maximumBookingDaysAhead: 45,
             appointmentBufferMinutes: 10,
-            plan: "RANDEVUGO",
+            plan: inheritedPlan,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
@@ -376,19 +435,32 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         });
         if (needsApproval) {
             transaction.set(db.collection("businessApprovalRequests").doc(businessRef.id), {
-                businessId: businessRef.id, ownerUid: uid, businessName: name, storePosition: position,
+                businessId: businessRef.id, organizationId, ownerUid: uid, businessName: name, storePosition: position,
                 status: "pending", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
             });
         }
         transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
-            businessId: businessRef.id, userId: uid, plan: "RANDEVUGO", status: "trialing",
+            businessId: businessRef.id, organizationId, billingBusinessId: headquartersBusinessId,
+            userId: uid, plan: inheritedPlan, status: String(inheritedSubscription?.data()?.status ?? "trialing"),
             trialDays: 90,
-            trialStartedAt: new Date().toISOString(),
-            trialEndsAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-            renewalEnabled: false, paymentProvider: "manual", createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            trialStartedAt: inheritedSubscription?.data()?.trialStartedAt ?? new Date().toISOString(),
+            trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+            renewalEnabled: inheritedSubscription?.data()?.renewalEnabled === true,
+            paymentProvider: String(inheritedSubscription?.data()?.paymentProvider ?? "manual"),
+            createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        transaction.set(db.collection("platformAuditLogs").doc(), {
+            action: parent || owned.size > 0 ? "organization.branch_created" : "organization.created",
+            entityType: "businessOrganization",
+            entityId: organizationId,
+            organizationId,
+            businessId: businessRef.id,
+            branchNumber: position,
+            actorUid: uid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
         });
     });
-    return { businessId: businessRef.id, status: "pending_review", requiresApproval: true, storePosition: position };
+    return { businessId: businessRef.id, organizationId, status: "pending_review", requiresApproval: true, storePosition: position };
 });
 exports.reviewBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
@@ -632,17 +704,29 @@ exports.assignBusinessPlan = (0, https_1.onCall)({ region: "europe-west1" }, asy
     await requirePlatformAdmin(uid, request.auth?.token.email);
     const businessId = requireString(request.data?.businessId, "businessId");
     const plan = requireString(request.data?.plan, "Paket").toUpperCase().slice(0, 40);
+    const business = await db.doc(`businesses/${businessId}`).get();
+    if (!business.exists)
+        throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
+    const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
+    const branchDocuments = organizationId
+        ? (await db.collection("businesses").where("organizationId", "==", organizationId).get()).docs
+        : [business];
     const batch = db.batch();
-    batch.update(db.doc(`businesses/${businessId}`), { plan, updatedAt: firestore_1.FieldValue.serverTimestamp() });
-    batch.set(db.doc(`subscriptions/${businessId}`), {
-        businessId, plan, status: String(request.data?.status ?? "active"), assignedBy: uid,
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    branchDocuments.forEach((branch) => {
+        batch.update(branch.ref, { plan, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        batch.set(db.doc(`subscriptions/${branch.id}`), {
+            businessId: branch.id,
+            ...(organizationId ? { organizationId } : {}),
+            plan, status: String(request.data?.status ?? "active"), assignedBy: uid,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    });
     batch.set(db.collection("platformAuditLogs").doc(), {
-        action: "subscription.plan_assigned", businessId, plan, actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp(),
+        action: "subscription.plan_assigned", businessId, organizationId: organizationId || null,
+        affectedBranches: branchDocuments.length, plan, actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
     await batch.commit();
-    return { success: true, plan };
+    return { success: true, plan, affectedBranches: branchDocuments.length };
 });
 exports.registerPushToken = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
@@ -662,7 +746,7 @@ exports.registerPushToken = (0, https_1.onCall)({ region: "europe-west1" }, asyn
         .map((document) => document.ref.delete()));
     await deviceRef.set({
         fcmToken: token,
-        platform: "ios",
+        platform: request.data?.platform === "android" ? "android" : "ios",
         appVersion: String(request.data?.appVersion ?? ""),
         locale: String(request.data?.locale ?? "tr_TR"),
         enabled: true,
@@ -747,16 +831,34 @@ exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async
     await requirePlatformAdmin(uid, request.auth?.token.email);
     const title = requireString(request.data?.title, "Başlık").slice(0, 80);
     const body = requireString(request.data?.body, "Mesaj").slice(0, 500);
+    const category = request.data?.category === "campaign" ? "campaign" : "service";
     const devices = await db.collectionGroup("devices").get();
-    const tokens = devices.docs.map((document) => ({
+    const candidateTokens = devices.docs.map((document) => ({
         ref: document.ref,
         token: String(document.data().fcmToken ?? ""),
     })).filter((item) => item.token.length > 20);
+    let tokens = candidateTokens;
+    if (category === "campaign") {
+        const userRefMap = new Map();
+        candidateTokens.forEach((item) => {
+            const ref = item.ref.parent.parent;
+            if (ref)
+                userRefMap.set(ref.path, db.doc(ref.path));
+        });
+        const users = await Promise.all([...userRefMap.values()].map((ref) => ref.get()));
+        const allowedUsers = new Set(users.filter((snapshot) => snapshot.data()?.notificationPreferences?.campaigns === true).map((snapshot) => snapshot.ref.path));
+        tokens = candidateTokens.filter((item) => {
+            const userPath = item.ref.parent.parent?.path;
+            return !!userPath && allowedUsers.has(userPath);
+        });
+    }
     const result = await sendTokenBatches(tokens, title, body, {
-        kind: "platform_announcement", destination: String(request.data?.destination ?? "discover"),
+        kind: category === "campaign" ? "platform_campaign" : "platform_announcement",
+        destination: String(request.data?.destination ?? "discover"),
     });
     await db.collection("notificationLogs").add({
-        audience: "platform", title, body, senderUid: uid, recipientDevices: tokens.length, ...result,
+        audience: "platform", category, title, body, senderUid: uid,
+        candidateDevices: candidateTokens.length, recipientDevices: tokens.length, ...result,
         status: tokens.length === 0 ? "no_recipients" : result.failureCount === 0 ? "sent" : "partial",
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });

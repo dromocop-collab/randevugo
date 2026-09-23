@@ -33,7 +33,7 @@ export function DashboardCommandCenter() {
       { id: "calendar", label: "Takvimi aç", description: "Günlük ve haftalık programı görüntüle", group: "Hızlı işlemler", icon: CalendarDays, keywords: "takvim randevu program", run: go("/dashboard/takvim") },
       { id: "assistant", label: "İşletme asistanına sor", description: "Canlı işletme verileriyle analiz başlat", group: "Hızlı işlemler", icon: Bot, keywords: "asistan yapay zeka analiz sor", run: go("/dashboard/asistan") },
       { id: "automation", label: "Yeni otomasyon oluştur", description: "Tekrarlanan operasyonları otomatikleştir", group: "Hızlı işlemler", icon: WandSparkles, keywords: "otomasyon kural bildirim akış", run: go("/dashboard/otomasyonlar?create=1") },
-      { id: "new-store", label: "Yeni mağaza kur", description: "Yeni bir işletme çalışma alanı aç", group: "Hızlı işlemler", icon: Plus, keywords: "mağaza işletme ekle", run: go("/onboarding") },
+      { id: "new-store", label: "Yeni şube kur", description: "Firma ağına yeni bir şube ekle", group: "Hızlı işlemler", icon: Plus, keywords: "şube mağaza işletme ekle", run: go("/dashboard/subeler") },
       { id: "copy-store", label: "Mağaza linkini kopyala", description: activeBusiness?.slug ? `seninrandevun.com/isletme/${activeBusiness.slug}` : "Önce mağaza profilini tamamlayın", group: "Hızlı işlemler", icon: Clipboard, keywords: "link url mağaza kopyala", run: async () => {
         if (!activeBusiness?.slug) return toast.error("Mağaza bağlantısı henüz hazır değil.");
         await navigator.clipboard.writeText(`${window.location.origin}/isletme/${activeBusiness.slug}`);

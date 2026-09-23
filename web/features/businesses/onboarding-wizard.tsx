@@ -579,7 +579,7 @@ export function OnboardingWizard() {
                       <ul className="mt-1.5 space-y-1 text-xs text-[var(--text-3)]">
                         <li>• Çalışma saatleriniz varsayılan olarak ayarlanacak (daha sonra değiştirebilirsiniz)</li>
                         <li>• Dashboard&apos;dan hizmetlerinizi ve çalışanlarınızı ekleyebilirsiniz</li>
-                        <li>• İlk mağaza hemen açılır; 2. ve 3. mağaza süper admin onayından sonra yayınlanır</li>
+                        <li>• Her yeni şube Süper Admin onayından sonra yayınlanır; firma başına en fazla 10 şube açılabilir</li>
                       </ul>
                     </div>
                   </div>

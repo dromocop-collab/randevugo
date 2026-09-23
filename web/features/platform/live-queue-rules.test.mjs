@@ -33,6 +33,7 @@ test("queue rules isolate customer and business data and forbid direct writes", 
   await adminDb.doc("businesses/rules-business-a").set({ isPublished: true, ownerUid: manager.uid });
   await adminDb.doc("businesses/rules-business-b").set({ isPublished: true, ownerUid: "someone-else" });
   await adminDb.doc("businesses/rules-business-c").set({ isPublished: true, ownerUid: ownerOnly.uid });
+  await adminDb.doc("businessOrganizations/rules-organization").set({ ownerUid: manager.uid, name: "Test Firma", branchCount: 2, maxBranches: 10 });
   await adminDb.doc(`businesses/rules-business-a/members/${manager.uid}`).set({ uid: manager.uid, role: "manager" });
   await adminDb.doc("businesses/rules-business-a/queueEntries/entry-a").set({ businessId: "rules-business-a", customerId: customer.uid, status: "waiting", joinedAt: new Date() });
   await adminDb.doc("businesses/rules-business-b/queueEntries/entry-b").set({ businessId: "rules-business-b", customerId: otherCustomer.uid, status: "waiting" });
@@ -48,6 +49,9 @@ test("queue rules isolate customer and business data and forbid direct writes", 
   await assert.rejects(getDocs(query(collection(customer.db, "businesses/rules-business-a/queueEntries"),
     where("status", "in", ["waiting", "on_the_way", "called", "in_service"]), orderBy("joinedAt", "asc"))));
   assert.equal((await getDoc(doc(ownerOnly.db, "businesses/rules-business-c/queueEntries/entry-c"))).exists(), true);
+  assert.equal((await getDoc(doc(manager.db, "businessOrganizations/rules-organization"))).exists(), true);
+  await assert.rejects(getDoc(doc(customer.db, "businessOrganizations/rules-organization")));
+  await assert.rejects(setDoc(doc(manager.db, "businessOrganizations/rules-organization"), { branchCount: 99 }, { merge: true }));
   await assert.rejects(getDoc(doc(manager.db, "businesses/rules-business-b/queueEntries/entry-b")));
   await assert.rejects(setDoc(own, { status: "completed" }, { merge: true }));
   await assert.rejects(setDoc(doc(manager.db, "businesses/rules-business-a/queueEntries/entry-a"), { status: "called" }, { merge: true }));

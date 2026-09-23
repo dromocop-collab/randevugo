@@ -19,8 +19,9 @@ import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Business, DaySchedule } from "@/types/business";
 
-interface OnboardingInput {
+export interface OnboardingInput {
   ownerUid: string;
+  parentBusinessId?: string;
   name: string;
   category: string;
   phone: string;
@@ -127,6 +128,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
 
 export interface CreateBusinessResult {
   businessId: string;
+  organizationId?: string;
   status: "active" | "pending_review";
   requiresApproval: boolean;
   storePosition: number;
@@ -139,6 +141,7 @@ export async function createBusinessFromOnboarding(input: OnboardingInput): Prom
   if (!data.businessId) throw new Error("İşletme oluşturulamadı.");
   return {
     businessId: data.businessId,
+    organizationId: typeof data.organizationId === "string" ? data.organizationId : undefined,
     status: data.status === "pending_review" ? "pending_review" : "active",
     requiresApproval: data.requiresApproval === true,
     storePosition: Number(data.storePosition ?? 1),
