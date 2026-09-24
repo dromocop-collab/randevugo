@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = void 0;
+exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -832,37 +832,99 @@ exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async
     const title = requireString(request.data?.title, "Başlık").slice(0, 80);
     const body = requireString(request.data?.body, "Mesaj").slice(0, 500);
     const category = request.data?.category === "campaign" ? "campaign" : "service";
+    const platform = request.data?.platform === "ios" || request.data?.platform === "android"
+        ? request.data.platform
+        : "all";
+    const allowedDestinations = new Set(["discover", "appointments", "queue", "account"]);
+    const requestedDestination = String(request.data?.destination ?? "discover");
+    const destination = allowedDestinations.has(requestedDestination) ? requestedDestination : "discover";
+    const templateId = String(request.data?.templateId ?? "custom")
+        .replace(/[^a-zA-Z0-9_-]/g, "")
+        .slice(0, 64) || "custom";
     const devices = await db.collectionGroup("devices").get();
-    const candidateTokens = devices.docs.map((document) => ({
-        ref: document.ref,
-        token: String(document.data().fcmToken ?? ""),
-    })).filter((item) => item.token.length > 20);
-    let tokens = candidateTokens;
+    const candidateTokens = devices.docs.flatMap((document) => {
+        const data = document.data();
+        const platform = data.platform === "android" ? "android"
+            : data.platform === "ios" ? "ios" : null;
+        const token = String(data.fcmToken ?? "");
+        return platform && token.length > 20 && data.enabled !== false
+            ? [{ ref: document.ref, token, platform }]
+            : [];
+    });
+    const platformTokens = platform === "all"
+        ? candidateTokens
+        : candidateTokens.filter((item) => item.platform === platform);
+    let tokens = platformTokens;
     if (category === "campaign") {
         const userRefMap = new Map();
-        candidateTokens.forEach((item) => {
+        platformTokens.forEach((item) => {
             const ref = item.ref.parent.parent;
             if (ref)
                 userRefMap.set(ref.path, db.doc(ref.path));
         });
         const users = await Promise.all([...userRefMap.values()].map((ref) => ref.get()));
         const allowedUsers = new Set(users.filter((snapshot) => snapshot.data()?.notificationPreferences?.campaigns === true).map((snapshot) => snapshot.ref.path));
-        tokens = candidateTokens.filter((item) => {
+        tokens = platformTokens.filter((item) => {
             const userPath = item.ref.parent.parent?.path;
             return !!userPath && allowedUsers.has(userPath);
         });
     }
     const result = await sendTokenBatches(tokens, title, body, {
         kind: category === "campaign" ? "platform_campaign" : "platform_announcement",
-        destination: String(request.data?.destination ?? "discover"),
+        destination,
     });
     await db.collection("notificationLogs").add({
-        audience: "platform", category, title, body, senderUid: uid,
-        candidateDevices: candidateTokens.length, recipientDevices: tokens.length, ...result,
+        audience: "platform", category, platform, destination, templateId, title, body, senderUid: uid,
+        candidateDevices: candidateTokens.length, targetPlatformDevices: platformTokens.length,
+        recipientDevices: tokens.length, ...result,
         status: tokens.length === 0 ? "no_recipients" : result.failureCount === 0 ? "sent" : "partial",
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
-    return { success: result.successCount > 0, recipients: tokens.length, ...result };
+    return { success: result.successCount > 0, platform, recipients: tokens.length, ...result };
+});
+exports.getPlatformPushOperations = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const [devices, logs] = await Promise.all([
+        db.collectionGroup("devices").get(),
+        db.collection("notificationLogs").orderBy("createdAt", "desc").limit(100).get(),
+    ]);
+    const summary = devices.docs.reduce((counts, document) => {
+        const data = document.data();
+        if (data.enabled === false || String(data.fcmToken ?? "").length <= 20)
+            return counts;
+        if (data.platform === "android")
+            counts.android += 1;
+        else if (data.platform === "ios")
+            counts.ios += 1;
+        else
+            return counts;
+        counts.total += 1;
+        return counts;
+    }, { total: 0, ios: 0, android: 0 });
+    const rows = logs.docs
+        .filter((document) => document.data().audience === "platform")
+        .slice(0, 30)
+        .map((document) => {
+        const data = document.data();
+        return {
+            id: document.id,
+            title: String(data.title ?? ""),
+            body: String(data.body ?? ""),
+            category: data.category === "campaign" ? "campaign" : "service",
+            platform: data.platform === "ios" || data.platform === "android" ? data.platform : "all",
+            destination: String(data.destination ?? "discover"),
+            templateId: String(data.templateId ?? "custom"),
+            recipients: Number(data.recipientDevices ?? 0),
+            successCount: Number(data.successCount ?? 0),
+            failureCount: Number(data.failureCount ?? 0),
+            status: String(data.status ?? "unknown"),
+            createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? null,
+        };
+    });
+    return { summary, rows };
 });
 exports.sendBusinessPush = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;

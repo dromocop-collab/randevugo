@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import {
-  Activity, ArrowLeftToLine, BarChart3, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones, Settings2,
+  Activity, ArrowLeftToLine, BarChart3, BellRing, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones, Settings2,
   Bot, MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
@@ -18,6 +18,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin/destek", label: "Destek", icon: Headphones },
   { href: "/super-admin/moderasyon", label: "Moderasyon", icon: ShieldCheck },
   { href: "/super-admin/audit-logs", label: "Audit Kayıtları", icon: ClipboardList },
+  { href: "/super-admin/bildirimler", label: "Bildirim Merkezi", icon: BellRing },
   { href: "/super-admin/sms", label: "SMS Merkezi", icon: MessageSquareText },
   { href: "/super-admin/randevu-alanlari", label: "Randevu Alanları", icon: CalendarCog },
   { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2 },
