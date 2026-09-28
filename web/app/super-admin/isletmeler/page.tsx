@@ -148,7 +148,7 @@ export default function SuperAdminBusinessesPage() {
     setBusyId(bizId);
     try {
       const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "assignBusinessPlan");
-      await callable({ businessId: bizId, plan: newPlan, status: "active" });
+      await callable({ businessId: bizId, plan: newPlan });
       toast.success(`Plan ${newPlan} olarak güncellendi.`);
       await loadBusinesses();
     } catch (e) {

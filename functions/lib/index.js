@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = void 0;
+exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -17,6 +17,7 @@ const live_queue_domain_js_1 = require("./live-queue-domain.js");
 const live_queue_wait_engine_js_1 = require("./live-queue-wait-engine.js");
 const live_queue_notifications_js_1 = require("./live-queue-notifications.js");
 const availability_alert_domain_js_1 = require("./availability-alert-domain.js");
+const subscription_domain_js_1 = require("./subscription-domain.js");
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
 const auth = (0, auth_1.getAuth)();
@@ -164,10 +165,22 @@ function htmlSafe(value) {
         "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
     })[character] ?? character);
 }
-async function requirePlatformAdmin(uid, email) {
+async function isPlatformAdminAccount(uid, email) {
     if (email?.trim().toLowerCase() === "cihatwin@gmail.com")
-        return;
-    if ((await db.doc(`platformAdmins/${uid}`).get()).exists)
+        return true;
+    if (!email) {
+        try {
+            if ((await auth.getUser(uid)).email?.trim().toLowerCase() === "cihatwin@gmail.com")
+                return true;
+        }
+        catch {
+            // Continue with the platformAdmins collection check.
+        }
+    }
+    return (await db.doc(`platformAdmins/${uid}`).get()).exists;
+}
+async function requirePlatformAdmin(uid, email) {
+    if (await isPlatformAdminAccount(uid, email))
         return;
     throw new https_1.HttpsError("permission-denied", "Bu işlem yalnızca süper admin tarafından yapılabilir.");
 }
@@ -195,22 +208,53 @@ function entitlementDateMillis(value) {
     }
     return null;
 }
+async function grantAdminOwnerLifetimeAccess(businessId) {
+    const business = await db.doc(`businesses/${businessId}`).get();
+    const ownerUid = typeof business.data()?.ownerUid === "string" ? String(business.data()?.ownerUid) : "";
+    if (!ownerUid || !(await isPlatformAdminAccount(ownerUid)))
+        return false;
+    await db.doc(`subscriptions/${businessId}`).set({
+        businessId,
+        userId: ownerUid,
+        plan: String(business.data()?.plan ?? "RANDEVUGO"),
+        status: "active",
+        accessMode: "lifetime",
+        isLifetime: true,
+        trialEndsAt: firestore_1.FieldValue.delete(),
+        subscriptionEndsAt: firestore_1.FieldValue.delete(),
+        reminders: firestore_1.FieldValue.delete(),
+        expiredAt: firestore_1.FieldValue.delete(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return true;
+}
 async function requireBookingEntitlement(businessId) {
     const subscriptionRef = db.doc(`subscriptions/${businessId}`);
     const snapshot = await subscriptionRef.get();
     if (!snapshot.exists) {
+        if (await grantAdminOwnerLifetimeAccess(businessId)) {
+            return { allowed: true, status: "active", endsAtMillis: null };
+        }
         throw new https_1.HttpsError("failed-precondition", "SUBSCRIPTION_REQUIRED: İşletmenin abonelik kaydı bulunmuyor.");
     }
     const subscription = snapshot.data() ?? {};
     const status = String(subscription.status ?? "expired");
+    if (subscription.isLifetime === true || subscription.accessMode === "lifetime") {
+        return { allowed: true, status: "active", endsAtMillis: null };
+    }
     const endsAtMillis = entitlementDateMillis(status === "trialing" ? subscription.trialEndsAt : subscription.subscriptionEndsAt);
-    const periodExpired = endsAtMillis !== null && endsAtMillis <= Date.now();
-    const allowed = status === "trialing"
-        ? endsAtMillis !== null && !periodExpired
-        : status === "active" && !periodExpired;
-    if (allowed)
+    const decision = (0, subscription_domain_js_1.evaluateSubscriptionAccess)({
+        status,
+        accessMode: typeof subscription.accessMode === "string" ? subscription.accessMode : null,
+        isLifetime: subscription.isLifetime === true,
+        endsAtMillis,
+    });
+    if (decision.allowed)
         return { allowed: true, status, endsAtMillis };
-    if ((status === "trialing" || status === "active") && periodExpired) {
+    if (await grantAdminOwnerLifetimeAccess(businessId)) {
+        return { allowed: true, status: "active", endsAtMillis: null };
+    }
+    if (decision.shouldExpire) {
         await subscriptionRef.set({
             status: "expired",
             expiredAt: firestore_1.FieldValue.serverTimestamp(),
@@ -343,6 +387,7 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
     const uid = request.auth?.uid;
     if (!uid)
         throw new https_1.HttpsError("unauthenticated", "İşletme açmak için giriş yapmalısınız.");
+    const creatorIsPlatformAdmin = await isPlatformAdminAccount(uid, request.auth?.token.email);
     const data = request.data ?? {};
     const name = requireString(data.name, "İşletme adı").slice(0, 100);
     const slug = requireString(data.slug, "Mağaza adresi").toLowerCase();
@@ -480,10 +525,15 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         }
         transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
             businessId: businessRef.id, organizationId, billingBusinessId: headquartersBusinessId,
-            userId: uid, plan: inheritedPlan, status: String(inheritedSubscription?.data()?.status ?? "trialing"),
+            userId: uid, plan: inheritedPlan,
+            status: creatorIsPlatformAdmin ? "active" : String(inheritedSubscription?.data()?.status ?? "trialing"),
+            accessMode: creatorIsPlatformAdmin ? "lifetime" : String(inheritedSubscription?.data()?.accessMode ?? "timed"),
+            isLifetime: creatorIsPlatformAdmin || inheritedSubscription?.data()?.isLifetime === true,
             trialDays: 90,
             trialStartedAt: inheritedSubscription?.data()?.trialStartedAt ?? new Date().toISOString(),
-            trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+            ...(creatorIsPlatformAdmin ? {} : {
+                trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+            }),
             renewalEnabled: inheritedSubscription?.data()?.renewalEnabled === true,
             paymentProvider: String(inheritedSubscription?.data()?.paymentProvider ?? "manual"),
             createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
@@ -750,13 +800,21 @@ exports.assignBusinessPlan = (0, https_1.onCall)({ region: "europe-west1" }, asy
     const branchDocuments = organizationId
         ? (await db.collection("businesses").where("organizationId", "==", organizationId).get()).docs
         : [business];
+    const subscriptionSnapshots = await db.getAll(...branchDocuments.map((branch) => db.doc(`subscriptions/${branch.id}`)));
     const batch = db.batch();
-    branchDocuments.forEach((branch) => {
+    branchDocuments.forEach((branch, index) => {
         batch.update(branch.ref, { plan, updatedAt: firestore_1.FieldValue.serverTimestamp() });
         batch.set(db.doc(`subscriptions/${branch.id}`), {
             businessId: branch.id,
             ...(organizationId ? { organizationId } : {}),
-            plan, status: String(request.data?.status ?? "active"), assignedBy: uid,
+            plan,
+            // Paket atamak erişim süresini değiştirmez. Süre yalnızca
+            // updateBusinessSubscription üzerinden açıkça yönetilir.
+            ...(!subscriptionSnapshots[index].exists ? {
+                status: "expired", accessMode: "timed", isLifetime: false,
+                renewalEnabled: false, paymentProvider: "manual",
+            } : {}),
+            assignedBy: uid,
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     });
@@ -766,6 +824,207 @@ exports.assignBusinessPlan = (0, https_1.onCall)({ region: "europe-west1" }, asy
     });
     await batch.commit();
     return { success: true, plan, affectedBranches: branchDocuments.length };
+});
+const SUBSCRIPTION_ADMIN_MODES = ["trialing", "active", "past_due", "cancelled", "expired", "lifetime"];
+function adminSubscriptionPatch(mode, endAtMillis) {
+    const base = {
+        status: mode === "lifetime" ? "active" : mode,
+        accessMode: mode === "lifetime" ? "lifetime" : "timed",
+        isLifetime: mode === "lifetime",
+        reminders: firestore_1.FieldValue.delete(),
+        expiredAt: firestore_1.FieldValue.delete(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    };
+    if (mode === "lifetime") {
+        base.trialEndsAt = firestore_1.FieldValue.delete();
+        base.subscriptionEndsAt = firestore_1.FieldValue.delete();
+        return base;
+    }
+    if (mode === "trialing") {
+        base.trialEndsAt = new Date(endAtMillis).toISOString();
+        base.subscriptionEndsAt = firestore_1.FieldValue.delete();
+    }
+    else if (mode === "active") {
+        base.subscriptionEndsAt = new Date(endAtMillis).toISOString();
+        base.trialEndsAt = firestore_1.FieldValue.delete();
+    }
+    else {
+        base.subscriptionEndsAt = endAtMillis ? new Date(endAtMillis).toISOString() : firestore_1.FieldValue.delete();
+        base.trialEndsAt = firestore_1.FieldValue.delete();
+    }
+    return base;
+}
+exports.updateBusinessSubscription = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const mode = String(request.data?.mode ?? "");
+    if (!SUBSCRIPTION_ADMIN_MODES.includes(mode)) {
+        throw new https_1.HttpsError("invalid-argument", "Abonelik durumu geçersiz.");
+    }
+    const rawEnd = Number(request.data?.endAtMillis);
+    const needsFutureEnd = mode === "trialing" || mode === "active";
+    if (needsFutureEnd && (!Number.isFinite(rawEnd) || rawEnd <= Date.now())) {
+        throw new https_1.HttpsError("invalid-argument", "Aktif veya deneme aboneliği için gelecekte bir bitiş tarihi seçin.");
+    }
+    if (Number.isFinite(rawEnd) && rawEnd > Date.now() + 10 * 366 * 86_400_000) {
+        throw new https_1.HttpsError("invalid-argument", "Bitiş tarihi en fazla 10 yıl ileri alınabilir.");
+    }
+    const business = await db.doc(`businesses/${businessId}`).get();
+    if (!business.exists)
+        throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
+    const organizationId = typeof business.data()?.organizationId === "string"
+        ? String(business.data()?.organizationId)
+        : "";
+    const affected = organizationId
+        ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(20).get()).docs
+        : [business];
+    const patch = adminSubscriptionPatch(mode, Number.isFinite(rawEnd) ? rawEnd : undefined);
+    const batch = db.batch();
+    affected.forEach((document) => {
+        batch.set(db.doc(`subscriptions/${document.id}`), {
+            businessId: document.id,
+            ...(organizationId ? { organizationId } : {}),
+            ...patch,
+            updatedBy: uid,
+        }, { merge: true });
+    });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: "subscription.access_updated",
+        entityType: "subscription",
+        entityId: businessId,
+        businessId,
+        organizationId: organizationId || null,
+        mode,
+        endAt: Number.isFinite(rawEnd) ? new Date(rawEnd).toISOString() : null,
+        affectedBranches: affected.length,
+        actorUid: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true, mode, affectedBranches: affected.length };
+});
+exports.ensureAdminOwnedBusinessesLifetime = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businesses = await db.collection("businesses").where("ownerUid", "==", uid).limit(20).get();
+    if (businesses.empty)
+        return { success: true, affectedBusinesses: 0 };
+    const batch = db.batch();
+    businesses.docs.forEach((business) => {
+        batch.set(db.doc(`subscriptions/${business.id}`), {
+            businessId: business.id,
+            userId: uid,
+            plan: String(business.data().plan ?? "RANDEVUGO"),
+            ...adminSubscriptionPatch("lifetime"),
+            updatedBy: uid,
+        }, { merge: true });
+    });
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: "subscription.admin_lifetime_synced",
+        entityType: "platformAdmin",
+        entityId: uid,
+        affectedBusinesses: businesses.size,
+        actorUid: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true, affectedBusinesses: businesses.size };
+});
+exports.backfillLegacyBusinessSubscriptions = (0, https_1.onCall)({ region: "europe-west1", timeoutSeconds: 120 }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const cursor = typeof request.data?.cursor === "string" ? request.data.cursor.trim() : "";
+    const pageSize = 200;
+    let query = db.collection("businesses").orderBy(firestore_1.FieldPath.documentId()).limit(pageSize);
+    if (cursor)
+        query = query.startAfter(cursor);
+    const businesses = await query.get();
+    if (businesses.empty)
+        return { success: true, processed: 0, updated: 0, nextCursor: null };
+    const subscriptionSnapshots = await db.getAll(...businesses.docs.map((business) => db.doc(`subscriptions/${business.id}`)));
+    const now = Date.now();
+    const batch = db.batch();
+    let updated = 0;
+    businesses.docs.forEach((business, index) => {
+        const subscription = subscriptionSnapshots[index];
+        const row = subscription.data() ?? {};
+        const lifetime = row.isLifetime === true || row.accessMode === "lifetime";
+        if (lifetime)
+            return;
+        if (!subscription.exists) {
+            const trial = (0, subscription_domain_js_1.legacyTrialWindow)(entitlementDateMillis(business.data().createdAt), now);
+            batch.set(subscription.ref, {
+                businessId: business.id,
+                ...(typeof business.data().organizationId === "string" ? { organizationId: business.data().organizationId } : {}),
+                userId: business.data().ownerUid ?? null,
+                plan: String(business.data().plan ?? "RANDEVUGO"),
+                status: trial.status,
+                accessMode: "timed",
+                isLifetime: false,
+                trialDays: 90,
+                ...(trial.trialStartedAt ? { trialStartedAt: trial.trialStartedAt } : {}),
+                ...(trial.trialEndsAt ? { trialEndsAt: trial.trialEndsAt } : {}),
+                renewalEnabled: false,
+                paymentProvider: "manual",
+                migrationSource: "business_created_at",
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            updated += 1;
+            return;
+        }
+        const status = String(row.status ?? "expired");
+        if (status !== "active" && status !== "trialing")
+            return;
+        const endAtMillis = entitlementDateMillis(status === "trialing" ? row.trialEndsAt : row.subscriptionEndsAt);
+        const decision = (0, subscription_domain_js_1.evaluateSubscriptionAccess)({ status, endsAtMillis: endAtMillis });
+        if (!decision.shouldExpire)
+            return;
+        if (status === "trialing" && endAtMillis === null) {
+            const trial = (0, subscription_domain_js_1.legacyTrialWindow)(entitlementDateMillis(business.data().createdAt), now);
+            batch.set(subscription.ref, {
+                status: trial.status,
+                accessMode: "timed",
+                isLifetime: false,
+                ...(trial.trialStartedAt ? { trialStartedAt: trial.trialStartedAt } : {}),
+                ...(trial.trialEndsAt ? { trialEndsAt: trial.trialEndsAt } : {}),
+                ...(trial.status === "expired" ? { expiredAt: firestore_1.FieldValue.serverTimestamp() } : {}),
+                migrationSource: "repaired_trial_dates",
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        else {
+            batch.set(subscription.ref, {
+                status: "expired",
+                accessMode: "timed",
+                isLifetime: false,
+                expiredAt: firestore_1.FieldValue.serverTimestamp(),
+                migrationSource: endAtMillis === null ? "invalid_missing_end_date" : "expired_period",
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        updated += 1;
+    });
+    if (updated > 0) {
+        batch.set(db.collection("platformAuditLogs").doc(), {
+            action: "subscription.legacy_backfill",
+            entityType: "subscription",
+            processed: businesses.size,
+            updated,
+            actorUid: uid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        await batch.commit();
+    }
+    const nextCursor = businesses.size === pageSize ? businesses.docs.at(-1)?.id ?? null : null;
+    return { success: true, processed: businesses.size, updated, nextCursor };
 });
 exports.registerPushToken = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;

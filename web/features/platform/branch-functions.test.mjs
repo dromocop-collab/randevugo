@@ -61,10 +61,14 @@ test("branch creation shares one organization, stays pending and plan updates co
   );
 
   await db.doc(`platformAdmins/${owner.uid}`).set({ enabled: true });
-  const planResult = (await owner.call("assignBusinessPlan", { businessId: second.businessId, plan: "BUSINESS", status: "active" })).data;
+  const originalTrialEnd = subscription.data().trialEndsAt;
+  const planResult = (await owner.call("assignBusinessPlan", { businessId: second.businessId, plan: "BUSINESS" })).data;
   assert.equal(planResult.affectedBranches, 2);
   assert.equal((await db.doc(`businesses/${first.businessId}`).get()).data().plan, "BUSINESS");
   assert.equal((await db.doc(`businesses/${second.businessId}`).get()).data().plan, "BUSINESS");
+  const subscriptionAfterPlanChange = (await db.doc(`subscriptions/${second.businessId}`).get()).data();
+  assert.equal(subscriptionAfterPlanChange.status, "trialing");
+  assert.equal(subscriptionAfterPlanChange.trialEndsAt, originalTrialEnd);
 });
 
 test.after(async () => {

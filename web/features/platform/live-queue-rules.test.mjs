@@ -52,6 +52,15 @@ test("queue rules isolate customer and business data and forbid direct writes", 
   assert.equal((await getDoc(doc(manager.db, "businessOrganizations/rules-organization"))).exists(), true);
   await assert.rejects(getDoc(doc(customer.db, "businessOrganizations/rules-organization")));
   await assert.rejects(setDoc(doc(manager.db, "businessOrganizations/rules-organization"), { branchCount: 99 }, { merge: true }));
+  await assert.rejects(setDoc(doc(manager.db, "subscriptions/rules-business-a"), {
+    businessId: "rules-business-a",
+    plan: "RANDEVUGO",
+    status: "trialing",
+    trialStartedAt: new Date().toISOString(),
+    trialEndsAt: "2099-01-01T00:00:00.000Z",
+    renewalEnabled: false,
+    paymentProvider: "manual",
+  }));
   await assert.rejects(getDoc(doc(manager.db, "businesses/rules-business-b/queueEntries/entry-b")));
   await assert.rejects(setDoc(own, { status: "completed" }, { merge: true }));
   await assert.rejects(setDoc(doc(manager.db, "businesses/rules-business-a/queueEntries/entry-a"), { status: "called" }, { merge: true }));

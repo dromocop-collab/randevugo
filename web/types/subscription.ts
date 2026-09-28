@@ -14,6 +14,8 @@ export interface Subscription extends EntityBase {
   businessId: string;
   plan: AnyPlanType;
   status: SubscriptionStatus;
+  accessMode?: "timed" | "lifetime";
+  isLifetime?: boolean;
 
   /** Trial period */
   trialStartedAt?: string;
@@ -40,11 +42,12 @@ export interface Subscription extends EntityBase {
 /** Check if subscription gives active access */
 export function isSubscriptionActive(sub: Subscription | null): boolean {
   if (!sub) return false;
+  if (sub.isLifetime === true || sub.accessMode === "lifetime") return true;
   const endValue = sub.status === "trialing" ? sub.trialEndsAt : sub.subscriptionEndsAt;
   const endMillis = endValue ? new Date(endValue).getTime() : null;
   if (sub.status === "trialing") return endMillis !== null && Number.isFinite(endMillis) && endMillis > Date.now();
   if (sub.status !== "active") return false;
-  return endMillis === null || !Number.isFinite(endMillis) || endMillis > Date.now();
+  return endMillis !== null && Number.isFinite(endMillis) && endMillis > Date.now();
 }
 
 export function subscriptionAccessState(sub: Subscription | null): "loading" | "active" | "expiring" | "expired" {

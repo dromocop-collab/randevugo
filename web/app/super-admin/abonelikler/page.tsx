@@ -3,12 +3,13 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { collection, doc, getDoc, getDocs, type DocumentData } from "firebase/firestore";
-import { BadgeCheck, CircleAlert, Copy, PencilLine, Plus, ReceiptText, RefreshCw, Save, Store, Trash2, UsersRound, WalletCards, X } from "lucide-react";
+import { BadgeCheck, CalendarClock, CircleAlert, Copy, Crown, PencilLine, Plus, ReceiptText, RefreshCw, Save, Search, Store, Trash2, UsersRound, WalletCards, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PLAN_PRICE, PLAN_LABEL, PLAN_FEATURES, PLAN_FEATURE_LIST } from "@/constants/plans";
 import { listPlatformPlans, removePlatformPlan, savePlatformPlan, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { backfillLegacyBusinessSubscriptions, ensureAdminOwnedBusinessesLifetime, updateBusinessSubscription, type AdminSubscriptionMode } from "@/features/subscriptions/admin-subscription-repository";
 import { getDb } from "@/lib/firebase/firestore";
 import type { PaymentProviderKey, SubscriptionStatus } from "@/types/subscription";
 
@@ -16,12 +17,15 @@ type SubscriptionRow = {
   id: string;
   businessId: string;
   businessName: string;
+  ownerUid: string;
   plan: string;
   status: SubscriptionStatus;
   paymentProvider: PaymentProviderKey;
   renewalEnabled: boolean;
   trialEndsAt?: string;
   subscriptionEndsAt?: string;
+  accessMode: "timed" | "lifetime";
+  isLifetime: boolean;
 };
 
 const DEFAULT_PLAN: PlatformPlan = { id: "RANDEVUGO", label: PLAN_LABEL, yearlyPrice: PLAN_PRICE.yearly, monthlyPrice: PLAN_PRICE.monthlyEquivalent, currency: "TRY", trialDays: PLAN_PRICE.trialDays, maxStores: 3, maxStaff: 250, isActive: true, isRecommended: true, description: "Tüm randevu operasyonunu tek merkezden yönetin.", features: [...PLAN_FEATURE_LIST] };
@@ -32,22 +36,48 @@ function readDate(value: unknown): string | undefined {
   return undefined;
 }
 
-function mapSubscription(id: string, data: DocumentData, businessNames: Map<string, string>): SubscriptionRow {
+function mapSubscription(id: string, data: DocumentData, businesses: Map<string, { name: string; ownerUid: string }>): SubscriptionRow {
   const businessId = String(data.businessId ?? id);
-  return { id, businessId, businessName: businessNames.get(businessId) ?? "İşletme kaydı bulunamadı", plan: String(data.plan ?? "RANDEVUGO"), status: String(data.status ?? "trialing") as SubscriptionStatus, paymentProvider: String(data.paymentProvider ?? "manual") as PaymentProviderKey, renewalEnabled: data.renewalEnabled === true, trialEndsAt: readDate(data.trialEndsAt), subscriptionEndsAt: readDate(data.subscriptionEndsAt) };
+  const business = businesses.get(businessId);
+  const isLifetime = data.isLifetime === true || data.accessMode === "lifetime";
+  return { id, businessId, businessName: business?.name ?? "İşletme kaydı bulunamadı", ownerUid: business?.ownerUid ?? "", plan: String(data.plan ?? "RANDEVUGO"), status: String(data.status ?? "trialing") as SubscriptionStatus, paymentProvider: String(data.paymentProvider ?? "manual") as PaymentProviderKey, renewalEnabled: data.renewalEnabled === true, trialEndsAt: readDate(data.trialEndsAt), subscriptionEndsAt: readDate(data.subscriptionEndsAt), accessMode: isLifetime ? "lifetime" : "timed", isLifetime };
 }
 
 async function fetchSubscriptions(): Promise<SubscriptionRow[]> {
   const db = getDb();
   const businessSnapshot = await getDocs(collection(db, "businesses"));
-  const businessNames = new Map(businessSnapshot.docs.map((item) => [item.id, String(item.data().name ?? "İsimsiz işletme")]));
+  const businesses = new Map(businessSnapshot.docs.map((item) => [item.id, { name: String(item.data().name ?? "İsimsiz işletme"), ownerUid: String(item.data().ownerUid ?? "") }]));
   try {
     const subscriptionSnapshot = await getDocs(collection(db, "subscriptions"));
-    return subscriptionSnapshot.docs.map((item) => mapSubscription(item.id, item.data(), businessNames));
+    const subscriptionsByBusiness = new Map(subscriptionSnapshot.docs.map((item) => [String(item.data().businessId ?? item.id), item]));
+    const rows = businessSnapshot.docs.map((business) => {
+      const subscription = subscriptionsByBusiness.get(business.id);
+      return subscription
+        ? mapSubscription(subscription.id, subscription.data(), businesses)
+        : mapSubscription(business.id, { businessId: business.id, status: "expired", plan: business.data().plan ?? "RANDEVUGO", paymentProvider: "manual" }, businesses);
+    });
+    const knownBusinessIds = new Set(businessSnapshot.docs.map((business) => business.id));
+    const orphaned = subscriptionSnapshot.docs
+      .filter((item) => !knownBusinessIds.has(String(item.data().businessId ?? item.id)))
+      .map((item) => mapSubscription(item.id, item.data(), businesses));
+    return [...rows, ...orphaned];
   } catch {
     const snapshots = await Promise.all(businessSnapshot.docs.map((business) => getDoc(doc(db, "subscriptions", business.id))));
-    return snapshots.filter((item) => item.exists()).map((item) => mapSubscription(item.id, item.data(), businessNames));
+    return snapshots.map((item, index) => item.exists()
+      ? mapSubscription(item.id, item.data(), businesses)
+      : mapSubscription(businessSnapshot.docs[index].id, { businessId: businessSnapshot.docs[index].id, status: "expired", plan: businessSnapshot.docs[index].data().plan ?? "RANDEVUGO", paymentProvider: "manual" }, businesses));
   }
+}
+
+function subscriptionEnd(item: SubscriptionRow) {
+  return item.status === "trialing" ? item.trialEndsAt : item.subscriptionEndsAt;
+}
+
+function remainingDays(item: SubscriptionRow, now: number): number | null {
+  if (item.isLifetime) return null;
+  const end = subscriptionEnd(item);
+  if (!end) return Number.NaN;
+  return Math.ceil((new Date(end).getTime() - now) / 86_400_000);
 }
 
 export default function SuperAdminSubscriptionsPage() {
@@ -61,7 +91,13 @@ export default function SuperAdminSubscriptionsPage() {
   const [deleteCandidate, setDeleteCandidate] = useState<PlatformPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadWarning, setLoadWarning] = useState("");
+  const [renderedAt] = useState(() => Date.now());
+  const [searchText, setSearchText] = useState("");
+  const [subscriptionEditor, setSubscriptionEditor] = useState<SubscriptionRow | null>(null);
+  const [subscriptionMode, setSubscriptionMode] = useState<AdminSubscriptionMode>("active");
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState("");
   const editorRef = useRef<HTMLFormElement>(null);
+  const adminLifetimeSynced = useRef(false);
 
   function focusEditor() {
     requestAnimationFrame(() => {
@@ -82,9 +118,18 @@ export default function SuperAdminSubscriptionsPage() {
     focusEditor();
   }
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (syncAdminLifetime = false) => {
     setLoading(true);
     setLoadWarning("");
+    if (syncAdminLifetime && !adminLifetimeSynced.current) {
+      try {
+        await ensureAdminOwnedBusinessesLifetime();
+        await backfillLegacyBusinessSubscriptions();
+        adminLifetimeSynced.current = true;
+      } catch {
+        setLoadWarning("Yönetici hesabına ait işletmelerin süresiz erişimi eşitlenemedi. Yeniden deneyin.");
+      }
+    }
     const [planResult, subscriptionResult] = await Promise.allSettled([listPlatformPlans(), fetchSubscriptions()]);
     if (planResult.status === "fulfilled" && planResult.value.length) setPlans(planResult.value);
     else setPlans([{ ...DEFAULT_PLAN, features: [...DEFAULT_PLAN.features] }]);
@@ -95,8 +140,44 @@ export default function SuperAdminSubscriptionsPage() {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => { void reload(); });
+    queueMicrotask(() => { void reload(true); });
   }, [reload]);
+
+  function openSubscriptionEditor(item: SubscriptionRow) {
+    const mode: AdminSubscriptionMode = item.isLifetime ? "lifetime" : item.status;
+    const end = subscriptionEnd(item);
+    setSubscriptionEditor(item);
+    setSubscriptionMode(mode);
+    setSubscriptionEndDate(end ? new Date(end).toISOString().slice(0, 10) : "");
+  }
+
+  function addSubscriptionDays(days: number) {
+    const current = subscriptionEndDate ? new Date(`${subscriptionEndDate}T23:59:59`).getTime() : 0;
+    const base = Math.max(Date.now(), current);
+    setSubscriptionMode("active");
+    setSubscriptionEndDate(new Date(base + days * 86_400_000).toISOString().slice(0, 10));
+  }
+
+  async function saveSubscriptionAccess() {
+    if (!subscriptionEditor) return;
+    const timed = subscriptionMode === "active" || subscriptionMode === "trialing";
+    const endAtMillis = subscriptionEndDate ? new Date(`${subscriptionEndDate}T23:59:59`).getTime() : undefined;
+    if (timed && (!endAtMillis || endAtMillis <= Date.now())) {
+      toast.error("Aktif veya deneme erişimi için gelecekte bir bitiş tarihi seçin.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await updateBusinessSubscription({ businessId: subscriptionEditor.businessId, mode: subscriptionMode, ...(timed && endAtMillis ? { endAtMillis } : {}) });
+      toast.success(subscriptionMode === "lifetime" ? `Süresiz erişim tanımlandı (${result.affectedBranches} mağaza).` : `Abonelik güncellendi (${result.affectedBranches} mağaza).`);
+      setSubscriptionEditor(null);
+      await reload();
+    } catch (error) {
+      toast.error((error as Error).message || "Abonelik güncellenemedi.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -125,6 +206,17 @@ export default function SuperAdminSubscriptionsPage() {
     finally { setBusy(false); }
   }
 
+  const normalizedSearch = searchText.trim().toLocaleLowerCase("tr-TR");
+  const visibleSubscriptions = subscriptions.filter((item) => !normalizedSearch ||
+    item.businessName.toLocaleLowerCase("tr-TR").includes(normalizedSearch) ||
+    item.businessId.toLocaleLowerCase("tr-TR").includes(normalizedSearch) ||
+    item.plan.toLocaleLowerCase("tr-TR").includes(normalizedSearch));
+  const lifetimeCount = subscriptions.filter((item) => item.isLifetime).length;
+  const expiringCount = subscriptions.filter((item) => {
+    const days = remainingDays(item, renderedAt);
+    return days !== null && Number.isFinite(days) && days >= 0 && days <= 7;
+  }).length;
+
   return (
     <div className="space-y-5">
       <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(125deg,#081923,#0b4050_58%,#0e7490)] px-6 py-7 text-white shadow-xl shadow-cyan-950/15 sm:px-8">
@@ -141,12 +233,15 @@ export default function SuperAdminSubscriptionsPage() {
       <section className="overflow-hidden rounded-[26px] border border-cyan-950/10 bg-white/85 shadow-sm">
         <div className="flex flex-col justify-between gap-3 border-b border-cyan-950/10 px-5 py-4 sm:flex-row sm:items-center">
           <div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-700">ÖDEME OPERASYONU</p><h2 className="mt-1 text-xl font-semibold text-slate-950">Aboneliklerin canlı durumu</h2></div>
-          <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">{subscriptions.filter((item) => item.status === "active").length} aktif</span><span className="rounded-full bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">{subscriptions.filter((item) => item.status === "trialing").length} denemede</span><span className="rounded-full bg-rose-50 px-3 py-1.5 font-semibold text-rose-700">{subscriptions.filter((item) => item.status === "past_due").length} ödeme bekliyor</span></div>
+          <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-violet-50 px-3 py-1.5 font-semibold text-violet-700">{lifetimeCount} süresiz</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">{subscriptions.filter((item) => item.status === "active" && !item.isLifetime).length} aktif</span><span className="rounded-full bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">{subscriptions.filter((item) => item.status === "trialing").length} denemede</span><span className="rounded-full bg-orange-50 px-3 py-1.5 font-semibold text-orange-700">{expiringCount} yakında doluyor</span><span className="rounded-full bg-rose-50 px-3 py-1.5 font-semibold text-rose-700">{subscriptions.filter((item) => ["past_due", "expired"].includes(item.status)).length} kapalı</span></div>
         </div>
-        {subscriptions.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Henüz abonelik kaydı oluşmadı.</p> : <div className="divide-y divide-cyan-950/5">{subscriptions.slice(0, 12).map((item) => {
+        <div className="border-b border-cyan-950/5 px-5 py-3"><label className="relative block max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="İşletme adı, ID veya paket ara" className="min-h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"/></label></div>
+        {subscriptions.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Henüz abonelik kaydı oluşmadı.</p> : visibleSubscriptions.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Aramayla eşleşen işletme bulunamadı.</p> : <div className="divide-y divide-cyan-950/5">{visibleSubscriptions.map((item) => {
           const statusLabel: Record<SubscriptionStatus, string> = { trialing: "Ücretsiz dönemde", active: "Aktif", past_due: "Ödeme bekliyor", cancelled: "İptal", expired: "Süresi doldu" };
-          const endDate = item.subscriptionEndsAt ?? item.trialEndsAt;
-          return <article key={item.id} className="grid gap-3 px-5 py-4 transition hover:bg-cyan-50/45 md:grid-cols-[1.4fr_.7fr_.7fr_.9fr] md:items-center"><div className="min-w-0"><p className="truncate font-semibold text-slate-950">{item.businessName}</p><p className="truncate text-xs text-slate-500">{item.businessId}</p></div><div><p className="text-[10px] font-bold tracking-wider text-slate-400">PAKET</p><p className="mt-1 text-sm font-semibold text-slate-800">{item.plan}</p></div><div><p className="text-[10px] font-bold tracking-wider text-slate-400">DURUM</p><p className={`mt-1 text-sm font-semibold ${item.status === "active" ? "text-emerald-700" : item.status === "past_due" ? "text-rose-700" : "text-amber-700"}`}>{statusLabel[item.status]}</p></div><div className="flex items-center justify-between gap-3 md:justify-end"><div className="text-right"><p className="text-xs font-semibold uppercase text-slate-700">{item.paymentProvider}</p><p className="text-[11px] text-slate-400">{endDate ? new Date(endDate).toLocaleDateString("tr-TR") : item.renewalEnabled ? "Otomatik yenileme" : "Bitiş tarihi yok"}</p></div>{item.paymentProvider === "manual" ? <span title="Gerçek ödeme sağlayıcısı bağlı değil" className="grid h-9 w-9 place-items-center rounded-xl bg-amber-100 text-amber-700"><CircleAlert size={17}/></span> : <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-100 text-emerald-700"><BadgeCheck size={17}/></span>}</div></article>;
+          const endDate = subscriptionEnd(item);
+          const days = remainingDays(item, renderedAt);
+          const remainingLabel = item.isLifetime ? "Süresiz erişim" : !endDate || !Number.isFinite(days) ? "Bitiş tarihi tanımsız" : days! > 0 ? `${days} gün kaldı` : days === 0 ? "Bugün sona eriyor" : `${Math.abs(days!)} gün önce doldu`;
+          return <article key={item.id} className="grid gap-4 px-5 py-4 transition hover:bg-cyan-50/45 xl:grid-cols-[1.35fr_.65fr_.75fr_1fr_auto] xl:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold text-slate-950">{item.businessName}</p>{item.isLifetime && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-1 text-[9px] font-black text-violet-700"><Crown size={11}/> SÜRESİZ</span>}</div><p className="truncate text-xs text-slate-500">{item.businessId}</p></div><div><p className="text-[10px] font-bold tracking-wider text-slate-400">PAKET</p><p className="mt-1 text-sm font-semibold text-slate-800">{item.plan}</p></div><div><p className="text-[10px] font-bold tracking-wider text-slate-400">DURUM</p><p className={`mt-1 text-sm font-semibold ${item.isLifetime || item.status === "active" ? "text-emerald-700" : ["past_due", "expired", "cancelled"].includes(item.status) ? "text-rose-700" : "text-amber-700"}`}>{item.isLifetime ? "Süresiz" : statusLabel[item.status]}</p></div><div className="rounded-xl bg-slate-50 px-3 py-2"><p className={`text-sm font-bold ${item.isLifetime ? "text-violet-700" : days !== null && Number.isFinite(days) && days <= 7 ? "text-rose-700" : "text-slate-800"}`}>{remainingLabel}</p><p className="mt-0.5 text-[11px] text-slate-400">{item.isLifetime ? "Bitiş tarihi uygulanmaz" : endDate ? `Bitiş: ${new Date(endDate).toLocaleDateString("tr-TR")}` : "Bitiş tarihi tanımsız"}</p></div><button type="button" onClick={() => openSubscriptionEditor(item)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-3 text-xs font-bold text-white transition hover:bg-cyan-800"><CalendarClock size={15}/> Süreyi düzenle</button></article>;
         })}</div>}
       </section>
 
@@ -232,6 +327,7 @@ export default function SuperAdminSubscriptionsPage() {
           </Card>
         </div>
       </Card>
+      {subscriptionEditor && <div className="fixed inset-0 z-[210] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" onMouseDown={() => !busy && setSubscriptionEditor(null)}><section role="dialog" aria-modal="true" aria-labelledby="subscription-editor-title" onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-lg overflow-hidden rounded-[28px] border border-white/15 bg-white shadow-2xl"><div className="bg-[linear-gradient(135deg,#071f2a,#0e7490)] p-6 text-white"><div className="flex items-start justify-between gap-4"><div><span className="text-[10px] font-black tracking-[.16em] text-cyan-200">ABONELİK ERİŞİMİ</span><h2 id="subscription-editor-title" className="mt-2 text-2xl font-bold">{subscriptionEditor.businessName}</h2><p className="mt-1 text-xs text-white/65">Değişiklik aynı firmaya bağlı tüm şubelere uygulanır.</p></div><button type="button" disabled={busy} onClick={() => setSubscriptionEditor(null)} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Pencereyi kapat"><X size={17}/></button></div></div><div className="space-y-5 p-6"><div><label className="mb-2 block text-sm font-bold text-slate-800">Erişim durumu</label><select value={subscriptionMode} onChange={(event) => setSubscriptionMode(event.target.value as AdminSubscriptionMode)} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"><option value="trialing">Ücretsiz deneme</option><option value="active">Aktif abonelik</option><option value="lifetime">Süresiz erişim</option><option value="past_due">Ödeme bekliyor</option><option value="expired">Süresi doldu</option><option value="cancelled">İptal edildi</option></select></div>{["active", "trialing"].includes(subscriptionMode) && <div><Input label="Bitiş tarihi" type="date" value={subscriptionEndDate} onChange={(event) => setSubscriptionEndDate(event.target.value)} min={new Date(renderedAt + 86_400_000).toISOString().slice(0, 10)} required/><div className="mt-3 grid grid-cols-3 gap-2"><button type="button" onClick={() => addSubscriptionDays(30)} className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800">+30 gün</button><button type="button" onClick={() => addSubscriptionDays(90)} className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800">+90 gün</button><button type="button" onClick={() => addSubscriptionDays(365)} className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800">+1 yıl</button></div></div>}{subscriptionMode === "lifetime" && <div className="flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-900"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100"><Crown size={18}/></span><div><b className="text-sm">Bu işletmenin süresi hiç dolmaz</b><p className="mt-1 text-xs leading-5 text-violet-700">Randevu kabulü abonelik tarihi nedeniyle kısıtlanmaz. Süper admin işletmeleri otomatik olarak bu moda alınır.</p></div></div>}{["past_due", "expired", "cancelled"].includes(subscriptionMode) && <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs leading-5 text-rose-800"><CircleAlert size={17} className="mt-0.5 shrink-0"/>Bu durum kaydedildiğinde yeni randevu, bekleme listesi ve canlı sıra alımı durdurulur; mevcut veriler korunur.</div>}<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="secondary" disabled={busy} onClick={() => setSubscriptionEditor(null)}>Vazgeç</Button><Button type="button" disabled={busy} onClick={() => void saveSubscriptionAccess()}><Save size={16}/>{busy ? "Kaydediliyor…" : "Erişimi kaydet"}</Button></div></div></section></div>}
       {deleteCandidate && <div className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={() => setDeleteCandidate(null)}><section role="dialog" aria-modal="true" aria-labelledby="delete-plan-title" onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-white/15 bg-white p-6 shadow-2xl"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600"><Trash2 size={21}/></div><h2 id="delete-plan-title" className="mt-4 text-xl font-bold text-slate-950">{deleteCandidate.label} silinsin mi?</h2><p className="mt-2 text-sm leading-6 text-slate-500">Bu işlem paket tanımını kalıcı olarak kaldırır. Aktif aboneliğe atanmış paketlerin silinmesine izin verilmez.</p>{subscriptions.some((item) => item.plan === deleteCandidate.id) && <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800"><CircleAlert size={15}/> {subscriptions.filter((item) => item.plan === deleteCandidate.id).length} abonelik bu paketi kullanıyor</div>}<div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setDeleteCandidate(null)}>Vazgeç</Button><Button type="button" variant="danger" disabled={busy || subscriptions.some((item) => item.plan === deleteCandidate.id)} onClick={() => void confirmDeletePlan()}><Trash2 size={15}/> Kalıcı olarak sil</Button></div></section></div>}
     </div>
   );

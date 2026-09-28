@@ -321,7 +321,7 @@ export function AdminAssistant() {
         await callable({ businessId: action.businessId, decision: "approved" });
       } else if (action.operation === "plan") {
         const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "assignBusinessPlan");
-        await callable({ businessId: action.businessId, plan: action.plan, status: "active" });
+        await callable({ businessId: action.businessId, plan: action.plan });
       } else {
         await updateDoc(doc(getDb(), "businesses", action.businessId), {
           isSuspended: action.operation === "suspend",
