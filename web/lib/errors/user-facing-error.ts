@@ -4,6 +4,7 @@ export function userFacingError(error: unknown, fallback: string): string {
   const message = String(value?.message ?? "").toLocaleLowerCase("tr-TR");
   const source = `${code} ${message}`;
 
+  if (source.includes("subscription_required")) return "Bu işletme şu anda yeni randevu kabul etmiyor. Lütfen daha sonra tekrar deneyin.";
   if (source.includes("permission-denied") || source.includes("insufficient permission")) return "Bu alana erişim izniniz doğrulanamadı. Oturumunuzu yenileyip tekrar deneyin.";
   if (source.includes("unauthenticated") || source.includes("auth/user-token-expired")) return "Oturumunuzun süresi dolmuş olabilir. Yeniden giriş yapıp tekrar deneyin.";
   if (source.includes("unavailable") || source.includes("network") || source.includes("offline")) return "Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.";

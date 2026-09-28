@@ -40,7 +40,20 @@ export interface Subscription extends EntityBase {
 /** Check if subscription gives active access */
 export function isSubscriptionActive(sub: Subscription | null): boolean {
   if (!sub) return false;
-  return sub.status === "active" || sub.status === "trialing";
+  const endValue = sub.status === "trialing" ? sub.trialEndsAt : sub.subscriptionEndsAt;
+  const endMillis = endValue ? new Date(endValue).getTime() : null;
+  if (sub.status === "trialing") return endMillis !== null && Number.isFinite(endMillis) && endMillis > Date.now();
+  if (sub.status !== "active") return false;
+  return endMillis === null || !Number.isFinite(endMillis) || endMillis > Date.now();
+}
+
+export function subscriptionAccessState(sub: Subscription | null): "loading" | "active" | "expiring" | "expired" {
+  if (!sub) return "loading";
+  if (!isSubscriptionActive(sub)) return "expired";
+  const endValue = sub.status === "trialing" ? sub.trialEndsAt : sub.subscriptionEndsAt;
+  if (!endValue) return "active";
+  const remaining = new Date(endValue).getTime() - Date.now();
+  return remaining <= 7 * 24 * 60 * 60 * 1000 ? "expiring" : "active";
 }
 
 /** Check if trial is expiring (within 3 days) */

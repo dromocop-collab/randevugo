@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = void 0;
+exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -182,6 +182,42 @@ async function requireBusinessManager(uid, businessId) {
     if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role))
         return business.data();
     throw new https_1.HttpsError("permission-denied", "Müşterilere bildirim gönderme yetkiniz yok.");
+}
+function entitlementDateMillis(value) {
+    if (value instanceof firestore_1.Timestamp)
+        return value.toMillis();
+    if (typeof value === "string") {
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+        return value.toDate().getTime();
+    }
+    return null;
+}
+async function requireBookingEntitlement(businessId) {
+    const subscriptionRef = db.doc(`subscriptions/${businessId}`);
+    const snapshot = await subscriptionRef.get();
+    if (!snapshot.exists) {
+        throw new https_1.HttpsError("failed-precondition", "SUBSCRIPTION_REQUIRED: İşletmenin abonelik kaydı bulunmuyor.");
+    }
+    const subscription = snapshot.data() ?? {};
+    const status = String(subscription.status ?? "expired");
+    const endsAtMillis = entitlementDateMillis(status === "trialing" ? subscription.trialEndsAt : subscription.subscriptionEndsAt);
+    const periodExpired = endsAtMillis !== null && endsAtMillis <= Date.now();
+    const allowed = status === "trialing"
+        ? endsAtMillis !== null && !periodExpired
+        : status === "active" && !periodExpired;
+    if (allowed)
+        return { allowed: true, status, endsAtMillis };
+    if ((status === "trialing" || status === "active") && periodExpired) {
+        await subscriptionRef.set({
+            status: "expired",
+            expiredAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
+    throw new https_1.HttpsError("failed-precondition", "SUBSCRIPTION_REQUIRED: İşletmenin ücretsiz kullanım veya abonelik süresi dolduğu için yeni randevu alınamıyor.");
 }
 async function tokensForUsers(userIds) {
     const uniqueIds = [...new Set(userIds.filter(Boolean))].slice(0, 2_000);
@@ -394,6 +430,9 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             name,
             slug,
             category: requireString(data.category, "Kategori").slice(0, 60),
+            businessType: ["kadin", "erkek", "unisex"].includes(String(data.businessType ?? ""))
+                ? String(data.businessType)
+                : null,
             phone: normalizedPhoneKey(requireString(data.phone, "Telefon")),
             email: requireString(data.email, "E-posta").toLowerCase().slice(0, 160),
             address: requireString(data.address, "Adres").slice(0, 300),
@@ -1580,6 +1619,7 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
 exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireString(data.serviceId, "serviceId");
     const date = requireString(data.date, "date");
     const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -1654,6 +1694,7 @@ exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (re
 exports.joinWaitlist = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireString(data.serviceId, "serviceId");
     const preferredDate = requireString(data.preferredDate, "preferredDate");
     const customerName = requireString(data.customerName, "customerName");
@@ -1686,6 +1727,7 @@ exports.joinWaitlist = (0, https_1.onCall)(publicCallableOptions, async (request
 exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const staffId = typeof data.staffId === "string" && data.staffId.trim().length > 0
         ? data.staffId.trim()
         : null;
@@ -2628,6 +2670,62 @@ exports.cleanupExpiredOperationalData = (0, scheduler_1.onSchedule)({ region: "e
             if (lockRef && lock?.data()?.entryId === document.id)
                 tx.delete(lockRef);
         });
+    }
+});
+exports.expireBusinessSubscriptions = (0, scheduler_1.onSchedule)({ region: "europe-west1", schedule: "every 60 minutes", timeZone: "Europe/Istanbul", maxInstances: 1 }, async () => {
+    const now = Date.now();
+    const candidates = await db.collection("subscriptions")
+        .where("status", "in", ["trialing", "active"])
+        .get();
+    // Her belge en fazla iki yazma üretir. 200'lük parçalar Firestore'un
+    // 500 yazmalık batch sınırının altında kalır ve hiçbir işletme atlanmaz.
+    for (let offset = 0; offset < candidates.docs.length; offset += 200) {
+        const batch = db.batch();
+        let writeCount = 0;
+        candidates.docs.slice(offset, offset + 200).forEach((document) => {
+            const row = document.data();
+            const status = String(row.status ?? "");
+            const endsAtMillis = entitlementDateMillis(status === "trialing" ? row.trialEndsAt : row.subscriptionEndsAt);
+            if (endsAtMillis === null)
+                return;
+            if (endsAtMillis <= now) {
+                batch.set(document.ref, {
+                    status: "expired",
+                    expiredAt: firestore_1.FieldValue.serverTimestamp(),
+                    updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                }, { merge: true });
+                batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
+                    type: "subscription_expired",
+                    title: "Ücretsiz kullanım süreniz sona erdi",
+                    body: "Yeni randevu kabul etmeye devam etmek için web işletme panelinden aboneliğinizi yenileyin.",
+                    isRead: false,
+                    createdAt: firestore_1.FieldValue.serverTimestamp(),
+                });
+                writeCount += 2;
+                return;
+            }
+            const remainingDays = Math.ceil((endsAtMillis - now) / (24 * 60 * 60 * 1000));
+            const reminderKey = remainingDays <= 1 ? "oneDayAt" : remainingDays <= 7 ? "sevenDayAt" : null;
+            const reminders = row.reminders && typeof row.reminders === "object"
+                ? row.reminders
+                : {};
+            if (!reminderKey || reminders[reminderKey])
+                return;
+            batch.set(document.ref, {
+                [`reminders.${reminderKey}`]: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
+                type: "subscription_expiring",
+                title: remainingDays <= 1 ? "Ücretsiz kullanımınız yarın sona eriyor" : "Ücretsiz kullanımınız yakında sona eriyor",
+                body: `${remainingDays} gün sonra yeni randevu alımı duracak. Aboneliğinizi web işletme panelinden yenileyebilirsiniz.`,
+                isRead: false,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            writeCount += 2;
+        });
+        if (writeCount > 0)
+            await batch.commit();
     }
 });
 exports.getSmsOperations = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
@@ -3732,6 +3830,7 @@ exports.createAvailabilityAlert = (0, https_1.onCall)(protectedCallableOptions, 
         throw new https_1.HttpsError("unauthenticated", "Bildirim için giriş yapmalısınız.");
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireString(data.serviceId, "serviceId");
     const dateKey = requireString(data.dateKey, "dateKey");
     const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -4307,6 +4406,7 @@ exports.joinQueue = (0, https_1.onCall)(protectedCallableOptions, async (request
     if (!uid)
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireQueueId(request.data?.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
     const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
     const mode = staffId ? "specific_staff" : "first_available";

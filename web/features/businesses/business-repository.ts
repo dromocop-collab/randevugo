@@ -24,6 +24,7 @@ export interface OnboardingInput {
   parentBusinessId?: string;
   name: string;
   category: string;
+  businessType?: "kadin" | "erkek" | "unisex";
   phone: string;
   email: string;
   address: string;

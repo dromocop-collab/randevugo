@@ -204,6 +204,57 @@ async function requireBusinessManager(uid: string, businessId: string) {
   throw new HttpsError("permission-denied", "Müşterilere bildirim gönderme yetkiniz yok.");
 }
 
+type BookingEntitlement = {
+  allowed: boolean;
+  status: string;
+  endsAtMillis: number | null;
+};
+
+function entitlementDateMillis(value: unknown): number | null {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  return null;
+}
+
+async function requireBookingEntitlement(businessId: string): Promise<BookingEntitlement> {
+  const subscriptionRef = db.doc(`subscriptions/${businessId}`);
+  const snapshot = await subscriptionRef.get();
+  if (!snapshot.exists) {
+    throw new HttpsError("failed-precondition", "SUBSCRIPTION_REQUIRED: İşletmenin abonelik kaydı bulunmuyor.");
+  }
+
+  const subscription = snapshot.data() ?? {};
+  const status = String(subscription.status ?? "expired");
+  const endsAtMillis = entitlementDateMillis(
+    status === "trialing" ? subscription.trialEndsAt : subscription.subscriptionEndsAt
+  );
+  const periodExpired = endsAtMillis !== null && endsAtMillis <= Date.now();
+  const allowed = status === "trialing"
+    ? endsAtMillis !== null && !periodExpired
+    : status === "active" && !periodExpired;
+
+  if (allowed) return { allowed: true, status, endsAtMillis };
+
+  if ((status === "trialing" || status === "active") && periodExpired) {
+    await subscriptionRef.set({
+      status: "expired",
+      expiredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  throw new HttpsError(
+    "failed-precondition",
+    "SUBSCRIPTION_REQUIRED: İşletmenin ücretsiz kullanım veya abonelik süresi dolduğu için yeni randevu alınamıyor."
+  );
+}
+
 async function tokensForUsers(userIds: string[]) {
   const uniqueIds = [...new Set(userIds.filter(Boolean))].slice(0, 2_000);
   const snapshots = await Promise.all(uniqueIds.map((uid) => db.collection(`users/${uid}/devices`).get()));
@@ -435,6 +486,9 @@ export const createBusiness = onCall(
         name,
         slug,
         category: requireString(data.category, "Kategori").slice(0, 60),
+        businessType: ["kadin", "erkek", "unisex"].includes(String(data.businessType ?? ""))
+          ? String(data.businessType)
+          : null,
         phone: normalizedPhoneKey(requireString(data.phone, "Telefon")),
         email: requireString(data.email, "E-posta").toLowerCase().slice(0, 160),
         address: requireString(data.address, "Adres").slice(0, 300),
@@ -1669,6 +1723,7 @@ export const getAvailableSlots = onCall(
   async (request) => {
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireString(data.serviceId, "serviceId");
     const date = requireString(data.date, "date");
     const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -1747,6 +1802,7 @@ export const joinWaitlist = onCall(
   async (request) => {
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const serviceId = requireString(data.serviceId, "serviceId");
     const preferredDate = requireString(data.preferredDate, "preferredDate");
     const customerName = requireString(data.customerName, "customerName");
@@ -1780,6 +1836,7 @@ export const createAppointment = onCall(
     const data = request.data ?? {};
 
     const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
     const staffId = typeof data.staffId === "string" && data.staffId.trim().length > 0
       ? data.staffId.trim()
       : null;
@@ -2875,6 +2932,67 @@ export const cleanupExpiredOperationalData = onSchedule(
         if (pointer.data()?.entryId === document.id) tx.delete(pointerRef);
         if (lockRef && lock?.data()?.entryId === document.id) tx.delete(lockRef);
       });
+    }
+  }
+);
+
+export const expireBusinessSubscriptions = onSchedule(
+  { region: "europe-west1", schedule: "every 60 minutes", timeZone: "Europe/Istanbul", maxInstances: 1 },
+  async () => {
+    const now = Date.now();
+    const candidates = await db.collection("subscriptions")
+      .where("status", "in", ["trialing", "active"])
+      .get();
+
+    // Her belge en fazla iki yazma üretir. 200'lük parçalar Firestore'un
+    // 500 yazmalık batch sınırının altında kalır ve hiçbir işletme atlanmaz.
+    for (let offset = 0; offset < candidates.docs.length; offset += 200) {
+      const batch = db.batch();
+      let writeCount = 0;
+      candidates.docs.slice(offset, offset + 200).forEach((document) => {
+        const row = document.data();
+        const status = String(row.status ?? "");
+        const endsAtMillis = entitlementDateMillis(status === "trialing" ? row.trialEndsAt : row.subscriptionEndsAt);
+        if (endsAtMillis === null) return;
+
+        if (endsAtMillis <= now) {
+          batch.set(document.ref, {
+            status: "expired",
+            expiredAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+          batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
+            type: "subscription_expired",
+            title: "Ücretsiz kullanım süreniz sona erdi",
+            body: "Yeni randevu kabul etmeye devam etmek için web işletme panelinden aboneliğinizi yenileyin.",
+            isRead: false,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+          writeCount += 2;
+          return;
+        }
+
+        const remainingDays = Math.ceil((endsAtMillis - now) / (24 * 60 * 60 * 1000));
+        const reminderKey = remainingDays <= 1 ? "oneDayAt" : remainingDays <= 7 ? "sevenDayAt" : null;
+        const reminders = row.reminders && typeof row.reminders === "object"
+          ? row.reminders as Record<string, unknown>
+          : {};
+        if (!reminderKey || reminders[reminderKey]) return;
+
+        batch.set(document.ref, {
+          [`reminders.${reminderKey}`]: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
+          type: "subscription_expiring",
+          title: remainingDays <= 1 ? "Ücretsiz kullanımınız yarın sona eriyor" : "Ücretsiz kullanımınız yakında sona eriyor",
+          body: `${remainingDays} gün sonra yeni randevu alımı duracak. Aboneliğinizi web işletme panelinden yenileyebilirsiniz.`,
+          isRead: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        writeCount += 2;
+      });
+      if (writeCount > 0) await batch.commit();
     }
   }
 );
@@ -4156,6 +4274,7 @@ export const createAvailabilityAlert = onCall(protectedCallableOptions, async (r
   if (!uid) throw new HttpsError("unauthenticated", "Bildirim için giriş yapmalısınız.");
   const data = request.data ?? {};
   const businessId = requireString(data.businessId, "businessId");
+  await requireBookingEntitlement(businessId);
   const serviceId = requireString(data.serviceId, "serviceId");
   const dateKey = requireString(data.dateKey, "dateKey");
   const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -4718,6 +4837,7 @@ export const joinQueue = onCall(protectedCallableOptions, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
   const businessId = requireQueueId(request.data?.businessId, "businessId");
+  await requireBookingEntitlement(businessId);
   const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
   const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
   const mode = staffId ? "specific_staff" : "first_available";

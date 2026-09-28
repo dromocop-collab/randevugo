@@ -165,6 +165,27 @@ export function OnboardingWizard() {
     setStep((prev) => Math.max(prev - 1, 0));
   }
 
+  function selectImage(file: File, kind: "logo" | "cover") {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("Lütfen PNG, JPEG veya WebP formatında bir görsel seçin.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Görsel boyutu en fazla 5 MB olabilir.");
+      return;
+    }
+    const preview = URL.createObjectURL(file);
+    if (kind === "logo") {
+      setLogoPreview((current) => { if (current) URL.revokeObjectURL(current); return preview; });
+      setLogoFile(file);
+      setLogoUrl("pending-upload");
+    } else {
+      setCoverPreview((current) => { if (current) URL.revokeObjectURL(current); return preview; });
+      setCoverFile(file);
+      setCoverUrl("pending-upload");
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!user) return;
@@ -172,6 +193,7 @@ export function OnboardingWizard() {
     const validated = onboardingSchema.safeParse({
       name,
       category,
+      businessType,
       phone,
       email,
       address,
@@ -196,6 +218,7 @@ export function OnboardingWizard() {
         ownerUid: user.uid,
         name: payload.name,
         category: payload.category,
+        businessType: payload.businessType || undefined,
         phone: payload.phone,
         email: payload.email,
         address: payload.address,
@@ -211,24 +234,26 @@ export function OnboardingWizard() {
 
       // Upload images after business is created
       const imageUpdates: Record<string, string> = {};
+      let mediaWarning = false;
       if (logoFile) {
         try {
           imageUpdates.logoUrl = await uploadBusinessImage(businessId, "logo", logoFile);
-        } catch { /* ignore upload fail */ }
+        } catch { mediaWarning = true; }
       }
       if (coverFile) {
         try {
           imageUpdates.coverUrl = await uploadBusinessImage(businessId, "cover", coverFile);
-        } catch { /* ignore upload fail */ }
+        } catch { mediaWarning = true; }
       }
       if (Object.keys(imageUpdates).length > 0) {
         try {
           await updateBusiness(businessId, imageUpdates);
-        } catch { /* non-critical */ }
+        } catch { mediaWarning = true; }
       }
 
       setBusinessId(businessId);
       toast.success(`🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`);
+      if (mediaWarning) toast.warning("Mağazan oluşturuldu ancak bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin.", { duration: 9000 });
       router.push("/dashboard");
     } catch (error) {
       toast.error(mapOnboardingError(error));
@@ -260,6 +285,8 @@ export function OnboardingWizard() {
               <div className="flex flex-col items-center">
                 <button
                   type="button"
+                  aria-label={`${idx + 1}. adım: ${s.title}${idx === step ? ", şu an açık" : ""}`}
+                  aria-current={idx === step ? "step" : undefined}
                   onClick={() => {
                     if (idx < step) setStep(idx);
                   }}
@@ -276,7 +303,7 @@ export function OnboardingWizard() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   ) : (
-                    <span>{s.icon}</span>
+                    <span>{idx + 1}</span>
                   )}
                 </button>
                 <span className={`mt-2 hidden text-[10px] font-medium sm:block ${
@@ -340,6 +367,7 @@ export function OnboardingWizard() {
                     options={businessTypes}
                   />
                 </div>
+                <p className="rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs leading-5 text-[var(--text-3)]">Kategori mağazanı doğru listelerde gösterir. İşletme tipi ise müşterilerin kendilerine uygun hizmeti daha hızlı bulmasına yardımcı olur.</p>
                 {name && (
                   <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-3">
                     <p className="text-xs text-[var(--text-3)]">Profil URL&apos;niz:</p>
@@ -429,9 +457,11 @@ export function OnboardingWizard() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
+                    maxLength={600}
                     className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none transition hover:bg-[var(--field-bg-hover)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
                     placeholder="İşletmenizi kısaca tanıtın — müşterileriniz bu açıklamayı görecek."
                   />
+                  <div className="mt-1 flex justify-between gap-3 text-[10px] text-[var(--text-3)]"><span>Uzmanlık alanını ve müşterinin neden seni seçmesi gerektiğini yaz.</span><span>{description.length}/600</span></div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {/* Logo Upload */}
@@ -460,11 +490,7 @@ export function OnboardingWizard() {
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) {
-                            setLogoFile(file);
-                            setLogoPreview(URL.createObjectURL(file));
-                            setLogoUrl("pending-upload");
-                          }
+                          if (file) selectImage(file, "logo");
                           e.target.value = "";
                         }}
                       />
@@ -498,11 +524,7 @@ export function OnboardingWizard() {
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) {
-                            setCoverFile(file);
-                            setCoverPreview(URL.createObjectURL(file));
-                            setCoverUrl("pending-upload");
-                          }
+                          if (file) selectImage(file, "cover");
                           e.target.value = "";
                         }}
                       />
@@ -514,7 +536,7 @@ export function OnboardingWizard() {
                   <Input
                     label="Profil URL Slug"
                     value={slug || computedSlug}
-                    onChange={(e) => setSlug(e.target.value)}
+                    onChange={(e) => setSlug(slugify(e.target.value))}
                     placeholder="isletmeniz"
                   />
                   <p className="mt-1 text-xs text-[var(--text-3)]">

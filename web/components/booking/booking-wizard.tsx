@@ -179,7 +179,7 @@ export function BookingWizard(props: Props) {
       .catch((error) => {
         if (!cancelled) {
           setAvailableSlots([]);
-          toast.error((error as Error).message || "Uygun saatler alınamadı.");
+          toast.error(userFacingError(error, "Uygun saatler alınamadı."));
         }
       })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
@@ -378,7 +378,7 @@ export function BookingWizard(props: Props) {
       setStep("success");
       toast.success("Randevunuz başarıyla oluşturuldu!");
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(userFacingError(error, "Randevunuz oluşturulamadı. Lütfen tekrar deneyin."));
     } finally {
       setSubmitting(false);
     }

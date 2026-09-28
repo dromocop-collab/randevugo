@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
@@ -57,7 +58,7 @@ export function PublicBookingFlow(props: Props) {
       .catch((error) => {
         if (!cancelled) {
           setAvailableSlots([]);
-          toast.error((error as Error).message || "Uygun saatler alınamadı.");
+          toast.error(userFacingError(error, "Uygun saatler alınamadı."));
         }
       });
     return () => { cancelled = true; };
@@ -98,7 +99,7 @@ export function PublicBookingFlow(props: Props) {
       setNotes("");
       setSlot("");
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(userFacingError(error, "Randevunuz oluşturulamadı. Lütfen tekrar deneyin."));
     }
   }
 

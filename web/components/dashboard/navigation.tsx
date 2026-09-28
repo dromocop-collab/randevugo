@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-operations-available";
 import {
-  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, GitBranch, Headphones, Rocket,
+  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -32,6 +32,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/musteriler", label: "Müşteriler", icon: UsersRound },
   { href: "/dashboard/yorumlar", label: "Yorumlar", icon: Star },
   { href: "/dashboard/destek", label: "Destek", icon: Headphones },
+  { href: "/dashboard/abonelik", label: "Abonelik", icon: CreditCard },
   { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2 },
   { href: "/hesabim", label: "Müşteri Modu", icon: CircleUserRound },
 ];

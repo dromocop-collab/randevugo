@@ -12,6 +12,7 @@ import { listStaff } from "@/features/staff/staff-repository";
 import type { Appointment } from "@/types/appointments";
 import type { Business } from "@/types/business";
 import { userFacingError } from "@/lib/errors/user-facing-error";
+import { SetupAssistant, type SetupAssistantStep } from "@/components/dashboard/setup-assistant";
 import {
   ArrowUpRight, Building2, CalendarCheck2, CalendarDays, CheckCircle2,
   CircleDollarSign, Clock3, Copy, Eye, FileText, FolderOpen, ImageIcon,
@@ -37,6 +38,7 @@ interface DashboardData {
 }
 
 interface SetupItem {
+  id: "business" | "category" | "hours" | "services" | "staff" | "logo" | "description";
   label: string;
   done: boolean;
   href: string;
@@ -71,7 +73,7 @@ function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
 }
 
 export default function DashboardHomePage() {
-  const { businessId } = useBusiness();
+  const { businessId, access } = useBusiness();
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
@@ -150,33 +152,40 @@ export default function DashboardHomePage() {
         // Dynamic labels with actual counts
         const items: SetupItem[] = [
           {
+            id: "business",
             label: biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district
               ? "İşletme bilgileri tamamlandı" : "İşletme bilgilerini tamamla",
             done: !!(biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district),
             href: "/dashboard/ayarlar", icon: Building2,
           },
           {
+            id: "category",
             label: biz?.category && biz.category !== "diger" ? `Kategori: ${biz.category}` : "Kategori seçilmedi",
             done: !!(biz?.category && biz.category !== "diger"),
             href: "/dashboard/ayarlar", icon: FolderOpen,
           },
           {
+            id: "hours",
             label: workingHours.length > 0 ? "Çalışma saatleri ayarlandı" : "Çalışma saatlerini ayarla",
             done: workingHours.length > 0, href: "/dashboard/calisma-saatleri", icon: Clock3,
           },
           {
+            id: "services",
             label: services.length > 0 ? `${services.length} hizmet eklendi` : "Henüz hizmet eklenmedi",
             done: services.length > 0, href: "/dashboard/hizmetler", icon: Scissors,
           },
           {
+            id: "staff",
             label: staff.length > 0 ? `${staff.length} çalışan eklendi` : "Henüz çalışan eklenmedi",
             done: staff.length > 0, href: "/dashboard/calisanlar", icon: UserRound,
           },
           {
+            id: "logo",
             label: biz?.logoUrl ? "Logo yüklendi" : "Logo yükle",
             done: !!biz?.logoUrl, href: "/dashboard/ayarlar", icon: ImageIcon,
           },
           {
+            id: "description",
             label: biz?.description && biz.description.length > 10 ? "Açıklama eklendi" : "Açıklama ekle",
             done: !!(biz?.description && biz.description.length > 10), href: "/dashboard/ayarlar", icon: FileText,
           },
@@ -199,6 +208,38 @@ export default function DashboardHomePage() {
   const totalSteps = setupItems.length;
   const completionPercent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
   const allComplete = completedSteps === totalSteps;
+  const isPublished = business?.status === "active" && business.isPublished === true;
+  const setupDone = (id: SetupItem["id"]) => setupItems.find((item) => item.id === id)?.done === true;
+  const assistantSteps: SetupAssistantStep[] = [
+    {
+      title: "Mağaza profilini tamamla",
+      description: "Sol menüden Ayarlar'a gir; işletme bilgilerini, kategoriyi, açıklamayı ve logonu tamamla.",
+      href: "/dashboard/ayarlar",
+      action: "Profil ayarlarını aç",
+      done: ["business", "category", "logo", "description"].every((id) => setupDone(id as SetupItem["id"])),
+    },
+    {
+      title: "Çalışma saatlerini kontrol et",
+      description: "Sol menüde Çalışma Saatleri'ne tıkla; açık günleri, molaları ve kapanış saatini işletmene göre düzenle.",
+      href: "/dashboard/calisma-saatleri",
+      action: "Saatleri kontrol et",
+      done: setupDone("hours"),
+    },
+    {
+      title: "Randevu alınacak hizmetleri ekle",
+      description: "Hizmetler sayfasında ad, süre ve fiyat bilgisiyle en az bir gerçek hizmet oluştur.",
+      href: "/dashboard/hizmetler",
+      action: "Hizmet ekle",
+      done: setupDone("services"),
+    },
+    {
+      title: "Ekibini ve uzmanlıklarını tanımla",
+      description: "Çalışanlar sayfasında hizmet verecek kişileri ekle ve hangi hizmetleri sunduklarını seç.",
+      href: "/dashboard/calisanlar",
+      action: "Çalışan ekle",
+      done: setupDone("staff"),
+    },
+  ];
 
   const statCards = [
     { label: "Bugünkü Randevular", value: data.todayCount, icon: CalendarDays, tone: "ocean", note: "Günlük program" },
@@ -219,6 +260,7 @@ export default function DashboardHomePage() {
 
   return (
     <div className="dashboard-command-home">
+      {access?.role !== "staff" && <SetupAssistant businessId={businessId ?? ""} ready={ready} steps={assistantSteps}/>}
       {loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-sm text-rose-600">{loadError}</p>
@@ -231,7 +273,7 @@ export default function DashboardHomePage() {
           <div className="dashboard-ops-copy">
             <span className="dashboard-ops-kicker"><Sparkles size={14}/> BUGÜNÜN KOMUTA MERKEZİ</span>
             <h2>{business?.name ?? "İşletmeniz"} için ritim <em>kontrol altında.</em></h2>
-            <p>{data.todayCount ? `Bugün ${data.todayCount} randevunuz var. ${data.pending ? `${data.pending} kayıt aksiyon bekliyor.` : "Bekleyen aksiyon bulunmuyor."}` : "Bugün için programınız açık. Yeni talepleri karşılamaya hazırsınız."}</p>
+            <p>{!isPublished ? "Kurulum bilgilerini tamamla; süper admin onayından sonra mağazan müşterilere açılacak." : data.todayCount ? `Bugün ${data.todayCount} randevunuz var. ${data.pending ? `${data.pending} kayıt aksiyon bekliyor.` : "Bekleyen aksiyon bulunmuyor."}` : "Bugün için programınız açık. Yeni talepleri karşılamaya hazırsınız."}</p>
             <div className="dashboard-ops-actions"><Link href="/dashboard/takvim"><CalendarPlus2 size={17}/> Takvimi aç</Link><Link href="/dashboard/buyume">Büyüme merkezine git <ArrowRight size={15}/></Link></div>
           </div>
           <div className="dashboard-ops-focus">
@@ -241,7 +283,7 @@ export default function DashboardHomePage() {
           </div>
         </div>
         <div className="dashboard-ops-signals">
-          <span><Gauge size={16}/><b>Sistem hazır</b><small>Randevu altyapısı aktif</small></span>
+          <span><Gauge size={16}/><b>{isPublished ? "Sistem hazır" : "Onay bekleniyor"}</b><small>{isPublished ? "Randevu altyapısı aktif" : "Onaydan sonra yayına açılır"}</small></span>
           <span><Target size={16}/><b>{data.weekAppointments} randevu</b><small>Son 7 günlük hacim</small></span>
           <span><TrendingUp size={16}/><b>{data.weekRevenue.toLocaleString("tr-TR")} ₺</b><small>Haftalık gerçekleşen</small></span>
           <span><UsersRound size={16}/><b>{data.returningCustomers} sadık müşteri</b><small>Tekrar gelen kitle</small></span>
@@ -291,7 +333,7 @@ export default function DashboardHomePage() {
                 const ItemIcon = item.icon;
                 return (
               <Link
-                key={item.label}
+                key={item.id}
                 href={item.href}
                 className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition-all duration-300 hover:scale-[1.01] hover:shadow-sm ${
                   item.done
@@ -344,27 +386,27 @@ export default function DashboardHomePage() {
                 </div>
                 <div>
                   <h3 className="text-xl font-extrabold text-[var(--text-1)]">
-                    Profiliniz hazır!
+                    {isPublished ? "Profiliniz hazır!" : "Kurulum tamam, onay bekleniyor"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--text-3)]">
-                    İşletmeniz aktif — müşterileriniz online randevu alabiliyor.
+                    {isPublished ? "İşletmeniz aktif — müşterileriniz online randevu alabiliyor." : "Bilgilerin kaydedildi. Süper admin incelemesi tamamlandığında mağazan yayınlanacak."}
                   </p>
                   
                   {/* Store URL display */}
-                  {business?.slug && (
+                  {business?.slug && isPublished ? (
                     <div className="dashboard-profile-ready__url">
                       <Copy size={14} className="text-[var(--text-3)]" />
                       <code className="text-xs font-medium text-[var(--text-2)]">
                         seninrandevun.com/isletme/{business.slug}
                       </code>
                     </div>
-                  )}
+                  ) : <div className="dashboard-profile-ready__url"><Clock3 size={14}/><span className="text-xs font-medium">Mağaza bağlantısı onaydan sonra paylaşılabilir olacak.</span></div>}
                 </div>
               </div>
 
               {/* Right side — Action buttons */}
               <div className="dashboard-profile-ready__actions">
-                {business?.slug && (
+                {business?.slug && isPublished && (
                   <>
                     <button
                       onClick={() => {
@@ -380,12 +422,12 @@ export default function DashboardHomePage() {
                       <Copy size={17} />
                       Linki Kopyala
                     </button>
-                    <Link
+                    {isPublished && <Link
                       href={`/isletme/${business.slug}`}
                       className="profile-ready-view"
                     >
                       <Eye size={17} /> Profili Gör <ArrowUpRight size={15} />
-                    </Link>
+                    </Link>}
                   </>
                 )}
               </div>
@@ -394,7 +436,7 @@ export default function DashboardHomePage() {
             {/* Completion badges */}
             <div className="dashboard-profile-ready__checks">
               {setupItems.map((item) => (
-                <span key={item.label}>{(() => { const SetupIcon = item.icon; return <SetupIcon size={14} />; })()}<b>{item.label}</b><CheckCircle2 size={13} /></span>
+                <span key={item.id}>{(() => { const SetupIcon = item.icon; return <SetupIcon size={14} />; })()}<b>{item.label}</b><CheckCircle2 size={13} /></span>
               ))}
             </div>
           </div>
@@ -402,7 +444,7 @@ export default function DashboardHomePage() {
       )}
 
       {/* Store Link Quick Copy — shows even when profile incomplete */}
-      {!allComplete && business?.slug && setupItems.length > 0 && (
+      {!allComplete && business?.slug && isPublished && setupItems.length > 0 && (
         <div
           className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-5 py-3.5"
           style={{

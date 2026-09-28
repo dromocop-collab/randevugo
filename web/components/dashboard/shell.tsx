@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { DashboardBottomNav, DashboardSidebar } from "@/components/dashboard/navigation";
 import { DashboardTopBar } from "@/components/dashboard/topbar";
+import { SubscriptionStatusBanner } from "@/components/dashboard/subscription-status-banner";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <DashboardSidebar />
       <div className="min-w-0 flex-1 pb-28 lg:pb-6">
         <DashboardTopBar />
+        <SubscriptionStatusBanner />
         <div className="mt-5">{children}</div>
       </div>
       <DashboardBottomNav />
