@@ -76,14 +76,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
   }, [categories, services]);
 
   if (services.length === 0) {
-    return (
-      <section className="storefront-service-empty" aria-labelledby="empty-services-title">
-        <div><Layers3 size={28} strokeWidth={1.7} /></div>
-        <p>HİZMET MENÜSÜ HAZIRLANIYOR</p>
-        <h2 id="empty-services-title">Yeni deneyimler yakında burada.</h2>
-        <span>İşletme hizmetlerini ve online randevu seçeneklerini hazırlıyor.</span>
-      </section>
-    );
+    return null;
   }
 
   const safeActiveCat =

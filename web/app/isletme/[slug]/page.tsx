@@ -23,5 +23,6 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
     listBusinessReviews(business.id).catch(() => []),
     listServiceCategories(business.id).catch(() => []),
   ]);
+  if (services.length === 0) notFound();
   return <BusinessProfileClient initialBusiness={serializable(business)} initialWorkingHours={serializable(workingHours)} initialServices={serializable(services)} initialStaff={serializable(staff)} initialReviews={serializable(reviews)} initialServiceCategories={serializable(serviceCategories)} />;
 }

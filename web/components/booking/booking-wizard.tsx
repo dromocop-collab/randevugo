@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { format } from "date-fns";
+import { createPortal } from "react-dom";
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
+import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   createAppointment,
@@ -25,9 +27,9 @@ import {
   type BookingFieldSettings,
 } from "@/features/booking/booking-field-settings-repository";
 import {
-  ArrowLeft, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2,
+  ArrowLeft, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
   CircleDollarSign, Clock3, FileCheck2, Mail, MessageSquareText, Phone,
-  Send, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
+  Send, ShieldCheck, Sparkles, UserRound, UsersRound, WandSparkles, X, type LucideIcon,
 } from "lucide-react";
 
 interface Props {
@@ -77,6 +79,30 @@ const STEPS: WizardStep[] = [
   "summary",
 ];
 
+function formatServiceDuration(minutes: number) {
+  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440} gün`;
+  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} saat`;
+  if (minutes > 60) return `${Math.floor(minutes / 60)} sa ${minutes % 60} dk`;
+  return `${minutes} dk`;
+}
+
+function expertiseLabel(level: Staff["expertiseLevel"]) {
+  if (level === "trainer") return "Eğitmen / Usta";
+  if (level === "senior") return "Kıdemli uzman";
+  if (level === "junior") return "Gelişen uzman";
+  return "Uzman";
+}
+
+function displayName(value: string) {
+  return value.trim().split(/\s+/).map((part) => part ? `${part.charAt(0).toLocaleUpperCase("tr-TR")}${part.slice(1).toLocaleLowerCase("tr-TR")}` : part).join(" ");
+}
+
+function publicStaffBio(value?: string) {
+  const bio = value?.trim() ?? "";
+  if (bio.length < 20 || /^(test|demo|deneme|lorem|x+|k+)$/i.test(bio)) return "";
+  return bio;
+}
+
 export function BookingWizard(props: Props) {
   const [step, setStep] = useState<WizardStep>("service");
   const [services, setServices] = useState<Service[]>([]);
@@ -98,6 +124,7 @@ export function BookingWizard(props: Props) {
   const [notes, setNotes] = useState("");
   const [bookingFields, setBookingFields] = useState<BookingFieldSettings>(DEFAULT_BOOKING_FIELD_SETTINGS);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistBusy, setWaitlistBusy] = useState(false);
   const [waitlistDone, setWaitlistDone] = useState(false);
@@ -111,6 +138,18 @@ export function BookingWizard(props: Props) {
   const [countdown, setCountdown] = useState(0);
   const [verifyError, setVerifyError] = useState("");
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (!privacyModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setPrivacyModalOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [privacyModalOpen]);
 
   // Success data
   const [successData, setSuccessData] = useState<{
@@ -420,7 +459,7 @@ export function BookingWizard(props: Props) {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-[var(--text-3)]">Hizmet</span>
-            <span className="font-medium text-[var(--text-1)]">{successData.serviceName}</span>
+            <span className="font-medium text-[var(--text-1)]">{displayName(successData.serviceName)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-[var(--text-3)]">Çalışan</span>
@@ -488,7 +527,7 @@ export function BookingWizard(props: Props) {
         {/* ── Service Step ── */}
         {step === "service" && (
           <div>
-            <div className="flex items-center gap-3">
+            <div className="booking-section-head flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] shadow-md shadow-sky-500/20">
                 <WandSparkles size={20} className="text-white" />
               </div>
@@ -540,8 +579,8 @@ export function BookingWizard(props: Props) {
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-[var(--text-1)]">{service.name}</p>
-                      <p className="text-xs text-[var(--text-3)]">⏱ {service.durationMinutes} dk</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{displayName(service.name)}</p>
+                      <p className="text-xs text-[var(--text-3)]">⏱ {formatServiceDuration(service.durationMinutes)}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -558,7 +597,7 @@ export function BookingWizard(props: Props) {
         {/* ── Staff Step ── */}
         {step === "staff" && (
           <div>
-            <div className="flex items-center gap-3">
+            <div className="booking-section-head flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#8b5cf6,#7c3aed)] shadow-md shadow-purple-500/20">
                 <UsersRound size={20} className="text-white" />
               </div>
@@ -566,13 +605,15 @@ export function BookingWizard(props: Props) {
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Çalışan Seçin</h2>
                 <p className="text-xs text-[var(--text-3)]">Hizmetinizi almak istediğiniz çalışanı seçin</p>
               </div>
+              <span className="booking-section-head__badge"><UsersRound size={13}/>{filteredStaff.length} uygun uzman</span>
             </div>
-            <div className="mt-5 space-y-2.5">
+            {selectedService && <div className="booking-context-strip"><WandSparkles size={14}/><span><small>SEÇİLEN HİZMET</small><b>{displayName(selectedService.name)}</b></span><em>{formatServiceDuration(selectedService.durationMinutes)}</em></div>}
+            <div className="booking-staff-grid mt-5">
               {filteredStaff.map((member, idx) => (
                 <label
                   key={member.id}
                   style={{ animationDelay: `${idx * 60}ms` }}
-                  className={`group flex animate-[fadeSlideIn_0.35s_ease_forwards] cursor-pointer items-center gap-4 rounded-2xl border-2 p-4 opacity-0 transition-all duration-300 hover:shadow-lg hover:scale-[1.01] ${
+                  className={`booking-staff-card group flex animate-[fadeSlideIn_0.35s_ease_forwards] cursor-pointer items-center gap-4 rounded-2xl border-2 p-4 opacity-0 transition-all duration-300 hover:shadow-lg hover:scale-[1.01] ${
                     staffId === member.id
                       ? "border-[var(--accent)] bg-[var(--accent)]/5 shadow-md shadow-sky-500/10"
                       : "border-transparent bg-[var(--surface-2)]/60 hover:border-[var(--accent)]/30"
@@ -599,24 +640,24 @@ export function BookingWizard(props: Props) {
                       </svg>
                     )}
                   </div>
-                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl shadow-md">
+                  <div className="booking-staff-avatar h-11 w-11 shrink-0 overflow-hidden rounded-xl shadow-md">
                     {member.photoUrl ? (
                       <Image src={member.photoUrl} alt="" width={44} height={44} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)] text-sm font-bold text-white">
-                        {member.fullName.charAt(0)}
+                        {member.fullName.charAt(0).toLocaleUpperCase("tr-TR")}
                       </div>
                     )}
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--text-1)]">{member.fullName}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--text-1)]">{displayName(member.fullName)}</p>
                     {member.position && (
                       <p className="text-xs text-[var(--text-3)]">{member.position}</p>
                     )}
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
-                      {member.expertiseLevel === "trainer" ? "Eğitmen / Usta" : member.expertiseLevel === "senior" ? "Kıdemli uzman" : member.expertiseLevel === "junior" ? "Gelişen uzman" : "Uzman"}
-                    </p>
+                    {(member.position ?? "").trim().toLocaleLowerCase("tr-TR") !== expertiseLabel(member.expertiseLevel).toLocaleLowerCase("tr-TR") && <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">{expertiseLabel(member.expertiseLevel)}</p>}
+                    {publicStaffBio(member.bio) && <p className="booking-staff-bio">{publicStaffBio(member.bio)}</p>}
                   </div>
+                  <span className="booking-staff-status">{staffId === member.id ? <><CheckCircle2 size={13}/> Seçili</> : "Seç"}</span>
                 </label>
               ))}
             </div>
@@ -642,20 +683,13 @@ export function BookingWizard(props: Props) {
                 <label className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--text-3)]">
                   🗓️ Tarih
                 </label>
-                <input
-                  type="date"
-                  value={appointmentsDate}
-                  onChange={(e) => { setAppointmentsDate(e.target.value); setSlot(""); }}
-                  min={minDate}
-                  max={maxDate}
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm font-semibold text-[var(--text-1)] shadow-sm transition-all duration-300 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
-                />
+                <BookingCalendar value={appointmentsDate} min={minDate} max={maxDate} onChange={(value) => { setAppointmentsDate(value); setSlot(""); }} />
                 {selectedService && (
                   <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--accent)]/5 px-3 py-2.5 animate-[fadeSlideIn_0.3s_ease]">
                     <span className="text-xs">📋</span>
                     <p className="text-xs text-[var(--text-2)]">
-                      <span className="font-bold text-[var(--text-1)]">{selectedService.name}</span>
-                      {" · "}{selectedService.durationMinutes} dk
+                      <span className="font-bold text-[var(--text-1)]">{displayName(selectedService.name)}</span>
+                      {" · "}{formatServiceDuration(selectedService.durationMinutes)}
                       {" · "}<span className="font-bold text-[var(--accent)]">{selectedService.price.toLocaleString("tr-TR")} ₺</span>
                     </p>
                   </div>
@@ -864,7 +898,7 @@ export function BookingWizard(props: Props) {
                   className="mt-0.5 h-4 w-4 rounded accent-[var(--accent)]"
                 />
                 <span className="text-xs leading-relaxed text-[var(--text-3)]">
-                  Kişisel verilerimin randevu oluşturma amacıyla işlenmesini kabul ediyorum.
+                  <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPrivacyModalOpen(true); }} className="font-semibold text-[var(--accent)] underline underline-offset-2">Randevu Aydınlatma Metni</button>&apos;ni okudum ve bilgi edindim. Bu onay pazarlama izni değildir.
                 </span>
               </label>
             </div>
@@ -991,9 +1025,9 @@ export function BookingWizard(props: Props) {
               <SummaryRow icon={Building2} label="İşletme" value={props.businessName} delay={0} />
               <SummaryRow
                 icon={WandSparkles} label="Hizmet" delay={50}
-                value={selectedService ? `${selectedService.name} (${selectedService.durationMinutes} dk)` : ""}
+                value={selectedService ? `${displayName(selectedService.name)} (${formatServiceDuration(selectedService.durationMinutes)})` : ""}
               />
-              <SummaryRow icon={UserRound} label="Çalışan" value={selectedStaff?.fullName ?? ""} delay={100} />
+              <SummaryRow icon={UserRound} label="Çalışan" value={selectedStaff ? displayName(selectedStaff.fullName) : ""} delay={100} />
               <SummaryRow icon={CalendarDays} label="Tarih" value={format(new Date(appointmentsDate), "dd.MM.yyyy")} delay={150} />
               <SummaryRow icon={Clock3} label="Saat" value={slot} delay={200} />
               <SummaryRow
@@ -1012,7 +1046,7 @@ export function BookingWizard(props: Props) {
 
       {/* ━━━ Navigation ━━━ */}
       {step !== "success" && (
-        <div className="flex items-center justify-between">
+        <div className="booking-navigation flex items-center justify-between">
           <button
             type="button"
             onClick={goBack}
@@ -1065,6 +1099,24 @@ export function BookingWizard(props: Props) {
         </div>
       )}
 
+      {privacyModalOpen && <div className="booking-privacy-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPrivacyModalOpen(false); }}>
+        <section className="booking-privacy-modal" role="dialog" aria-modal="true" aria-labelledby="booking-privacy-title">
+          <header>
+            <span><ShieldCheck size={20}/></span>
+            <div><small>KVKK · RANDEVU SÜRECİ</small><h2 id="booking-privacy-title">Randevu Aydınlatma Metni</h2><p>Bilgilerinin neden ve nasıl işlendiğini sade biçimde incele.</p></div>
+            <button type="button" onClick={() => setPrivacyModalOpen(false)} aria-label="Aydınlatma metnini kapat"><X size={19}/></button>
+          </header>
+          <div className="booking-privacy-modal__body">
+            <article><b>01</b><div><h3>Hangi bilgiler işlenir?</h3><p>Telefon numaran; işletmenin ayarına göre ad-soyad, e-posta ve isteğe bağlı randevu notun; seçtiğin hizmet, çalışan, tarih ve saat bilgileri.</p></div></article>
+            <article><b>02</b><div><h3>Neden işlenir?</h3><p>Randevuyu oluşturmak ve yönetmek, telefonunu doğrulamak, çakışmayı önlemek, randevu bildirimlerini iletmek ve işlem güvenliğini sağlamak için.</p></div></article>
+            <article><b>03</b><div><h3>Kimlerle paylaşılır?</h3><p>Randevunun yürütülmesi için seçtiğin işletmeyle; hizmetin çalışması için gerekli barındırma, doğrulama, SMS/e-posta ve güvenlik sağlayıcılarıyla amaçla sınırlı olarak.</p></div></article>
+            <article><b>04</b><div><h3>Hukuki sebep ve saklama</h3><p>Veriler sözleşmenin kurulması/ifası, hukuki yükümlülük, hakkın tesisi ve meşru menfaat sebeplerine dayanılarak; amaç ve yasal saklama yükümlülüğü sürdüğü kadar işlenir.</p></div></article>
+            <aside><ShieldCheck size={17}/><p>Telefon doğrulama kodu yalnızca güvenlik içindir. Bu bilgilendirme pazarlama izni veya açık rıza talebi değildir.</p></aside>
+          </div>
+          <footer><a href="/kvkk#randevu-aydinlatmasi" target="_blank" rel="noreferrer">Tam KVKK metnini görüntüle</a><button type="button" onClick={() => setPrivacyModalOpen(false)}>Anladım, kapat <CheckCircle2 size={16}/></button></footer>
+        </section>
+      </div>}
+
       {/* ━━━ Keyframes ━━━ */}
       <style jsx global>{`
         @keyframes fadeSlideIn {
@@ -1099,4 +1151,47 @@ function SummaryRow({ icon: Icon, label, value, delay = 0 }: { icon: LucideIcon;
       </span>
     </div>
   );
+}
+
+function dateFromIso(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function BookingCalendar({ value, min, max, onChange }: { value: string; min: string; max: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(dateFromIso(value)));
+  const selectedDate = dateFromIso(value);
+  const minMonth = startOfMonth(dateFromIso(min));
+  const maxMonth = startOfMonth(dateFromIso(max));
+  const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 1 }), end: endOfWeek(endOfMonth(visibleMonth), { weekStartsOn: 1 }) });
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return <div className={`booking-calendar ${open ? "is-open" : ""}`}>
+    <button type="button" className="booking-calendar-trigger" onClick={() => { if (!open) setVisibleMonth(startOfMonth(selectedDate)); setOpen(!open); }} aria-expanded={open} aria-haspopup="dialog"><span><CalendarDays size={17}/><span><small>RANDEVU TARİHİ</small><b>{format(selectedDate, "d MMMM yyyy, EEEE", { locale: tr })}</b></span></span><ChevronRight size={17}/></button>
+    {open && typeof document !== "undefined" && createPortal(<><button type="button" className="booking-calendar-backdrop" aria-label="Takvimi kapat" onClick={() => setOpen(false)}/><section className="booking-calendar-popover" role="dialog" aria-modal="true" aria-label="Randevu tarihi seç">
+      <header><div><small>UYGUN TARİH</small><h3>{format(visibleMonth, "MMMM yyyy", { locale: tr })}</h3></div><nav><button type="button" onClick={() => setVisibleMonth((month) => addMonths(month, -1))} disabled={visibleMonth <= minMonth} aria-label="Önceki ay"><ChevronLeft size={18}/></button><button type="button" onClick={() => setVisibleMonth((month) => addMonths(month, 1))} disabled={visibleMonth >= maxMonth} aria-label="Sonraki ay"><ChevronRight size={18}/></button></nav></header>
+      <div className="booking-calendar-week" aria-hidden="true">{["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"].map((day) => <span key={day}>{day}</span>)}</div>
+      <div className="booking-calendar-days" role="grid">{days.map((day) => {
+        const iso = format(day, "yyyy-MM-dd");
+        const outside = day.getMonth() !== visibleMonth.getMonth();
+        const disabled = iso < min || iso > max;
+        const selected = iso === value;
+        const today = iso === format(new Date(), "yyyy-MM-dd");
+        return <button key={iso} type="button" role="gridcell" disabled={disabled} className={`${outside ? "is-outside" : ""} ${selected ? "is-selected" : ""} ${today ? "is-today" : ""}`} aria-label={format(day, "d MMMM yyyy EEEE", { locale: tr })} aria-selected={selected} onClick={() => { onChange(iso); setOpen(false); }}><span>{format(day, "d")}</span>{today && <i />}</button>;
+      })}</div>
+      <footer><span><i/> Yeşil nokta bugünü gösterir</span><button type="button" onClick={() => { const today = format(new Date(), "yyyy-MM-dd"); if (today >= min && today <= max) onChange(today); setOpen(false); }}>Bugün</button></footer>
+    </section></>, document.body)}
+  </div>;
 }

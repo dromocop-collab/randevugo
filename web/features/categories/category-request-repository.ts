@@ -122,6 +122,7 @@ export interface DynamicCategory {
   label: string;
   emoji: string;
   isCustom: boolean;
+  imageUrl?: string;
 }
 
 export async function listDynamicCategories(): Promise<DynamicCategory[]> {
@@ -132,6 +133,7 @@ export async function listDynamicCategories(): Promise<DynamicCategory[]> {
     label: d.data().label ?? d.id,
     emoji: d.data().emoji ?? "📂",
     isCustom: d.data().isCustom ?? true,
+    imageUrl: typeof d.data().imageUrl === "string" ? d.data().imageUrl : undefined,
   }));
 }
 

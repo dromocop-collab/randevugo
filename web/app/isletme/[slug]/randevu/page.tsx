@@ -10,6 +10,7 @@ import {
   getBusinessBySlug,
   listBusinessWorkingHours,
 } from "@/features/businesses/business-repository";
+import { listServices } from "@/features/services/service-repository";
 import type { Business, DaySchedule } from "@/types/business";
 import { ArrowLeft, Clock3, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -42,15 +43,21 @@ export default function BookingPage() {
           setError("İşletme bulunamadı.");
           return;
         }
-        if (row.status === "suspended") {
+        if (row.status !== "active" || !row.isPublished) {
           setError("Bu işletme şu anda aktif değil.");
           return;
         }
 
-        setBusiness(row);
-
-        const schedules = await listBusinessWorkingHours(row.id);
+        const [schedules, services] = await Promise.all([
+          listBusinessWorkingHours(row.id),
+          listServices(row.id, true),
+        ]);
         if (cancelled) return;
+        if (services.length === 0) {
+          setError("Bu işletme henüz online randevu kabul etmiyor.");
+          return;
+        }
+        setBusiness(row);
         setWorkingHours(schedules);
       })
       .catch((e) => {

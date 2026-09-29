@@ -22,6 +22,17 @@ export default function DashboardSupportPage(){
   const [search,setSearch]=useState(""); const [showForm,setShowForm]=useState(false); const [selected,setSelected]=useState<Ticket|null>(null);
   const [title,setTitle]=useState(""); const [category,setCategory]=useState("technical"); const [message,setMessage]=useState(""); const [submitting,setSubmitting]=useState(false);
 
+  useEffect(()=>{
+    if(new URLSearchParams(window.location.search).get("mode")!=="billing")return;
+    queueMicrotask(()=>{
+      setTab("platform");
+      setCategory("billing");
+      setTitle("Abonelik ve faturalama talebi");
+      setMessage("İşletmem için abonelik süresini yenilemek ve ödeme seçenekleri hakkında bilgi almak istiyorum.");
+      setShowForm(true);
+    });
+  },[]);
+
   useEffect(()=>{if(!businessId)return;return onSnapshot(query(collection(getDb(),"supportTickets"),where("businessId","==",businessId),orderBy("createdAt","desc")),snapshot=>{setTickets(snapshot.docs.map(item=>{const d=item.data();const stamp=d.createdAt as Timestamp|undefined;return{id:item.id,title:String(d.title??"Mesaj"),category:String(d.category??"other"),status:String(d.status??"open"),createdAt:stamp?.toDate?stamp.toDate().toLocaleString("tr-TR"):"Şimdi",message:String(d.message??""),requesterName:String(d.requesterName??d.userEmail??"Kullanıcı"),requesterPhone:String(d.requesterPhone??""),requesterEmail:String(d.requesterEmail??d.userEmail??""),source:String(d.source??"dashboard"),target:String(d.target??"platform")}}));setLoading(false)},error=>{toast.error(error.message);setLoading(false)});},[businessId]);
   const customerTickets=useMemo(()=>tickets.filter(item=>item.target==="business"||item.source==="storefront"||item.category==="customer_message"),[tickets]);
   const platformTickets=useMemo(()=>tickets.filter(item=>!(item.target==="business"||item.source==="storefront"||item.category==="customer_message")),[tickets]);
