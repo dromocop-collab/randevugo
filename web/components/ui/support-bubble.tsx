@@ -37,6 +37,7 @@ export function SupportBubble() {
   const [isClosing, setIsClosing] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const hasEmbeddedSupport = pathname === "/hesabim";
   const isBusinessPanel = pathname.startsWith("/dashboard") || pathname.startsWith("/isletme/") || pathname.startsWith("/super-admin");
 
   const handleClose = useCallback(() => {
@@ -82,7 +83,7 @@ export function SupportBubble() {
     };
   }, [isOpen, handleClose]);
 
-  if (isBusinessPanel) return null;
+  if (isBusinessPanel || hasEmbeddedSupport) return null;
 
   return (
     <>
