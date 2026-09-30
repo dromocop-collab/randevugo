@@ -71,6 +71,7 @@ export default function ServicesPage() {
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [businessSector, setBusinessSector] = useState<string>("diger");
+  const [businessType, setBusinessType] = useState<"kadin" | "erkek" | "unisex">("unisex");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
@@ -117,6 +118,7 @@ export default function ServicesPage() {
       setServices(svc);
       setCategories(cats);
       if (biz?.category) setBusinessSector(biz.category);
+      if (biz?.businessType) setBusinessType(biz.businessType);
     });
 
     return () => {
@@ -157,12 +159,18 @@ export default function ServicesPage() {
     if (!businessId || selectedTemplates.length === 0) return;
     setTemplateBusy(true);
     try {
-      const added = await seedDefaultCategories(businessId, businessSector, selectedTemplates);
+      const result = await seedDefaultCategories(businessId, businessSector, selectedTemplates, businessType);
       await reload();
       setShowTemplatePicker(false);
       setSelectedTemplates([]);
       setTemplateSearch("");
-      toast.success(added > 0 ? `${added} kategori işletmenize eklendi! 🎉` : "Seçtiğiniz kategoriler zaten mevcut.");
+      const migratedText = result.servicesMigrated > 0 ? ` ${result.servicesMigrated} mevcut hizmet doğru başlığa taşındı.` : "";
+      toast.success(
+        result.categoriesAdded > 0 || result.servicesAdded > 0 || result.servicesMigrated > 0
+          ? `${result.categoriesAdded} ana başlık ve ${result.servicesAdded} hazır hizmet eklendi.${migratedText} Fiyat girilen hizmetler otomatik yayına alınır.`
+          : "Seçtiğiniz hizmet grupları zaten eksiksiz.",
+        { duration: 7000 },
+      );
     } catch {
       toast.error("Şablon yüklenirken hata oluştu.");
     } finally {
@@ -347,8 +355,8 @@ export default function ServicesPage() {
       toast.error("Hizmet adı boş bırakılamaz.");
       return;
     }
-    if (!Number.isFinite(Number(editPrice)) || Number(editPrice) < 0) {
-      toast.error("Geçerli bir fiyat girin.");
+    if (!Number.isFinite(Number(editPrice)) || Number(editPrice) < 0 || (editingService.templateDraft && Number(editPrice) <= 0)) {
+      toast.error(editingService.templateDraft ? "Hazır hizmeti yayınlamak için sıfırdan büyük bir fiyat girin." : "Geçerli bir fiyat girin.");
       return;
     }
     if (!Number.isFinite(Number(editDuration)) || Number(editDuration) <= 0) {
@@ -362,10 +370,11 @@ export default function ServicesPage() {
         category: editCategory,
         price: Number(editPrice),
         durationMinutes: Number(editDuration),
+        ...(editingService.templateDraft ? { isActive: true, isBookableOnline: true, templateDraft: false } : {}),
       });
       setEditingService(null);
       await reload();
-      toast.success("Hizmet güncellendi.");
+      toast.success(editingService.templateDraft ? "Fiyat kaydedildi; hizmet yayına alındı." : "Hizmet güncellendi.");
     } catch {
       toast.error("Güncelleme başarısız.");
     }
@@ -378,6 +387,39 @@ export default function ServicesPage() {
     setEditPrice(String(s.price));
     setEditDuration(String(s.durationMinutes));
     setEditCategory(s.category || "");
+  }
+
+  async function handleQuickPrice(item: Service, nextPrice: number) {
+    if (!businessId) return;
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+      toast.error("Fiyat sıfırdan büyük olmalı.");
+      throw new Error("invalid-price");
+    }
+    await updateService(businessId, item.id, {
+      price: nextPrice,
+      ...(item.templateDraft
+        ? { isActive: true, isBookableOnline: true, templateDraft: false }
+        : {}),
+    });
+    await reload();
+    toast.success(item.templateDraft
+      ? `${item.name} fiyatlandırıldı ve yayına alındı.`
+      : `${item.name} fiyatı güncellendi.`);
+  }
+
+  async function handleToggleService(item: Service) {
+    if (!businessId) return;
+    if (!item.isActive && item.templateDraft && item.price <= 0) {
+      startEdit(item);
+      toast.info("Hizmeti yayınlamak için önce fiyatını girin.");
+      return;
+    }
+    await updateService(businessId, item.id, {
+      isActive: !item.isActive,
+      isBookableOnline: !item.isActive,
+      ...(!item.isActive ? { templateDraft: false } : {}),
+    });
+    await reload();
   }
 
   /* ── Filtered & grouped ──────────────────────────── */
@@ -399,13 +441,31 @@ export default function ServicesPage() {
   );
 
   const canonicalSector = canonicalBusinessCategory(businessSector);
-  const sectorTemplates = getCategoryTemplates(canonicalSector);
+  const sectorTemplates = getCategoryTemplates(canonicalSector, businessType);
   const existingCategoryNames = new Set(categories.map((category) => normalizeCategoryName(category.name)));
-  const missingTemplates = sectorTemplates.filter((template) => !existingCategoryNames.has(normalizeCategoryName(template.name)));
-  const visibleTemplates = missingTemplates.filter((template) => `${template.name} ${template.description ?? ""}`.toLocaleLowerCase("tr-TR").includes(templateSearch.trim().toLocaleLowerCase("tr-TR")));
+  const missingServiceCountForTemplate = (template: (typeof sectorTemplates)[number]) => {
+    const templateKey = normalizeCategoryName(template.name);
+    if (!existingCategoryNames.has(templateKey)) return template.services.length;
+    const category = categories.find((item) => normalizeCategoryName(item.name) === templateKey);
+    if (!category) return template.services.length;
+    const serviceNames = new Set(
+      services.filter((item) => item.category === category.id).map((item) => normalizeCategoryName(item.name)),
+    );
+    return template.services.filter((item) => !serviceNames.has(normalizeCategoryName(item.name))).length;
+  };
+  const missingTemplates = sectorTemplates.filter((template) => missingServiceCountForTemplate(template) > 0);
+  const visibleTemplates = missingTemplates.filter((template) =>
+    `${template.name} ${template.description} ${template.services.map((item) => item.name).join(" ")}`
+      .toLocaleLowerCase("tr-TR")
+      .includes(templateSearch.trim().toLocaleLowerCase("tr-TR"))
+  );
   const seededCategories = categories.filter((category) => category.templateSource === canonicalSector);
   const sectorLabel =
     SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel";
+  const selectedServiceCount = sectorTemplates
+    .filter((template) => selectedTemplates.includes(template.name))
+    .reduce((total, template) => total + missingServiceCountForTemplate(template), 0);
+  const businessTypeLabel = businessType === "kadin" ? "Kadın işletmesi" : businessType === "erkek" ? "Erkek işletmesi" : "Unisex işletme";
 
   function openTemplatePicker() {
     setSelectedTemplates([]);
@@ -424,7 +484,7 @@ export default function ServicesPage() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-1)]">Hizmet Yönetimi</h1>
           <p className="mt-1 text-sm text-[var(--text-3)]">
-            Kategorilerinizi ve sunduğunuz hizmetleri buradan yönetebilirsiniz.
+            Ana hizmet gruplarınızı, hizmetlerinizi, süreleri ve fiyatları buradan yönetebilirsiniz.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -433,7 +493,7 @@ export default function ServicesPage() {
             onClick={openTemplatePicker}
             className="gap-2 font-semibold"
           >
-            <Rocket size={16} className="text-[var(--accent)]" /> Sektöre Özel Kategoriler
+            <Rocket size={16} className="text-[var(--accent)]" /> Hazır Hizmet Kütüphanesi
           </Button>
           {seededCategories.length > 0 && <Button variant="secondary" disabled={templateBusy} onClick={handleRemoveTemplateCategories} className="gap-2 font-semibold text-rose-600"><RotateCcw size={16} /> Hazır Paketi Kaldır</Button>}
 
@@ -741,12 +801,11 @@ export default function ServicesPage() {
                 <div className="grid gap-3">
                   {catServices.map((item) => (
                     <ServiceCard
-                      key={item.id}
+                      key={`${item.id}:${item.price}`}
                       service={item}
                       categoryMeta={getCategoryMeta(item.category)}
                       onToggle={async () => {
-                        await updateService(businessId!, item.id, { isActive: !item.isActive });
-                        await reload();
+                        await handleToggleService(item);
                       }}
                       onDelete={async () => {
                         await removeService(businessId!, item.id);
@@ -754,6 +813,7 @@ export default function ServicesPage() {
                         toast.success("Hizmet silindi.");
                       }}
                       onEdit={() => startEdit(item)}
+                      onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
                     />
                   ))}
                 </div>
@@ -775,12 +835,11 @@ export default function ServicesPage() {
               <div className="grid gap-3">
                 {uncategorized.map((item) => (
                   <ServiceCard
-                    key={item.id}
+                    key={`${item.id}:${item.price}`}
                     service={item}
                     categoryMeta={undefined}
                     onToggle={async () => {
-                      await updateService(businessId!, item.id, { isActive: !item.isActive });
-                      await reload();
+                      await handleToggleService(item);
                     }}
                     onDelete={async () => {
                       await removeService(businessId!, item.id);
@@ -788,6 +847,7 @@ export default function ServicesPage() {
                       toast.success("Hizmet silindi.");
                     }}
                     onEdit={() => startEdit(item)}
+                    onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
                   />
                 ))}
               </div>
@@ -811,12 +871,11 @@ export default function ServicesPage() {
           ) : (
             filteredServices.map((item) => (
               <ServiceCard
-                key={item.id}
+                key={`${item.id}:${item.price}`}
                 service={item}
                 categoryMeta={getCategoryMeta(item.category)}
                 onToggle={async () => {
-                  await updateService(businessId!, item.id, { isActive: !item.isActive });
-                  await reload();
+                  await handleToggleService(item);
                 }}
                 onDelete={async () => {
                   await removeService(businessId!, item.id);
@@ -824,6 +883,7 @@ export default function ServicesPage() {
                   toast.success("Hizmet silindi.");
                 }}
                 onEdit={() => startEdit(item)}
+                onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
               />
             ))
           )}
@@ -837,17 +897,17 @@ export default function ServicesPage() {
             <header className="services-template-modal-header relative shrink-0 overflow-hidden border-b border-[var(--border)] px-5 py-6 text-white sm:px-8">
               <div className="pointer-events-none absolute -right-12 -top-24 h-56 w-56 rounded-full bg-[var(--dash-bright)]/25 blur-2xl" />
               <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/12 text-[#dafa83] shadow-xl"><Layers3 size={23} /></span><div><p className="text-[9px] font-black tracking-[.18em] text-[#dafa83]">AKILLI SEKTÖR KÜTÜPHANESİ</p><h2 id="template-picker-title" className="mt-1 text-xl font-extrabold sm:text-2xl">{sectorLabel} kategorilerini seçin</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/65">Hiçbir şey otomatik eklenmez. İşletmenizde kullanmak istediğiniz başlıkları seçip onaylayın.</p></div></div>
+                <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/12 text-[#dafa83] shadow-xl"><Layers3 size={23} /></span><div><div className="flex flex-wrap items-center gap-2"><p className="text-[9px] font-black tracking-[.18em] text-[#dafa83]">AKILLI HİZMET KÜTÜPHANESİ</p><span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white/80">{businessTypeLabel}</span></div><h2 id="template-picker-title" className="mt-1 text-xl font-extrabold sm:text-2xl">{sectorLabel} hizmet gruplarını seçin</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/65">{businessTypeLabel} için uygun ana başlıkları seçin; içlerindeki hazır hizmetler otomatik yüklensin. Hizmetler fiyat girilene kadar müşterilere gösterilmez.</p></div></div>
                 <button type="button" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/10 transition hover:rotate-6 hover:bg-white hover:text-[#073d29]" aria-label="Kategori seçiciyi kapat"><X size={18} /></button>
               </div>
-              <div className="relative mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur"><Search size={15} className="text-[var(--dash-bright)]"/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Kategori ara…" className="w-full bg-transparent text-xs text-white outline-none placeholder:text-white/45"/></label><div className="services-template-modal-stats flex items-center gap-2 text-[10px] font-bold"><span className="rounded-full bg-white/10 px-3 py-2">{missingTemplates.length} uygun seçenek</span><span className="is-selected rounded-full bg-[var(--dash-bright)] px-3 py-2 text-[var(--dash-deep)]">{selectedTemplates.length} seçildi</span></div></div>
+              <div className="relative mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur"><Search size={15} className="text-[var(--dash-bright)]"/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Başlık veya hizmet ara…" className="w-full bg-transparent text-xs text-white outline-none placeholder:text-white/45"/></label><div className="services-template-modal-stats flex items-center gap-2 text-[10px] font-bold"><span className="rounded-full bg-white/10 px-3 py-2">{missingTemplates.length} hizmet grubu</span><span className="is-selected rounded-full bg-[var(--dash-bright)] px-3 py-2 text-[var(--dash-deep)]">{selectedServiceCount} hizmet eklenecek</span></div></div>
             </header>
 
             <div className="services-template-modal-body min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-7">
-              {missingTemplates.length === 0 ? <div className="grid min-h-64 place-items-center text-center"><div><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-500/10 text-emerald-600"><PackageCheck size={30}/></span><h3 className="mt-4 text-lg font-extrabold text-[var(--text-1)]">Sektör paketi tamamlandı</h3><p className="mt-2 text-sm text-[var(--text-3)]">Bu sektör için önerilen kategorilerin tamamı zaten işletmenizde.</p></div></div> : visibleTemplates.length === 0 ? <div className="grid min-h-52 place-items-center text-center text-sm text-[var(--text-3)]">Aramanızla eşleşen kategori bulunamadı.</div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleTemplates.map((template,index) => { const selected = selectedTemplates.includes(template.name); return <button key={template.name} type="button" onClick={() => toggleTemplate(template.name)} aria-pressed={selected} className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${selected ? "border-[var(--accent)] bg-emerald-500/[.08] shadow-lg shadow-emerald-900/10" : "border-[var(--border)] bg-[var(--surface-1)]"}`} style={{ animationDelay: `${index * 35}ms` }}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-xl shadow-sm" style={{ backgroundColor: `${template.color}18`, border: `1px solid ${template.color}28` }}><ServiceCategoryIcon icon={template.icon} name={template.name} size={22}/></span><div className="min-w-0 flex-1"><b className="block text-sm text-[var(--text-1)]">{template.name}</b><p className="mt-1 text-[10px] leading-4 text-[var(--text-3)]">{template.description ?? `${sectorLabel} işletmeleri için önerilen kategori`}</p></div><i className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border transition ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] bg-[var(--surface-2)] text-transparent"}`}><Check size={13} strokeWidth={3}/></i></div><span className="absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 transition group-hover:scale-x-100" style={{ backgroundColor: template.color }}/></button>; })}</div>}
+              {missingTemplates.length === 0 ? <div className="grid min-h-64 place-items-center text-center"><div><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-500/10 text-emerald-600"><PackageCheck size={30}/></span><h3 className="mt-4 text-lg font-extrabold text-[var(--text-1)]">Hizmet kütüphanesi tamamlandı</h3><p className="mt-2 text-sm text-[var(--text-3)]">{businessTypeLabel} için uygun hizmetlerin tamamı işletmenizde.</p></div></div> : visibleTemplates.length === 0 ? <div className="grid min-h-52 place-items-center text-center text-sm text-[var(--text-3)]">Aramanızla eşleşen başlık veya hizmet bulunamadı.</div> : <div className="grid gap-3 sm:grid-cols-2">{visibleTemplates.map((template,index) => { const selected = selectedTemplates.includes(template.name); const missingCount = missingServiceCountForTemplate(template); return <button key={template.name} type="button" onClick={() => toggleTemplate(template.name)} aria-pressed={selected} className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${selected ? "border-[var(--accent)] bg-emerald-500/[.08] shadow-lg shadow-emerald-900/10" : "border-[var(--border)] bg-[var(--surface-1)]"}`} style={{ animationDelay: `${index * 35}ms` }}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-xl shadow-sm" style={{ backgroundColor: `${template.color}18`, border: `1px solid ${template.color}28` }}><ServiceCategoryIcon icon={template.icon} name={template.name} size={22}/></span><div className="min-w-0 flex-1"><b className="block text-sm text-[var(--text-1)]">{template.name}</b><p className="mt-1 text-[10px] leading-4 text-[var(--text-3)]">{template.description}</p><small className="mt-2 block text-[9px] font-black uppercase tracking-wider" style={{ color: template.color }}>{missingCount} yeni hizmet eklenecek</small></div><i className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border transition ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] bg-[var(--surface-2)] text-transparent"}`}><Check size={13} strokeWidth={3}/></i></div><div className="mt-3 flex flex-wrap gap-1.5">{template.services.slice(0,4).map((item) => <span key={item.name} className="rounded-full bg-[var(--surface-2)] px-2 py-1 text-[9px] font-semibold text-[var(--text-3)]">{item.name}</span>)}{template.services.length > 4 && <span className="rounded-full px-2 py-1 text-[9px] font-bold" style={{ backgroundColor: `${template.color}14`, color: template.color }}>+{template.services.length - 4} hizmet</span>}</div><span className="absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 transition group-hover:scale-x-100" style={{ backgroundColor: template.color }}/></button>; })}</div>}
             </div>
 
-            <footer className="services-template-modal-footer flex shrink-0 flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8"><div className="flex gap-2">{missingTemplates.length > 0 && <button type="button" onClick={() => setSelectedTemplates(selectedTemplates.length === missingTemplates.length ? [] : missingTemplates.map((item) => item.name))} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--accent)] transition hover:bg-[var(--surface-3)]">{selectedTemplates.length === missingTemplates.length ? "Seçimi temizle" : "Tümünü seç"}</button>}</div><div className="flex gap-2"><Button type="button" variant="secondary" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)}>Vazgeç</Button><Button type="button" disabled={templateBusy || selectedTemplates.length === 0} onClick={handleSeedCategories} className="gap-2 border-0 bg-[var(--accent)] px-5 font-bold text-white shadow-lg">{templateBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/> : <PackageCheck size={16}/>} {templateBusy ? "Ekleniyor…" : `${selectedTemplates.length} kategoriyi ekle`}</Button></div></footer>
+            <footer className="services-template-modal-footer flex shrink-0 flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8"><div className="flex gap-2">{missingTemplates.length > 0 && <button type="button" onClick={() => setSelectedTemplates(selectedTemplates.length === missingTemplates.length ? [] : missingTemplates.map((item) => item.name))} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--accent)] transition hover:bg-[var(--surface-3)]">{selectedTemplates.length === missingTemplates.length ? "Seçimi temizle" : "Tümünü seç"}</button>}</div><div className="flex gap-2"><Button type="button" variant="secondary" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)}>Vazgeç</Button><Button type="button" disabled={templateBusy || selectedTemplates.length === 0} onClick={handleSeedCategories} className="gap-2 border-0 bg-[var(--accent)] px-5 font-bold text-white shadow-lg">{templateBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/> : <PackageCheck size={16}/>} {templateBusy ? "Yükleniyor…" : `${selectedTemplates.length} başlık ve ${selectedServiceCount} hizmeti ekle`}</Button></div></footer>
           </section>
         </div>,
         document.body,
@@ -1008,13 +1068,35 @@ function ServiceCard({
   onToggle,
   onDelete,
   onEdit,
+  onQuickPrice,
 }: {
   service: Service;
   categoryMeta?: ServiceCategory;
   onToggle: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onQuickPrice: (price: number) => Promise<void>;
 }) {
+  const [quickPrice, setQuickPrice] = useState(String(service.price || ""));
+  const [quickSaving, setQuickSaving] = useState(false);
+
+  async function saveQuickPrice() {
+    const value = Number(quickPrice);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error("Fiyat sıfırdan büyük olmalı.");
+      return;
+    }
+    setQuickSaving(true);
+    try {
+      await onQuickPrice(value);
+    } catch (error) {
+      if (error instanceof Error && error.message === "invalid-price") return;
+      toast.error("Fiyat güncellenemedi.");
+    } finally {
+      setQuickSaving(false);
+    }
+  }
+
   return (
     <div
       className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-xl sm:p-5 p-4 ${service.isActive
@@ -1059,14 +1141,39 @@ function ServiceCard({
             </p>
           )}
           
-          <div className="mt-3.5 flex items-center gap-4">
+          <div className="mt-3.5 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-2)] bg-[var(--surface-3)] px-2.5 py-1 rounded-lg">
               <Clock size={14} className="text-[var(--text-3)]" /> 
               {service.durationMinutes} dakika
             </div>
-            <div className="flex items-center gap-1.5 text-lg font-black tracking-tight bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent drop-shadow-sm">
-              {service.price.toLocaleString("tr-TR")} ₺
+            <div className="flex items-center overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)] shadow-sm transition focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--ring)]">
+              <label htmlFor={`quick-price-${service.id}`} className="pl-3 text-[9px] font-black uppercase tracking-wider text-[var(--text-3)]">Fiyat</label>
+              <input
+                id={`quick-price-${service.id}`}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="decimal"
+                value={quickPrice}
+                onChange={(event) => setQuickPrice(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
+                placeholder="0"
+                aria-label={`${service.name} fiyatı`}
+                className="w-24 bg-transparent px-2 py-2 text-right text-sm font-extrabold text-[var(--text-1)] outline-none"
+              />
+              <span className="border-l border-[var(--border)] px-2 text-sm font-black text-[var(--accent)]">₺</span>
+              <button
+                type="button"
+                onClick={() => void saveQuickPrice()}
+                disabled={quickSaving || Number(quickPrice) === service.price}
+                className="grid self-stretch w-10 place-items-center bg-[var(--accent)] text-white transition hover:bg-[var(--accent-2)] disabled:cursor-not-allowed disabled:bg-[var(--surface-3)] disabled:text-[var(--text-3)]"
+                aria-label={`${service.name} fiyatını kaydet`}
+                title="Fiyatı kaydet"
+              >
+                {quickSaving ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"/> : <Check size={15} strokeWidth={3}/>}
+              </button>
             </div>
+            {service.templateDraft && <span className="text-[10px] font-semibold text-emerald-700">Fiyatı kaydedince otomatik yayınlanır</span>}
           </div>
         </div>
         

@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Clock3, LoaderCircle, 
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessBySlug } from "@/features/businesses/business-repository";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
 import { getLiveQueueWaitEstimate, getLiveQueueWaitOptions, getMyActiveQueues, joinLiveQueue, listLiveDiscovery, queueCustomerError, type ActiveQueuePointer } from "@/features/live-queue/customer-queue-repository";
@@ -44,7 +44,7 @@ export default function CustomerJoinQueuePage() {
     getBusinessBySlug(slug).then(async (row) => {
       if (!row) return;
       const [discovery, serviceRows, staffRows] = await Promise.all([
-        listLiveDiscovery(row.id), listServices(row.id, true), listStaff(row.id, true),
+        listLiveDiscovery(row.id), listBookableServices(row.id), listStaff(row.id, true),
       ]);
       if (cancelled) return;
       setBusiness(row);

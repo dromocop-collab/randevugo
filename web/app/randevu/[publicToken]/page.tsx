@@ -51,12 +51,13 @@ export default function AppointmentDetailPage() {
   const start=new Date(appointment.startAt); const end=new Date(appointment.endAt); const status=statusMap[appointment.status]??{label:appointment.status,className:"pending"};
   const date=start.toLocaleDateString("tr-TR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
   const time=`${start.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}${Number.isNaN(end.getTime())?"":` — ${end.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}`}`;
+  const serviceSummary=[appointment.serviceName,...(appointment.additionalServices??[]).map(service=>service.name)].filter(Boolean).join(" + ")||"Belirtilmedi";
 
   return <div className="appointment-detail-page"><MarketingHeader/><main className="appointment-detail-shell">
     <Link href="/hesabim" className="appointment-detail-back"><ArrowLeft size={16}/> Randevularıma dön</Link>
     <section className="appointment-detail-hero">
       <div className="appointment-detail-orbit"/><div className="appointment-detail-brand">{business.logoUrl?<Image src={business.logoUrl} alt={`${business.name} logosu`} fill sizes="82px"/>:<Store size={32}/>}</div>
-      <div className="appointment-detail-title"><span><BadgeCheck size={14}/> RANDEVU ONAY MERKEZİ</span><h1>{business.name||"Randevunuz"}</h1><p>{appointment.serviceName||"Hizmet"} için tüm detaylar tek ekranda.</p></div>
+      <div className="appointment-detail-title"><span><BadgeCheck size={14}/> RANDEVU ONAY MERKEZİ</span><h1>{business.name||"Randevunuz"}</h1><p>{serviceSummary} için tüm detaylar tek ekranda.</p></div>
       <div className={`appointment-detail-status ${status.className}`}><CheckCircle2 size={17}/><span><small>DURUM</small><b>{status.label}</b></span></div>
     </section>
     <section className="appointment-detail-grid">
@@ -64,7 +65,7 @@ export default function AppointmentDetailPage() {
         <header><span>RANDEVU PLANI</span><h2>Takviminiz hazır.</h2></header>
         <div className="appointment-time-card"><CalendarDays/><div><small>TARİH</small><b>{date}</b></div><Clock3/><div><small>SAAT</small><b>{time}</b></div></div>
         <div className="appointment-detail-facts">
-          <Detail icon={<BriefcaseBusiness/>} label="Hizmet" value={appointment.serviceName||"Belirtilmedi"}/>
+          <Detail icon={<BriefcaseBusiness/>} label="Hizmetler" value={serviceSummary}/>
           <Detail icon={<UserRound/>} label="Uzman" value={appointment.staffName||"İşletme ekibi"}/>
           <Detail icon={<Clock3/>} label="Süre" value={appointment.serviceDurationMinutes?`${appointment.serviceDurationMinutes} dakika`:"İşletme belirleyecek"}/>
           <Detail icon={<WalletCards/>} label="Tutar" value={appointment.servicePrice!=null?`${appointment.servicePrice.toLocaleString("tr-TR")} ₺`:"İşletmede"}/>

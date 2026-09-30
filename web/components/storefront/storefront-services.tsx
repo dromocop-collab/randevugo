@@ -12,9 +12,11 @@ import {
   ChevronRight,
   Clock3,
   Layers3,
+  Search,
   Sparkles,
   Tag,
   WandSparkles,
+  X,
 } from "lucide-react";
 
 interface Props {
@@ -36,7 +38,12 @@ const DEFAULT_CATEGORY_COLOR = "#0b6b45";
 
 export function StorefrontServices({ services, categories = [], onSelectService }: Props) {
   const [activeCat, setActiveCat] = useState("all");
+  const [serviceQuery, setServiceQuery] = useState("");
   const categoryRailRef = useRef<HTMLDivElement>(null);
+  const bookableServices = useMemo(
+    () => services.filter((service) => service.isActive && service.isBookableOnline),
+    [services],
+  );
 
   const scrollCategories = (direction: -1 | 1) => {
     categoryRailRef.current?.scrollBy({
@@ -52,12 +59,12 @@ export function StorefrontServices({ services, categories = [], onSelectService 
         name: category.name,
         icon: category.icon || "✦",
         color: category.color || DEFAULT_CATEGORY_COLOR,
-        items: services.filter((service) => service.category === category.id),
+        items: bookableServices.filter((service) => service.category === category.id),
         category,
       }))
       .filter((group) => group.items.length > 0);
 
-    const uncategorized = services.filter(
+    const uncategorized = bookableServices.filter(
       (service) =>
         !service.category || !categories.some((category) => category.id === service.category),
     );
@@ -73,9 +80,9 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     }
 
     return categoryGroups;
-  }, [categories, services]);
+  }, [bookableServices, categories]);
 
-  if (services.length === 0) {
+  if (bookableServices.length === 0) {
     return null;
   }
 
@@ -87,6 +94,33 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     safeActiveCat === "all"
       ? groups
       : groups.filter((group) => group.id === safeActiveCat);
+  const normalizedQuery = normalizeSearchText(serviceQuery);
+  const filteredGroups = visibleGroups
+    .map((group) => ({
+      ...group,
+      items: normalizedQuery
+        ? group.items.filter((service) =>
+            normalizeSearchText(
+              `${service.name} ${service.description || ""} ${group.name}`,
+            ).includes(normalizedQuery),
+          )
+        : group.items,
+    }))
+    .filter((group) => group.items.length > 0);
+  const visibleServiceCount = filteredGroups.reduce(
+    (total, group) => total + group.items.length,
+    0,
+  );
+
+  const selectCategory = (categoryId: string, button: HTMLButtonElement) => {
+    setActiveCat(categoryId);
+    setServiceQuery("");
+
+    const rail = categoryRailRef.current;
+    if (!rail) return;
+    const targetLeft = button.offsetLeft - (rail.clientWidth - button.offsetWidth) / 2;
+    rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+  };
 
   return (
     <section className="storefront-services-v3" aria-labelledby="service-menu-title">
@@ -96,9 +130,9 @@ export function StorefrontServices({ services, categories = [], onSelectService 
           <h2 id="service-menu-title">Sana uygun deneyimi seç.</h2>
           <p>Hizmetleri karşılaştır, detayları incele ve uygun saatini ayır.</p>
         </div>
-        <div className="storefront-services-count" aria-label={`${services.length} aktif hizmet`}>
+        <div className="storefront-services-count" aria-label={`${bookableServices.length} online hizmet`}>
           <small>AKTİF MENÜ</small>
-          <strong>{String(services.length).padStart(2, "0")}</strong>
+          <strong>{String(bookableServices.length).padStart(2, "0")}</strong>
           <span>hizmet</span>
         </div>
       </header>
@@ -130,13 +164,12 @@ export function StorefrontServices({ services, categories = [], onSelectService 
               aria-selected={safeActiveCat === "all"}
               className={`storefront-category-card all${safeActiveCat === "all" ? " active" : ""}`}
               onClick={(event) => {
-                setActiveCat("all");
-                event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                selectCategory("all", event.currentTarget);
               }}
             >
               <i><Layers3 size={18} /></i>
               <span><small>TÜM MENÜ</small><strong>Tümü</strong></span>
-              <b>{services.length}</b>
+              <b>{bookableServices.length}</b>
             </button>
 
             {groups.map((group) => {
@@ -151,8 +184,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
                   className={`storefront-category-card${isActive ? " active" : ""}`}
                   style={style}
                   onClick={(event) => {
-                    setActiveCat(isActive ? "all" : group.id);
-                    event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                    selectCategory(isActive ? "all" : group.id, event.currentTarget);
                   }}
                 >
                   <i aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={23} /></i>
@@ -165,8 +197,36 @@ export function StorefrontServices({ services, categories = [], onSelectService 
         </div>
       )}
 
-      <div key={safeActiveCat} className="storefront-service-groups">
-        {visibleGroups.map((group, groupIndex) => {
+      <div className="storefront-service-finder" role="search">
+        <Search size={21} aria-hidden="true" />
+        <label htmlFor="storefront-service-search">
+          <span>HİZMET ARA</span>
+          <input
+            id="storefront-service-search"
+            type="search"
+            value={serviceQuery}
+            onChange={(event) => setServiceQuery(event.target.value)}
+            placeholder="Örn. saç kesimi, manikür veya bakım"
+            autoComplete="off"
+          />
+        </label>
+        {serviceQuery && (
+          <button
+            type="button"
+            className="storefront-service-search-clear"
+            onClick={() => setServiceQuery("")}
+            aria-label="Hizmet aramasını temizle"
+          >
+            <X size={18} />
+          </button>
+        )}
+        <span className="storefront-service-search-count" aria-live="polite">
+          <b>{visibleServiceCount}</b> sonuç
+        </span>
+      </div>
+
+      <div key={`${safeActiveCat}-${normalizedQuery}`} className="storefront-service-groups">
+        {filteredGroups.map((group, groupIndex) => {
           const style = { "--category-color": group.color } as CSSProperties;
           return (
             <section
@@ -184,7 +244,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
                 <b>{group.items.length} hizmet</b>
               </header>
 
-              <div className="storefront-service-grid">
+              <div className="storefront-service-list">
                 {group.items.map((service, index) => (
                   <ServiceItem
                     key={service.id}
@@ -199,6 +259,17 @@ export function StorefrontServices({ services, categories = [], onSelectService 
             </section>
           );
         })}
+
+        {filteredGroups.length === 0 && (
+          <div className="storefront-service-no-results">
+            <span><Search size={23} /></span>
+            <div>
+              <strong>Bu aramayla eşleşen hizmet bulunamadı.</strong>
+              <p>Hizmet adını daha kısa yazarak tekrar deneyebilirsin.</p>
+            </div>
+            <button type="button" onClick={() => setServiceQuery("")}>Aramayı temizle</button>
+          </div>
+        )}
       </div>
 
       <footer className="storefront-services-assurance">
@@ -229,37 +300,54 @@ function ServiceItem({
   } as CSSProperties;
 
   return (
-    <article className="storefront-service-card-v3" style={style}>
-      <div className="storefront-service-visual" aria-hidden="true">
-        <span>{categoryMeta?.icon || "✦"}</span>
+    <article className="storefront-service-row" style={style}>
+      <div className="storefront-service-row-icon" aria-hidden="true">
+        <ServiceCategoryIcon
+          icon={categoryMeta?.icon || "✦"}
+          name={categoryMeta?.name || service.name}
+          size={22}
+        />
         <small>{String(index + 1).padStart(2, "0")}</small>
       </div>
 
-      <div className="storefront-service-copy">
-        <div className="storefront-service-kicker">
-          <span>ONLINE RANDEVU</span>
-          {service.isBookableOnline && <b><i /> Uygun</b>}
-        </div>
+      <div className="storefront-service-row-copy">
         <h4>{service.name}</h4>
         {service.description && <p>{service.description}</p>}
-        <div className="storefront-service-meta-v3">
-          <span><Clock3 size={14} /> {formatDuration(service.durationMinutes)}</span>
-          {service.requiresDeposit && <span><CheckCircle2 size={14} /> Ön ödeme</span>}
-        </div>
       </div>
 
-      <div className="storefront-service-action">
+      <div className="storefront-service-row-meta">
+        <span><Clock3 size={15} /> {formatDuration(service.durationMinutes)}</span>
+        {service.requiresDeposit && <span><CheckCircle2 size={15} /> Ön ödeme</span>}
+        {service.isBookableOnline && <span className="is-available"><i /> Online uygun</span>}
+      </div>
+
+      <div className="storefront-service-row-price">
         <small>HİZMET BEDELİ</small>
         <strong>{formatPrice(service.price, service.currency)}</strong>
-        {onSelect && (
-          <button type="button" onClick={() => onSelect(service.id)}>
-            <span>Randevu seç</span>
-            <i><ArrowUpRight size={17} /></i>
-          </button>
-        )}
       </div>
+
+      {onSelect && service.isBookableOnline && (
+        <button
+          type="button"
+          className="storefront-service-row-select"
+          onClick={() => onSelect(service.id)}
+          aria-label={`${service.name} hizmeti için randevu seç`}
+        >
+          <span>Randevu seç</span>
+          <i><ArrowUpRight size={17} /></i>
+        </button>
+      )}
     </article>
   );
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function formatPrice(price: number, currency: Service["currency"]) {

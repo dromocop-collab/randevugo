@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import BusinessProfileClient from "./business-profile-client";
 import { getBusinessBySlug, listBusinessWorkingHours } from "@/features/businesses/business-repository";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessReviews } from "@/features/reviews/review-repository";
 import { listServiceCategories } from "@/features/services/service-category-repository";
@@ -18,7 +18,7 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
   if (!business || business.status !== "active" || !business.isPublished) notFound();
   const [workingHours, services, staff, reviews, serviceCategories] = await Promise.all([
     listBusinessWorkingHours(business.id),
-    listServices(business.id, true),
+    listBookableServices(business.id),
     listStaff(business.id, true),
     listBusinessReviews(business.id).catch(() => []),
     listServiceCategories(business.id).catch(() => []),

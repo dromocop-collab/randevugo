@@ -71,6 +71,7 @@ export function DiscoverInteractive() {
   const [resultLimit, setResultLimit] = useState(24);
   const [urlReady, setUrlReady] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const resultsHeadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -196,6 +197,19 @@ export function DiscoverInteractive() {
     setResultLimit(24);
   }
 
+  function revealResults() {
+    window.requestAnimationFrame(() => {
+      const target = resultsHeadRef.current;
+      if (!target) return;
+      window.scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + window.scrollY - 96), behavior: "smooth" });
+    });
+  }
+
+  function selectCategoryAndReveal(value: string) {
+    updateCategory(value);
+    revealResults();
+  }
+
   function updateCity(value: string) {
     setCity(value);
     setResultLimit(24);
@@ -228,29 +242,30 @@ export function DiscoverInteractive() {
 
   return (
     <>
-      <section className="discover-search-panel discover-command-center mb-8" aria-label="İşletme keşfetme ve filtreleme" aria-busy={loading}>
+      <section className="discover-search-panel discover-command-center discover-command-v2 mb-8" aria-label="İşletme keşfetme ve filtreleme" aria-busy={loading}>
         <div className="discover-command-glow" aria-hidden="true" />
+        <div className="discover-command-orbits" aria-hidden="true"><i /><i /><i /></div>
         <header className="discover-command-head">
           <div>
-            <span className="discover-command-kicker"><Sparkles size={14} /> AKILLI KEŞİF</span>
-            <h2>Doğru hizmeti <em>daha hızlı</em> bul.</h2>
-            <p>Yalnızca yayında, eksiksiz ve randevuya hazır işletmeler arasında ara.</p>
+            <span className="discover-command-kicker"><Sparkles size={14} /> SENİN İÇİN AKILLI KEŞİF</span>
+            <h2>Aradığın deneyim,<br/><em>birkaç dokunuş uzağında.</em></h2>
+            <p>Hizmeti yaz, kategorini seç; yayındaki ve randevuya hazır işletmeleri senin için eşleştirelim.</p>
           </div>
           <aside className="discover-command-badges">
-            <span><i /> Canlı sonuçlar</span>
-            <span><BadgeCheck size={14} /> Gerçek işletmeler</span>
+            <span><i /> Veriler anlık güncellenir</span>
+            <span><BadgeCheck size={14} /> Yalnızca aktif işletmeler</span>
           </aside>
         </header>
 
-        <div className="discover-command-search">
-          <span className="discover-command-search__icon"><Search size={22} /></span>
+        <form className="discover-command-search" role="search" onSubmit={(event) => { event.preventDefault(); setDebouncedKeyword(keyword.trim()); setResultLimit(24); revealResults(); }}>
+          <button type="submit" className="discover-command-search__icon" aria-label="Ara ve mağaza sonuçlarına git"><Search size={22} /></button>
           <label htmlFor="discover-search-input">
-            <small>NE ARIYORSUN?</small>
+            <small>HİZMET, İŞLETME VEYA KATEGORİ</small>
             <input
               ref={searchInputRef}
               id="discover-search-input"
               type="search"
-              placeholder="Berber, kuaför, güzellik merkezi veya hizmet ara..."
+              placeholder="Örn. saç kesimi, manikür veya kuaför ara..."
               value={keyword}
               maxLength={100}
               onChange={(event) => updateKeyword(event.target.value)}
@@ -258,16 +273,16 @@ export function DiscoverInteractive() {
             />
           </label>
           {keyword && <button type="button" className="discover-command-search__clear" onClick={() => { updateKeyword(""); searchInputRef.current?.focus(); }} aria-label="Aramayı temizle"><X size={17} /></button>}
-          <kbd>⌘ K</kbd>
+          <kbd aria-hidden="true">⌘ K</kbd>
           <div className={`discover-command-search__state ${refreshing ? "is-searching" : ""}`} aria-live="polite">
             <span /> {loadError ? "Bağlantı sorunu" : refreshing ? "Eşleştiriliyor" : `${visibleResults.length} sonuç`}
           </div>
-        </div>
+        </form>
 
         {facetsLoading ? (
           <div className="discover-category-skeleton" aria-label="Kategoriler yükleniyor">{Array.from({ length: 5 }).map((_, index) => <span key={index} />)}</div>
         ) : (
-          <CategoryRail categories={availableCategories} value={category} onChange={updateCategory} counts={facets.categoryCounts} covers={facets.categoryCovers ?? {}} total={facets.totalBusinesses} />
+          <CategoryRail categories={availableCategories} value={category} onChange={selectCategoryAndReveal} counts={facets.categoryCounts} covers={facets.categoryCovers ?? {}} total={facets.totalBusinesses} />
         )}
 
         <div className="discover-command-toolbar">
@@ -282,7 +297,7 @@ export function DiscoverInteractive() {
         {refreshing && <div className="discover-command-loading" aria-hidden="true"><span /></div>}
       </section>
 
-      <div className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> Yayındaki işletmeler, kolay randevu deneyimi</p></div>
+      <div ref={resultsHeadRef} className="discover-results-head"><div><span>SEÇİLMİŞ İŞLETMELER</span><h2>{category ? categories.find((item) => item.value === category)?.label : "Sana uygun yerler"}</h2></div><p><UsersRound size={16} /> Yayındaki işletmeler, kolay randevu deneyimi</p></div>
 
       {/* Results */}
       {initialLoading ? (
@@ -414,9 +429,35 @@ function CategoryRail({ categories, value, onChange, counts, covers = {}, total 
   }, [categories, updateEdges]);
 
   useEffect(() => {
+    function releasePointer(event: globalThis.PointerEvent) {
+      if (!drag.current.active || drag.current.pointerId !== event.pointerId) return;
+      drag.current.active = false;
+      setIsDragging(false);
+      window.setTimeout(() => { if (!drag.current.active) drag.current.moved = false; }, 0);
+    }
+    function releaseOnBlur() {
+      drag.current = { active: false, moved: false, startX: 0, scrollLeft: 0, pointerId: -1 };
+      setIsDragging(false);
+    }
+    window.addEventListener("pointerup", releasePointer);
+    window.addEventListener("pointercancel", releasePointer);
+    window.addEventListener("blur", releaseOnBlur);
+    return () => {
+      window.removeEventListener("pointerup", releasePointer);
+      window.removeEventListener("pointercancel", releasePointer);
+      window.removeEventListener("blur", releaseOnBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || rail.scrollWidth <= rail.clientWidth + 4) return;
     const index = categories.findIndex((item) => item.value === value);
-    const target = index >= 0 ? railRef.current?.children.item(index) : null;
-    if (target instanceof HTMLElement) target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const target = index >= 0 ? rail.children.item(index) : null;
+    if (target instanceof HTMLElement) {
+      const centeredLeft = target.offsetLeft - (rail.clientWidth - target.offsetWidth) / 2;
+      rail.scrollTo({ left: Math.max(0, centeredLeft), behavior: "smooth" });
+    }
   }, [categories, value]);
 
   function scroll(direction: -1 | 1) { railRef.current?.scrollBy({ left: direction * Math.max(280, railRef.current.clientWidth * .72), behavior: "smooth" }); }
@@ -469,7 +510,7 @@ function CategoryRail({ categories, value, onChange, counts, covers = {}, total 
             const count = cat.value ? (counts[cat.value] ?? 0) : total;
             return <button key={cat.value} type="button" aria-pressed={active} aria-label={`${cat.label}, ${count} işletme`} onClick={() => { if (!drag.current.moved) onChange(cat.value); }} className={`discover-category-card ${active ? "active" : ""}`}>
               <figure>
-                {cat.value === "" && categoryVisuals.length > 1 ? <span className="discover-category-mosaic">{categoryVisuals.slice(0, 3).map((src) => <Image key={src} src={src} alt="" width={220} height={130} sizes="(max-width: 640px) 120px, 220px" loading="eager" />)}</span> : visual ? <Image src={visual} alt="" fill sizes="(max-width: 640px) 160px, 260px" loading={categoryIndex < 2 ? "eager" : "lazy"} /> : <span>{cat.icon}</span>}
+                {cat.value === "" && categoryVisuals.length > 1 ? <span className="discover-category-mosaic" style={{ gridTemplateColumns: `repeat(${Math.min(categoryVisuals.length, 3)}, minmax(0, 1fr))` }}>{categoryVisuals.slice(0, 3).map((src) => <Image key={src} src={src} alt="" width={220} height={130} sizes="(max-width: 640px) 120px, 220px" loading="eager" />)}</span> : visual ? <Image src={visual} alt="" fill sizes="(max-width: 640px) 160px, 260px" loading={categoryIndex < 2 ? "eager" : "lazy"} /> : <span>{cat.icon}</span>}
                 <i aria-hidden="true" />
               </figure>
               <span className="discover-category-card-copy"><small>{cat.value ? "KATEGORİ" : "TÜM DENEYİMLER"}</small><strong>{cat.label}</strong><em>{active ? "Seçildi" : `${count} işletme`}</em></span>

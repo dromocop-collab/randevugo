@@ -10,7 +10,7 @@ import {
   getBusinessBySlug,
   listBusinessWorkingHours,
 } from "@/features/businesses/business-repository";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 import type { Business, DaySchedule } from "@/types/business";
 import { ArrowLeft, Clock3, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -50,7 +50,7 @@ export default function BookingPage() {
 
         const [schedules, services] = await Promise.all([
           listBusinessWorkingHours(row.id),
-          listServices(row.id, true),
+          listBookableServices(row.id),
         ]);
         if (cancelled) return;
         if (services.length === 0) {

@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-operations-available";
 import {
-  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones, Rocket,
+  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones, ReceiptText, Rocket,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
   ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -21,6 +21,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot },
   { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays },
   { href: "/dashboard/randevular", label: "Randevular", icon: MessageSquareText },
+  { href: "/dashboard/operasyon", label: "Kasa & Operasyon", icon: ReceiptText },
   { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing },
   { href: "/dashboard/canli-operasyon", label: "Canlı Sıra", icon: Activity },
   { href: "/dashboard/analitik", label: "Büyüme Analitiği", icon: ChartNoAxesCombined },
@@ -43,6 +44,7 @@ export function DashboardSidebar() {
   const { businesses, businessId, access } = useBusinessContext();
   const showLiveOperations = useLiveOperationsAvailable();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
   
   const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
 
@@ -63,7 +65,8 @@ export function DashboardSidebar() {
       </div>
       <nav className="space-y-0.5">
         {navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
-          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href))).map((item) => {
+          (item.href !== "/dashboard/operasyon" || canOpenOperations) &&
+          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href))).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"
@@ -107,13 +110,15 @@ export function DashboardBottomNav() {
   const { access } = useBusinessContext();
   const showLiveOperations = useLiveOperationsAvailable();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
 
   return (
     <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
       <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
       <ul className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
-          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : [])].includes(item.href))).map((item) => {
+          (item.href !== "/dashboard/operasyon" || canOpenOperations) &&
+          (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href))).map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/dashboard"

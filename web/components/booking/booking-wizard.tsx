@@ -9,12 +9,13 @@ import { toast } from "sonner";
 import {
   createAppointment,
   joinAppointmentWaitlist,
+  listAvailableDates,
   listAvailableSlots,
   type AvailableAppointmentSlot,
 } from "@/features/appointments/appointment-repository";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
@@ -103,20 +104,60 @@ function publicStaffBio(value?: string) {
   return bio;
 }
 
+function istanbulDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDaysToIso(value: string, days: number) {
+  const date = dateFromIso(value);
+  date.setDate(date.getDate() + days);
+  return format(date, "yyyy-MM-dd");
+}
+
+function normalizeTurkishPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10 && digits.startsWith("5")) return `+90${digits}`;
+  if (digits.length === 11 && digits.startsWith("05")) return `+90${digits.slice(1)}`;
+  if (digits.length === 12 && digits.startsWith("905")) return `+${digits}`;
+  return value.trim();
+}
+
+function isValidTurkishPhone(value: string) {
+  return /^\+905\d{9}$/.test(normalizeTurkishPhone(value));
+}
+
+function isValidOptionalEmail(value: string) {
+  return !value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export function BookingWizard(props: Props) {
   const [step, setStep] = useState<WizardStep>("service");
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [availableSlots, setAvailableSlots] = useState<AvailableAppointmentSlot[]>([]);
+  const [availableDateCounts, setAvailableDateCounts] = useState<Record<string, number>>({});
+  const [availabilityRange, setAvailabilityRange] = useState<{ start: string; end: string } | null>(null);
+  const [datesLoading, setDatesLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
   const [staffId, setStaffId] = useState(props.preselectedStaffId ?? "");
-  const [appointmentsDate, setAppointmentsDate] = useState(
-    props.preselectedDate ?? new Date().toISOString().slice(0, 10)
-  );
+  const [appointmentsDate, setAppointmentsDate] = useState(() => {
+    const today = istanbulDateKey();
+    const latest = addDaysToIso(today, props.maximumBookingDaysAhead);
+    return props.preselectedDate && /^\d{4}-\d{2}-\d{2}$/.test(props.preselectedDate) && props.preselectedDate >= today && props.preselectedDate <= latest
+      ? props.preselectedDate
+      : today;
+  });
   const [slot, setSlot] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -137,7 +178,15 @@ export function BookingWizard(props: Props) {
   const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [verifyError, setVerifyError] = useState("");
+  const [infoTouched, setInfoTouched] = useState(false);
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const availabilityRequestRef = useRef(0);
+  const availabilitySelectionRef = useRef("");
+
+  useEffect(() => {
+    availabilitySelectionRef.current = `${serviceId}:${staffId}`;
+    availabilityRequestRef.current += 1;
+  }, [serviceId, staffId]);
 
   useEffect(() => {
     if (!privacyModalOpen) return;
@@ -154,6 +203,7 @@ export function BookingWizard(props: Props) {
   // Success data
   const [successData, setSuccessData] = useState<{
     appointmentId: string;
+    publicToken: string;
     serviceName: string;
     staffName: string;
     date: string;
@@ -162,7 +212,7 @@ export function BookingWizard(props: Props) {
 
   useEffect(() => {
     Promise.all([
-      listServices(props.businessId, true),
+      listBookableServices(props.businessId),
       listStaff(props.businessId, true),
     ]).then(([serviceRows, staffRows]) => {
       setServices(serviceRows);
@@ -172,11 +222,15 @@ export function BookingWizard(props: Props) {
         setServiceId(props.preselectedServiceId);
       } else if (serviceRows[0]) {
         setServiceId(serviceRows[0].id);
+      } else {
+        setServiceId("");
       }
       if (props.preselectedStaffId && staffRows.some((staff) => staff.id === props.preselectedStaffId)) {
         setStaffId(props.preselectedStaffId);
       } else if (staffRows[0]) {
         setStaffId(staffRows[0].id);
+      } else {
+        setStaffId("");
       }
     }).catch(() => toast.error("Randevu seçenekleri yüklenemedi."))
       .finally(() => setCatalogLoading(false));
@@ -225,6 +279,33 @@ export function BookingWizard(props: Props) {
     return () => { cancelled = true; };
   }, [appointmentsDate, props.businessId, props.preselectedDate, props.preselectedStartAtMillis, serviceId, staffId]);
 
+  const loadDateAvailability = useCallback(async (startDate: string, endDate: string) => {
+    if (!serviceId) return;
+    const selectionKey = `${serviceId}:${staffId}`;
+    const requestId = availabilityRequestRef.current + 1;
+    availabilityRequestRef.current = requestId;
+    setDatesLoading(true);
+    setAvailabilityRange({ start: startDate, end: endDate });
+    setAvailableDateCounts({});
+    try {
+      const rows = await listAvailableDates({
+        businessId: props.businessId,
+        serviceId,
+        staffId: staffId || undefined,
+        startDate,
+        endDate,
+      });
+      if (availabilityRequestRef.current !== requestId || availabilitySelectionRef.current !== selectionKey) return;
+      setAvailableDateCounts(Object.fromEntries(rows.map((row) => [row.date, row.slotCount])));
+    } catch (error) {
+      if (availabilityRequestRef.current !== requestId || availabilitySelectionRef.current !== selectionKey) return;
+      setAvailableDateCounts({});
+      toast.error(userFacingError(error, "Takvim müsaitliği alınamadı."));
+    } finally {
+      if (availabilityRequestRef.current === requestId && availabilitySelectionRef.current === selectionKey) setDatesLoading(false);
+    }
+  }, [props.businessId, serviceId, staffId]);
+
   const selectedService = useMemo(
     () => services.find((item) => item.id === serviceId),
     [serviceId, services]
@@ -233,6 +314,10 @@ export function BookingWizard(props: Props) {
     () => staffList.find((item) => item.id === staffId),
     [staffList, staffId]
   );
+  const normalizedCustomerPhone = normalizeTurkishPhone(customerPhone);
+  const phoneValid = isValidTurkishPhone(customerPhone);
+  const emailValid = isValidOptionalEmail(customerEmail);
+  const infoValid = phoneValid && emailValid && privacyAccepted && (!bookingFields.collectName || customerName.trim().length >= 2);
 
   // Filter staff to those who can provide selected service
   const filteredStaff = useMemo(() => {
@@ -253,7 +338,7 @@ export function BookingWizard(props: Props) {
     }
     setWaitlistBusy(true);
     try {
-      const result = await joinAppointmentWaitlist({ businessId: props.businessId, serviceId: selectedService.id, staffId: staffId || undefined, preferredDate: appointmentsDate, customerName: customerName.trim(), customerPhone: customerPhone.trim(), customerEmail: customerEmail.trim() });
+      const result = await joinAppointmentWaitlist({ businessId: props.businessId, serviceId: selectedService.id, staffId: staffId || undefined, preferredDate: appointmentsDate, customerName: customerName.trim(), customerPhone: normalizedCustomerPhone, customerEmail: customerEmail.trim() });
       setWaitlistDone(true);
       toast.success(result.alreadyJoined ? "Bu tarih için zaten bekleme listesindesiniz." : "Bekleme listesine eklendiniz. Yer açıldığında işletme sizinle iletişime geçecek.");
     } catch (error) { toast.error(userFacingError(error, "Bekleme listesine eklenemediniz.")); }
@@ -287,13 +372,13 @@ export function BookingWizard(props: Props) {
 
   // ━━━ Phone Verification Handlers ━━━
   const handleSendCode = useCallback(async () => {
-    if (!customerPhone || sendingCode) return;
+    if (!phoneValid || sendingCode) return;
     setSendingCode(true);
     setVerifyError("");
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
       const sendCode = httpsCallable<{ phone: string }, { success: boolean; smsDelivered?: boolean; fallbackCode?: string }>(functions, "sendVerificationCode");
-      const result = await sendCode({ phone: customerPhone });
+      const result = await sendCode({ phone: normalizedCustomerPhone });
       setCodeSent(true);
       setCountdown(60);
       if (!result.data.smsDelivered && result.data.fallbackCode) {
@@ -315,7 +400,7 @@ export function BookingWizard(props: Props) {
     } finally {
       setSendingCode(false);
     }
-  }, [customerPhone, sendingCode]);
+  }, [normalizedCustomerPhone, phoneValid, sendingCode]);
 
   // Countdown timer
   useEffect(() => {
@@ -366,7 +451,7 @@ export function BookingWizard(props: Props) {
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
       const verify = httpsCallable(functions, "verifyPhoneCode");
-      await verify({ phone: customerPhone, code });
+      await verify({ phone: normalizedCustomerPhone, code });
       setPhoneVerified(true);
       toast.success("Telefon numarası doğrulandı!");
       // Auto-advance to summary after short delay
@@ -396,19 +481,20 @@ export function BookingWizard(props: Props) {
     }
 
     try {
-      const appointmentId = await createAppointment({
+      const createdAppointment = await createAppointment({
         businessId: props.businessId,
         staffId: selectedSlot.staffId ?? selectedStaff?.id ?? "",
         serviceId: selectedService.id,
         customerName: bookingFields.collectName ? customerName.trim() : undefined,
-        customerPhone,
+        customerPhone: normalizedCustomerPhone,
         customerEmail: bookingFields.collectEmail ? customerEmail.trim() : undefined,
         notes: bookingFields.collectNotes ? notes.trim() : undefined,
         startAtMillis: selectedSlot.startAtMillis,
       });
 
       setSuccessData({
-        appointmentId,
+        appointmentId: createdAppointment.appointmentId,
+        publicToken: createdAppointment.publicToken,
         serviceName: selectedService.name,
         staffName: selectedStaff?.fullName ?? "İşletme",
         date: format(dateBase, "dd.MM.yyyy"),
@@ -425,13 +511,8 @@ export function BookingWizard(props: Props) {
 
   // Minimum/maximum date for date picker (stable per mount)
   const [minDate, maxDate] = useMemo(() => {
-    const now = new Date();
-    const min = now.toISOString().slice(0, 10);
-    const max = new Date(
-      now.getTime() + props.maximumBookingDaysAhead * 86400000
-    )
-      .toISOString()
-      .slice(0, 10);
+    const min = istanbulDateKey();
+    const max = addDaysToIso(min, props.maximumBookingDaysAhead);
     return [min, max] as const;
   }, [props.maximumBookingDaysAhead]);
 
@@ -478,6 +559,16 @@ export function BookingWizard(props: Props) {
             <span className="text-right font-medium text-[var(--text-1)]">{props.businessAddress}</span>
           </div>
         </div>
+
+        {successData.publicToken && (
+          <a
+            href={`/randevu/${encodeURIComponent(successData.publicToken)}`}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-100"
+          >
+            <span><small className="block font-semibold text-emerald-600">GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle, iptal et veya yönet</span>
+            <ArrowRight size={18} />
+          </a>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <a
@@ -683,7 +774,16 @@ export function BookingWizard(props: Props) {
                 <label className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--text-3)]">
                   🗓️ Tarih
                 </label>
-                <BookingCalendar value={appointmentsDate} min={minDate} max={maxDate} onChange={(value) => { setAppointmentsDate(value); setSlot(""); }} />
+                <BookingCalendar
+                  value={appointmentsDate}
+                  min={minDate}
+                  max={maxDate}
+                  availableDateCounts={availableDateCounts}
+                  availabilityRange={availabilityRange}
+                  loading={datesLoading}
+                  onRangeChange={loadDateAvailability}
+                  onChange={(value) => { setAppointmentsDate(value); setSlot(""); }}
+                />
                 {selectedService && (
                   <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--accent)]/5 px-3 py-2.5 animate-[fadeSlideIn_0.3s_ease]">
                     <span className="text-xs">📋</span>
@@ -860,11 +960,15 @@ export function BookingWizard(props: Props) {
                 <input
                   type="tel"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  onChange={(e) => { setCustomerPhone(e.target.value); setPhoneVerified(false); }}
+                  onBlur={() => { setInfoTouched(true); if (phoneValid) setCustomerPhone(normalizedCustomerPhone); }}
                   placeholder="05XX XXX XX XX"
                   required
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
+                  aria-invalid={infoTouched && !phoneValid}
+                  aria-describedby={infoTouched && !phoneValid ? "booking-phone-error" : undefined}
+                  className={`w-full rounded-xl border bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:outline-none focus:ring-4 ${infoTouched && !phoneValid ? "border-red-400 focus:border-red-500 focus:ring-red-500/10" : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent)]/10"}`}
                 />
+                {infoTouched && !phoneValid && <p id="booking-phone-error" className="mt-1.5 text-xs font-medium text-red-600">05XX XXX XX XX biçiminde geçerli bir Türkiye telefonu girin.</p>}
               </div>
               {bookingFields.collectEmail && <div className="animate-[fadeSlideIn_0.4s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
@@ -874,9 +978,13 @@ export function BookingWizard(props: Props) {
                   type="email"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
+                  onBlur={() => setInfoTouched(true)}
                   placeholder="ornek@mail.com"
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--accent)]/10 focus:shadow-lg"
+                  aria-invalid={infoTouched && !emailValid}
+                  aria-describedby={infoTouched && !emailValid ? "booking-email-error" : undefined}
+                  className={`w-full rounded-xl border bg-[var(--field-bg)] px-4 py-3.5 text-sm font-medium text-[var(--text-1)] shadow-sm transition-all duration-300 placeholder:text-[var(--text-3)]/50 focus:outline-none focus:ring-4 ${infoTouched && !emailValid ? "border-red-400 focus:border-red-500 focus:ring-red-500/10" : "border-[var(--border)] focus:border-[var(--accent)] focus:ring-[var(--accent)]/10"}`}
                 />
+                {infoTouched && !emailValid && <p id="booking-email-error" className="mt-1.5 text-xs font-medium text-red-600">Geçerli bir e-posta adresi girin veya alanı boş bırakın.</p>}
               </div>}
               {bookingFields.collectNotes && <div className="animate-[fadeSlideIn_0.45s_ease]">
                 <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)]">
@@ -1088,7 +1196,7 @@ export function BookingWizard(props: Props) {
                 (step === "service" && !serviceId) ||
                 (step === "staff" && !staffId) ||
                 (step === "datetime" && !slot) ||
-                (step === "info" && (!customerPhone || !privacyAccepted || (bookingFields.collectName && customerName.trim().length < 2)))
+                (step === "info" && !infoValid)
               }
               className="group flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-7 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/25 transition-all duration-300 hover:shadow-xl hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -1158,40 +1266,95 @@ function dateFromIso(value: string) {
   return new Date(year, month - 1, day);
 }
 
-function BookingCalendar({ value, min, max, onChange }: { value: string; min: string; max: string; onChange: (value: string) => void }) {
+function BookingCalendar({
+  value,
+  min,
+  max,
+  availableDateCounts,
+  availabilityRange,
+  loading,
+  onRangeChange,
+  onChange,
+}: {
+  value: string;
+  min: string;
+  max: string;
+  availableDateCounts: Record<string, number>;
+  availabilityRange: { start: string; end: string } | null;
+  loading: boolean;
+  onRangeChange: (start: string, end: string) => void;
+  onChange: (value: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(dateFromIso(value)));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const selectedDate = dateFromIso(value);
   const minMonth = startOfMonth(dateFromIso(min));
   const maxMonth = startOfMonth(dateFromIso(max));
   const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 1 }), end: endOfWeek(endOfMonth(visibleMonth), { weekStartsOn: 1 }) });
+  const rangeStart = format(days[0], "yyyy-MM-dd");
+  const rangeEnd = format(days[days.length - 1], "yyyy-MM-dd");
+  const rangeLoaded = availabilityRange?.start === rangeStart && availabilityRange.end === rangeEnd;
+
+  useEffect(() => {
+    if (open) onRangeChange(rangeStart, rangeEnd);
+  }, [open, onRangeChange, rangeEnd, rangeStart]);
 
   useEffect(() => {
     if (!open) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const trigger = triggerRef.current;
+    const dialog = dialogRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? []);
+    const focusTimer = window.setTimeout(() => focusable()[0]?.focus(), 20);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.clearTimeout(focusTimer);
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleKeyDown);
+      trigger?.focus();
     };
   }, [open]);
 
   return <div className={`booking-calendar ${open ? "is-open" : ""}`}>
-    <button type="button" className="booking-calendar-trigger" onClick={() => { if (!open) setVisibleMonth(startOfMonth(selectedDate)); setOpen(!open); }} aria-expanded={open} aria-haspopup="dialog"><span><CalendarDays size={17}/><span><small>RANDEVU TARİHİ</small><b>{format(selectedDate, "d MMMM yyyy, EEEE", { locale: tr })}</b></span></span><ChevronRight size={17}/></button>
-    {open && typeof document !== "undefined" && createPortal(<><button type="button" className="booking-calendar-backdrop" aria-label="Takvimi kapat" onClick={() => setOpen(false)}/><section className="booking-calendar-popover" role="dialog" aria-modal="true" aria-label="Randevu tarihi seç">
+    <button ref={triggerRef} type="button" className="booking-calendar-trigger" onClick={() => { if (!open) setVisibleMonth(startOfMonth(selectedDate)); setOpen(!open); }} aria-expanded={open} aria-haspopup="dialog"><span><CalendarDays size={17}/><span><small>RANDEVU TARİHİ</small><b>{format(selectedDate, "d MMMM yyyy, EEEE", { locale: tr })}</b></span></span><ChevronRight size={17}/></button>
+    {open && typeof document !== "undefined" && createPortal(<><button type="button" className="booking-calendar-backdrop" aria-label="Takvimi kapat" onClick={() => setOpen(false)}/><section ref={dialogRef} className="booking-calendar-popover" role="dialog" aria-modal="true" aria-label="Randevu tarihi seç" aria-busy={loading}>
       <header><div><small>UYGUN TARİH</small><h3>{format(visibleMonth, "MMMM yyyy", { locale: tr })}</h3></div><nav><button type="button" onClick={() => setVisibleMonth((month) => addMonths(month, -1))} disabled={visibleMonth <= minMonth} aria-label="Önceki ay"><ChevronLeft size={18}/></button><button type="button" onClick={() => setVisibleMonth((month) => addMonths(month, 1))} disabled={visibleMonth >= maxMonth} aria-label="Sonraki ay"><ChevronRight size={18}/></button></nav></header>
       <div className="booking-calendar-week" aria-hidden="true">{["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"].map((day) => <span key={day}>{day}</span>)}</div>
       <div className="booking-calendar-days" role="grid">{days.map((day) => {
         const iso = format(day, "yyyy-MM-dd");
         const outside = day.getMonth() !== visibleMonth.getMonth();
-        const disabled = iso < min || iso > max;
+        const outsideBookingRange = iso < min || iso > max;
+        const slotCount = availableDateCounts[iso] ?? 0;
+        const availabilityKnown = rangeLoaded && !loading;
+        const hasAvailability = availabilityKnown && slotCount > 0;
+        const disabled = outsideBookingRange || loading || (availabilityKnown && !hasAvailability);
         const selected = iso === value;
-        const today = iso === format(new Date(), "yyyy-MM-dd");
-        return <button key={iso} type="button" role="gridcell" disabled={disabled} className={`${outside ? "is-outside" : ""} ${selected ? "is-selected" : ""} ${today ? "is-today" : ""}`} aria-label={format(day, "d MMMM yyyy EEEE", { locale: tr })} aria-selected={selected} onClick={() => { onChange(iso); setOpen(false); }}><span>{format(day, "d")}</span>{today && <i />}</button>;
+        const today = iso === istanbulDateKey();
+        const availabilityLabel = loading ? "müsaitlik yükleniyor" : hasAvailability ? `${slotCount} müsait saat` : "müsait saat yok";
+        return <button key={iso} type="button" role="gridcell" disabled={disabled} className={`${outside ? "is-outside" : ""} ${selected ? "is-selected" : ""} ${today ? "is-today" : ""} ${hasAvailability ? "is-available" : availabilityKnown ? "is-unavailable" : ""}`} aria-label={`${format(day, "d MMMM yyyy EEEE", { locale: tr })}, ${availabilityLabel}`} aria-selected={selected} onClick={() => { onChange(iso); setOpen(false); }}><span>{format(day, "d")}</span>{hasAvailability && <small>{slotCount}</small>}{today && <i />}</button>;
       })}</div>
-      <footer><span><i/> Yeşil nokta bugünü gösterir</span><button type="button" onClick={() => { const today = format(new Date(), "yyyy-MM-dd"); if (today >= min && today <= max) onChange(today); setOpen(false); }}>Bugün</button></footer>
+      <footer><span className="booking-calendar-legend"><i className="is-available"/> Müsait <i className="is-today"/> Bugün {loading && <b>Yükleniyor…</b>}</span><button type="button" disabled={loading || (rangeLoaded && (availableDateCounts[istanbulDateKey()] ?? 0) === 0)} onClick={() => { const today = istanbulDateKey(); if (today >= min && today <= max) onChange(today); setOpen(false); }}>Bugün</button></footer>
     </section></>, document.body)}
   </div>;
 }

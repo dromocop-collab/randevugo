@@ -112,7 +112,7 @@ export default function StaffPage() {
       expertiseLevel: "specialist",
       commissionRate: 0,
       serviceOverrides: {},
-      permissions: { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false },
+      permissions: { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false, manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false },
       isActive: true,
       serviceIds: matchingServiceIds,
       workingHours: defaultHours,
@@ -225,7 +225,7 @@ function StaffCard({
   const [expertiseLevel, setExpertiseLevel] = useState(item.expertiseLevel ?? "specialist");
   const [commissionRate, setCommissionRate] = useState(item.commissionRate ?? 0);
   const [serviceOverrides, setServiceOverrides] = useState(item.serviceOverrides ?? {});
-  const [permissions, setPermissions] = useState(item.permissions ?? { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false });
+  const [permissions, setPermissions] = useState({ manageOwnCalendar: true, viewCustomers: false, manageAppointments: false, manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false, ...(item.permissions ?? {}) });
   const [replacementStaffId, setReplacementStaffId] = useState("");
   const [editBio, setEditBio] = useState(item.bio ?? "");
   const [editCapacity, setEditCapacity] = useState(item.appointmentCapacity);
@@ -463,6 +463,10 @@ function StaffCard({
                 ["manageOwnCalendar", "Kendi takvimini yönet"],
                 ["viewCustomers", "Müşteri bilgilerini gör"],
                 ["manageAppointments", "Randevu durumunu değiştir"],
+                ["manageCheckout", "Adisyon ve tahsilat yönet"],
+                ["manageCatalog", "Ürün ve stok yönet"],
+                ["managePackages", "Paket ve seans yönet"],
+                ["manageFinance", "Gelir ve giderleri gör"],
               ] as const).map(([key, label]) => (
                 <label key={key} className={`staff-service-option ${permissions[key] ? "is-selected" : ""}`}>
                   <input type="checkbox" checked={permissions[key]} onChange={() => setPermissions((current) => ({ ...current, [key]: !current[key] }))} />

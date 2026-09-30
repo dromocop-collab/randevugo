@@ -41,8 +41,19 @@ function isPublicActiveBusiness(business: Business): boolean {
   return business.status === "active" && business.isPublished === true && isPublicReadyBusiness(business);
 }
 
+function normalizeSearch(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/ı/g, "i")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function includesSearch(value: unknown, searchTerm: string) {
-  return typeof value === "string" && value.toLocaleLowerCase("tr-TR").includes(searchTerm);
+  return normalizeSearch(value).includes(normalizeSearch(searchTerm));
 }
 
 async function findServiceMatches(searchTerm: string) {
@@ -118,7 +129,7 @@ export async function searchBusinesses(
   })).filter(isPublicReadyBusiness);
 
   if (filters.searchText) {
-    const searchTerm = filters.searchText.toLocaleLowerCase("tr-TR").trim();
+    const searchTerm = normalizeSearch(filters.searchText);
     const serviceMatches = await findServiceMatches(searchTerm);
     const knownIds = new Set(results.map((business) => business.id));
     const missingIds = [...serviceMatches.keys()].filter((id) => !knownIds.has(id));

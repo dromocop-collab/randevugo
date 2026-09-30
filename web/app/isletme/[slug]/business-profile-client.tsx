@@ -15,7 +15,7 @@ import {
   getBusinessBySlug,
   listBusinessWorkingHours,
 } from "@/features/businesses/business-repository";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessReviews } from "@/features/reviews/review-repository";
 import { listServiceCategories } from "@/features/services/service-category-repository";
@@ -122,7 +122,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
         const [schedules, serviceRows, staffRows, reviewRows, catRows] =
           await Promise.all([
             listBusinessWorkingHours(row.id),
-            listServices(row.id, true),
+            listBookableServices(row.id),
             listStaff(row.id, true),
             listBusinessReviews(row.id).catch(() => [] as Review[]),
             listServiceCategories(row.id).catch(() => [] as ServiceCategory[]),

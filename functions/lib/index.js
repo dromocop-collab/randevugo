@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = void 0;
+exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -196,6 +196,19 @@ async function requireBusinessManager(uid, businessId) {
         return business.data();
     throw new https_1.HttpsError("permission-denied", "Müşterilere bildirim gönderme yetkiniz yok.");
 }
+async function requireBusinessOperation(uid, businessId, permission) {
+    const [business, member] = await Promise.all([
+        db.doc(`businesses/${businessId}`).get(),
+        db.doc(`businesses/${businessId}/members/${uid}`).get(),
+    ]);
+    if (!business.exists)
+        throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
+    const role = String(member.data()?.role ?? "");
+    if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role) ||
+        (role === "staff" && member.data()?.permissions?.[permission] === true))
+        return business.data();
+    throw new https_1.HttpsError("permission-denied", "Bu işletme işlemi için yetkiniz bulunmuyor.");
+}
 function entitlementDateMillis(value) {
     if (value instanceof firestore_1.Timestamp)
         return value.toMillis();
@@ -382,6 +395,276 @@ exports.upsertCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (
         email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
         userId: typeof request.data?.userId === "string" ? request.data.userId : null,
     });
+});
+const BUSINESS_PAYMENT_METHODS = ["cash", "card", "transfer", "other"];
+function businessPaymentMethod(value) {
+    if (typeof value !== "string" || !BUSINESS_PAYMENT_METHODS.includes(value)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir ödeme yöntemi seçin.");
+    }
+    return value;
+}
+function finiteMoney(value, field, maximum = 10_000_000) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > maximum) {
+        throw new https_1.HttpsError("invalid-argument", `${field} tutarı geçersiz.`);
+    }
+    return Math.round(parsed * 100) / 100;
+}
+function loyaltyDocumentId(phone) {
+    return (0, crypto_1.createHash)("sha256").update(phone).digest("hex").slice(0, 32);
+}
+exports.finalizeAppointmentCheckout = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const appointmentId = requireString(request.data?.appointmentId, "appointmentId");
+    await requireBusinessOperation(uid, businessId, "manageCheckout");
+    const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
+    const discount = finiteMoney(request.data?.discount ?? 0, "İndirim");
+    const requestedPaidAmount = finiteMoney(request.data?.paidAmount ?? 0, "Ödenen");
+    const requestedPoints = Math.floor(finiteMoney(request.data?.loyaltyPointsToUse ?? 0, "Sadakat puanı", 1_000_000));
+    const requestedProducts = Array.isArray(request.data?.products) ? request.data.products : [];
+    if (requestedProducts.length > 40)
+        throw new https_1.HttpsError("invalid-argument", "Bir adisyona en fazla 40 ürün eklenebilir.");
+    const normalizedProducts = requestedProducts.map((item) => {
+        if (!item || typeof item !== "object")
+            throw new https_1.HttpsError("invalid-argument", "Ürün satırı geçersiz.");
+        const row = item;
+        const productId = requireString(row.productId, "productId");
+        const quantity = Math.floor(Number(row.quantity));
+        if (!Number.isFinite(quantity) || quantity < 1 || quantity > 999) {
+            throw new https_1.HttpsError("invalid-argument", "Ürün adedi 1 ile 999 arasında olmalıdır.");
+        }
+        return { productId, quantity };
+    });
+    if (new Set(normalizedProducts.map((item) => item.productId)).size !== normalizedProducts.length) {
+        throw new https_1.HttpsError("invalid-argument", "Aynı ürün adisyona birden fazla kez eklenemez.");
+    }
+    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    const receiptRef = db.doc(`businesses/${businessId}/checkoutReceipts/${appointmentId}`);
+    const financeRef = db.doc(`businesses/${businessId}/financeTransactions/checkout_${appointmentId}`);
+    const result = await db.runTransaction(async (tx) => {
+        const [appointmentSnapshot, existingReceipt] = await Promise.all([tx.get(appointmentRef), tx.get(receiptRef)]);
+        if (!appointmentSnapshot.exists)
+            throw new https_1.HttpsError("not-found", "Randevu bulunamadı.");
+        if (existingReceipt.exists)
+            throw new https_1.HttpsError("already-exists", "Bu randevunun adisyonu daha önce kapatılmış.");
+        const appointment = appointmentSnapshot.data() ?? {};
+        if (["cancelled", "no_show"].includes(String(appointment.status))) {
+            throw new https_1.HttpsError("failed-precondition", "İptal veya gelmedi durumundaki randevu kapatılamaz.");
+        }
+        const customerPhone = typeof appointment.customerPhone === "string" && appointment.customerPhone.trim()
+            ? normalizedPhoneKey(appointment.customerPhone)
+            : "";
+        const loyaltyRef = customerPhone
+            ? db.doc(`businesses/${businessId}/loyaltyAccounts/${loyaltyDocumentId(customerPhone)}`)
+            : null;
+        const loyaltySnapshot = loyaltyRef ? await tx.get(loyaltyRef) : null;
+        const availablePoints = Math.max(0, Math.floor(Number(loyaltySnapshot?.data()?.points ?? 0)));
+        if (requestedPoints > availablePoints)
+            throw new https_1.HttpsError("failed-precondition", "Müşterinin yeterli sadakat puanı yok.");
+        const productRows = [];
+        const productRefs = normalizedProducts.map((item) => db.doc(`businesses/${businessId}/products/${item.productId}`));
+        const productSnapshots = productRefs.length ? await tx.getAll(...productRefs) : [];
+        normalizedProducts.forEach((requested, index) => {
+            const productRef = productRefs[index];
+            const snapshot = productSnapshots[index];
+            if (!snapshot.exists || snapshot.data()?.isActive === false)
+                throw new https_1.HttpsError("failed-precondition", "Seçilen ürün artık satışta değil.");
+            const product = (snapshot.data() ?? {});
+            const stock = Math.max(0, Math.floor(Number(product.stock ?? 0)));
+            if (stock < requested.quantity)
+                throw new https_1.HttpsError("failed-precondition", `${String(product.name ?? "Ürün")} için yeterli stok yok.`);
+            const unitPrice = finiteMoney(product.salePrice ?? 0, "Ürün");
+            productRows.push({ productId: requested.productId, name: String(product.name ?? "Ürün"), quantity: requested.quantity, unitPrice, total: unitPrice * requested.quantity });
+            tx.update(productRef, { stock: stock - requested.quantity, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        });
+        const serviceTotal = finiteMoney(appointment.servicePrice ?? 0, "Hizmet");
+        const productTotal = productRows.reduce((sum, item) => sum + item.total, 0);
+        const subtotal = serviceTotal + productTotal;
+        if (discount > subtotal)
+            throw new https_1.HttpsError("invalid-argument", "İndirim toplam tutardan fazla olamaz.");
+        const loyaltyPointsUsed = Math.min(requestedPoints, Math.floor(subtotal - discount));
+        const total = Math.round((subtotal - discount - loyaltyPointsUsed) * 100) / 100;
+        const paidAmount = Math.min(total, requestedPaidAmount);
+        const remainingAmount = Math.round((total - paidAmount) * 100) / 100;
+        const loyaltyPointsEarned = Math.floor(paidAmount / 10);
+        const paymentStatus = remainingAmount <= 0 ? "paid" : paidAmount > 0 ? "deposit_paid" : "unpaid";
+        tx.create(receiptRef, {
+            appointmentId, customerName: String(appointment.customerName ?? "Müşteri"), customerPhone,
+            serviceTotal, productTotal, discount, total, paidAmount, remainingAmount, paymentMethod,
+            loyaltyPointsEarned, loyaltyPointsUsed, products: productRows, createdBy: uid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        if (paidAmount > 0)
+            tx.create(financeRef, {
+                type: "income", category: "Adisyon", amount: paidAmount, paymentMethod,
+                description: `${String(appointment.customerName ?? "Müşteri")} · ${String(appointment.serviceName ?? "Hizmet")}`,
+                appointmentId, receiptId: receiptRef.id, occurredAt: firestore_1.FieldValue.serverTimestamp(),
+                createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        tx.update(appointmentRef, {
+            status: "completed", paymentStatus, checkoutReceiptId: receiptRef.id,
+            paidAmount, remainingAmount, paymentMethod, checkedOutAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        if (customerPhone && loyaltyRef) {
+            tx.set(loyaltyRef, {
+                customerName: String(appointment.customerName ?? "Müşteri"), customerPhone,
+                points: firestore_1.FieldValue.increment(loyaltyPointsEarned - loyaltyPointsUsed), lifetimePoints: firestore_1.FieldValue.increment(loyaltyPointsEarned),
+                totalSpent: firestore_1.FieldValue.increment(paidAmount), lastEarnedAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(), createdAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            const customerRef = db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`);
+            tx.set(customerRef, {
+                fullName: String(appointment.customerName ?? "Müşteri"), phone: customerPhone,
+                completedAppointments: firestore_1.FieldValue.increment(1), totalSpent: firestore_1.FieldValue.increment(paidAmount),
+                lastVisitAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        return { receiptId: receiptRef.id, total, loyaltyPointsEarned };
+    });
+    return result;
+});
+exports.sellServicePackage = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const packageId = requireString(request.data?.packageId, "packageId");
+    const customerName = requireString(request.data?.customerName, "Müşteri adı").slice(0, 80);
+    const customerPhone = normalizedPhoneKey(requireString(request.data?.customerPhone, "Telefon"));
+    const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
+    await requireBusinessOperation(uid, businessId, "managePackages");
+    const templateRef = db.doc(`businesses/${businessId}/servicePackages/${packageId}`);
+    const customerPackageRef = db.collection(`businesses/${businessId}/customerPackages`).doc();
+    const financeRef = db.doc(`businesses/${businessId}/financeTransactions/package_${customerPackageRef.id}`);
+    await db.runTransaction(async (tx) => {
+        const snapshot = await tx.get(templateRef);
+        if (!snapshot.exists || snapshot.data()?.isActive === false)
+            throw new https_1.HttpsError("failed-precondition", "Paket artık satışta değil.");
+        const row = snapshot.data() ?? {};
+        const totalSessions = Math.max(1, Math.floor(Number(row.sessionCount ?? 1)));
+        const price = finiteMoney(row.price ?? 0, "Paket");
+        const validityDays = Math.max(1, Math.floor(Number(row.validityDays ?? 365)));
+        tx.create(customerPackageRef, {
+            packageId, packageName: String(row.name ?? "Hizmet paketi"), serviceName: String(row.serviceName ?? "Hizmet"),
+            customerName, customerPhone, totalSessions, remainingSessions: totalSessions, price, paymentMethod,
+            status: "active", expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + validityDays * 86_400_000),
+            createdBy: uid, createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        tx.create(financeRef, {
+            type: "income", category: "Paket satışı", amount: price, paymentMethod,
+            description: `${customerName} · ${String(row.name ?? "Hizmet paketi")}`,
+            customerPackageId: customerPackageRef.id, occurredAt: firestore_1.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        const points = Math.floor(price / 10);
+        tx.set(db.doc(`businesses/${businessId}/loyaltyAccounts/${loyaltyDocumentId(customerPhone)}`), {
+            customerName, customerPhone, points: firestore_1.FieldValue.increment(points), lifetimePoints: firestore_1.FieldValue.increment(points),
+            totalSpent: firestore_1.FieldValue.increment(price), lastEarnedAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(), createdAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        tx.set(db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`), {
+            fullName: customerName, phone: customerPhone, totalSpent: firestore_1.FieldValue.increment(price),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(), createdAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    });
+    return { customerPackageId: customerPackageRef.id };
+});
+exports.redeemServicePackage = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const customerPackageId = requireString(request.data?.customerPackageId, "customerPackageId");
+    await requireBusinessOperation(uid, businessId, "managePackages");
+    const ref = db.doc(`businesses/${businessId}/customerPackages/${customerPackageId}`);
+    await db.runTransaction(async (tx) => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists)
+            throw new https_1.HttpsError("not-found", "Müşteri paketi bulunamadı.");
+        const row = snapshot.data() ?? {};
+        const remaining = Math.max(0, Math.floor(Number(row.remainingSessions ?? 0)));
+        const expiresAt = row.expiresAt instanceof firestore_1.Timestamp ? row.expiresAt.toMillis() : 0;
+        if (row.status !== "active" || remaining < 1 || (expiresAt && expiresAt < Date.now())) {
+            throw new https_1.HttpsError("failed-precondition", "Bu pakette kullanılabilir seans bulunmuyor.");
+        }
+        tx.update(ref, {
+            remainingSessions: remaining - 1, status: remaining - 1 === 0 ? "used" : "active",
+            lastUsedAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        tx.create(ref.collection("usageHistory").doc(), {
+            usedBy: uid, usedAt: firestore_1.FieldValue.serverTimestamp(), remainingAfter: remaining - 1,
+        });
+    });
+    return { success: true };
+});
+exports.getMyCustomerBenefits = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const profile = await db.doc(`users/${uid}`).get();
+    const rawPhone = String(profile.data()?.phone ?? "").trim();
+    if (!rawPhone)
+        return { packages: [], loyalty: [], phoneRequired: true };
+    let customerPhone = "";
+    try {
+        customerPhone = normalizedPhoneKey(rawPhone);
+    }
+    catch {
+        return { packages: [], loyalty: [], phoneRequired: true };
+    }
+    const [packageRows, loyaltyRows] = await Promise.all([
+        db.collectionGroup("customerPackages").where("customerPhone", "==", customerPhone).get(),
+        db.collectionGroup("loyaltyAccounts").where("customerPhone", "==", customerPhone).get(),
+    ]);
+    const businessIds = [...new Set([...packageRows.docs, ...loyaltyRows.docs]
+            .map((row) => row.ref.parent.parent?.id ?? "").filter(Boolean))];
+    const businessRows = await Promise.all(businessIds.map((businessId) => db.doc(`businesses/${businessId}`).get()));
+    const businesses = new Map(businessIds.map((businessId, index) => [businessId, businessRows[index].data() ?? {}]));
+    const dateValue = (value) => {
+        if (value instanceof firestore_1.Timestamp)
+            return value.toDate().toISOString();
+        if (typeof value === "string" && !Number.isNaN(Date.parse(value)))
+            return new Date(value).toISOString();
+        return null;
+    };
+    return {
+        phoneRequired: false,
+        packages: packageRows.docs.map((row) => {
+            const data = row.data();
+            const businessId = row.ref.parent.parent?.id ?? "";
+            const expiresAt = dateValue(data.expiresAt);
+            const expired = Boolean(expiresAt && Date.parse(expiresAt) < Date.now());
+            return {
+                id: row.id,
+                businessId,
+                businessName: String(businesses.get(businessId)?.name ?? "İşletme"),
+                businessSlug: String(businesses.get(businessId)?.slug ?? ""),
+                packageName: String(data.packageName ?? "Hizmet paketi"),
+                serviceName: String(data.serviceName ?? "Hizmet"),
+                totalSessions: Math.max(0, Number(data.totalSessions ?? 0)),
+                remainingSessions: Math.max(0, Number(data.remainingSessions ?? 0)),
+                status: expired && data.status === "active" ? "expired" : String(data.status ?? "active"),
+                expiresAt,
+            };
+        }),
+        loyalty: loyaltyRows.docs.map((row) => {
+            const data = row.data();
+            const businessId = row.ref.parent.parent?.id ?? "";
+            return {
+                id: row.id,
+                businessId,
+                businessName: String(businesses.get(businessId)?.name ?? "İşletme"),
+                businessSlug: String(businesses.get(businessId)?.slug ?? ""),
+                points: Math.max(0, Number(data.points ?? 0)),
+                lifetimePoints: Math.max(0, Number(data.lifetimePoints ?? 0)),
+                totalSpent: Math.max(0, Number(data.totalSpent ?? 0)),
+            };
+        }),
+    };
 });
 exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
@@ -1077,6 +1360,12 @@ exports.deleteMyAccount = (0, https_1.onCall)({ region: "europe-west1" }, async 
         db.collection("businesses").where("ownerUid", "==", uid).get(),
     ]);
     const email = userRecord.email?.trim().toLowerCase() ?? "";
+    const confirmationEmail = typeof request.data?.confirmationEmail === "string"
+        ? request.data.confirmationEmail.trim().toLowerCase()
+        : "";
+    if (!email || confirmationEmail !== email) {
+        throw new https_1.HttpsError("failed-precondition", "Hesap silme onayı için kayıtlı e-posta adresinizi eksiksiz yazın.");
+    }
     const phone = String(userProfile.data()?.phone ?? "").trim();
     // Storage is removed before identity deletion so a failed media cleanup can be retried safely.
     const bucket = storage.bucket();
@@ -1297,6 +1586,10 @@ function isValidDateKey(value) {
         parsed.getUTCMonth() === month - 1 &&
         parsed.getUTCDate() === day;
 }
+function addDaysToDateKey(dateKey, days) {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
 function localParts(date, timeZone) {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone,
@@ -1370,8 +1663,8 @@ async function loadBookingContext(businessId, serviceId, staffId) {
     if (business.isPublished !== true || business.status !== "active" || business.isSuspended === true) {
         throw new https_1.HttpsError("failed-precondition", "İşletme şu anda online randevu kabul etmiyor.");
     }
-    if (!serviceSnap.exists || serviceSnap.data()?.isActive !== true) {
-        throw new https_1.HttpsError("failed-precondition", "Hizmet aktif değil.");
+    if (!serviceSnap.exists || serviceSnap.data()?.isActive !== true || serviceSnap.data()?.isBookableOnline !== true) {
+        throw new https_1.HttpsError("failed-precondition", "Hizmet online randevuya açık değil.");
     }
     if (staffId && (!staffSnap?.exists || staffSnap.data()?.isActive !== true)) {
         throw new https_1.HttpsError("failed-precondition", "Çalışan aktif değil.");
@@ -1395,6 +1688,33 @@ async function loadBookingContext(businessId, serviceId, staffId) {
         businessHours: hoursSnap.docs.map((item) => scheduleFromData(item.data())).filter((item) => item !== null),
         specialDays: specialDaysSnap.docs.map((item) => item.data()),
     };
+}
+async function loadBookingCandidates(businessId, serviceId, staffId, context) {
+    if (staffId)
+        return [{ staffId, context }];
+    const staffSnapshot = await db.collection(`businesses/${businessId}/staff`)
+        .where("isActive", "==", true)
+        .get();
+    const eligibleStaff = staffSnapshot.docs.filter((document) => {
+        const specialtyCategoryIds = Array.isArray(document.data().specialtyCategoryIds)
+            ? document.data().specialtyCategoryIds.map(String)
+            : [];
+        const serviceIds = Array.isArray(document.data().serviceIds)
+            ? document.data().serviceIds.map(String)
+            : [];
+        const matchesBranch = specialtyCategoryIds.length === 0 || specialtyCategoryIds.includes(String(context.service.category ?? ""));
+        return matchesBranch && (serviceIds.length === 0 || serviceIds.includes(serviceId));
+    });
+    if (eligibleStaff.length === 0)
+        return [{ staffId: null, context }];
+    return eligibleStaff.map((document) => ({
+        staffId: document.id,
+        context: {
+            ...context,
+            staff: document.data(),
+            service: applyStaffServiceOverride(context.service, document.data(), serviceId),
+        },
+    }));
 }
 function effectiveSchedule(context, dateKey, weekday, staffId) {
     const leaveDates = Array.isArray(context.staff?.leaveDates) ? context.staff.leaveDates.map(String) : [];
@@ -1643,7 +1963,8 @@ exports.rescheduleAppointment = (0, https_1.onCall)(protectedCallableOptions, as
     }
     const serviceId = requireString(appointment.serviceId, "serviceId");
     const context = await loadBookingContext(businessId, serviceId, staffId);
-    const durationMinutes = normalizedBookingDuration(context.service.durationMinutes);
+    // Preserve the complete appointment duration when extra services were added.
+    const durationMinutes = normalizedBookingDuration(appointment.serviceDurationMinutes ?? context.service.durationMinutes);
     const startAt = firestore_1.Timestamp.fromMillis(startAtMillis);
     const endAt = firestore_1.Timestamp.fromMillis(startAtMillis + durationMinutes * 60_000);
     const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
@@ -1837,7 +2158,11 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
         uid: userRecord.uid,
         role: "staff",
         staffId,
-        permissions: staff.permissions ?? { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false },
+        permissions: {
+            manageOwnCalendar: true, viewCustomers: false, manageAppointments: false,
+            manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false,
+            ...(staff.permissions ?? {}),
+        },
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -1896,40 +2221,7 @@ exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (re
     if (dayStart > Date.now() + maximumDays * 86_400_000 + 86_400_000) {
         throw new https_1.HttpsError("failed-precondition", "Bu tarih rezervasyon aralığının dışında.");
     }
-    const candidates = [];
-    if (staffId) {
-        candidates.push({ staffId, context });
-    }
-    else {
-        const staffSnapshot = await db.collection(`businesses/${businessId}/staff`)
-            .where("isActive", "==", true)
-            .get();
-        const eligibleStaff = staffSnapshot.docs.filter((document) => {
-            const specialtyCategoryIds = Array.isArray(document.data().specialtyCategoryIds)
-                ? document.data().specialtyCategoryIds.map(String)
-                : [];
-            const serviceIds = Array.isArray(document.data().serviceIds)
-                ? document.data().serviceIds.map(String)
-                : [];
-            const matchesBranch = specialtyCategoryIds.length === 0 || specialtyCategoryIds.includes(String(context.service.category ?? ""));
-            return matchesBranch && (serviceIds.length === 0 || serviceIds.includes(serviceId));
-        });
-        if (eligibleStaff.length === 0) {
-            candidates.push({ staffId: null, context });
-        }
-        else {
-            eligibleStaff.forEach((document) => {
-                candidates.push({
-                    staffId: document.id,
-                    context: {
-                        ...context,
-                        staff: document.data(),
-                        service: applyStaffServiceOverride(context.service, document.data(), serviceId),
-                    },
-                });
-            });
-        }
-    }
+    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context);
     const candidateSlots = await Promise.all(candidates.map(async (candidate) => {
         const blocked = await appointmentWindows(businessId, dayStart, dayEnd, candidate.staffId);
         return buildSlots(candidate.context, date, candidate.staffId, blocked).map((startAtMillis) => ({
@@ -1949,6 +2241,68 @@ exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (re
         })),
         timeZone,
     };
+});
+exports.getAvailableDates = (0, https_1.onCall)(publicCallableOptions, async (request) => {
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    await requireBookingEntitlement(businessId);
+    const serviceId = requireString(data.serviceId, "serviceId");
+    const startDate = requireString(data.startDate, "startDate");
+    const endDate = requireString(data.endDate, "endDate");
+    const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
+    if (!isValidDateKey(startDate) || !isValidDateKey(endDate) || endDate < startDate) {
+        throw new https_1.HttpsError("invalid-argument", "Tarih aralığı geçersiz.");
+    }
+    const spanDays = Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000) + 1;
+    if (spanDays < 1 || spanDays > 42) {
+        throw new https_1.HttpsError("invalid-argument", "En fazla 42 günlük müsaitlik sorgulanabilir.");
+    }
+    const context = await loadBookingContext(businessId, serviceId, staffId);
+    const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+    const maximumDays = Math.max(1, numberOr(context.business.maximumBookingDaysAhead, 30));
+    const latestAllowed = addDaysToDateKey(localParts(new Date(), timeZone).dateKey, maximumDays);
+    if (startDate > latestAllowed)
+        return { dates: [], timeZone };
+    const effectiveEndDate = endDate > latestAllowed ? latestAllowed : endDate;
+    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context);
+    const rangeStart = zonedTimeToMillis(startDate, 0, timeZone);
+    const rangeEnd = zonedTimeToMillis(addDaysToDateKey(effectiveEndDate, 1), 0, timeZone);
+    const appointmentSnapshot = await db.collection(`businesses/${businessId}/appointments`)
+        .where("startAt", ">=", firestore_1.Timestamp.fromMillis(rangeStart))
+        .where("startAt", "<", firestore_1.Timestamp.fromMillis(rangeEnd))
+        .get();
+    const activeAppointments = appointmentSnapshot.docs.flatMap((document) => {
+        const appointment = document.data();
+        if (!["pending", "confirmed"].includes(String(appointment.status)))
+            return [];
+        const startAt = appointment.startAt;
+        const endAt = appointment.endAt;
+        if (!startAt || !endAt)
+            return [];
+        return [{
+                staffId: typeof appointment.staffId === "string" ? appointment.staffId : null,
+                start: startAt.toMillis(),
+                end: endAt.toMillis(),
+            }];
+    });
+    const dates = [];
+    for (let offset = 0; offset < spanDays; offset += 1) {
+        const date = addDaysToDateKey(startDate, offset);
+        if (date > effectiveEndDate)
+            break;
+        const dayStart = zonedTimeToMillis(date, 0, timeZone);
+        const dayEnd = zonedTimeToMillis(addDaysToDateKey(date, 1), 0, timeZone);
+        const starts = new Set();
+        for (const candidate of candidates) {
+            const blocked = activeAppointments
+                .filter((appointment) => appointment.start < dayEnd && appointment.end > dayStart)
+                .filter((appointment) => !candidate.staffId || !appointment.staffId || appointment.staffId === candidate.staffId)
+                .map(({ start, end }) => ({ start, end }));
+            buildSlots(candidate.context, date, candidate.staffId, blocked).forEach((start) => starts.add(start));
+        }
+        dates.push({ date, slotCount: starts.size });
+    }
+    return { dates, timeZone };
 });
 exports.joinWaitlist = (0, https_1.onCall)(publicCallableOptions, async (request) => {
     const data = request.data ?? {};
@@ -2098,6 +2452,9 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
             publicToken,
             serviceName: String(serviceData.name ?? ""),
             staffName: staffData ? String(staffData.fullName ?? "") : String(context.business.name ?? "İşletme"),
+            primaryServicePrice: Number(serviceData.price ?? 0),
+            primaryServiceDurationMinutes: durationMinutes,
+            additionalServices: [],
             servicePrice: Number(serviceData.price ?? 0),
             serviceDurationMinutes: durationMinutes,
             source: "online",
@@ -2175,11 +2532,29 @@ exports.getAppointmentByPublicToken = (0, https_1.onCall)(publicCallableOptions,
     const business = businessSnapshot.data() ?? {};
     const startAt = appointment.startAt;
     const endAt = appointment.endAt;
+    const additionalServices = Array.isArray(appointment.additionalServices)
+        ? appointment.additionalServices.flatMap((item) => {
+            if (!item || typeof item !== "object")
+                return [];
+            const service = item;
+            const serviceId = String(service.serviceId ?? "").trim();
+            const name = String(service.name ?? "").trim();
+            if (!serviceId || !name)
+                return [];
+            return [{
+                    serviceId,
+                    name,
+                    price: Math.max(0, numberOr(service.price, 0)),
+                    durationMinutes: normalizedBookingDuration(service.durationMinutes),
+                }];
+        })
+        : [];
     return {
         appointment: {
             id: appointmentId,
             status: String(appointment.status ?? "pending"),
             serviceName: String(appointment.serviceName ?? ""),
+            additionalServices,
             staffName: String(appointment.staffName ?? ""),
             servicePrice: numberOr(appointment.servicePrice, 0),
             serviceDurationMinutes: normalizedBookingDuration(appointment.serviceDurationMinutes),
@@ -3344,11 +3719,20 @@ function buildEmailTemplate(code, type) {
 }
 // ── Send Email Verification Code ──
 exports.sendEmailVerificationCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "E-posta doğrulama kodu için giriş yapmalısınız.");
     const data = request.data ?? {};
     const email = requireString(data.email, "email").toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new https_1.HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
     }
+    const userRecord = await auth.getUser(uid);
+    if (userRecord.email?.trim().toLowerCase() !== email) {
+        throw new https_1.HttpsError("permission-denied", "Yalnızca kendi e-posta adresinize kod gönderebilirsiniz.");
+    }
+    if (userRecord.emailVerified)
+        return { success: true, verified: true, message: "E-posta adresiniz zaten doğrulanmış." };
     const codeDocRef = db.doc(`emailVerificationCodes/${email}`);
     const existing = await codeDocRef.get();
     // Rate limit: 60 seconds
@@ -3384,9 +3768,16 @@ exports.sendEmailVerificationCode = (0, https_1.onCall)({ region: "europe-west1"
 });
 // ── Verify Email Code ──
 exports.verifyEmailCode = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "E-postanızı doğrulamak için giriş yapmalısınız.");
     const data = request.data ?? {};
     const email = requireString(data.email, "email").toLowerCase();
     const inputCode = requireString(data.code, "code");
+    const userRecord = await auth.getUser(uid);
+    if (userRecord.email?.trim().toLowerCase() !== email) {
+        throw new https_1.HttpsError("permission-denied", "Yalnızca kendi e-posta adresinizi doğrulayabilirsiniz.");
+    }
     const codeDocRef = db.doc(`emailVerificationCodes/${email}`);
     const codeSnap = await codeDocRef.get();
     if (!codeSnap.exists) {
@@ -3407,10 +3798,14 @@ exports.verifyEmailCode = (0, https_1.onCall)({ region: "europe-west1" }, async 
         await codeDocRef.update({ attempts: firestore_1.FieldValue.increment(1) });
         throw new https_1.HttpsError("invalid-argument", `Yanlış kod. ${4 - attempts} deneme hakkınız kaldı.`);
     }
-    await codeDocRef.update({
-        verified: true,
-        verifiedAt: firestore_1.FieldValue.serverTimestamp(),
-    });
+    await Promise.all([
+        codeDocRef.update({
+            verified: true,
+            verifiedAt: firestore_1.FieldValue.serverTimestamp(),
+        }),
+        auth.updateUser(uid, { emailVerified: true }),
+        db.doc(`users/${uid}`).set({ emailVerified: true, emailVerifiedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true }),
+    ]);
     return { success: true, verified: true };
 });
 // ── Send Password Reset Code ──

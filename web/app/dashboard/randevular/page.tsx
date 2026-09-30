@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { toast } from "sonner";
-import { BadgeCheck, Banknote, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, CircleX, Clock3, Download, Mail, MapPin, Phone, Search, Sparkles, Timer, UserRound, UserX } from "lucide-react";
+import { BadgeCheck, Banknote, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronDown, CircleX, Clock3, Download, Mail, MapPin, PackagePlus, Phone, Plus, ReceiptText, Search, Sparkles, Timer, UserRound, UserX, X } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import {
   listAppointments,
+  updateAppointmentAdditionalServices,
   updateAppointmentStatus,
 } from "@/features/appointments/appointment-repository";
-import type { Appointment, AppointmentStatus } from "@/types/appointments";
+import { listServices } from "@/features/services/service-repository";
+import type { Appointment, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
+import type { Service } from "@/types/service";
 
 const STATUS_CONFIG: Record<
   AppointmentStatus,
@@ -65,22 +69,28 @@ export default function AppointmentsPage() {
   const canManageStatus = access?.role !== "staff" || access.permissions.manageAppointments;
   const canViewCustomerContact = access?.role !== "staff" || access.permissions.viewCustomers;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dateScope, setDateScope] = useState<DateScope>("all");
+  const [serviceEditor, setServiceEditor] = useState<Appointment | null>(null);
+  const [selectedExtraServiceIds, setSelectedExtraServiceIds] = useState<string[]>([]);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [savingServices, setSavingServices] = useState(false);
 
   useEffect(() => {
     if (!businessId) return;
     let cancelled = false;
 
     queueMicrotask(() => { if (!cancelled) setLoading(true); });
-    listAppointments(businessId)
-      .then((rows) => {
+    Promise.all([listAppointments(businessId), listServices(businessId, true)])
+      .then(([rows, serviceRows]) => {
         if (cancelled) return;
         setAppointments(rows);
+        setServices(serviceRows);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -95,6 +105,20 @@ export default function AppointmentsPage() {
       cancelled = true;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    if (!serviceEditor) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savingServices) setServiceEditor(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [serviceEditor, savingServices]);
 
   useEffect(() => {
     if (appointments.length === 0) return;
@@ -121,10 +145,95 @@ export default function AppointmentsPage() {
     [appointments, activeTab, dateScope, search]
   );
 
+  const extraServiceOptions = useMemo(() => {
+    if (!serviceEditor) return [];
+    const options = new Map<string, AppointmentServiceLine>();
+    services
+      .filter((service) => service.id !== serviceEditor.serviceId && service.price > 0)
+      .forEach((service) => options.set(service.id, {
+        serviceId: service.id,
+        name: service.name,
+        price: service.price,
+        durationMinutes: service.durationMinutes,
+      }));
+    (serviceEditor.additionalServices ?? []).forEach((service) => {
+      if (!options.has(service.serviceId)) options.set(service.serviceId, service);
+    });
+    return [...options.values()].sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  }, [serviceEditor, services]);
+
+  const visibleExtraServiceOptions = useMemo(() => {
+    const needle = serviceSearch.trim().toLocaleLowerCase("tr-TR");
+    return needle
+      ? extraServiceOptions.filter((service) => service.name.toLocaleLowerCase("tr-TR").includes(needle))
+      : extraServiceOptions;
+  }, [extraServiceOptions, serviceSearch]);
+
+  const selectedExtraServices = extraServiceOptions.filter((service) =>
+    selectedExtraServiceIds.includes(service.serviceId)
+  );
+  const editorPreviousExtraPrice = (serviceEditor?.additionalServices ?? []).reduce((sum, item) => sum + item.price, 0);
+  const editorPreviousExtraDuration = (serviceEditor?.additionalServices ?? []).reduce((sum, item) => sum + item.durationMinutes, 0);
+  const editorBasePrice = serviceEditor
+    ? serviceEditor.primaryServicePrice ?? Math.max(0, Number(serviceEditor.servicePrice ?? 0) - editorPreviousExtraPrice)
+    : 0;
+  const editorBaseDuration = serviceEditor
+    ? serviceEditor.primaryServiceDurationMinutes ?? Math.max(0, Number(serviceEditor.serviceDurationMinutes ?? 0) - editorPreviousExtraDuration)
+    : 0;
+  const editorTotalPrice = editorBasePrice + selectedExtraServices.reduce((sum, item) => sum + item.price, 0);
+  const editorTotalDuration = editorBaseDuration + selectedExtraServices.reduce((sum, item) => sum + item.durationMinutes, 0);
+  const editorScheduleConflict = serviceEditor
+    ? appointments.find((appointment) => {
+        if (appointment.id === serviceEditor.id || appointment.staffId !== serviceEditor.staffId) return false;
+        if (!["pending", "confirmed"].includes(appointment.status)) return false;
+        const editedStart = new Date(serviceEditor.startAt).getTime();
+        const editedEnd = editedStart + editorTotalDuration * 60_000;
+        const otherStart = new Date(appointment.startAt).getTime();
+        const otherEnd = new Date(appointment.endAt).getTime();
+        return editedStart < otherEnd && editedEnd > otherStart;
+      })
+    : undefined;
+
+  function openServiceEditor(appointment: Appointment) {
+    setServiceEditor(appointment);
+    setSelectedExtraServiceIds((appointment.additionalServices ?? []).map((item) => item.serviceId));
+    setServiceSearch("");
+  }
+
+  function toggleExtraService(serviceId: string) {
+    setSelectedExtraServiceIds((current) =>
+      current.includes(serviceId)
+        ? current.filter((item) => item !== serviceId)
+        : [...current, serviceId]
+    );
+  }
+
+  async function handleSaveAdditionalServices() {
+    if (!businessId || !serviceEditor) return;
+    setSavingServices(true);
+    try {
+      await updateAppointmentAdditionalServices(businessId, serviceEditor, selectedExtraServices);
+      const refreshed = await listAppointments(businessId);
+      setAppointments(refreshed);
+      setServiceEditor(null);
+      if (editorScheduleConflict) {
+        toast.warning(`Hizmetler kaydedildi; yeni bitiş saati ${editorScheduleConflict.customerName} randevusuyla çakışıyor.`);
+      } else {
+        toast.success(selectedExtraServices.length > 0
+          ? `${selectedExtraServices.length} ek hizmet randevuya işlendi.`
+          : "Ek hizmetler randevudan kaldırıldı.");
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Ek hizmetler güncellenemedi.");
+    } finally {
+      setSavingServices(false);
+    }
+  }
+
   function exportAppointments() {
     const rows = [
       ["Tarih", "Saat", "Müşteri", "Telefon", "E-posta", "Hizmet", "Çalışan", "Durum", "Ödeme", "Tutar"],
-      ...filtered.map((item) => [formatDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", item.serviceName ?? "", item.staffName ?? "", STATUS_CONFIG[item.status].label, item.paymentStatus, String(item.servicePrice ?? 0)]),
+        ...filtered.map((item) => [formatDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", [item.serviceName, ...(item.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + "), item.staffName ?? "", STATUS_CONFIG[item.status].label, item.paymentStatus, String(item.servicePrice ?? 0)]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -344,11 +453,16 @@ export default function AppointmentsPage() {
                         <Clock3 size={13}/> {formatTime(appointment.startAt)}
                         {appointment.endAt && ` - ${formatTime(appointment.endAt)}`}
                       </span>
-                      {appointment.serviceName && (
-                        <span className="flex items-center gap-1">
-                          <BriefcaseBusiness size={13}/> {appointment.serviceName}
-                        </span>
-                      )}
+                        {appointment.serviceName && (
+                          <span className="flex items-center gap-1">
+                            <BriefcaseBusiness size={13}/> {appointment.serviceName}
+                            {(appointment.additionalServices?.length ?? 0) > 0 && (
+                              <b className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] text-emerald-700">
+                                +{appointment.additionalServices?.length} ek
+                              </b>
+                            )}
+                          </span>
+                        )}
                     </div>
                   </div>
 
@@ -431,6 +545,26 @@ export default function AppointmentsPage() {
                       )}
                     </div>
 
+                    {(appointment.additionalServices?.length ?? 0) > 0 && (
+                      <div className="mt-3 rounded-2xl border border-emerald-500/15 bg-emerald-500/[.055] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[.12em] text-emerald-700">
+                            <PackagePlus size={14}/> Eklenen hizmetler
+                          </p>
+                          <span className="text-[10px] font-bold text-[var(--text-3)]">
+                            {appointment.additionalServices?.length} hizmet
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {appointment.additionalServices?.map((service) => (
+                            <span key={service.serviceId} className="rounded-xl border border-emerald-500/15 bg-[var(--surface-1)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-2)]">
+                              {service.name} · {service.durationMinutes} dk · {service.price.toLocaleString("tr-TR")} ₺
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Notes */}
                     {appointment.notes && (
                       <div className="mt-3 rounded-xl bg-[var(--surface-2)] p-3">
@@ -441,6 +575,24 @@ export default function AppointmentsPage() {
 
                     {/* Action Buttons */}
                     <div className="mt-4 flex flex-wrap gap-2">
+                      {canManageStatus && !["cancelled", "no_show"].includes(appointment.status) && appointment.paymentStatus !== "paid" && (
+                        <Link
+                          href={`/dashboard/operasyon?appointment=${encodeURIComponent(appointment.id)}`}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800 hover:shadow-md"
+                        >
+                          <ReceiptText size={15}/> Adisyon aç
+                        </Link>
+                      )}
+                      {canManageStatus && !["cancelled", "no_show"].includes(appointment.status) && (
+                        <button
+                          type="button"
+                          onClick={() => openServiceEditor(appointment)}
+                          disabled={isUpdating}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-xs font-semibold text-violet-700 transition-all duration-200 hover:bg-violet-100 hover:shadow-md active:scale-95 disabled:opacity-50"
+                        >
+                          <Plus size={15}/> Hizmet Ekle / Düzenle
+                        </button>
+                      )}
                       {canManageStatus && appointment.status === "pending" && (
                         <ActionButton
                           onClick={() => handleStatusChange(appointment.id, "confirmed")}
@@ -491,6 +643,76 @@ export default function AppointmentsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {serviceEditor && (
+        <div
+          className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#07160f]/75 px-3 py-5 backdrop-blur-lg sm:px-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingServices) setServiceEditor(null);
+          }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="extra-services-title" className="my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/60 bg-[var(--surface-1)] shadow-[0_35px_100px_rgba(3,22,14,.42)]">
+            <header className="relative shrink-0 overflow-hidden bg-[linear-gradient(125deg,#101a31_0%,#173d4c_55%,#117254_100%)] px-5 py-5 text-white sm:px-7 sm:py-6">
+              <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-cyan-300/15 blur-2xl"/>
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/15 bg-white/10 text-cyan-200"><PackagePlus size={22}/></span>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-[.18em] text-cyan-200">RANDEVU HİZMETLERİ</p>
+                    <h2 id="extra-services-title" className="mt-1 text-xl font-extrabold sm:text-2xl">Ek hizmet ekle</h2>
+                    <p className="mt-1 text-xs leading-5 text-white/65">
+                      {serviceEditor.customerName} · Ana hizmet: <b className="text-white/90">{serviceEditor.serviceName ?? "Hizmet"}</b>
+                    </p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setServiceEditor(null)} disabled={savingServices} aria-label="Ek hizmet penceresini kapat" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/10 transition hover:bg-white hover:text-[#102c27] disabled:opacity-50"><X size={18}/></button>
+              </div>
+              <label className="relative mt-5 flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5">
+                <Search size={15} className="text-cyan-200"/>
+                <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Ek hizmet ara…" className="w-full bg-transparent text-xs text-white outline-none placeholder:text-white/45"/>
+                <span className="whitespace-nowrap rounded-full bg-white/10 px-2 py-1 text-[9px] font-bold">{selectedExtraServices.length} seçili</span>
+              </label>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-7 sm:py-6">
+              {visibleExtraServiceOptions.length === 0 ? (
+                <div className="grid min-h-48 place-items-center text-center">
+                  <div><PackagePlus className="mx-auto text-[var(--text-3)]" size={30}/><h3 className="mt-3 text-sm font-bold text-[var(--text-1)]">Uygun ek hizmet bulunamadı</h3><p className="mt-1 text-xs text-[var(--text-3)]">Aktif ve fiyatı tanımlanmış hizmetler burada görünür.</p></div>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {visibleExtraServiceOptions.map((service) => {
+                    const selected = selectedExtraServiceIds.includes(service.serviceId);
+                    return (
+                      <button key={service.serviceId} type="button" aria-pressed={selected} onClick={() => toggleExtraService(service.serviceId)} className={`group flex items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-200 ${selected ? "border-emerald-500 bg-emerald-500/[.07] shadow-md shadow-emerald-900/5" : "border-[var(--border)] bg-[var(--surface-1)] hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md"}`}>
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${selected ? "bg-emerald-600 text-white" : "bg-[var(--surface-2)] text-[var(--text-3)]"}`}>{selected ? <Check size={16} strokeWidth={3}/> : <Plus size={16}/>}</span>
+                        <span className="min-w-0 flex-1"><b className="block truncate text-xs text-[var(--text-1)]">{service.name}</b><small className="mt-0.5 block text-[10px] text-[var(--text-3)]">{service.durationMinutes} dk · {service.price.toLocaleString("tr-TR")} ₺</small></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <footer className="shrink-0 border-t border-[var(--border)] bg-[var(--surface-2)] px-4 py-4 sm:px-7">
+              {editorScheduleConflict && (
+                <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-4 text-amber-800">
+                  Yeni bitiş saati {editorScheduleConflict.customerName} müşterisinin {formatTime(editorScheduleConflict.startAt)} randevusuyla çakışıyor. Hizmeti yine de kaydedebilirsiniz; programı kontrol edin.
+                </div>
+              )}
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl bg-[var(--surface-1)] p-2.5"><small className="block text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Ek hizmet</small><b className="mt-0.5 block text-sm text-[var(--text-1)]">{selectedExtraServices.length}</b></div>
+                <div className="rounded-xl bg-[var(--surface-1)] p-2.5"><small className="block text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Toplam süre</small><b className="mt-0.5 block text-sm text-[var(--text-1)]">{editorTotalDuration} dk</b></div>
+                <div className="rounded-xl bg-[var(--surface-1)] p-2.5"><small className="block text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Toplam tutar</small><b className="mt-0.5 block text-sm text-emerald-700">{editorTotalPrice.toLocaleString("tr-TR")} ₺</b></div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setServiceEditor(null)} disabled={savingServices} className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-2.5 text-xs font-bold text-[var(--text-2)] disabled:opacity-50">Vazgeç</button>
+                <button type="button" onClick={handleSaveAdditionalServices} disabled={savingServices} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-900/15 transition hover:bg-emerald-600 disabled:opacity-50">{savingServices ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white"/> : <Check size={15}/>} {savingServices ? "Kaydediliyor…" : "Hizmetleri Kaydet"}</button>
+              </div>
+            </footer>
+          </section>
         </div>
       )}
 

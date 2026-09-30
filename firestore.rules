@@ -403,14 +403,17 @@ service cloud.firestore {
         allow update: if isPlatformAdmin() ||
           (canManage(businessId) &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["status", "paymentStatus", "updatedAt"]) &&
+             .hasOnly(["status", "paymentStatus", "primaryServicePrice",
+               "primaryServiceDurationMinutes", "additionalServices", "servicePrice",
+               "serviceDurationMinutes", "endAt", "updatedAt"]) &&
            request.resource.data.status in ["pending", "confirmed", "completed", "cancelled", "no_show"] &&
            (request.resource.data.status == resource.data.status ||
              resource.data.status in ["pending", "confirmed"])) ||
           (staffPermission(businessId, "manageAppointments") &&
            resource.data.staffId == getMember(businessId).data.staffId &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["status", "updatedAt"]) &&
+             .hasOnly(["status", "primaryServicePrice", "primaryServiceDurationMinutes",
+               "additionalServices", "servicePrice", "serviceDurationMinutes", "endAt", "updatedAt"]) &&
            request.resource.data.status in ["pending", "confirmed", "completed", "cancelled", "no_show"] &&
            (request.resource.data.status == resource.data.status ||
              resource.data.status in ["pending", "confirmed"]));
@@ -469,6 +472,51 @@ service cloud.firestore {
       match /automationRules/{ruleId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();
         allow create, update, delete: if canManage(businessId) || isPlatformAdmin();
+      }
+
+      // Products and package templates are business-managed catalog data.
+      match /products/{productId} {
+        allow read: if canOperate(businessId) || isPlatformAdmin();
+        allow create, update: if canManage(businessId) || staffPermission(businessId, "manageCatalog") || isPlatformAdmin();
+        allow delete: if canManage(businessId) || staffPermission(businessId, "manageCatalog") || isPlatformAdmin();
+      }
+
+      match /servicePackages/{packageId} {
+        allow read: if canOperate(businessId) || isPlatformAdmin();
+        allow create, update, delete: if canManage(businessId) || staffPermission(businessId, "managePackages") || isPlatformAdmin();
+      }
+
+      // Package sales, receipts and loyalty balances are finalized by callable
+      // Cloud Functions so stock, money and point movements stay atomic.
+      match /customerPackages/{customerPackageId} {
+        allow read: if canManage(businessId) || staffPermission(businessId, "managePackages") || isPlatformAdmin();
+        allow write: if false;
+        match /usageHistory/{usageId} {
+          allow read: if canManage(businessId) || staffPermission(businessId, "managePackages") || isPlatformAdmin();
+          allow write: if false;
+        }
+      }
+
+      match /checkoutReceipts/{receiptId} {
+        allow read: if canManage(businessId) || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      match /loyaltyAccounts/{accountId} {
+        allow read: if canManage(businessId) || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      match /financeTransactions/{transactionId} {
+        allow read: if canManage(businessId) || staffPermission(businessId, "manageFinance") || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
+        allow create: if (canManage(businessId) || staffPermission(businessId, "manageFinance") || isPlatformAdmin()) &&
+          request.resource.data.type == "expense" &&
+          request.resource.data.amount is number && request.resource.data.amount >= 0 &&
+          request.resource.data.keys().hasOnly([
+            "type", "amount", "category", "description", "paymentMethod",
+            "occurredAt", "createdAt", "updatedAt"
+          ]);
+        allow update, delete: if isPlatformAdmin();
       }
 
       // Audit Logs (business-level, server-write only)

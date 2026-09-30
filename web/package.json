@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:booking:emulator": "cd .. && npm --prefix functions run build && firebase --project demo-availability-phase8 emulators:exec --only auth,firestore,functions \"node --test web/features/platform/availability-functions.test.mjs\""
   },
   "dependencies": {
     "clsx": "^2.1.1",

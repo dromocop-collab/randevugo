@@ -11,6 +11,13 @@ export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
 export type AppointmentSource = "online" | "dashboard" | "phone" | "walk_in";
 
+export interface AppointmentServiceLine {
+  serviceId: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+}
+
 export interface Appointment extends EntityBase {
   businessId: string;
   staffId: string;
@@ -27,9 +34,19 @@ export interface Appointment extends EntityBase {
   publicToken?: string;
   serviceName?: string;
   staffName?: string;
+  /** Original booked service snapshots, retained while extra services change totals. */
+  primaryServicePrice?: number;
+  primaryServiceDurationMinutes?: number;
+  /** Services performed in addition to the originally booked service. */
+  additionalServices?: AppointmentServiceLine[];
   servicePrice?: number;
   serviceDurationMinutes?: number;
   source?: AppointmentSource;
+  checkoutReceiptId?: string;
+  paidAmount?: number;
+  remainingAmount?: number;
+  paymentMethod?: "cash" | "card" | "transfer" | "other";
+  checkedOutAt?: string;
 }
 
 export interface AppointmentCreateInput {

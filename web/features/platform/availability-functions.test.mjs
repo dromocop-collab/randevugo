@@ -53,14 +53,25 @@ test("alerts, matching, last-minute projection, privacy and booking race", async
     status: "active", isPublished: true, isSuspended: false, availabilityAlertsEnabled: true,
     lastMinuteSlotsEnabled: true, timeZone: "Europe/Istanbul", minimumBookingNoticeMinutes: 30,
     slotIntervalMinutes: 15, maximumBookingDaysAhead: 30 });
+  await db.doc(`subscriptions/${businessId}`).set({ businessId, userId: manager.uid, status: "active",
+    accessMode: "lifetime", isLifetime: true });
   await db.doc(`businesses/${businessId}/services/${serviceId}`).set({ name: "Saç Kesimi", isActive: true,
     isBookableOnline: true, durationMinutes: 30, category: "hair", assignableStaffIds: [staffId] });
+  await db.doc(`businesses/${businessId}/services/offline-service`).set({ name: "Gizli Hizmet", isActive: true,
+    isBookableOnline: false, durationMinutes: 30, category: "hair", assignableStaffIds: [staffId] });
   await db.doc(`businesses/${businessId}/staff/${staffId}`).set({ fullName: "Ayşe", isActive: true,
     serviceIds: [serviceId], specialtyCategoryIds: ["hair"], workingHours: [] });
   await db.doc(`businesses/${businessId}/members/${manager.uid}`).set({ uid: manager.uid, role: "manager" });
   await Promise.all(Array.from({ length: 7 }, (_, day) =>
     db.doc(`businesses/${businessId}/workingHours/${day}`).set({ day, isOpen: true,
       start: "00:00", end: "23:59" })));
+  const dateAvailability = await customer.call("getAvailableDates", {
+    businessId, serviceId, staffId, startDate: dateKey, endDate: dateKey,
+  });
+  assert.ok(dateAvailability.data.dates[0].slotCount > 0, "calendar must expose real slot availability");
+  await assert.rejects(customer.call("getAvailableSlots", {
+    businessId, serviceId: "offline-service", staffId, date: dateKey,
+  }), "offline services must never be publicly bookable");
   const blockedRef = db.doc(`businesses/${businessId}/appointments/blocked`);
   await blockedRef.set({ businessId, serviceId, staffId, status: "confirmed", customerId: other.uid,
     startAt: Timestamp.fromMillis(at(15)), endAt: Timestamp.fromMillis(at(15) + 30 * 60_000) });
@@ -171,6 +182,10 @@ test("alerts, matching, last-minute projection, privacy and booking race", async
   const winnerIndex = race[0].status === "fulfilled" ? 0 : 1;
   const winner = winnerIndex === 0 ? customer : other;
   const appointmentId = race[winnerIndex].value.data.appointmentId;
+  const publicToken = race[winnerIndex].value.data.publicToken;
+  assert.equal(typeof publicToken, "string");
+  assert.ok(publicToken.length > 20);
+  assert.equal((await db.doc(`appointmentTokens/${publicToken}`).get()).data().appointmentId, appointmentId);
   await eventually(async () => (await db.doc(`availabilityAlerts/${claimAlerts[winnerIndex]}`).get()).data()?.status === "claimed");
   assert.notEqual((await db.doc(`availabilityAlerts/${claimAlerts[1 - winnerIndex]}`).get()).data()?.status, "claimed");
   const bookings = await db.collection(`businesses/${businessId}/appointments`)

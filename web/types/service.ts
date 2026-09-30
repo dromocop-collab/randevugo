@@ -14,4 +14,7 @@ export interface Service extends EntityBase {
   assignableStaffIds: string[];
   imageUrl?: string;
   sortOrder: number;
+  templateSource?: string;
+  templateKey?: string;
+  templateDraft?: boolean;
 }

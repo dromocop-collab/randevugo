@@ -14,7 +14,7 @@ import { getFunctions, httpsCallable as call } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { mapDoc } from "@/lib/firebase/mapper";
-import type { Appointment, AppointmentCreateInput, AppointmentStatus } from "@/types/appointments";
+import type { Appointment, AppointmentCreateInput, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
 
 async function staffScope(businessId: string): Promise<string | null> {
   const user = getAuth(getFirebaseApp()).currentUser;
@@ -73,6 +73,49 @@ export async function updateAppointmentStatus(
   });
 }
 
+/**
+ * Replaces the extra services attached to an appointment while preserving the
+ * original booked service as the primary line. Total price, duration and end
+ * time are stored as snapshots so reporting and customer views stay in sync.
+ */
+export async function updateAppointmentAdditionalServices(
+  businessId: string,
+  appointment: Appointment,
+  additionalServices: AppointmentServiceLine[]
+): Promise<void> {
+  const previousExtras = appointment.additionalServices ?? [];
+  const previousExtraPrice = previousExtras.reduce((sum, item) => sum + Number(item.price || 0), 0);
+  const previousExtraDuration = previousExtras.reduce((sum, item) => sum + Number(item.durationMinutes || 0), 0);
+  const primaryServicePrice = Math.max(
+    0,
+    appointment.primaryServicePrice ?? Number(appointment.servicePrice ?? 0) - previousExtraPrice
+  );
+  const primaryServiceDurationMinutes = Math.max(
+    0,
+    appointment.primaryServiceDurationMinutes ?? Number(appointment.serviceDurationMinutes ?? 0) - previousExtraDuration
+  );
+  const sanitized = additionalServices.map((item) => ({
+    serviceId: String(item.serviceId),
+    name: String(item.name).trim(),
+    price: Math.max(0, Number(item.price) || 0),
+    durationMinutes: Math.max(1, Math.round(Number(item.durationMinutes) || 1)),
+  }));
+  const servicePrice = primaryServicePrice + sanitized.reduce((sum, item) => sum + item.price, 0);
+  const serviceDurationMinutes = primaryServiceDurationMinutes + sanitized.reduce((sum, item) => sum + item.durationMinutes, 0);
+  const startAtMillis = new Date(appointment.startAt).getTime();
+  if (!Number.isFinite(startAtMillis)) throw new Error("Randevu başlangıç zamanı geçersiz.");
+
+  await updateDoc(doc(getDb(), "businesses", businessId, "appointments", appointment.id), {
+    primaryServicePrice,
+    primaryServiceDurationMinutes,
+    additionalServices: sanitized,
+    servicePrice,
+    serviceDurationMinutes,
+    endAt: Timestamp.fromMillis(startAtMillis + serviceDurationMinutes * 60_000),
+    updatedAt: Timestamp.now(),
+  });
+}
+
 export async function rescheduleAppointment(
   businessId: string,
   appointmentId: string,
@@ -88,7 +131,12 @@ export async function rescheduleAppointment(
   });
 }
 
-export async function createAppointment(input: AppointmentCreateInput): Promise<string> {
+export interface CreatedAppointment {
+  appointmentId: string;
+  publicToken: string;
+}
+
+export async function createAppointment(input: AppointmentCreateInput): Promise<CreatedAppointment> {
   const functions = getFunctions(getFirebaseApp(), "europe-west1");
   const callable = call(functions, "createAppointment");
 
@@ -103,7 +151,11 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     startAtMillis: input.startAtMillis,
   });
 
-  return String((result.data as { appointmentId?: string }).appointmentId ?? "");
+  const data = result.data as { appointmentId?: unknown; publicToken?: unknown };
+  return {
+    appointmentId: String(data.appointmentId ?? ""),
+    publicToken: String(data.publicToken ?? ""),
+  };
 }
 
 export interface AvailableAppointmentSlot {
@@ -132,6 +184,32 @@ export async function listAvailableSlots(input: {
           label: row.label,
           ...(typeof row.staffId === "string" ? { staffId: row.staffId } : {}),
         }]
+      : [];
+  });
+}
+
+export interface AvailableAppointmentDate {
+  date: string;
+  slotCount: number;
+}
+
+export async function listAvailableDates(input: {
+  businessId: string;
+  serviceId: string;
+  staffId?: string;
+  startDate: string;
+  endDate: string;
+}): Promise<AvailableAppointmentDate[]> {
+  const functions = getFunctions(getFirebaseApp(), "europe-west1");
+  const callable = call(functions, "getAvailableDates");
+  const result = await callable(input);
+  const dates = (result.data as { dates?: unknown }).dates;
+  if (!Array.isArray(dates)) return [];
+  return dates.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { date?: unknown; slotCount?: unknown };
+    return typeof row.date === "string" && typeof row.slotCount === "number"
+      ? [{ date: row.date, slotCount: Math.max(0, Math.round(row.slotCount)) }]
       : [];
   });
 }

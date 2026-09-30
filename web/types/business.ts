@@ -118,5 +118,9 @@ export interface Business extends EntityBase {
     manageOwnCalendar?: boolean;
     viewCustomers?: boolean;
     manageAppointments?: boolean;
+    manageCheckout?: boolean;
+    manageCatalog?: boolean;
+    managePackages?: boolean;
+    manageFinance?: boolean;
   };
 }

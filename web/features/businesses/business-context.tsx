@@ -16,7 +16,7 @@ interface BusinessContextValue {
   access: {
     role: "owner" | "admin" | "manager" | "staff";
     staffId?: string;
-    permissions: { manageOwnCalendar: boolean; viewCustomers: boolean; manageAppointments: boolean };
+    permissions: { manageOwnCalendar: boolean; viewCustomers: boolean; manageAppointments: boolean; manageCheckout: boolean; manageCatalog: boolean; managePackages: boolean; manageFinance: boolean };
   } | null;
 }
 
@@ -117,6 +117,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
               manageOwnCalendar: active.currentPermissions?.manageOwnCalendar ?? true,
               viewCustomers: active.currentPermissions?.viewCustomers ?? false,
               manageAppointments: active.currentPermissions?.manageAppointments ?? false,
+              manageCheckout: active.currentPermissions?.manageCheckout ?? false,
+              manageCatalog: active.currentPermissions?.manageCatalog ?? false,
+              managePackages: active.currentPermissions?.managePackages ?? false,
+              manageFinance: active.currentPermissions?.manageFinance ?? false,
             },
           };
         })(),

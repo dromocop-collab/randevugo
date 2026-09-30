@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/features/businesses/business-context";
-import { BarChart3, Bot, CalendarDays, Check, Clipboard, Command, LayoutPanelTop, Palette, Plus, Rocket, Scissors, Search, Settings2, UsersRound, WandSparkles, X } from "lucide-react";
+import { BarChart3, Bot, CalendarDays, Check, Clipboard, Command, LayoutPanelTop, Palette, Plus, ReceiptText, Rocket, Scissors, Search, Settings2, UsersRound, WandSparkles, X } from "lucide-react";
 
 type PaletteCommand = {
   id: string;
@@ -40,6 +40,7 @@ export function DashboardCommandCenter() {
         toast.success("Mağaza linki kopyalandı.");
       } },
       { id: "appointments", label: "Randevular", description: "Tüm kayıtları ve durumları yönet", group: "Sayfalar", icon: CalendarDays, keywords: "randevular müşteri rezervasyon", run: go("/dashboard/randevular") },
+      { id: "operations", label: "Kasa ve operasyon", description: "Adisyon, stok, paket, finans ve sadakati yönet", group: "Sayfalar", icon: ReceiptText, keywords: "kasa adisyon stok ürün paket finans gelir gider sadakat", run: go("/dashboard/operasyon") },
       { id: "customers", label: "Müşteriler", description: "Müşteri 360 profillerini görüntüle", group: "Sayfalar", icon: UsersRound, keywords: "müşteri crm kişi", run: go("/dashboard/musteriler") },
       { id: "services", label: "Hizmetler", description: "Kategori, süre ve fiyatları düzenle", group: "Sayfalar", icon: Scissors, keywords: "hizmet kategori fiyat süre", run: go("/dashboard/hizmetler") },
       { id: "growth", label: "Büyüme merkezi", description: "Gelir ve doluluk fırsatlarını incele", group: "Sayfalar", icon: Rocket, keywords: "büyüme gelir fırsat", run: go("/dashboard/buyume") },
@@ -52,7 +53,7 @@ export function DashboardCommandCenter() {
 
   const filtered = (() => {
     const availableCommands = access?.role === "staff"
-      ? commands.filter((item) => ["calendar", "appointments", ...(access.permissions.viewCustomers ? ["customers"] : [])].includes(item.id))
+      ? commands.filter((item) => ["calendar", "appointments", ...(access.permissions.viewCustomers ? ["customers"] : []), ...((access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance) ? ["operations"] : [])].includes(item.id))
       : commands;
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
     const matches = normalized ? availableCommands.filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLocaleLowerCase("tr-TR").includes(normalized)) : availableCommands;

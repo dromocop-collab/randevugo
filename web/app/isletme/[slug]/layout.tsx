@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getBusinessBySlug, listBusinessWorkingHours } from "@/features/businesses/business-repository";
-import { listServices } from "@/features/services/service-repository";
+import { listBookableServices } from "@/features/services/service-repository";
 
 const SITE_URL = "https://seninrandevun.com";
 
@@ -63,7 +63,7 @@ export default async function BusinessProfileLayout({ children, params }: { chil
   // Fetch working hours and services for rich schema
   const [workingHours, services] = await Promise.all([
     listBusinessWorkingHours(business.id).catch(() => []),
-    listServices(business.id, true).catch(() => []),
+    listBookableServices(business.id).catch(() => []),
   ]);
 
   // Build openingHoursSpecification

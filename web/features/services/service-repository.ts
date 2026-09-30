@@ -21,6 +21,12 @@ export async function listServices(businessId: string, activeOnly = false): Prom
   return snap.docs.map((item) => mapDoc<Service>(item));
 }
 
+/** Public booking surfaces must never expose an active-but-offline service. */
+export async function listBookableServices(businessId: string): Promise<Service[]> {
+  const services = await listServices(businessId, true);
+  return services.filter((service) => service.isBookableOnline === true);
+}
+
 export async function createService(
   businessId: string,
   input: Omit<Service, "id" | "createdAt" | "updatedAt">

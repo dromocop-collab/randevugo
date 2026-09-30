@@ -30,6 +30,10 @@ export interface Staff extends EntityBase {
     manageOwnCalendar: boolean;
     viewCustomers: boolean;
     manageAppointments: boolean;
+    manageCheckout: boolean;
+    manageCatalog: boolean;
+    managePackages: boolean;
+    manageFinance: boolean;
   };
   archivedAt?: string;
   linkedUid?: string;
