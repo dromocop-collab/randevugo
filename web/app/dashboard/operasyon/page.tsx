@@ -93,10 +93,10 @@ export default function OperationsPage() {
   if (!activeTab) return <section className="rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-950"><h1 className="text-xl font-black">Operasyon merkezi yetkisi gerekli</h1><p className="mt-2 text-sm">İşletme yöneticiniz size kasa, stok, paket veya finans yetkisi verebilir.</p></section>;
 
   return <div className="space-y-5 pb-12">
-    <section className="relative overflow-hidden rounded-[32px] bg-[linear-gradient(125deg,#071d18,#07533c_58%,#15966a)] p-6 text-white shadow-2xl sm:p-8">
+    <section className="dashboard-theme-hero relative overflow-hidden rounded-[32px] p-6 text-white shadow-2xl sm:p-8">
       <div className="absolute -right-20 -top-24 size-72 rounded-full border border-lime-100/20 bg-white/5"/>
       <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-        <div><span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-black tracking-[.18em]"><Sparkles size={13}/> CANLI İŞLETME OPERASYONU</span><h1 className="mt-4 text-3xl font-black sm:text-5xl">Hizmetten tahsilata<br/>tek bağlı akış.</h1><p className="mt-3 max-w-2xl text-sm text-emerald-50/75">Adisyonu kapatın; stok, gelir, paket ve sadakat kayıtları aynı anda güncellensin.</p></div>
+        <div><span className="dashboard-theme-hero__badge inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-black tracking-[.18em]"><Sparkles size={13}/> CANLI İŞLETME OPERASYONU</span><h1 className="mt-4 text-3xl font-black sm:text-5xl">Hizmetten tahsilata<br/>tek bağlı akış.</h1><p className="dashboard-theme-hero__description mt-3 max-w-2xl text-sm">Adisyonu kapatın; stok, gelir, paket ve sadakat kayıtları aynı anda güncellensin.</p></div>
         <div className="grid grid-cols-3 gap-2"><HeroMetric label="Açık adisyon" value={String(unpaidAppointments.length)}/><HeroMetric label="Kritik stok" value={String(products.filter((item) => item.stock <= item.criticalStock).length)}/><HeroMetric label="Net kasa" value={money(income-expenses)}/></div>
       </div>
     </section>

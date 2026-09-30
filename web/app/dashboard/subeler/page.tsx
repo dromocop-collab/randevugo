@@ -95,17 +95,17 @@ export default function BranchesPage() {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(125deg,#062e24,#075f46_58%,#0a7c58)] p-6 text-white shadow-2xl shadow-emerald-950/15 sm:p-8">
+      <section className="dashboard-theme-hero relative overflow-hidden rounded-[30px] p-6 text-white shadow-2xl sm:p-8">
         <div className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-white/10 bg-lime-300/10" />
         <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
-            <p className="flex items-center gap-2 text-[11px] font-bold tracking-[.22em] text-lime-200"><Network size={15}/> FİRMA VE ŞUBE AĞI</p>
+            <p className="dashboard-theme-hero__kicker flex items-center gap-2 text-[11px] font-bold tracking-[.22em]"><Network size={15}/> FİRMA VE ŞUBE AĞI</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{activeBusiness?.organizationName ?? headquarters?.name ?? "Şube yönetimi"}</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/75">Her şubenin randevusu, ekibi, hizmeti ve çalışma saati ayrıdır. Firma sahipliği, paket ve Süper Admin onayı merkezden izlenir.</p>
+            <p className="dashboard-theme-hero__description mt-3 max-w-xl text-sm leading-6">Her şubenin randevusu, ekibi, hizmeti ve çalışma saati ayrıdır. Firma sahipliği, paket ve Süper Admin onayı merkezden izlenir.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur"><small className="block text-[10px] font-bold tracking-widest text-emerald-100/70">ŞUBE KAPASİTESİ</small><b className="mt-1 block text-xl">{branches.length} / {MAX_BRANCHES}</b></div>
-            {canCreate && <Button type="button" onClick={() => setShowForm(true)} className="border-0 bg-lime-300 text-emerald-950 shadow-lime-950/20 hover:bg-lime-200" iconLeft={<CirclePlus size={18}/>}>Yeni şube ekle</Button>}
+            <div className="dashboard-theme-hero__stat rounded-2xl px-4 py-3 backdrop-blur"><small className="block text-[10px] font-bold tracking-widest">ŞUBE KAPASİTESİ</small><b className="mt-1 block text-xl">{branches.length} / {MAX_BRANCHES}</b></div>
+            {canCreate && <Button type="button" onClick={() => setShowForm(true)} className="dashboard-theme-hero__primary border-0" iconLeft={<CirclePlus size={18}/>}>Yeni şube ekle</Button>}
           </div>
         </div>
       </section>

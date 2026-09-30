@@ -32,9 +32,9 @@ export default function SubscriptionPage() {
   if (loading) return <div className="grid min-h-72 place-items-center"><LoaderCircle className="animate-spin text-[var(--accent)]"/></div>;
 
   return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(130deg,#071f15,#0b6b45)] p-7 text-white shadow-xl sm:p-9">
-      <div className="absolute -right-14 -top-20 h-60 w-60 rounded-full bg-[#c9f45b]/10"/>
-      <div className="relative"><span className="text-[10px] font-black tracking-[.18em] text-[#c9f45b]">ABONELİK MERKEZİ</span><h1 className="mt-3 text-4xl font-semibold tracking-tight">Randevu akışınız kesintisiz devam etsin.</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">İlk 90 gün ücretsizdir. Süre dolduğunda mevcut verileriniz korunur ancak yeni randevu kabulü ödeme tamamlanana kadar durur.</p></div>
+    <section className="dashboard-theme-hero relative overflow-hidden rounded-[30px] p-7 text-white shadow-xl sm:p-9">
+      <div className="dashboard-theme-hero__orb absolute -right-14 -top-20 h-60 w-60 rounded-full"/>
+      <div className="relative"><span className="dashboard-theme-hero__kicker text-[10px] font-black tracking-[.18em]">ABONELİK MERKEZİ</span><h1 className="mt-3 text-4xl font-semibold tracking-tight">Randevu akışınız kesintisiz devam etsin.</h1><p className="dashboard-theme-hero__description mt-3 max-w-2xl text-sm leading-7">İlk 90 gün ücretsizdir. Süre dolduğunda mevcut verileriniz korunur ancak yeni randevu kabulü ödeme tamamlanana kadar durur.</p></div>
     </section>
 
     <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">

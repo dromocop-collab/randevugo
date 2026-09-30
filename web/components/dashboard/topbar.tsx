@@ -21,6 +21,10 @@ const dashboardSkins = [
   { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#ea580c", "#fde047"] },
   { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#e11d48", "#fda4af"] },
   { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#334155", "#38bdf8"] },
+  { id: "champagne", name: "Şampanya", note: "Sıcak ve sofistike", colors: ["#a16207", "#fde68a"] },
+  { id: "forest", name: "Orman", note: "Doğal ve prestijli", colors: ["#166534", "#86efac"] },
+  { id: "ruby", name: "Yakut", note: "Güçlü ve seçkin", colors: ["#be123c", "#fbbf24"] },
+  { id: "indigo", name: "İndigo", note: "Teknolojik ve sakin", colors: ["#4338ca", "#a5b4fc"] },
 ] as const;
 
 type DashboardSkin = (typeof dashboardSkins)[number]["id"];
