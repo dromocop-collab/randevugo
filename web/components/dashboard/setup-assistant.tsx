@@ -54,10 +54,10 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
         type="button"
         onClick={reopen}
         className="setup-assistant-trigger fixed bottom-24 right-4 z-[70] inline-flex min-h-14 items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-left shadow-2xl transition hover:-translate-y-0.5 lg:bottom-6 lg:right-6"
-        aria-label={`Rande ile kurulum rehberini aç. ${completed}/${steps.length} adım tamamlandı`}
+        aria-label={`Rovi ile kurulum rehberini aç. ${completed}/${steps.length} adım tamamlandı`}
       >
         <span className="setup-assistant-trigger__mascot" aria-hidden="true"><Image src="/mascots/randevu-rehberi.png" alt="" width={54} height={50}/></span>
-        <span className="leading-tight"><b className="block text-xs">Rande yardım etsin</b><small className="text-[9px] font-semibold opacity-70">Sıradaki: {nextStep.title}</small></span>
+        <span className="leading-tight"><b className="block text-xs">Rovi yardım etsin</b><small className="text-[9px] font-semibold opacity-70">Sıradaki: {nextStep.title}</small></span>
         <span className="setup-assistant-trigger__progress rounded-full px-2 py-1 text-[10px] font-black">{completed}/{steps.length}</span>
       </button>
     );
@@ -66,7 +66,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
   return (
     <aside
       className="setup-assistant fixed bottom-3 right-3 z-[80] w-[calc(100vw-1.5rem)] max-w-[500px] overflow-hidden rounded-[30px] lg:bottom-6 lg:right-6"
-      aria-label="Rande kurulum koçu"
+      aria-label="Rovi kurulum koçu"
     >
       <div className="setup-assistant__header text-white">
         <button type="button" onClick={dismiss} className="setup-assistant__close grid h-9 w-9 place-items-center rounded-full text-white transition" aria-label="Kurulum rehberini kapat"><X size={17}/></button>
@@ -76,7 +76,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
             <Image src="/mascots/randevu-rehberi.png" alt="" width={154} height={141} priority/>
           </div>
           <div className="setup-assistant__bubble">
-            <span className="setup-assistant__kicker inline-flex items-center gap-1.5 text-[9px] font-black tracking-[.15em]"><Sparkles size={12}/> RANDE · KURULUM KOÇUN</span>
+            <span className="setup-assistant__kicker inline-flex items-center gap-1.5 text-[9px] font-black tracking-[.15em]"><Sparkles size={12}/> ROVİ · KURULUM KOÇUN</span>
             <h2 className="mt-1.5 text-lg font-black">Haydi, mağazanı yayına hazırlayalım!</h2>
             <p className="mt-1 text-[11px] leading-[1.55]">Şimdi <b>{nextStep.title.toLocaleLowerCase("tr-TR")}</b>. Ben adım adım yanında olacağım.</p>
           </div>
@@ -112,7 +112,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
           );
         })}
       </ol>
-      <button type="button" onClick={dismiss} className="setup-assistant__dismiss w-full border-t px-4 py-3 text-[11px] font-bold">Rande’yi şimdilik dinlendir</button>
+      <button type="button" onClick={dismiss} className="setup-assistant__dismiss w-full border-t px-4 py-3 text-[11px] font-bold">Rovi’yi şimdilik dinlendir</button>
     </aside>
   );
 }

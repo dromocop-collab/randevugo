@@ -20,6 +20,7 @@ import type {
   LoyaltyAccount,
   PaymentMethod,
   Product,
+  RewardProgramSettings,
   ServicePackage,
 } from "@/types/operations";
 
@@ -34,6 +35,21 @@ export const listCustomerPackages = (businessId: string) => listCollection<Custo
 export const listFinanceTransactions = (businessId: string) => listCollection<FinanceTransaction>(businessId, "financeTransactions", "occurredAt");
 export const listCheckoutReceipts = (businessId: string) => listCollection<CheckoutReceipt>(businessId, "checkoutReceipts");
 export const listLoyaltyAccounts = (businessId: string) => listCollection<LoyaltyAccount>(businessId, "loyaltyAccounts", "totalSpent");
+
+export async function getRewardProgramSettings(businessId: string): Promise<RewardProgramSettings> {
+  const fn = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "getRewardProgramSettings");
+  const result = await fn({ businessId });
+  return result.data as RewardProgramSettings;
+}
+
+export async function updateRewardProgramSettings(
+  businessId: string,
+  settings: RewardProgramSettings
+): Promise<RewardProgramSettings> {
+  const fn = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "updateRewardProgramSettings");
+  const result = await fn({ businessId, ...settings });
+  return result.data as RewardProgramSettings;
+}
 
 export async function saveProduct(
   businessId: string,

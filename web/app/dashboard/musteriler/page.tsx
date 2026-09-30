@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, ClipboardList, Clock3, ContactRound, Mail, Phone, RefreshCw, Search, Sparkles, TrendingUp, UsersRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, ClipboardList, Clock3, ContactRound, Mail, PencilLine, Phone, RefreshCw, Save, Search, Sparkles, TrendingUp, UsersRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { listAppointments } from "@/features/appointments/appointment-repository";
 import { createOrUpdateCustomer, listCustomers, normalizeCustomerPhone } from "@/features/customers/customer-repository";
@@ -24,6 +24,9 @@ export default function CustomersPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -94,6 +97,29 @@ export default function CustomersPage() {
     finally { setSyncing(false); }
   }
 
+  async function saveCustomerName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const fullName = nameDraft.trim();
+    if (!businessId || !selectedCustomer || fullName.length < 2) return toast.error("Müşteri adı en az 2 karakter olmalıdır.");
+    setSavingName(true);
+    try {
+      const customerId = await createOrUpdateCustomer(businessId, {
+        fullName,
+        phone: selectedCustomer.phone,
+        email: selectedCustomer.email,
+      });
+      setCustomers(await listCustomers(businessId));
+      setSelectedId(customerId || selectedCustomer.id);
+      setNameDraft(fullName);
+      setEditingName(false);
+      toast.success("Müşteri adı güncellendi.");
+    } catch {
+      toast.error("Müşteri adı güncellenemedi.");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" /></div>;
 
   const metrics = [
@@ -126,7 +152,7 @@ export default function CustomersPage() {
           <div className="crm-customer-list">
             {filtered.map((customer) => {
               const isActive = selectedId === customer.id;
-              return <button key={customer.id} onClick={() => setSelectedId(customer.id)} className={`crm-customer-card${isActive ? " active" : ""}`} aria-pressed={isActive}>
+              return <button key={customer.id} onClick={() => {setSelectedId(customer.id);setNameDraft(customer.fullName);setEditingName(false);}} className={`crm-customer-card${isActive ? " active" : ""}`} aria-pressed={isActive}>
                 <span className="crm-customer-main"><span className="crm-avatar">{customer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="crm-customer-name"><strong>{customer.fullName}</strong><small><Phone size={13} /> {customer.phone}</small></span><span className="crm-customer-value"><b><CalendarDays size={14} /> {customer.totalAppointments}</b>{customer.totalSpent > 0 && <small>{formatMoney(customer.totalSpent)}</small>}</span><ChevronRight className="crm-card-arrow" size={19} /></span>
                 <span className="crm-tags"><small className="is-complete"><CheckCircle2 size={13} /> {customer.completedAppointments} tamamlanan</small>{customer.cancelledAppointments > 0 && <small className="is-cancelled"><CircleX size={13} /> {customer.cancelledAppointments} iptal</small>}{customer.lastVisitAt && <small className="is-visit"><Clock3 size={13} /> {new Date(customer.lastVisitAt).toLocaleDateString("tr-TR")}</small>}</span>
               </button>;
@@ -135,7 +161,7 @@ export default function CustomersPage() {
 
           <div className="crm-detail-column" ref={detailRef}>
             {selectedCustomer ? <article className="crm-detail-card">
-              <header className="crm-detail-head"><button className="crm-detail-close" onClick={() => setSelectedId(null)} aria-label="Müşteri detayını kapat"><X size={18} /></button><span className="crm-detail-avatar">{selectedCustomer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><div><small>MÜŞTERİ PROFİLİ</small><h2>{selectedCustomer.fullName}</h2><p><Phone size={14} /> {selectedCustomer.phone}</p>{selectedCustomer.email && <p><Mail size={14} /> {selectedCustomer.email}</p>}</div></header>
+              <header className="crm-detail-head"><button className="crm-detail-close" onClick={() => setSelectedId(null)} aria-label="Müşteri detayını kapat"><X size={18} /></button><span className="crm-detail-avatar">{selectedCustomer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><div><small>MÜŞTERİ PROFİLİ</small>{editingName?<form className="crm-name-editor" onSubmit={saveCustomerName}><input autoFocus maxLength={80} value={nameDraft} onChange={(event)=>setNameDraft(event.target.value)} placeholder="Müşteri adı soyadı" aria-label="Müşteri adı soyadı"/><button type="submit" disabled={savingName||nameDraft.trim().length<2} aria-label="Müşteri adını kaydet">{savingName?<RefreshCw size={15} className="animate-spin"/>:<Save size={15}/>}</button><button type="button" onClick={()=>{setEditingName(false);setNameDraft(selectedCustomer.fullName);}} aria-label="Düzenlemeyi iptal"><X size={15}/></button></form>:<div className="crm-name-row"><h2>{selectedCustomer.fullName}</h2><button type="button" onClick={()=>setEditingName(true)}><PencilLine size={14}/>{selectedCustomer.fullName.startsWith("Telefon müşterisi")?"İsim ekle":"Düzenle"}</button></div>}<p><Phone size={14} /> {selectedCustomer.phone}</p>{selectedCustomer.email && <p><Mail size={14} /> {selectedCustomer.email}</p>}</div></header>
               <div className="crm-detail-metrics">
                 {([{ label: "Toplam", value: selectedCustomer.totalAppointments, icon: CalendarDays, tone: "ocean" }, { label: "Tamamlanan", value: selectedCustomer.completedAppointments, icon: CheckCircle2, tone: "emerald" }, { label: "İptal", value: selectedCustomer.cancelledAppointments, icon: CircleX, tone: "rose" }, { label: "Harcama", value: formatMoney(selectedCustomer.totalSpent), icon: CircleDollarSign, tone: "amber" }]).map(({ label, value, icon: Icon, tone }) => <div className={`crm-detail-stat crm-detail-stat--${tone}`} key={label}><i><Icon size={19} /></i><strong>{value}</strong><small>{label}</small></div>)}
               </div>

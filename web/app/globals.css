@@ -13496,6 +13496,7 @@ a {
 .crm-detail-head h2 {
   overflow: hidden;
   margin-top: 4px;
+  color: #fff;
   font: 610 22px/1 var(--font-space-grotesk);
   text-overflow: ellipsis;
   white-space: nowrap
@@ -13508,6 +13509,73 @@ a {
   margin-top: 6px;
   color: rgb(255 255 255/.63);
   font-size: 9px
+}
+
+.crm-name-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px
+}
+
+.crm-name-row h2 {
+  min-width: 0
+}
+
+.crm-name-row button,
+.crm-name-editor button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgb(255 255 255/.2);
+  border-radius: 10px;
+  background: rgb(255 255 255/.11);
+  padding: 0 9px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer
+}
+
+.crm-name-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  gap: 6px;
+  margin-top: 6px
+}
+
+.crm-name-editor input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid rgb(255 255 255/.3);
+  border-radius: 11px;
+  background: rgb(255 255 255/.12);
+  padding: 0 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  outline: none
+}
+
+.crm-name-editor input::placeholder {
+  color: rgb(255 255 255/.55)
+}
+
+.crm-name-editor input:focus {
+  border-color: color-mix(in srgb, var(--dash-bright, #c9f45b) 80%, #fff);
+  box-shadow: 0 0 0 3px rgb(255 255 255/.1)
+}
+
+.crm-name-editor button {
+  padding: 0
+}
+
+.crm-name-editor button:disabled {
+  cursor: not-allowed;
+  opacity: .45
 }
 
 .crm-detail-close {
@@ -14875,6 +14943,19 @@ a {
 .dashboard-v2 .support-command-hero b,
 .dashboard-v2 .business-assistant-page .admin-assistant-hero>div>span {
   color: var(--dash-bright) !important
+}
+
+.dashboard-v2 .crm-detail-head .crm-name-row h2 {
+  color: #fff !important;
+  text-shadow: 0 1px 1px rgb(0 0 0/.18)
+}
+
+.dashboard-v2 .crm-detail-head>div>p {
+  color: rgb(255 255 255/.74) !important
+}
+
+.dashboard-v2 .crm-detail-head .crm-name-row button {
+  color: #fff !important
 }
 
 .dashboard-v2 .dashboard-profile-ready__icon,

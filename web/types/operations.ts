@@ -72,3 +72,12 @@ export interface LoyaltyAccount extends EntityBase {
   totalSpent: number;
   lastEarnedAt?: string;
 }
+
+export interface RewardProgramSettings {
+  enabled: boolean;
+  spendPerPoint: number;
+  pointValueTl: number;
+  minimumRedeemPoints: number;
+  maxRedemptionPercent: number;
+  earnOnPackages: boolean;
+}
