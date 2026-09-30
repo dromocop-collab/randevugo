@@ -597,13 +597,29 @@ exports.sellServicePackage = (0, https_1.onCall)(protectedCallableOptions, async
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
     const packageId = requireString(request.data?.packageId, "packageId");
+    const businessCustomerId = typeof request.data?.customerId === "string" ? request.data.customerId.trim() : "";
     const customerName = requireString(request.data?.customerName, "Müşteri adı").slice(0, 80);
     const customerPhone = normalizedPhoneKey(requireString(request.data?.customerPhone, "Telefon"));
     const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
     const business = await requireBusinessOperation(uid, businessId, "managePackages");
     const rewardProgram = rewardProgramSettings(business.rewardProgram);
-    const linkedCustomer = await db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`).get();
-    const customerUserId = typeof linkedCustomer.data()?.userId === "string" ? String(linkedCustomer.data()?.userId) : null;
+    const linkedCustomerRef = db.doc(`businesses/${businessId}/customers/${businessCustomerId || customerDocumentId(customerPhone)}`);
+    const linkedCustomer = await linkedCustomerRef.get();
+    if (businessCustomerId && !linkedCustomer.exists)
+        throw new https_1.HttpsError("not-found", "Seçilen müşteri artık bulunamıyor.");
+    if (linkedCustomer.exists) {
+        const linkedPhone = normalizedPhoneKey(String(linkedCustomer.data()?.phoneKey ?? linkedCustomer.data()?.phone ?? ""));
+        if (linkedPhone !== customerPhone)
+            throw new https_1.HttpsError("failed-precondition", "Müşteri telefon kaydı değişti. Müşteriyi yeniden seçin.");
+    }
+    let customerUserId = typeof linkedCustomer.data()?.userId === "string" ? String(linkedCustomer.data()?.userId) : null;
+    if (!customerUserId) {
+        const matchingAppointments = await db.collection(`businesses/${businessId}/appointments`)
+            .where("customerPhone", "==", customerPhone).limit(30).get();
+        customerUserId = matchingAppointments.docs
+            .map((row) => String(row.data().customerId ?? ""))
+            .find((value) => value && !value.startsWith("guest_")) ?? null;
+    }
     const templateRef = db.doc(`businesses/${businessId}/servicePackages/${packageId}`);
     const customerPackageRef = db.collection(`businesses/${businessId}/customerPackages`).doc();
     const financeRef = db.doc(`businesses/${businessId}/financeTransactions/package_${customerPackageRef.id}`);
@@ -617,7 +633,8 @@ exports.sellServicePackage = (0, https_1.onCall)(protectedCallableOptions, async
         const validityDays = Math.max(1, Math.floor(Number(row.validityDays ?? 365)));
         tx.create(customerPackageRef, {
             packageId, packageName: String(row.name ?? "Hizmet paketi"), serviceName: String(row.serviceName ?? "Hizmet"),
-            customerName, customerPhone, customerUserId, totalSessions, remainingSessions: totalSessions, price, paymentMethod,
+            customerName, customerPhone, customerUserId, businessCustomerId: linkedCustomer.id,
+            totalSessions, remainingSessions: totalSessions, price, paymentMethod,
             status: "active", expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + validityDays * 86_400_000),
             createdBy: uid, createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
@@ -636,7 +653,8 @@ exports.sellServicePackage = (0, https_1.onCall)(protectedCallableOptions, async
             }, { merge: true });
         }
         tx.set(db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`), {
-            fullName: customerName, phone: customerPhone, totalSpent: firestore_1.FieldValue.increment(price),
+            fullName: customerName, phone: customerPhone, phoneKey: customerPhone, userId: customerUserId,
+            totalSpent: firestore_1.FieldValue.increment(price),
             updatedAt: firestore_1.FieldValue.serverTimestamp(), createdAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     });
@@ -676,17 +694,22 @@ exports.getMyCustomerBenefits = (0, https_1.onCall)(protectedCallableOptions, as
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const profile = await db.doc(`users/${uid}`).get();
     const rawPhone = String(profile.data()?.phone ?? "").trim();
-    const linkedCustomers = await db.collectionGroup("customers").where("userId", "==", uid).limit(20).get();
+    const [linkedCustomers, linkedAppointments] = await Promise.all([
+        db.collectionGroup("customers").where("userId", "==", uid).limit(20).get(),
+        db.collectionGroup("appointments").where("customerId", "==", uid).limit(100).get(),
+    ]);
     const customerPhones = new Set();
-    for (const value of [rawPhone, ...linkedCustomers.docs.map((row) => String(row.data().phoneKey ?? row.data().phone ?? ""))]) {
+    for (const value of [
+        rawPhone,
+        ...linkedCustomers.docs.map((row) => String(row.data().phoneKey ?? row.data().phone ?? "")),
+        ...linkedAppointments.docs.map((row) => String(row.data().customerPhone ?? "")),
+    ]) {
         try {
             if (value)
                 customerPhones.add(normalizedPhoneKey(value));
         }
         catch { /* Ignore malformed legacy values. */ }
     }
-    if (customerPhones.size === 0)
-        return { packages: [], loyalty: [], phoneRequired: true };
     const phoneList = [...customerPhones].slice(0, 20);
     const [packageSnapshots, linkedPackageRows, loyaltySnapshots] = await Promise.all([
         Promise.all(phoneList.map((phone) => db.collectionGroup("customerPackages").where("customerPhone", "==", phone).get())),
@@ -708,7 +731,7 @@ exports.getMyCustomerBenefits = (0, https_1.onCall)(protectedCallableOptions, as
         return null;
     };
     return {
-        phoneRequired: false,
+        phoneRequired: customerPhones.size === 0,
         packages: packageRows.map((row) => {
             const data = row.data();
             const businessId = row.ref.parent.parent?.id ?? "";

@@ -4,6 +4,7 @@ export interface Customer extends EntityBase {
   fullName: string;
   phone: string;
   email?: string;
+  userId?: string | null;
   totalAppointments: number;
   completedAppointments: number;
   cancelledAppointments: number;

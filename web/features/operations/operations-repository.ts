@@ -117,7 +117,7 @@ export async function finalizeCheckout(input: {
 }
 
 export async function sellPackage(input: {
-  businessId: string; packageId: string; customerName: string; customerPhone: string; paymentMethod: PaymentMethod;
+  businessId: string; packageId: string; customerId?: string; customerName: string; customerPhone: string; paymentMethod: PaymentMethod;
 }): Promise<{ customerPackageId: string }> {
   const fn = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "sellServicePackage");
   const result = await fn(input);
