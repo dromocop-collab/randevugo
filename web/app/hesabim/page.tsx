@@ -72,6 +72,8 @@ export default function CustomerAccountPage() {
   const [benefitPackages,setBenefitPackages] = useState<CustomerBenefitPackage[]>([]);
   const [loyaltyBenefits,setLoyaltyBenefits] = useState<LoyaltyBenefit[]>([]);
   const [benefitsPhoneRequired,setBenefitsPhoneRequired] = useState(false);
+  const [benefitsError,setBenefitsError] = useState("");
+  const [benefitsReloadKey,setBenefitsReloadKey] = useState(0);
   const [suspendedBusinesses,setSuspendedBusinesses] = useState<SuspendedBusiness[]>([]);
   const [loading,setLoading] = useState(true);
   const [reloadKey,setReloadKey] = useState(0);
@@ -118,6 +120,7 @@ export default function CustomerAccountPage() {
         setHasMoreAppointments(appointmentSnap.docs.length===APPOINTMENT_PAGE_SIZE);
         setFavorites(favoriteRows);
         const benefits=(benefitsResult?.data??{packages:[],loyalty:[],phoneRequired:false}) as CustomerBenefitsPayload;
+        setBenefitsError(benefitsResult?"":"Paket ve puan bilgileriniz şu anda yüklenemedi.");
         setBenefitPackages(Array.isArray(benefits.packages)?benefits.packages:[]);
         setLoyaltyBenefits(Array.isArray(benefits.loyalty)?benefits.loyalty:[]);
         setBenefitsPhoneRequired(Boolean(benefits.phoneRequired));
@@ -149,16 +152,17 @@ export default function CustomerAccountPage() {
         const result=await httpsCallable(getFunctions(getFirebaseApp(),"europe-west1"),"getMyCustomerBenefits")({});
         if(!active)return;
         const benefits=(result.data??{packages:[],loyalty:[],phoneRequired:false}) as CustomerBenefitsPayload;
+        setBenefitsError("");
         setBenefitPackages(Array.isArray(benefits.packages)?benefits.packages:[]);
         setLoyaltyBenefits(Array.isArray(benefits.loyalty)?benefits.loyalty:[]);
         setBenefitsPhoneRequired(Boolean(benefits.phoneRequired));
-      }catch{/* İlk yüklemedeki mevcut veriyi koru. */}
+      }catch(error){if(active)setBenefitsError(userFacingError(error,"Paket ve puan bilgileriniz yüklenemedi."));}
     };
     void refreshBenefits();
     const onFocus=()=>void refreshBenefits();
     window.addEventListener("focus",onFocus);
     return()=>{active=false;window.removeEventListener("focus",onFocus)};
-  },[authStatus,tab,user]);
+  },[authStatus,benefitsReloadKey,tab,user]);
 
   const modalOpen=Boolean(reviewing||cancelling||verifyOpen||deleteOpen);
   useEffect(()=>{
@@ -352,6 +356,7 @@ export default function CustomerAccountPage() {
           {tab==="benefits"&&<>
             <div className="account-section-head"><div><span>PAKETLER VE AVANTAJLAR</span><h2>Kalan hakkınız, puanınız, tek yerde.</h2></div><Link href="/kesfet">Yeni deneyim keşfet <Compass size={15}/></Link></div>
             <section className="account-benefit-hero"><div><span><Crown/> SENİNRANDEVUN AVANTAJLARI</span><h3>{totalLoyaltyPoints} kullanılabilir puan</h3><p>Her işletmenin puanı kendi mağazasında geçerlidir. Paket seanslarınız kullanıldıkça kalan haklarınız otomatik güncellenir.</p></div><div><strong>{activePackages.length}</strong><span>aktif paket</span></div></section>
+            {benefitsError&&<section className="account-benefit-notice"><AlertTriangle/><div><b>Paket bilgileriniz yüklenemedi.</b><span>{benefitsError}</span></div><button type="button" onClick={()=>setBenefitsReloadKey(value=>value+1)}>Yeniden dene</button></section>}
             {benefitsPhoneRequired&&<section className="account-benefit-notice"><AlertTriangle/><div><b>Paketlerinizi eşleştirmek için telefon numaranızı tamamlayın.</b><span>İşletmenin paket satışında kullandığı telefon ile hesabınızdaki telefon aynı olmalıdır.</span></div><button type="button" onClick={()=>setTab("profile")}>Telefonu güncelle</button></section>}
             <div className="account-benefit-title"><div><PackageCheck/><span><small>SEANS TAKİBİ</small><h3>Hizmet paketlerim</h3></span></div><b>{activePackages.length} aktif</b></div>
             {benefitPackages.length?<div className="account-package-grid">{benefitPackages.map(item=>{const progress=item.totalSessions>0?Math.max(0,Math.min(100,(item.remainingSessions/item.totalSessions)*100)):0;const active=item.status==="active"&&item.remainingSessions>0;return <article key={`${item.businessId}-${item.id}`} className={active?"":"inactive"}><header><span><Gift/></span><div><small>{item.businessName}</small><h3>{item.packageName}</h3><p>{item.serviceName}</p></div><em>{packageStatusLabel(item.status)}</em></header><div className="account-package-progress"><div><span>Kalan seans</span><b>{item.remainingSessions} / {item.totalSessions}</b></div><i><span style={{width:`${progress}%`}}/></i></div><footer><span><CalendarDays/> {item.expiresAt?`${formatShortDate(item.expiresAt)} tarihine kadar`:"Süresiz"}</span>{item.businessSlug&&<Link href={`/isletme/${item.businessSlug}/randevu`}>Randevu al <ArrowRight/></Link>}</footer></article>})}</div>:!benefitsPhoneRequired&&<section className="account-empty-premium"><div><Gift size={31}/></div><h3>Henüz hesabınıza tanımlı paket yok.</h3><p>Bir işletme size hizmet paketi tanımladığında kalan seanslarınız burada otomatik görünür.</p><Link href="/kesfet">İşletmeleri keşfet <ArrowRight size={15}/></Link></section>}

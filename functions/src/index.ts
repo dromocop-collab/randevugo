@@ -690,6 +690,7 @@ export const sellServicePackage = onCall(
       const linkedPhone = normalizedPhoneKey(String(linkedCustomer.data()?.phoneKey ?? linkedCustomer.data()?.phone ?? ""));
       if (linkedPhone !== customerPhone) throw new HttpsError("failed-precondition", "Müşteri telefon kaydı değişti. Müşteriyi yeniden seçin.");
     }
+    const customerEmail = String(linkedCustomer.data()?.email ?? "").trim().toLowerCase();
     let customerUserId = typeof linkedCustomer.data()?.userId === "string" ? String(linkedCustomer.data()?.userId) : null;
     if (!customerUserId) {
       const matchingAppointments = await db.collection(`businesses/${businessId}/appointments`)
@@ -697,6 +698,10 @@ export const sellServicePackage = onCall(
       customerUserId = matchingAppointments.docs
         .map((row) => String(row.data().customerId ?? ""))
         .find((value) => value && !value.startsWith("guest_")) ?? null;
+    }
+    if (!customerUserId && customerEmail) {
+      try { customerUserId = (await auth.getUserByEmail(customerEmail)).uid; }
+      catch { /* The CRM customer may not have a registered account yet. */ }
     }
     const templateRef = db.doc(`businesses/${businessId}/servicePackages/${packageId}`);
     const customerPackageRef = db.collection(`businesses/${businessId}/customerPackages`).doc();
@@ -711,7 +716,8 @@ export const sellServicePackage = onCall(
       const validityDays = Math.max(1, Math.floor(Number(row.validityDays ?? 365)));
       tx.create(customerPackageRef, {
         packageId, packageName: String(row.name ?? "Hizmet paketi"), serviceName: String(row.serviceName ?? "Hizmet"),
-        customerName, customerPhone, customerUserId, businessCustomerId: linkedCustomer.id,
+        customerName, customerPhone, customerEmail: customerEmail || null,
+        customerUserId, businessCustomerId: linkedCustomer.id,
         totalSessions, remainingSessions: totalSessions, price, paymentMethod,
         status: "active", expiresAt: Timestamp.fromMillis(Date.now() + validityDays * 86_400_000),
         createdBy: uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -731,7 +737,8 @@ export const sellServicePackage = onCall(
         }, { merge: true });
       }
       tx.set(db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`), {
-        fullName: customerName, phone: customerPhone, phoneKey: customerPhone, userId: customerUserId,
+        fullName: customerName, phone: customerPhone, phoneKey: customerPhone,
+        email: customerEmail || null, userId: customerUserId,
         totalSpent: FieldValue.increment(price),
         updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -775,17 +782,35 @@ export const getMyCustomerBenefits = onCall(
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
-    const profile = await db.doc(`users/${uid}`).get();
+    const [profile, authUser] = await Promise.all([
+      db.doc(`users/${uid}`).get(),
+      auth.getUser(uid),
+    ]);
     const rawPhone = String(profile.data()?.phone ?? "").trim();
-    const [linkedCustomers, linkedAppointments] = await Promise.all([
+    const accountEmail = String(authUser.email ?? profile.data()?.email ?? "").trim().toLowerCase();
+    const [linkedCustomers, linkedAppointments, emailCustomers, emailAppointments] = await Promise.all([
       db.collectionGroup("customers").where("userId", "==", uid).limit(20).get(),
       db.collectionGroup("appointments").where("customerId", "==", uid).limit(100).get(),
+      accountEmail
+        ? db.collectionGroup("customers").where("email", "==", accountEmail).limit(20).get()
+        : Promise.resolve(null),
+      accountEmail
+        ? db.collectionGroup("appointments").where("customerEmail", "==", accountEmail).limit(100).get()
+        : Promise.resolve(null),
     ]);
+    const customerRows = [...new Map([
+      ...linkedCustomers.docs,
+      ...(emailCustomers?.docs ?? []),
+    ].map((row) => [row.ref.path, row])).values()];
+    const appointmentRows = [...new Map([
+      ...linkedAppointments.docs,
+      ...(emailAppointments?.docs ?? []),
+    ].map((row) => [row.ref.path, row])).values()];
     const customerPhones = new Set<string>();
     for (const value of [
       rawPhone,
-      ...linkedCustomers.docs.map((row) => String(row.data().phoneKey ?? row.data().phone ?? "")),
-      ...linkedAppointments.docs.map((row) => String(row.data().customerPhone ?? "")),
+      ...customerRows.map((row) => String(row.data().phoneKey ?? row.data().phone ?? "")),
+      ...appointmentRows.map((row) => String(row.data().customerPhone ?? "")),
     ]) {
       try { if (value) customerPhones.add(normalizedPhoneKey(value)); } catch { /* Ignore malformed legacy values. */ }
     }
@@ -800,6 +825,14 @@ export const getMyCustomerBenefits = onCall(
       [...new Map(rows.map((row) => [row.ref.path, row])).values()];
     const packageRows = uniqueDocs([...packageSnapshots.flatMap((snapshot) => snapshot.docs), ...linkedPackageRows.docs]);
     const loyaltyRows = uniqueDocs(loyaltySnapshots.flatMap((snapshot) => snapshot.docs));
+    if (customerRows.some((row) => row.data().userId !== uid) || packageRows.some((row) => row.data().customerUserId !== uid)) {
+      const repair = db.batch();
+      customerRows.filter((row) => row.data().userId !== uid)
+        .forEach((row) => repair.set(row.ref, { userId: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true }));
+      packageRows.filter((row) => row.data().customerUserId !== uid)
+        .forEach((row) => repair.set(row.ref, { customerUserId: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true }));
+      await repair.commit();
+    }
     const businessIds = [...new Set([...packageRows, ...loyaltyRows]
       .map((row) => row.ref.parent.parent?.id ?? "").filter(Boolean))];
     const businessRows = await Promise.all(businessIds.map((businessId) => db.doc(`businesses/${businessId}`).get()));
