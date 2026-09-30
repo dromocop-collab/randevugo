@@ -145,6 +145,7 @@ export function BookingWizard(props: Props) {
   const [availableDateCounts, setAvailableDateCounts] = useState<Record<string, number>>({});
   const [availabilityRange, setAvailabilityRange] = useState<{ start: string; end: string } | null>(null);
   const [datesLoading, setDatesLoading] = useState(false);
+  const [dateAvailabilityUnavailable, setDateAvailabilityUnavailable] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -285,6 +286,7 @@ export function BookingWizard(props: Props) {
     const requestId = availabilityRequestRef.current + 1;
     availabilityRequestRef.current = requestId;
     setDatesLoading(true);
+    setDateAvailabilityUnavailable(false);
     setAvailabilityRange({ start: startDate, end: endDate });
     setAvailableDateCounts({});
     try {
@@ -300,6 +302,8 @@ export function BookingWizard(props: Props) {
     } catch (error) {
       if (availabilityRequestRef.current !== requestId || availabilitySelectionRef.current !== selectionKey) return;
       setAvailableDateCounts({});
+      setAvailabilityRange(null);
+      setDateAvailabilityUnavailable(true);
       toast.error(userFacingError(error, "Takvim müsaitliği alınamadı."));
     } finally {
       if (availabilityRequestRef.current === requestId && availabilitySelectionRef.current === selectionKey) setDatesLoading(false);
@@ -781,6 +785,7 @@ export function BookingWizard(props: Props) {
                   availableDateCounts={availableDateCounts}
                   availabilityRange={availabilityRange}
                   loading={datesLoading}
+                  availabilityUnavailable={dateAvailabilityUnavailable}
                   onRangeChange={loadDateAvailability}
                   onChange={(value) => { setAppointmentsDate(value); setSlot(""); }}
                 />
@@ -1273,6 +1278,7 @@ function BookingCalendar({
   availableDateCounts,
   availabilityRange,
   loading,
+  availabilityUnavailable,
   onRangeChange,
   onChange,
 }: {
@@ -1282,6 +1288,7 @@ function BookingCalendar({
   availableDateCounts: Record<string, number>;
   availabilityRange: { start: string; end: string } | null;
   loading: boolean;
+  availabilityUnavailable: boolean;
   onRangeChange: (start: string, end: string) => void;
   onChange: (value: string) => void;
 }) {
@@ -1351,10 +1358,10 @@ function BookingCalendar({
         const disabled = outsideBookingRange || loading || (availabilityKnown && !hasAvailability);
         const selected = iso === value;
         const today = iso === istanbulDateKey();
-        const availabilityLabel = loading ? "müsaitlik yükleniyor" : hasAvailability ? `${slotCount} müsait saat` : "müsait saat yok";
+        const availabilityLabel = loading ? "müsaitlik yükleniyor" : availabilityUnavailable ? "seçildiğinde saatler kontrol edilir" : hasAvailability ? `${slotCount} müsait saat` : "müsait saat yok";
         return <button key={iso} type="button" role="gridcell" disabled={disabled} className={`${outside ? "is-outside" : ""} ${selected ? "is-selected" : ""} ${today ? "is-today" : ""} ${hasAvailability ? "is-available" : availabilityKnown ? "is-unavailable" : ""}`} aria-label={`${format(day, "d MMMM yyyy EEEE", { locale: tr })}, ${availabilityLabel}`} aria-selected={selected} onClick={() => { onChange(iso); setOpen(false); }}><span>{format(day, "d")}</span>{hasAvailability && <small>{slotCount}</small>}{today && <i />}</button>;
       })}</div>
-      <footer><span className="booking-calendar-legend"><i className="is-available"/> Müsait <i className="is-today"/> Bugün {loading && <b>Yükleniyor…</b>}</span><button type="button" disabled={loading || (rangeLoaded && (availableDateCounts[istanbulDateKey()] ?? 0) === 0)} onClick={() => { const today = istanbulDateKey(); if (today >= min && today <= max) onChange(today); setOpen(false); }}>Bugün</button></footer>
+      <footer><span className="booking-calendar-legend"><i className="is-available"/> Müsait <i className="is-today"/> Bugün {loading && <b>Yükleniyor…</b>}{availabilityUnavailable && <b>Gün seçince kontrol edilir</b>}</span><button type="button" disabled={loading || (rangeLoaded && (availableDateCounts[istanbulDateKey()] ?? 0) === 0)} onClick={() => { const today = istanbulDateKey(); if (today >= min && today <= max) onChange(today); setOpen(false); }}>Bugün</button></footer>
     </section></>, document.body)}
   </div>;
 }
