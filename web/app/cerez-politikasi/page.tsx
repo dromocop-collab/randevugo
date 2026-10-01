@@ -1,5 +1,5 @@
-import type { Metadata } from "next"; import { ContentPage } from "@/components/marketing/content-page";
-export const metadata:Metadata={title:"Çerez Politikası",description:"SeninRandevun çerez kullanımı ve tercihleri.",alternates:{canonical:"/cerez-politikasi"}};
+import { ContentPage } from "@/components/marketing/content-page"; import { createPublicMetadata } from "@/lib/seo/metadata";
+export const metadata=createPublicMetadata({title:"Çerez Politikası",description:"SeninRandevun zorunlu, analitik ve pazarlama çerezlerinin kullanım amaçlarını ve çerez tercihlerinizi nasıl yönetebileceğinizi öğrenin.",pathname:"/cerez-politikasi",type:"article"});
 export default function Page(){return <ContentPage eyebrow="YASAL · 29 EYLÜL 2026" title="Çerez politikası" intro="Hangi çerezlerin neden kullanıldığını, ne zaman çalıştığını ve tercihini nasıl değiştirebileceğini açıklar. Zorunlu olmayan çerezler varsayılan olarak kapalıdır." sections={[
 {title:"Çerez nedir?",body:"Çerezler ve benzer yerel depolama teknolojileri, tarayıcının hizmeti güvenli ve tutarlı biçimde çalıştırması veya izin verdiğiniz ölçüm ve pazarlama işlemlerini yapması için cihazda küçük bilgiler saklar."},
 {title:"Zorunlu çerezler",body:"Güvenli oturum, kimlik doğrulama, dolandırıcılığın önlenmesi, dil veya tema, çerez tercihi ve temel form işlevleri için gereklidir. Bu kategori hizmetin çalışması için kullanılır ve tercih panelinden kapatılamaz."},

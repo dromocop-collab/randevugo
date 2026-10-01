@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { PLAN_PRICE, PLAN_FEATURE_LIST, PLAN_LABEL } from "@/constants/plans";
+import { createPublicMetadata, safeJsonLd } from "@/lib/seo/metadata";
 
 const SITE_URL = "https://seninrandevun.com";
 
-export const metadata: Metadata = {
-  title: "Online Randevu Sistemi Fiyatları | İşletme Planları",
-  description: `Yeni işletmelere SeninRandevun ilk 3 ay ücretsiz. Sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
+export const metadata: Metadata = createPublicMetadata({
+  title: "Randevu Sistemi Fiyatları",
+  description: `Lansmana özel SeninRandevun ilk 3 ay ücretsiz. Sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
   keywords: [
     "online randevu sistemi fiyatları",
     "randevu yazılımı fiyat",
@@ -15,14 +16,9 @@ export const metadata: Metadata = {
     "salon randevu yazılımı",
     "randevu sistemi ücretsiz deneme",
   ],
-  alternates: { canonical: `${SITE_URL}/fiyatlar` },
-  openGraph: {
-    title: "Online Randevu Sistemi Fiyatları | SeninRandevun",
-    description: `Yeni işletmelere ilk 3 ay ücretsiz; sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Tüm özellikler dahil.`,
-    url: `${SITE_URL}/fiyatlar`,
-    type: "website",
-  },
-};
+  pathname: "/fiyatlar",
+  imageAlt: "SeninRandevun işletme planları ve fiyatları",
+});
 
 /* JSON-LD Pricing Schema — rendered server-side for Google */
 const pricingJsonLd = {
@@ -53,7 +49,7 @@ const pricingJsonLd = {
         {
           "@type": "Question",
           name: "İlk 3 ay ücretsiz kampanyası nasıl çalışır?",
-          acceptedAnswer: { "@type": "Answer", text: "Yeni işletme kayıtları tüm özellikleri kayıt tarihinden itibaren 3 ay ücretsiz kullanır. Kart bilgisi istenmez." },
+          acceptedAnswer: { "@type": "Answer", text: "Lansman döneminde açılan işletme hesapları tüm özellikleri kayıt tarihinden itibaren 3 ay ücretsiz kullanır. Kart bilgisi istenmez." },
         },
         {
           "@type": "Question",
@@ -86,7 +82,7 @@ export default function FiyatlarLayout({ children }: { children: React.ReactNode
   return <>
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd).replace(/</g, "\\u003c") }}
+      dangerouslySetInnerHTML={{ __html: safeJsonLd(pricingJsonLd) }}
     />
     {children}
   </>;

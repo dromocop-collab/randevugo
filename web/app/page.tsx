@@ -8,6 +8,15 @@ import { APP_STORE_URL } from "@/lib/app-store";
 import { HomeInteractive } from "./home-client";
 import { CustomerLiveHome } from "@/features/live-queue/customer-live-home";
 import { LastMinuteHome } from "@/features/availability/last-minute-home";
+import { createPublicMetadata, safeJsonLd, SEO_SITE_URL } from "@/lib/seo/metadata";
+
+export const metadata = createPublicMetadata({
+  title: "Online Randevu Al ve Yakınındaki İşletmeleri Keşfet",
+  description: "Kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; hizmetleri ve uygun saatleri karşılaştırarak online randevunuzu kolayca alın.",
+  pathname: "/",
+  keywords: ["online randevu al", "yakındaki işletmeler", "kuaför randevusu", "berber randevusu", "güzellik merkezi randevusu", "SeninRandevun"],
+  imageAlt: "SeninRandevun ile yakındaki işletmeleri keşfet ve online randevu al",
+});
 
 const CUSTOMER_FAQ = [
   ["Randevu almak ücretli mi?", "Hayır. İşletme keşfetmek ve online randevu oluşturmak müşteriler için tamamen ücretsizdir."],
@@ -16,6 +25,16 @@ const CUSTOMER_FAQ = [
   ["Yakınımdaki işletmeleri nasıl bulurum?", "Keşfet ekranında şehir, kategori, işletme veya hizmet adıyla arama yapabilir; yayınlanmış işletmelerin profillerini karşılaştırabilirsin."],
   ["Hangi hizmetler için randevu alabilirim?", "Kuaför, berber, güzellik merkezi, spa, nail studio, sağlık, spor, veteriner ve danışmanlık dahil birçok alanda randevu alabilirsin."],
 ];
+
+const homeJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "CollectionPage", "@id": `${SEO_SITE_URL}/#homepage`, url: SEO_SITE_URL, name: "Yakınındaki İşletmeleri Keşfet ve Online Randevu Al", description: "Kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; hizmetleri ve uygun saatleri karşılaştırarak online randevunuzu kolayca alın.", inLanguage: "tr-TR", isPartOf: { "@id": `${SEO_SITE_URL}/#website` }, about: ["Online randevu", "Yerel işletme keşfi", "Hizmet rezervasyonu"] },
+    { "@type": "Service", "@id": `${SEO_SITE_URL}/#booking-service`, name: "SeninRandevun Online Randevu ve İşletme Keşif Hizmeti", serviceType: "Online appointment booking marketplace", provider: { "@id": `${SEO_SITE_URL}/#organization` }, areaServed: { "@type": "Country", name: "Türkiye" }, availableChannel: { "@type": "ServiceChannel", serviceUrl: `${SEO_SITE_URL}/kesfet`, availableLanguage: "Turkish" } },
+    { "@type": "BreadcrumbList", "@id": `${SEO_SITE_URL}/#breadcrumb`, itemListElement: [{ "@type": "ListItem", position: 1, name: "Ana Sayfa", item: SEO_SITE_URL }] },
+    { "@type": "FAQPage", "@id": `${SEO_SITE_URL}/#faq`, mainEntity: CUSTOMER_FAQ.map(([question, answer]) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) },
+  ],
+};
 
 const SEO_JOURNEYS = [
   { href: "/kuafor-randevu", title: "Kuaför randevusu", text: "Saç kesimi, boya, röfle ve bakım hizmetlerini keşfet.", icon: Scissors },
@@ -26,6 +45,7 @@ const SEO_JOURNEYS = [
 
 export default function HomePage() {
   return <div className="marketing-page customer-home">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(homeJsonLd) }}/>
     <MarketingHeader />
     <main>
       <section className="customer-home-hero">

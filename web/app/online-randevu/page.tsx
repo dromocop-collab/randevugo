@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Online Randevu Al | Hızlı ve Kolay Randevu Sistemi",
+export const metadata: Metadata = createPublicMetadata({
+  title: "Online Randevu Al",
   description: "Kuaför, berber, güzellik, sağlık, spor ve daha fazlası için online randevu alın. Uygun işletmeyi ve saati seçin, randevunuzu saniyeler içinde oluşturun.",
-  alternates: { canonical: "https://seninrandevun.com/online-randevu" },
-  openGraph: {
-    title: "Online Randevu Al | SeninRandevun",
-    description: "İhtiyacınız olan hizmet için uygun işletmeyi bulun ve online randevunuzu hemen oluşturun.",
-    url: "https://seninrandevun.com/online-randevu",
-    type: "website",
-  },
-};
+  pathname: "/online-randevu",
+  keywords: ["online randevu al", "internetten randevu", "randevu uygulaması", "yakındaki işletmeler", "ücretsiz randevu al"],
+  imageAlt: "Online randevu alma rehberi",
+});
 
 export default function OnlineRandevuPage() {
   return (

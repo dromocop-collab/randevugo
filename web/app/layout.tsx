@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import { AppProviders } from "@/components/layout/app-providers";
-import { APP_STORE_ID, APP_STORE_URL } from "@/lib/app-store";
+import { APP_STORE_ID } from "@/lib/app-store";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: "SeninRandevun — Yakınındaki İşletmeyi Keşfet, Online Randevu Al",
-    template: "%s — SeninRandevun | Online Randevu Sistemi",
+    template: "%s | SeninRandevun",
   },
   description: SITE_DESCRIPTION,
   keywords: [
@@ -115,12 +115,6 @@ export const metadata: Metadata = {
     creator: "@seninrandevun",
     site: "@seninrandevun",
   },
-  alternates: {
-    canonical: SITE_URL,
-    languages: {
-      "tr-TR": SITE_URL,
-    },
-  },
   category: "technology",
   classification: "Business Software",
   robots: {
@@ -195,96 +189,6 @@ const jsonLd = {
         "https://instagram.com/seninrandevun",
         "https://twitter.com/seninrandevun",
         "https://linkedin.com/company/seninrandevun",
-      ],
-    },
-    {
-      "@type": "SoftwareApplication",
-      "@id": `${SITE_URL}/#app`,
-      name: SITE_NAME,
-      applicationCategory: "BusinessApplication",
-      operatingSystem: "Web",
-      url: `${SITE_URL}/isletmeler`,
-      inLanguage: "tr-TR",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "TRY",
-        description: "Yeni işletmelere ilk 3 ay ücretsiz kullanım",
-      },
-      featureList: [
-        "Online Randevu Yönetimi",
-        "Çalışan ve Vardiya Yönetimi",
-        "Müşteri CRM",
-        "Gelişmiş Analitik Dashboard",
-        "SMS ve E-posta Hatırlatmaları",
-        "7/24 Online Randevu Sayfası",
-      ],
-      downloadUrl: APP_STORE_URL,
-      installUrl: APP_STORE_URL,
-    },
-    {
-      "@type": "CollectionPage",
-      "@id": `${SITE_URL}/#homepage`,
-      url: SITE_URL,
-      name: "Yakınındaki İşletmeleri Keşfet ve Online Randevu Al",
-      description: SITE_DESCRIPTION,
-      inLanguage: "tr-TR",
-      isPartOf: { "@id": `${SITE_URL}/#website` },
-      about: ["Online randevu", "Yerel işletme keşfi", "Hizmet rezervasyonu"],
-    },
-    {
-      "@type": "Service",
-      "@id": `${SITE_URL}/#booking-service`,
-      name: "SeninRandevun Online Randevu ve İşletme Keşif Hizmeti",
-      serviceType: "Online appointment booking marketplace",
-      provider: { "@id": `${SITE_URL}/#organization` },
-      areaServed: { "@type": "Country", name: "Türkiye" },
-      availableChannel: {
-        "@type": "ServiceChannel",
-        serviceUrl: `${SITE_URL}/kesfet`,
-        availableLanguage: "Turkish",
-      },
-    },
-    {
-      "@type": "BreadcrumbList",
-      "@id": `${SITE_URL}/#breadcrumb`,
-      itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Ana Sayfa",
-          item: SITE_URL,
-        },
-      ],
-    },
-    {
-      "@type": "FAQPage",
-      "@id": `${SITE_URL}/#faq`,
-      mainEntity: [
-        {
-          "@type": "Question",
-          name: "Randevu almak ücretli mi?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "Hayır. İşletme keşfetmek ve online randevu oluşturmak müşteriler için tamamen ücretsizdir.",
-          },
-        },
-        {
-          "@type": "Question",
-          name: "Üye olmadan randevu alabilir miyim?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "İşletmenin sunduğu akışa göre temel iletişim bilgileriyle hızlıca randevu oluşturabilirsiniz.",
-          },
-        },
-        {
-          "@type": "Question",
-          name: "Randevumu değiştirebilir miyim?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "İşletmenin iptal ve değişiklik kuralları doğrultusunda randevunuzu kolayca yönetebilirsiniz.",
-          },
-        },
       ],
     },
   ],

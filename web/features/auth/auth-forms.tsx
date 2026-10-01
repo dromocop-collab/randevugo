@@ -401,7 +401,7 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
         <div className={`register-heading mb-6 text-center ${embedded ? "sr-only" : ""}`}>
           <span className="register-heading-icon"><Sparkles size={20} /></span>
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 3 ay ücretsiz"}</p>
+          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Lansmana özel · Tüm özellikler ilk 3 ay ücretsiz"}</p>
         </div>
 
         <form className="register-form space-y-4" onSubmit={onSubmit}>

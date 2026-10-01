@@ -3,8 +3,9 @@ import Link from "next/link";
 import { ArrowRight, MapPin } from "lucide-react";
 import { MarketingPage } from "@/components/marketing/marketing-shell";
 import { SITE_URL, jsonLd } from "@/lib/seo/local-seo";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = { title: "Muğla Online Randevu ve Yerel İşletmeler", description: "Muğla'daki hizmet işletmelerini keşfedin, Fethiye'deki uygun saatleri görün ve online randevu alın.", alternates: { canonical: "/mugla" }, openGraph: { title: "Muğla Online Randevu | SeninRandevun", url: `${SITE_URL}/mugla`, type: "website" } };
+export const metadata: Metadata = createPublicMetadata({ title: "Muğla Online Randevu ve Yerel İşletmeler", description: "Muğla'daki hizmet işletmelerini keşfedin, Fethiye'deki uygun saatleri görün ve online randevu alın.", pathname: "/mugla", keywords: ["Muğla online randevu", "Muğla kuaför", "Muğla güzellik merkezi", "Fethiye randevu", "Muğla işletmeleri"] });
 
 export default function MuglaPage() {
   const schema = { "@context":"https://schema.org", "@type":"BreadcrumbList", itemListElement:[{ "@type":"ListItem", position:1, name:"Ana Sayfa", item:SITE_URL },{ "@type":"ListItem", position:2, name:"Muğla", item:`${SITE_URL}/mugla` }] };

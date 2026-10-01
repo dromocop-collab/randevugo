@@ -3,8 +3,13 @@ import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, type Loc
 import { searchBusinesses } from "@/features/discovery/search-repository";
 import { GEO_CATEGORIES, businessesInCategory, seoSlug, type GeoCategorySlug } from "@/lib/seo/geo-seo";
 
-/** Use a recent date for static pages to signal freshness to crawlers. */
-const STATIC_LAST_MODIFIED = new Date();
+/** Static pages omit lastModified unless the build pipeline provides a truthful timestamp. */
+const configuredBuildTime = process.env.NEXT_PUBLIC_BUILD_TIME
+  ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME)
+  : undefined;
+const STATIC_LAST_MODIFIED = configuredBuildTime && Number.isFinite(configuredBuildTime.getTime())
+  ? configuredBuildTime
+  : undefined;
 
 export const revalidate = 3600;
 
@@ -30,7 +35,7 @@ function xmlSafeUrl(url: string): string {
   return url.replace(/&(?!amp;)/g, "&amp;");
 }
 
-function businessLastModified(value: unknown): Date {
+function businessLastModified(value: unknown): Date | undefined {
   if (typeof value === "string" || typeof value === "number" || value instanceof Date) {
     const parsed = new Date(value);
     if (Number.isFinite(parsed.getTime())) return parsed;
@@ -168,6 +173,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.9,
       alternates: alternates(`${baseUrl}/online-randevu`),
+      images: [`${baseUrl}/og.png`],
+    },
+    {
+      url: `${baseUrl}/simdi-musait`,
+      lastModified: STATIC_LAST_MODIFIED,
+      changeFrequency: "daily",
+      priority: 0.82,
+      alternates: alternates(`${baseUrl}/simdi-musait`),
       images: [`${baseUrl}/og.png`],
     },
     ...[

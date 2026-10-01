@@ -6,17 +6,17 @@ import { MarketingPage } from "@/components/marketing/marketing-shell";
 import { AppStoreButton } from "@/components/marketing/app-store-button";
 import { IosAppVisual } from "@/components/marketing/ios-app-visual";
 import { APP_STORE_URL } from "@/lib/app-store";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
 const SITE_URL = "https://seninrandevun.com";
 
-export const metadata: Metadata = {
-  title: "SeninRandevun iOS Uygulaması | App Store'dan İndir",
+export const metadata: Metadata = createPublicMetadata({
+  title: "iOS Randevu Uygulaması",
   description: "Yakınındaki işletmeleri keşfet, gerçek müsaitlikleri gör, randevularını iPhone ve iPad üzerinden kolayca oluştur ve takip et. SeninRandevun şimdi App Store'da.",
-  alternates: { canonical: `${SITE_URL}/mobil-uygulama` },
+  pathname: "/mobil-uygulama",
   keywords: ["SeninRandevun uygulaması", "iOS randevu uygulaması", "iPhone randevu", "App Store randevu uygulaması", "mobil randevu al"],
-  openGraph: { title: "SeninRandevun artık App Store'da", description: "İyi hizmetleri keşfet, uygun saati seç ve randevunu mobil uygulamadan yönet.", url: `${SITE_URL}/mobil-uygulama`, type: "website", images: ["/og.png"] },
-  twitter: { card: "summary_large_image", title: "SeninRandevun iOS Uygulaması", description: "Randevunun en kolay hâli artık iPhone ve iPad'de.", images: ["/og.png"] },
-};
+  imageAlt: "SeninRandevun iOS randevu uygulaması",
+});
 
 const features = [
   { icon: MapPin, title: "Yakınındakileri keşfet", text: "Şehrindeki doğrulanmış işletmeleri kategori, hizmet ve konuma göre bul." },
@@ -39,4 +39,3 @@ export default function MobileAppPage() {
     </main>
   </MarketingPage>;
 }
-

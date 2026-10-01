@@ -2,7 +2,7 @@
  * SeninRandevun — Tek Abonelik Modeli
  *
  * Tek plan: "SeninRandevun" — 149 TL/ay veya 1.490 TL/yıl
- * Lansman kampanyası: yeni işletmelere 90 gün, kredi kartı gerekmez
+ * Lansman kampanyası: lansman döneminde açılan işletme hesaplarına 90 gün, kredi kartı gerekmez
  * Tüm özellikler açık — feature kilidi yok
  */
 

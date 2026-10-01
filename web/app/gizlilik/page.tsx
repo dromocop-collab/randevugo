@@ -1,5 +1,5 @@
-import type { Metadata } from "next"; import { ContentPage } from "@/components/marketing/content-page";
-export const metadata:Metadata={title:"Gizlilik Politikası",description:"SeninRandevun gizlilik ve kişisel veri politikası.",alternates:{canonical:"/gizlilik"}};
+import { ContentPage } from "@/components/marketing/content-page"; import { createPublicMetadata } from "@/lib/seo/metadata";
+export const metadata=createPublicMetadata({title:"Gizlilik Politikası",description:"SeninRandevun web ve mobil hizmetlerinde hangi bilgilerin toplandığını, nasıl kullanıldığını, korunduğunu ve tercihlerinizi nasıl yönetebileceğinizi öğrenin.",pathname:"/gizlilik",type:"article"});
 export default function Page(){return <ContentPage eyebrow="YASAL · 29 EYLÜL 2026" title="Gizlilik politikası" intro="SeninRandevun web, iOS ve Android hizmetlerinde bilgilerin nasıl korunduğunu ve tercihlerini nasıl yönetebileceğini sade bir dille açıklar." sections={[
 {title:"Kapsam",body:"Bu politika ziyaretçiler, randevu alan müşteriler, işletme sahipleri, işletme çalışanları ve destek kanallarını kullanan kişiler için geçerlidir. İşletmelerin kendi müşteri süreçleri için ek bildirimleri bulunabilir."},
 {title:"Toplanan bilgiler",body:"Hesap ve iletişim bilgileri; işletme, hizmet ve çalışan profilleri; randevu ayrıntıları; destek mesajları; cihaz, oturum, IP ve güvenlik kayıtları işlenebilir. Alanlar amaçla sınırlı tutulur ve gereksiz özel nitelikli veri talep edilmez."},

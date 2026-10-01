@@ -18,7 +18,7 @@ const featureGroups = [
 ];
 
 const faqs = [
-  ["Lansmana özel 3 ay ücretsiz dönem nasıl çalışır?", "Yeni işletme hesabınızı açtığınız anda tüm özellikler 90 gün boyunca ücretsiz kullanıma açılır. Başlamak için kredi kartı gerekmez."],
+  ["Lansmana özel 3 ay ücretsiz dönem nasıl çalışır?", "İşletme hesabınızı lansman döneminde açtığınızda tüm özellikler 90 gün boyunca ücretsiz kullanıma açılır. Başlamak için kredi kartı gerekmez."],
   ["Ücretsiz dönemde özellik kısıtlaması var mı?", "Hayır. Takvim, müşteri yönetimi, kasa, paketler, raporlar, mağaza ve işletme asistanı dahil plan kapsamındaki özellikleri deneyebilirsiniz."],
   ["Ücretsiz dönem bitince hangi seçenekler var?", `Aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya iki ay avantaj sağlayan yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺ seçeneklerinden size uygun olanla devam edebilirsiniz.`],
   ["Çalışan, müşteri veya randevu sınırı var mı?", "Müşteri ve randevu sayısı sınırsızdır. Tek başınıza başlayabilir, işletmeniz büyüdükçe ekibinizi ve şubelerinizi ekleyebilirsiniz."],
@@ -36,7 +36,7 @@ export default function PricingPage() {
       <div className="pricing-hero__eyebrow"><Gift size={15}/> LANSMANA ÖZEL · 90 GÜN ÜCRETSİZ</div>
       <h1>Randevularınız, müşterileriniz<br/><em>ve kasanız tek yerde.</em></h1>
       <p>Dağınık defterler ve ayrı uygulamalar yerine işletmenizi tek ekrandan yönetin. Daha az operasyon yükü, daha düzenli ve daha net bir gün.</p>
-      <div className="pricing-hero__actions"><Link href={primaryHref}>{primaryLabel}<ArrowUpRight size={18}/></Link><a href="#urun-onizleme">Nasıl çalıştığını gör<ArrowRight size={17}/></a></div>
+        <div className="pricing-hero__actions"><Link href={primaryHref}>{primaryLabel}<ArrowUpRight size={18}/></Link><a href="#urun-onizleme">Nasıl çalıştığını gör<ArrowRight size={17}/></a></div>
       <div className="pricing-hero__trust"><span><CircleCheckBig/> Kredi kartı gerekmez</span><span><CircleCheckBig/> Kolay kurulum</span><span><CircleCheckBig/> Tüm özellikler açık</span></div>
     </section>
 

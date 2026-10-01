@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "İşletme Keşfet | Yakınındaki Randevu Alınabilecek İşletmeler",
+export const metadata: Metadata = createPublicMetadata({
+  title: "Yakındaki İşletmeleri Keşfet",
   description: "Kuaför, berber, güzellik merkezi, sağlık, spor ve daha fazlasını şehir ve kategoriye göre keşfedin. Size uygun işletmeden online randevu alın.",
-  alternates: { canonical: "https://seninrandevun.com/kesfet" },
-  openGraph: {
-    title: "İşletme Keşfet | SeninRandevun",
-    description: "Yakınınızdaki işletmeleri keşfedin ve uygun saatten online randevu alın.",
-    url: "https://seninrandevun.com/kesfet",
-    type: "website",
-  },
-};
+  pathname: "/kesfet",
+  keywords: ["yakındaki işletmeler", "online randevu al", "kuaför randevu", "berber randevu", "güzellik merkezi randevu", "işletme keşfet"],
+  imageAlt: "SeninRandevun işletme keşfet sayfası",
+});
 
 export default function KesfetLayout({ children }: { children: React.ReactNode }) {
   return children;

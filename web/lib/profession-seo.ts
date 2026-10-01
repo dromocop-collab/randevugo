@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
-const SITE_URL = "https://seninrandevun.com";
 const CATEGORY_IMAGES: Record<string, string> = {
   kuafor: "/images/categories/kuafor.png",
   berber: "/images/categories/berber.png",
@@ -15,16 +15,16 @@ const CATEGORY_IMAGES: Record<string, string> = {
 };
 
 export function createProfessionMetadata(content: { title: string; description: string; pathname: string; category?: string }): Metadata {
-  const url = `${SITE_URL}${content.pathname}`;
   const image = CATEGORY_IMAGES[content.category ?? ""] ?? "/og.png";
   const keyword = content.category?.replaceAll("-", " ") ?? "online randevu";
-  return {
+  return createPublicMetadata({
     title: content.title,
     description: content.description,
+    pathname: content.pathname,
     keywords: [`${keyword} randevu`, `online ${keyword} randevu`, `${keyword} randevusu al`, "yakınımdaki işletmeler", "SeninRandevun"],
-    alternates: { canonical: url, languages: { "tr-TR": url } },
-    robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
-    openGraph: { title: content.title, description: content.description, url, type: "website", locale: "tr_TR", siteName: "SeninRandevun", images: [{ url: image, width: 1024, height: 1024, alt: `${content.title} — SeninRandevun` }] },
-    twitter: { card: "summary_large_image", title: content.title, description: content.description, images: [image] },
-  };
+    image,
+    imageAlt: `${content.title} — SeninRandevun`,
+    imageWidth: image === "/og.png" ? 1729 : 1024,
+    imageHeight: image === "/og.png" ? 910 : 1024,
+  });
 }

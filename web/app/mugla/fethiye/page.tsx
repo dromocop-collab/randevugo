@@ -4,9 +4,10 @@ import { ArrowRight, CalendarCheck2, Search, ShieldCheck } from "lucide-react";
 import { MarketingPage } from "@/components/marketing/marketing-shell";
 import { LocalBusinessGrid } from "@/components/seo/local-business-grid";
 import { LOCAL_CATEGORIES, SITE_URL, getFethiyeBusinesses, jsonLd } from "@/lib/seo/local-seo";
+import { createPublicMetadata } from "@/lib/seo/metadata";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Fethiye'de Online Randevu Al", description: "Fethiye'deki kuaför, berber, güzellik, nail studio, spa ve diğer işletmeleri keşfet; müsait saatleri gör ve online randevu al.", alternates:{canonical:"/mugla/fethiye"}, openGraph:{title:"Fethiye'de Online Randevu Al | SeninRandevun",description:"Fethiye'deki gerçek işletmeleri ve uygun saatleri keşfedin.",url:`${SITE_URL}/mugla/fethiye`,type:"website"},twitter:{card:"summary_large_image",title:"Fethiye'de Online Randevu Al",description:"Fethiye'deki gerçek işletmeleri keşfedin."} };
+export const metadata: Metadata = createPublicMetadata({ title: "Fethiye'de Online Randevu Al", description: "Fethiye'deki kuaför, berber, güzellik, nail studio, spa ve diğer işletmeleri keşfet; müsait saatleri gör ve online randevu al.", pathname: "/mugla/fethiye", keywords: ["Fethiye online randevu", "Fethiye kuaför", "Fethiye berber", "Fethiye güzellik merkezi", "Fethiye nail studio"] });
 
 const faq=[{q:"Fethiye'de nasıl online randevu alırım?",a:"Kategori veya işletme seçin, gerçek müsaitliklerden uygun saati belirleyip bilgilerinizi onaylayın."},{q:"Fiyatları randevudan önce görebilir miyim?",a:"İşletmenin yayınladığı hizmetlerde süre ve fiyat bilgisi mağaza sayfasında gösterilir."},{q:"Randevu için uygulama indirmek gerekir mi?",a:"Hayır. Web üzerinden de güvenli biçimde randevu oluşturabilirsiniz."}];
 

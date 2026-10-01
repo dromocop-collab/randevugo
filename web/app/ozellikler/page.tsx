@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, BellRing, CalendarDays, Check, Clock3, MessageSquareText, ShieldCheck, Smartphone, Store, UsersRound, WandSparkles } from "lucide-react";
 import { BusinessPage } from "@/components/marketing/business-shell";
-export const metadata={title:"İşletme Özellikleri",description:"Akıllı takvim, müşteri CRM, ekip, dijital mağaza ve analitik özelliklerini keşfedin.",alternates:{canonical:"/ozellikler"}};
+import { createPublicMetadata } from "@/lib/seo/metadata";
+export const metadata=createPublicMetadata({title:"Randevu Sistemi Özellikleri",description:"Akıllı takvim, müşteri takibi, çalışan yönetimi, paket ve seans, kasa, şube ve online randevu özelliklerini tek işletme panelinde keşfedin.",pathname:"/ozellikler",keywords:["online randevu sistemi özellikleri","randevu takip programı","müşteri takip sistemi","çalışan randevu takvimi","seans paket takibi","işletme yönetim yazılımı"]});
 const features=[
   {no:"01",icon:CalendarDays,title:"Akıllı takvim",lead:"Her dakikayı görünür, her randevuyu yönetilebilir kılın.",text:"Günlük, haftalık ve aylık görünümler; çalışan bazlı müsaitlik, mola, izin ve hizmet süreleriyle gerçek zamanlı çalışır.",items:["Çakışma engelleme","Sürükle-bırak planlama","Durum ve ödeme takibi","Çalışan filtreleri"]},
   {no:"02",icon:Store,title:"Dijital mağaza",lead:"İşletmeniz kapalıyken bile randevu almaya devam edin.",text:"Markanıza özel mobil mağaza; hizmetlerinizi, fiyatlarınızı, ekibinizi, yorumları ve canlı saatleri tek bağlantıda sunar.",items:["7/24 self-servis randevu","Keşfet görünürlüğü","Paylaşılabilir mağaza linki","Mobil öncelikli deneyim"]},
