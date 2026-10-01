@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { EmptyState, LoadingState } from "@/components/ui/states";
+import { EmptyState } from "@/components/ui/states";
+import { BrandPageLoader } from "@/components/ui/brand-page-loader";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
 import { useBusiness } from "@/hooks/use-business";
 import { archiveStaff, createStaff, linkStaffAccount, listStaff, updateStaff } from "@/features/staff/staff-repository";
@@ -23,7 +24,7 @@ import type { ServiceCategory } from "@/types/service-category";
 import type { DaySchedule } from "@/types/business";
 import type { Appointment } from "@/types/appointments";
 import type { Review } from "@/types/review";
-import { BriefcaseBusiness, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Save, ShieldCheck, Sparkles, Trash2, UserRound, WandSparkles } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Plus, Save, ShieldCheck, Sparkles, Trash2, UserRound, WandSparkles, X } from "lucide-react";
 
 const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const ORDERED_DAYS = [1, 2, 3, 4, 5, 6, 0];
@@ -38,6 +39,7 @@ function generateTimeSlots(): string[] {
   return slots;
 }
 const TIME_SLOTS = generateTimeSlots();
+const TIME_OPTIONS = TIME_SLOTS.map((time) => ({ value: time, label: time }));
 
 const defaultHours: DaySchedule[] = ORDERED_DAYS.map((day) => ({
   day,
@@ -57,6 +59,7 @@ export default function StaffPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [loadedAt] = useState(() => Date.now());
 
   // Create form
@@ -126,26 +129,23 @@ export default function StaffPage() {
     setEmail("");
     setPosition("Uzman");
     setSpecialtyCategoryIds([]);
+    setShowCreate(false);
     setStaff(await listStaff(businessId));
   }
 
   if (loading) {
-    return <LoadingState title="Çalışanlar yükleniyor" description="Lütfen bekleyin..." />;
+    return <BrandPageLoader title="Ekip alanınız hazırlanıyor" label="Çalışanlar, hizmetler ve çalışma planları getiriliyor." eyebrow="İŞLETME EKİBİ" />;
   }
 
   return (
     <div className="staff-page">
-      <section className="staff-command-hero">
-        <div>
-          <span><Sparkles size={15} /> EKİP OPERASYONU</span>
-          <h1>Yeteneği doğru hizmetle buluştur.</h1>
-          <p>Uzmanlıkları, kapasiteyi, vardiyaları ve izinleri akıcı bir çalışma alanından yönet.</p>
-        </div>
-        <aside><UserRound size={27} /><strong>{staff.length}</strong><small>aktif ekip profili</small></aside>
+      <section className="dashboard-theme-hero relative overflow-hidden rounded-[30px] border border-[var(--border)] bg-[linear-gradient(120deg,var(--accent-3),var(--accent),var(--accent-2))] p-6 text-white shadow-xl sm:p-8">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-black tracking-[.12em]"><Sparkles size={14}/> EKİP YÖNETİMİ</span><h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Ekibinizi tek yerden kolayca yönetin.</h1><p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-white/80">Çalışanı ekleyin; sunduğu hizmetleri, çalışma saatlerini ve yetkilerini gerektiğinde düzenleyin.</p></div><div className="flex flex-wrap items-center gap-3"><div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3"><small className="font-bold text-white/65">AKTİF</small><b className="ml-3 text-2xl">{staff.filter((item) => item.isActive).length}</b></div><div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3"><small className="font-bold text-white/65">TOPLAM</small><b className="ml-3 text-2xl">{staff.length}</b></div><button type="button" onClick={() => setShowCreate(true)} className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[var(--accent)] shadow-lg"><Plus size={18}/> Çalışan ekle</button></div></div>
       </section>
 
       {/* Create Staff Form */}
-      <Card className="staff-create-card" title="Yeni Çalışan Ekle" description="Ekibinize yeni bir üye ekleyin.">
+      {showCreate && <Card className="staff-create-card" title="Yeni çalışan" description="Temel bilgileri girin; diğer ayarları çalışanı ekledikten sonra tamamlayabilirsiniz.">
+        <div className="mb-4 flex justify-end"><button type="button" onClick={() => setShowCreate(false)} className="inline-flex items-center gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs font-bold text-[var(--text-2)]"><X size={15}/> Kapat</button></div>
         <form className="grid gap-3 sm:grid-cols-5" onSubmit={onCreate}>
           <Input label="Ad Soyad *" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ali Yılmaz" />
           <Input label="Telefon *" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="05XX" />
@@ -163,13 +163,13 @@ export default function StaffPage() {
             />
           </div>
         </form>
-      </Card>
+      </Card>}
 
       {/* Staff List */}
       {staff.length === 0 ? (
         <EmptyState title="Henüz çalışan yok" description="İlk ekip üyenizi yukarıdan ekleyin." />
       ) : (
-        <div className="staff-list">
+        <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-lg sm:p-6"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black tracking-[.13em] text-[var(--accent)]">EKİP LİSTESİ</p><h2 className="mt-1 text-2xl font-black text-[var(--text-1)]">Çalışanlar</h2><p className="mt-1 text-sm text-[var(--text-3)]">Ayrıntıları görmek veya düzenlemek için bir çalışana dokunun.</p></div><span className="rounded-full bg-[var(--surface-2)] px-3 py-2 text-xs font-bold text-[var(--text-2)]">{staff.length} kişi</span></div><div className="staff-list">
           {staff.map((item) => (
             <StaffCard
               key={item.id}
@@ -186,7 +186,7 @@ export default function StaffPage() {
               onRefresh={async () => setStaff(await listStaff(businessId!))}
             />
           ))}
-        </div>
+        </div></section>
       )}
     </div>
   );
@@ -220,6 +220,7 @@ function StaffCard({
   onRefresh: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [editorTab, setEditorTab] = useState<"profile" | "services" | "schedule" | "access">("profile");
   const [editPosition, setEditPosition] = useState(item.position);
   const [editPhotoUrl, setEditPhotoUrl] = useState(item.photoUrl ?? "");
   const [expertiseLevel, setExpertiseLevel] = useState(item.expertiseLevel ?? "specialist");
@@ -399,6 +400,10 @@ function StaffCard({
             <div><span><WandSparkles size={14} /> PROFİL STÜDYOSU</span><h3>{item.fullName} için çalışma planı</h3></div>
             <i><ShieldCheck size={18} /> Değişiklikler güvenle senkronlanır</i>
           </div>
+          <nav className="mb-4 grid gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-2 sm:grid-cols-4" aria-label="Çalışan düzenleme bölümleri">
+            {([{id:"profile",label:"Profil",hint:"Bilgiler ve performans"},{id:"services",label:"Hizmetler",hint:"Branş ve fiyatlar"},{id:"schedule",label:"Çalışma planı",hint:"Saatler ve izinler"},{id:"access",label:"Yetkiler",hint:"Panel erişimi"}] as const).map((tab) => <button type="button" key={tab.id} onClick={() => setEditorTab(tab.id)} className={`rounded-xl px-3 py-3 text-left transition ${editorTab===tab.id?"bg-[var(--accent)] text-white shadow-lg":"text-[var(--text-2)] hover:bg-[var(--surface-1)]"}`}><b className="block text-sm">{tab.label}</b><small className={`mt-0.5 block ${editorTab===tab.id?"text-white/70":"text-[var(--text-3)]"}`}>{tab.hint}</small></button>)}
+          </nav>
+          {editorTab === "profile" && <>
           {/* Basic Info */}
           <section className="staff-editor-section"><header><BriefcaseBusiness size={18} /><div><h4>Uzmanlık profili</h4><p>Rol, kapasite ve müşteriye görünen tanıtım.</p></div></header><div className="grid gap-3 sm:grid-cols-3">
             <Input label="Pozisyon" value={editPosition} onChange={(e) => setEditPosition(e.target.value)} />
@@ -455,8 +460,9 @@ function StaffCard({
             </div>
             {(item.commissionPayouts ?? []).length > 0 && <div className="mt-2 text-xs text-[var(--text-3)]">Son ödeme: {(item.commissionPayouts ?? []).at(-1)?.periodLabel} · {(item.commissionPayouts ?? []).at(-1)?.amount.toLocaleString("tr-TR")} ₺</div>}
           </section>
+          </>}
 
-          <section className="staff-editor-section">
+          {editorTab === "access" && <section className="staff-editor-section">
             <header><ShieldCheck size={18} /><div><h4>Çalışan paneli yetkileri</h4><p>Çalışan hesabı bağlandığında erişebileceği alanları şimdiden sınırla.</p></div></header>
             <div className="grid gap-2 sm:grid-cols-3">
               {([
@@ -474,11 +480,13 @@ function StaffCard({
                 </label>
               ))}
             </div>
-          </section>
+          </section>}
 
           {/* Service Assignment */}
-          <section className="staff-editor-section">
-            <header><Sparkles size={18} /><div><h4>Hizmet yetkinlikleri</h4><p>Bu uzmanın sunabildiği hizmetleri seç.</p></div></header>
+          {editorTab === "services" && <section className="staff-editor-section">
+            <header><Sparkles size={18} /><div><h4>Branş ve hizmetler</h4><p>Önce branşları, ardından bu çalışanın sunduğu hizmetleri seçin.</p></div></header>
+            <SpecialtyPicker categories={categories} selectedIds={selectedCategoryIds} onChange={changeSpecialties} />
+            <div className="my-5 border-t border-[var(--border)]" />
             {services.length === 0 ? (
               <p className="text-sm text-[var(--text-3)]">Henüz hizmet tanımlı değil.</p>
             ) : (
@@ -529,9 +537,10 @@ function StaffCard({
                 ))}
               </div>
             )}
-          </section>
+          </section>}
 
           {/* Staff Working Hours */}
+          {editorTab === "schedule" && <>
           <section className="staff-editor-section">
             <header><CalendarClock size={18} /><div><h4>Haftalık çalışma ritmi</h4><p>Açık günleri ve hizmet saatlerini planla.</p></div></header>
             <div className="staff-hours-grid">
@@ -544,26 +553,9 @@ function StaffCard({
                       : "is-closed"
                   }`}
                 >
-                  <span className="w-20 font-medium text-[var(--text-1)]">{DAY_NAMES[h.day]}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateHourDay(idx, { isOpen: !h.isOpen })}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                      h.isOpen ? "bg-emerald-500" : "bg-[var(--surface-3)]"
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${h.isOpen ? "translate-x-4" : "translate-x-0.5"}`} />
-                  </button>
+                  <div className="flex w-full items-center justify-between gap-3"><span className="font-bold text-[var(--text-1)]">{DAY_NAMES[h.day]}</span><button type="button" role="switch" aria-checked={h.isOpen} onClick={() => updateHourDay(idx, { isOpen: !h.isOpen })} className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${h.isOpen ? "bg-[var(--accent)]" : "bg-[var(--surface-3)]"}`}><span className={`inline-block size-4 transform rounded-full bg-white shadow transition ${h.isOpen ? "translate-x-6" : "translate-x-1"}`} /></button></div>
                   {h.isOpen && (
-                    <>
-                      <select value={h.start} onChange={(e) => updateHourDay(idx, { start: e.target.value })} className="rounded border border-[var(--border)] bg-[var(--surface-1)] px-1.5 py-1 text-xs">
-                        {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <span className="text-xs text-[var(--text-3)]">—</span>
-                      <select value={h.end} onChange={(e) => updateHourDay(idx, { end: e.target.value })} className="rounded border border-[var(--border)] bg-[var(--surface-1)] px-1.5 py-1 text-xs">
-                        {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </>
+                    <div className="grid w-full grid-cols-2 gap-2"><Select label="Başlangıç" value={h.start} onChange={(e) => updateHourDay(idx, { start: e.target.value })} options={TIME_OPTIONS}/><Select label="Bitiş" value={h.end} onChange={(e) => updateHourDay(idx, { end: e.target.value })} options={TIME_OPTIONS}/></div>
                   )}
                 </div>
               ))}
@@ -607,28 +599,14 @@ function StaffCard({
               </div>
             )}
           </section>
+          </>}
 
           {/* Action Buttons */}
           <footer className="staff-editor-actions">
             <Button onClick={handleSave} disabled={saving}>
               <Save size={17} /> {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
             </Button>
-            <Button variant="secondary" onClick={handleToggleActive}>
-              {item.isActive ? <PauseCircle size={17} /> : <PlayCircle size={17} />} {item.isActive ? "Pasif Yap" : "Aktif Yap"}
-            </Button>
-            <Button variant="secondary" onClick={handleLinkAccount}>
-              <ShieldCheck size={17} /> {item.linkedUid ? "Panel Erişimini Yenile" : "Çalışan Panelini Bağla"}
-            </Button>
-            <Select
-              label="Gelecek randevuları aktar"
-              value={replacementStaffId}
-              onChange={(e) => setReplacementStaffId(e.target.value)}
-              options={[
-                { value: "", label: "Aktarım gerekmiyorsa boş bırak" },
-                ...allStaff.filter((candidate) => candidate.id !== item.id && candidate.isActive).map((candidate) => ({ value: candidate.id, label: candidate.fullName })),
-              ]}
-            />
-            <Button variant="danger" onClick={handleDelete}><Trash2 size={17} /> Arşivle</Button>
+            <details className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3"><summary className="cursor-pointer text-sm font-bold text-[var(--text-2)]">Diğer çalışan işlemleri</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><Button variant="secondary" onClick={handleToggleActive}>{item.isActive ? <PauseCircle size={17} /> : <PlayCircle size={17} />} {item.isActive ? "Pasif yap" : "Aktif yap"}</Button><Button variant="secondary" onClick={handleLinkAccount}><ShieldCheck size={17} /> {item.linkedUid ? "Panel erişimini yenile" : "Çalışan panelini bağla"}</Button><Select label="Arşivlemeden önce randevuları aktar" value={replacementStaffId} onChange={(e) => setReplacementStaffId(e.target.value)} options={[{ value: "", label: "Aktarım yapma" },...allStaff.filter((candidate) => candidate.id !== item.id && candidate.isActive).map((candidate) => ({ value: candidate.id, label: candidate.fullName }))]}/><div className="flex items-end"><Button className="w-full" variant="danger" onClick={handleDelete}><Trash2 size={17} /> Çalışanı arşivle</Button></div></div></details>
           </footer>
         </div>
       )}

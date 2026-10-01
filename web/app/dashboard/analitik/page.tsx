@@ -1,15 +1,39 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, BarChart3, BellRing, CalendarClock, Rocket, Sparkles } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { listAppointments } from "@/features/appointments/appointment-repository";
 import { listCustomers } from "@/features/customers/customer-repository";
 import type { Appointment } from "@/types/appointments";
+import GrowthCenterPage from "@/app/dashboard/buyume/page";
 
 const DAY = 86_400_000;
 const WEEKDAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 
 export default function AnalyticsPage() {
+  const [view, setView] = useState<"insights" | "actions">("insights");
+  useEffect(() => {
+    const syncHash = () => setView(window.location.hash === "#growth-actions" ? "actions" : "insights");
+    queueMicrotask(syncHash);
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+  function changeView(next: "insights" | "actions") {
+    setView(next);
+    window.history.replaceState(null, "", next === "actions" ? "#growth-actions" : window.location.pathname);
+  }
+  return <div className="space-y-5">
+    <section className="growth-hub-switcher" aria-label="Analiz ve büyüme görünümü">
+      <div><span>TEK BÜYÜME MERKEZİ</span><h1>Analizden aksiyona, aynı yerde.</h1><p>Performansı okuyun veya doğrudan uygulanabilir büyüme fırsatlarına geçin.</p></div>
+      <nav><button type="button" className={view === "insights" ? "active" : ""} onClick={() => changeView("insights")}><BarChart3 size={17}/><span><b>Performans</b><small>Raporlar ve eğilimler</small></span></button><button type="button" className={view === "actions" ? "active" : ""} onClick={() => changeView("actions")}><Rocket size={17}/><span><b>Büyüme aksiyonları</b><small>Fırsatlar ve geri kazanım</small></span></button></nav>
+    </section>
+    {view === "insights" ? <AnalyticsOverview/> : <GrowthCenterPage/>}
+  </div>;
+}
+
+function AnalyticsOverview() {
   const { businessId } = useBusinessContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [customerCount, setCustomerCount] = useState(0);
@@ -31,7 +55,7 @@ export default function AnalyticsPage() {
 
   return <div className="space-y-6">
     <section className="dashboard-hero rounded-3xl border border-[var(--border)] p-6 shadow-xl sm:p-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[var(--accent)]">Son 30 gün</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[var(--text-1)]">Büyüme Analitiği</h1><p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-3)]">Randevu akışınızın, gelirinizin ve müşteri bağlılığınızın net resmi.</p></div><div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm"><span className="text-[var(--text-3)]">Veri sağlığı</span><strong className="ml-2 text-emerald-500">● Canlı</strong></div></div>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[var(--accent)]">Son 30 gün</p><h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[var(--text-1)]">Performans görünümü</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-3)]">Randevu akışınızın, gelirinizin ve müşteri bağlılığınızın net resmi.</p></div><div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm"><span className="text-[var(--text-3)]">Veri sağlığı</span><strong className="ml-2 text-emerald-500">● Canlı</strong></div></div>
     </section>
     {error && <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-500">{error}</div>}
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -49,7 +73,31 @@ export default function AnalyticsPage() {
     </section>
     <section className="grid gap-5 lg:grid-cols-2">
       <article className="rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-lg"><div className="flex items-center justify-between"><h2 className="font-bold text-[var(--text-1)]">En çok tercih edilen hizmetler</h2><span className="text-xs text-[var(--text-3)]">30 gün</span></div><div className="mt-5 space-y-2">{report.services.length ? report.services.map((service,index) => <div key={service.name} className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--accent)]/10 text-xs font-extrabold text-[var(--accent)]">{index+1}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text-1)]">{service.name}</p><p className="text-[10px] text-[var(--text-3)]">{service.count} randevu</p></div><strong className="text-sm text-[var(--text-1)]">{currency(service.revenue)}</strong></div>) : <Empty text="Hizmet analizi için tamamlanan randevu bekleniyor." />}</div></article>
-      <article className="rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-lg"><h2 className="font-bold text-[var(--text-1)]">Akıllı öneriler</h2><p className="mt-1 text-xs text-[var(--text-3)]">Verinize göre sıradaki en değerli aksiyonlar</p><div className="mt-5 space-y-3">{report.insights.map((insight,index) => <div key={insight} className="flex gap-3 rounded-2xl border border-[var(--border)] p-4"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/10 text-sm">{["↗","◎","✦"][index]}</span><p className="text-xs leading-6 text-[var(--text-2)]">{insight}</p></div>)}</div></article>
+      <article className="rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-lg">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 className="text-lg font-extrabold text-[var(--text-1)]">Akıllı öneriler</h2><p className="mt-1 text-sm text-[var(--text-3)]">Verinizden çıkan, hemen uygulayabileceğiniz sıradaki adımlar</p></div>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-bold text-[var(--text-2)]">{report.insights.length} aksiyon hazır</span>
+        </div>
+        <div className="mt-5 space-y-3">
+          {report.insights.map((insight,index) => {
+            const Icon = [CalendarClock, BellRing, Sparkles][index] ?? Sparkles;
+            return <article key={insight.title} className="group relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)]/45 hover:shadow-lg">
+              <i className={`absolute inset-y-0 left-0 w-1 ${insight.rail}`} aria-hidden="true" />
+              <div className="flex items-start gap-3">
+                <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${insight.iconClass}`}><Icon size={20} strokeWidth={2.2}/></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-extrabold text-[var(--text-1)]">{insight.title}</h3><span className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-[.08em] ${insight.badgeClass}`}>{insight.badge}</span></div>
+                  <p className="mt-1.5 text-sm font-medium leading-6 text-[var(--text-2)]">{insight.text}</p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-3">
+                    <p className="text-xs font-semibold text-[var(--text-3)]"><span className="text-[var(--text-2)]">Beklenen fayda:</span> {insight.benefit}</p>
+                    <Link href={insight.href} className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--surface-1)] px-3 py-2 text-xs font-extrabold text-[var(--accent)] shadow-sm transition group-hover:bg-[var(--accent)] group-hover:text-white">{insight.action}<ArrowRight size={14}/></Link>
+                  </div>
+                </div>
+              </div>
+            </article>;
+          })}
+        </div>
+      </article>
     </section>
   </div>;
 }
@@ -72,6 +120,16 @@ function buildReport(all:Appointment[],customers:number){
   const services=Object.values(completed.reduce<Record<string,{name:string;count:number;revenue:number}>>((acc,a)=>{const extras=a.additionalServices??[];const extrasRevenue=extras.reduce((sum,item)=>sum+item.price,0);const primaryName=a.serviceName||"Hizmet";acc[primaryName]??={name:primaryName,count:0,revenue:0};acc[primaryName].count++;acc[primaryName].revenue+=a.primaryServicePrice??Math.max(0,(a.servicePrice??0)-extrasRevenue);extras.forEach(item=>{acc[item.name]??={name:item.name,count:0,revenue:0};acc[item.name].count++;acc[item.name].revenue+=item.price});return acc},{})).sort((a,b)=>b.count-a.count).slice(0,5);
   const completionRate=current.length?Math.round(completed.length/current.length*100):0,noShow=current.filter(a=>a.status==="no_show").length,noShowRate=current.length?Math.round(noShow/current.length*100):0;
   const busiest=weekdays.reduce((a,b)=>b.value>a.value?b:a,weekdays[0]);
-  const insights=[current.length===0?"İlk verinizi oluşturmak için mağaza linkinizi müşterilerinizle paylaşın.":`${busiest.label} en yoğun gününüz. Ekip müsaitliğini bu güne göre genişletmeyi değerlendirin.`,noShowRate>10?`Gelmeme oranınız %${noShowRate}. Otomatik hatırlatma ve teyit akışını güçlendirin.`:"Gelmeme oranınız kontrol altında. Mevcut teyit akışınızı koruyun.",services[0]?`${services[0].name} en çok tercih edilen hizmetiniz. Mağaza vitrininizde öne çıkarın.`:"Hizmet performansı için tamamlanan randevular biriktikçe öneriler gelişecek."];
+  const insights=[
+    current.length===0
+      ? {title:"İlk verinizi oluşturun",text:"Performans görünümünü başlatmak için ilk randevunuzu kaydedin.",benefit:"Analiz ve günlük özetler çalışmaya başlar",href:"/dashboard/randevular",action:"Randevu ekle",badge:"Başlangıç",rail:"bg-sky-500",iconClass:"bg-sky-500/10 text-sky-600",badgeClass:"bg-sky-500/10 text-sky-600"}
+      : {title:`${busiest.label} günü kapasiteyi kontrol edin`,text:`${busiest.label}, son 30 gündeki en yoğun gününüz. Çalışma saatlerini ve ekip uygunluğunu bu güne göre düzenleyin.`,benefit:"Yoğun saatlerde daha dengeli iş akışı",href:"/dashboard/calisma-saatleri",action:"Saatleri düzenle",badge:"Kapasite",rail:"bg-sky-500",iconClass:"bg-sky-500/10 text-sky-600",badgeClass:"bg-sky-500/10 text-sky-600"},
+    noShowRate>10
+      ? {title:"Gelmeyen müşterileri azaltın",text:`Gelmeme oranınız %${noShowRate}. Randevu teyidi ve zamanında hatırlatma akışını güçlendirin.`,benefit:"Boş kalan saatlerin azalması",href:"/dashboard/otomasyonlar",action:"Hatırlatmaları aç",badge:"Öncelikli",rail:"bg-amber-500",iconClass:"bg-amber-500/10 text-amber-600",badgeClass:"bg-amber-500/10 text-amber-700"}
+      : {title:"Teyit düzenini koruyun",text:`Gelmeme oranınız %${noShowRate} ile kontrol altında. Mevcut hatırlatma düzeninizi sürdürün.`,benefit:"Daha öngörülebilir günlük plan",href:"/dashboard/otomasyonlar",action:"Akışı kontrol et",badge:"İyi gidiyor",rail:"bg-emerald-500",iconClass:"bg-emerald-500/10 text-emerald-600",badgeClass:"bg-emerald-500/10 text-emerald-700"},
+    services[0]
+      ? {title:`${services[0].name} hizmetini öne çıkarın`,text:`${services[0].name}, son 30 günde en çok tercih edilen hizmetiniz. Açıklamasını, süresini ve fiyatını gözden geçirin.`,benefit:"Hizmet listenizin daha anlaşılır olması",href:"/dashboard/hizmetler",action:"Hizmeti düzenle",badge:"Hizmet fırsatı",rail:"bg-violet-500",iconClass:"bg-violet-500/10 text-violet-600",badgeClass:"bg-violet-500/10 text-violet-700"}
+      : {title:"Hizmet verisini tamamlayın",text:"Tamamlanan randevular arttıkça hangi hizmetlerin öne çıktığını burada göreceksiniz.",benefit:"Daha anlamlı hizmet karşılaştırması",href:"/dashboard/hizmetler",action:"Hizmetleri gözden geçir",badge:"Veri bekliyor",rail:"bg-violet-500",iconClass:"bg-violet-500/10 text-violet-600",badgeClass:"bg-violet-500/10 text-violet-700"}
+  ];
   return {revenue,revenueChange:change(revenue,previousRevenue),total:current.length,appointmentChange:change(current.length,previous.length),completed:completed.length,completionRate,noShowRate,customers,weekdays,busiestDay:busiest.label,statuses,services,insights};
 }

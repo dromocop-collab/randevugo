@@ -23,7 +23,7 @@ const businessTopics: HelpTopic[] = [
   { icon: UsersRound, title: "Ekip ve hizmetler", description: "Çalışan, yetki, süre ve fiyat düzeninizi kurun.", articles: ["Çalışan ve rol ekleme", "Hizmet kataloğu oluşturma", "Çalışana hizmet atama"] },
   { icon: MessagesSquare, title: "Müşteri ve iletişim", description: "CRM kayıtlarını ve otomatik iletişimi güçlendirin.", articles: ["Müşteri kartlarını yönetme", "Hatırlatma akışları", "Yorumlara profesyonel yanıt verme"] },
   { icon: CreditCard, title: "Plan ve abonelik", description: "Ücretsiz dönem, fatura ve abonelik detaylarını öğrenin.", articles: ["İlk 3 ay ücretsiz kampanyası nasıl çalışır?", "Abonelik ve ödeme adımları", "Plan durumunu görüntüleme"] },
-  { icon: ChartNoAxesCombined, title: "Analitik ve büyüme", description: "Raporları okuyup daha güçlü kararlar alın.", articles: ["Doluluk oranını yorumlama", "Gelir ve hizmet performansı", "Müşteri sadakati metrikleri"] },
+  { icon: ChartNoAxesCombined, title: "Analitik ve performans", description: "Raporları okuyup daha net yönetim kararları alın.", articles: ["Doluluk oranını yorumlama", "Gelir ve hizmet performansı", "Müşteri kayıtlarını yorumlama"] },
 ];
 
 export function HelpCenter({ mode }: { mode: HelpMode }) {

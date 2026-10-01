@@ -15,7 +15,7 @@ import {
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Check, CreditCard, Eye, EyeOff, Gift, LockKeyhole, Mail, Smartphone, Sparkles, UserRound, Zap } from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, CalendarCheck2, Check, CreditCard, Eye, EyeOff, Gift, LockKeyhole, Mail, ShieldCheck, Smartphone, Sparkles, UserRound, Zap } from "lucide-react";
 
 const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
 
@@ -147,24 +147,26 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`auth-login-stack auth-login-stack--${accountType} space-y-5`}>
       {/* Form Card */}
-      <div className="auth-form-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-        <div className="mb-6 text-center">
-          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">Tekrar hoş geldiniz.</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınıza ve favori mağazalarınıza ulaşın." : "İşletme çalışma alanınıza güvenle devam edin."}</p>
+      <div className="auth-form-card auth-login-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
+        <div className="auth-login-status"><span><i/> {accountType === "customer" ? "KİŞİSEL ALAN" : "GÜVENLİ BAĞLANTI"}</span><small><ShieldCheck size={13}/> {accountType === "customer" ? "Randevuların yalnızca sana özel" : "Oturum koruması aktif"}</small></div>
+        <div className="auth-login-heading mb-7">
+          <span className="auth-login-mark">{accountType === "customer" ? <UserRound size={23}/> : <Building2 size={23}/>}</span>
+          <div><small>{accountType === "customer" ? "MÜŞTERİ HESABI" : "İŞLETME ÇALIŞMA ALANI"}</small><h2>Tekrar hoş geldiniz.</h2><p>{accountType === "customer" ? "Randevularınıza ve favori mağazalarınıza ulaşın." : "Bugünün akışına güvenle kaldığınız yerden devam edin."}</p></div>
         </div>
 
-        <form className="space-y-4" onSubmit={onSubmit}>
-          <Input
+        <form className="auth-login-form space-y-4" onSubmit={onSubmit}>
+          <div className="register-field"><Mail size={18} aria-hidden="true"/><Input
             label="E-posta Adresi"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="ornek@email.com"
-          />
-          <div className="relative">
+            className="register-input"
+          /></div>
+          <div className="register-field relative"><LockKeyhole size={18} aria-hidden="true"/>
             <Input
               label="Şifre"
               type={showPassword ? "text" : "password"}
@@ -172,55 +174,51 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
+              className="register-input register-password-input"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-[38px] text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition"
+              className="register-password-toggle"
+              aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
             >
-              {showPassword ? "Gizle" : "Göster"}
+              {showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}<span>{showPassword ? "Gizle" : "Göster"}</span>
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2 text-[var(--text-3)]">
-              <input type="checkbox" checked readOnly className="rounded border-[var(--border)]" />
-              Oturumu açık tut
+          <div className="auth-login-options">
+            <label>
+              <input type="checkbox" defaultChecked />
+              <i><Check size={12}/></i><span>Oturumu açık tut<small>Bu cihazda güvenli erişim</small></span>
             </label>
-            <Link href="/sifremi-unuttum" className="font-medium text-[var(--accent)] hover:underline">
-              Şifremi unuttum
-            </Link>
+            <Link href="/sifremi-unuttum">Şifremi unuttum <ArrowRight size={13}/></Link>
           </div>
 
-          <Button className="w-full" disabled={loading} type="submit">
+          <Button className="auth-login-submit w-full" disabled={loading} type="submit" glow>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 Giriş yapılıyor...
               </span>
             ) : (
-              "Güvenli Giriş Yap →"
+              <>{accountType === "customer" ? "Randevularıma git" : "Güvenli giriş yap"} <ArrowRight size={17}/></>
             )}
           </Button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-[var(--text-3)]">
-            Hesabın yok mu?{" "}
-            <Link href={accountType === "customer" ? "/musteri/kayit" : "/isletmeler/kayit"} className="font-semibold text-[var(--accent)] hover:underline">
-              Ücretsiz başla →
-            </Link>
-          </p>
-        </div>
+        <div className="auth-login-divider"><span>veya</span></div>
+        <Link href={accountType === "customer" ? "/musteri/kayit" : "/isletmeler/kayit?source=login"} className="auth-login-start">
+          <span>{accountType === "customer" ? <UserRound size={19}/> : <Sparkles size={19}/>}</span>
+          <p><small>{accountType === "customer" ? "YENİ MÜŞTERİ HESABI" : "YENİ İŞLETME · 90 GÜN ÜCRETSİZ"}</small><b>{accountType === "customer" ? "Ücretsiz hesabını oluştur" : "Akıllı kurulumu başlat"}</b><em>{accountType === "customer" ? "Randevularını tek yerde yönet" : "Kategori seçimiyle başlayan 7 kolay adım"}</em></p>
+          <ArrowRight size={18}/>
+        </Link>
       </div>
 
       {/* Trust badges */}
-      <div className="flex items-center justify-center gap-4 text-[10px] text-[var(--text-3)]">
-        <span className="flex items-center gap-1">🔒 SSL Korumalı</span>
-        <span>•</span>
-        <span className="flex items-center gap-1">🛡️ KVKK Uyumlu</span>
-        <span>•</span>
-        <span className="flex items-center gap-1">⚡ Firebase Güvencesi</span>
+      <div className="auth-login-trust">
+        <span><ShieldCheck size={14}/> Şifreli erişim</span>
+        <span><BadgeCheck size={14}/> KVKK odaklı</span>
+        <span><CalendarCheck2 size={14}/> {accountType === "customer" ? "7/24 randevu erişimi" : "7/24 operasyon"}</span>
       </div>
     </div>
   );
@@ -233,7 +231,7 @@ function getSafeNextPath(fallback: string): string {
 }
 
 /* ─────────────────── REGISTER ─────────────────── */
-export function RegisterForm({ accountType = "business" }: { accountType?: "business" | "customer" }) {
+export function RegisterForm({ accountType = "business", embedded = false }: { accountType?: "business" | "customer"; embedded?: boolean }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -399,8 +397,8 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
     <div className="space-y-6">
       {/* Form Card */}
       <div className="auth-form-card auth-register-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-        <div className="register-progress" aria-label="Kayıt ilerlemesi"><span className="active"><b>1</b> Hesap bilgileri</span><i /><span><b>2</b> İşletme kurulumu</span></div>
-        <div className="register-heading mb-6 text-center">
+        {!embedded && <div className="register-progress" aria-label="Kayıt ilerlemesi"><span className="active"><b>1</b> Hesap bilgileri</span><i /><span><b>2</b> İşletme kurulumu</span></div>}
+        <div className={`register-heading mb-6 text-center ${embedded ? "sr-only" : ""}`}>
           <span className="register-heading-icon"><Sparkles size={20} /></span>
           <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
           <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Yeni işletmelere özel · Tüm özellikler ilk 3 ay ücretsiz"}</p>
@@ -504,7 +502,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
       </div>
 
       {/* Benefits */}
-      <div className="register-benefits grid grid-cols-2 gap-3">
+      {!embedded && <div className="register-benefits grid grid-cols-2 gap-3">
         {(accountType === "customer" ? [
           { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
         ] : [
@@ -516,7 +514,7 @@ export function RegisterForm({ accountType = "business" }: { accountType?: "busi
             {b.text}
           </div>;
         })}
-      </div>
+      </div>}
     </div>
   );
 }

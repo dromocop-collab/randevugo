@@ -389,6 +389,11 @@ function customerDocumentId(phone: string): string {
   return createHash("sha256").update(phone).digest("hex").slice(0, 32);
 }
 
+function isGeneratedCustomerName(value: string): boolean {
+  const normalized = value.trim().toLocaleLowerCase("tr-TR");
+  return !normalized || normalized === "müşteri" || normalized.startsWith("telefon müşterisi");
+}
+
 async function upsertBusinessCustomer(input: {
   businessId: string;
   fullName: string;
@@ -410,9 +415,14 @@ async function upsertBusinessCustomer(input: {
     sum + Math.max(0, Number(document.data()[key] ?? 0)), 0);
   const existingCanonical = matches.find((document) => document.ref.path === canonicalRef.path);
   const fallback = existingCanonical?.data() ?? matches[0]?.data() ?? {};
+  const requestedName = input.fullName.trim();
+  const previousName = String(fallback.fullName ?? "").trim();
+  const fullName = isGeneratedCustomerName(requestedName) && !isGeneratedCustomerName(previousName)
+    ? previousName
+    : requestedName || previousName || "Müşteri";
   const batch = db.batch();
   batch.set(canonicalRef, {
-    fullName: input.fullName || String(fallback.fullName ?? "Müşteri"),
+    fullName,
     phone,
     phoneKey: phone,
     email: input.email || fallback.email || null,
@@ -446,6 +456,73 @@ export const upsertCustomer = onCall(
       email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
       userId: typeof request.data?.userId === "string" ? request.data.userId : null,
     });
+  }
+);
+
+function customerPhoneCandidates(raw: string): string[] {
+  const canonical = normalizedPhoneKey(raw);
+  const local = canonical.slice(-10);
+  return [...new Set([canonical, `0${local}`, `90${local}`, local, raw.trim()])].filter(Boolean);
+}
+
+async function propagateCustomerName(businessId: string, phone: string, fullName: string) {
+  const targets = ["appointments", "customerPackages", "checkoutReceipts", "loyaltyAccounts", "waitlist"] as const;
+  const matched = new Map<string, QueryDocumentSnapshot>();
+
+  for (const collectionName of targets) {
+    for (const candidate of customerPhoneCandidates(phone)) {
+      const snapshot = await db.collection(`businesses/${businessId}/${collectionName}`)
+        .where("customerPhone", "==", candidate).limit(2_000).get();
+      snapshot.docs.forEach((document) => matched.set(document.ref.path, document));
+    }
+  }
+
+  const appointmentIds = new Set<string>();
+  const packageIds = new Set<string>();
+  const writes: Array<{ ref: FirebaseFirestore.DocumentReference; data: Record<string, unknown> }> = [];
+  matched.forEach((document) => {
+    writes.push({ ref: document.ref, data: { customerName: fullName, updatedAt: FieldValue.serverTimestamp() } });
+    if (document.ref.parent.id === "appointments") appointmentIds.add(document.id);
+    if (document.ref.parent.id === "customerPackages") packageIds.add(document.id);
+  });
+
+  // Kasa hareketleri telefonu ayrı bir alan olarak tutmadığı için ilgili randevu/paket
+  // bağlantısından bulunur; geçmiş tutarlar korunur, yalnız görünen müşteri adı yenilenir.
+  const financeSnapshot = await db.collection(`businesses/${businessId}/financeTransactions`).limit(2_000).get();
+  financeSnapshot.docs.forEach((document) => {
+    const row = document.data();
+    const linked = appointmentIds.has(String(row.appointmentId ?? "")) || packageIds.has(String(row.customerPackageId ?? ""));
+    if (!linked) return;
+    const description = String(row.description ?? "");
+    const detail = description.includes(" · ") ? description.slice(description.indexOf(" · ") + 3) : description;
+    writes.push({ ref: document.ref, data: { description: detail ? `${fullName} · ${detail}` : fullName, updatedAt: FieldValue.serverTimestamp() } });
+  });
+
+  for (let offset = 0; offset < writes.length; offset += 450) {
+    const batch = db.batch();
+    writes.slice(offset, offset + 450).forEach(({ ref, data }) => batch.set(ref, data, { merge: true }));
+    await batch.commit();
+  }
+  return writes.length;
+}
+
+export const renameCustomer = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    const fullName = requireString(request.data?.fullName, "Ad soyad").slice(0, 80);
+    const phone = normalizedPhoneKey(requireString(request.data?.phone, "Telefon"));
+    const result = await upsertBusinessCustomer({
+      businessId,
+      fullName,
+      phone,
+      email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
+    });
+    const updatedRecords = await propagateCustomerName(businessId, phone, fullName);
+    return { ...result, updatedRecords };
   }
 );
 
@@ -990,6 +1067,16 @@ export const createBusiness = onCall(
         logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : null,
         coverUrl: typeof data.coverUrl === "string" ? data.coverUrl : null,
         description: typeof data.description === "string" ? data.description.slice(0, 600) : "",
+        onboardingGoals: Array.isArray(data.onboardingGoals)
+          ? data.onboardingGoals.map(String).filter(Boolean).slice(0, 8)
+          : [],
+        appointmentManagers: ["owner", "team"].includes(String(data.appointmentManagers ?? ""))
+          ? String(data.appointmentManagers)
+          : "owner",
+        dailyAppointmentVolume: ["0-5", "6-10", "11-20", "21+"].includes(String(data.dailyAppointmentVolume ?? ""))
+          ? String(data.dailyAppointmentVolume)
+          : "0-5",
+        allowOnlineBooking: data.allowOnlineBooking !== false,
         isPublished: !needsApproval,
         status: needsApproval ? "pending_review" : "active",
         approvalStatus: needsApproval ? "pending" : "approved",
@@ -2659,9 +2746,14 @@ export const createAppointment = onCall(
     if (!customerPhone || !/^\+90\d{10}$/.test(customerPhone)) {
       throw new HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
-    const customerName = bookingFields.collectName
+    let customerName = bookingFields.collectName
       ? suppliedCustomerName
       : `Telefon müşterisi • ${customerPhone.slice(-4)}`;
+    if (!bookingFields.collectName) {
+      const customer = await db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`).get();
+      const savedName = String(customer.data()?.fullName ?? "").trim();
+      if (!isGeneratedCustomerName(savedName)) customerName = savedName;
+    }
     const customerEmail = bookingFields.collectEmail && typeof data.customerEmail === "string" && data.customerEmail.trim()
       ? data.customerEmail.trim().toLowerCase()
       : null;
@@ -2678,6 +2770,13 @@ export const createAppointment = onCall(
     }
 
     const context = await loadBookingContext(businessId, serviceId, staffId);
+    if (context.business.allowOnlineBooking === false) {
+      const uid = request.auth?.uid;
+      const member = uid ? await db.doc(`businesses/${businessId}/members/${uid}`).get() : null;
+      if (!member?.exists) {
+        throw new HttpsError("failed-precondition", "Bu işletme müşteri tarafından online randevu kabul etmiyor.");
+      }
+    }
     const serviceData = context.service;
     const durationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
 

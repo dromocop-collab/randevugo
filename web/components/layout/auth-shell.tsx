@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode, useEffect, useState, type CSSProperties } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowUpRight, BarChart3, CalendarCheck2, Check, Clock3, Heart, LockKeyhole, MessageCircleMore, ShieldCheck, Smartphone, Sparkles, Star, TrendingUp, UsersRound, Zap, type LucideIcon } from "lucide-react";
+import { BarChart3, BellRing, CalendarCheck2, Check, Clock3, Compass, Heart, LockKeyhole, MapPin, MessageCircleMore, ShieldCheck, Smartphone, Sparkles, Star, Store, TrendingUp, UsersRound, Zap, type LucideIcon } from "lucide-react";
 
 interface AuthShellProps {
   eyebrow: string;
@@ -19,19 +19,6 @@ const TRUST_ITEMS = [
   { icon: ShieldCheck, label: "Tenant İzolasyonu", desc: "Her işletme izole ortamda" },
   { icon: Zap, label: "%99.99 Uptime", desc: "Firebase altyapı garantisi" },
   { icon: Smartphone, label: "7/24 Erişim", desc: "Tüm cihazlardan erişin" },
-];
-
-const TESTIMONIALS = [
-  {
-    name: "Ayşe K.",
-    role: "Güzellik Merkezi Sahibi",
-    quote: "SeninRandevun ile müşterilerimiz artık 7/24 randevu alabiliyor. No-show oranımız %40 düştü!",
-  },
-  {
-    name: "Mehmet T.",
-    role: "Berber",
-    quote: "Takvim yönetimi çok kolay. Çalışanlarım için ayrı müsaitlik ayarlıyorum.",
-  },
 ];
 
 const PRODUCT_SCENES = [
@@ -81,6 +68,30 @@ function ProductShowcase() {
   );
 }
 
+function CustomerShowcase() {
+  return (
+    <div className="auth-customer-showcase" aria-label="Kişisel randevu merkezi önizlemesi">
+      <div className="auth-customer-showcase__top">
+        <span><Sparkles size={13}/> KİŞİSEL RANDEVU MERKEZİN</span>
+        <small><i/> Planların hazır</small>
+      </div>
+      <div className="auth-customer-showcase__body">
+        <article className="auth-customer-next">
+          <div><span><CalendarCheck2 size={19}/></span><p><small>SIRADAKİ RANDEVUN</small><strong>Yarın · 14:30</strong></p></div>
+          <h3>Bakım günün yaklaşıyor.</h3>
+          <p>Detaylarını görüntüle, yol tarifini aç veya tek dokunuşla işletmeye ulaş.</p>
+          <footer><span><MapPin size={13}/> Sana yakın</span><b>Hazır <Check size={12}/></b></footer>
+        </article>
+        <div className="auth-customer-quick">
+          <article><span><Heart size={17}/></span><p><strong>Favorilerin</strong><small>Sevdiğin işletmeler</small></p><b>8</b></article>
+          <article><span><BellRing size={17}/></span><p><strong>Hatırlatmalar</strong><small>Hiçbir planı kaçırma</small></p><b>2</b></article>
+          <article><span><Compass size={17}/></span><p><strong>Yeni yerler</strong><small>Sana uygun seçenekler</small></p><b><Store size={14}/></b></article>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AuthShell({ eyebrow, title, subtitle, children, variant = "business" }: AuthShellProps) {
   const { user, status } = useAuth();
   const customer = variant === "customer";
@@ -91,7 +102,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
     { icon: CalendarCheck2, label: "Hızlı Randevu", desc: "Saniyeler içinde yerinizi ayırın" },
   ] : TRUST_ITEMS;
   return (
-    <main className="auth-v2 relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8">
+    <main className={`auth-v2 auth-v2--${variant} relative mx-auto grid min-h-screen w-full max-w-[1500px] items-center gap-8 px-4 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-8`}>
       {status === "authenticated" && user && <Link href={customer ? "/hesabim" : "/dashboard"} className="auth-session-pill"><span>✓</span><div><b>Oturumunuz açık</b><small>{customer ? "Hesabıma" : "Panele"} devam et →</small></div></Link>}
       {/* Left — Branding Panel */}
       <section className="auth-story order-2 relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] p-8 shadow-2xl backdrop-blur-xl lg:order-1 lg:p-12">
@@ -128,7 +139,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
             {subtitle}
           </p>
 
-          {!customer && <ProductShowcase />}
+          {customer ? <CustomerShowcase /> : <ProductShowcase />}
 
           {/* Trust Grid */}
           <div className="auth-trust-grid mt-10 grid grid-cols-2 gap-3">
@@ -150,50 +161,14 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
             )})}
           </div>
 
-          {/* Testimonials */}
-          {!customer && <div className="auth-testimonials mt-6 grid gap-3 sm:grid-cols-2">
-            {TESTIMONIALS.map((t, index) => (
-              <div
-                key={t.name}
-                className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)]/60 p-4 backdrop-blur"
-              >
-                <span className="auth-quote-rating"><Star size={10} fill="currentColor" /> 5.0 <ArrowUpRight size={11} /></span>
-                <p className="text-xs leading-relaxed text-[var(--text-2)] italic">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)]/10 text-[10px] font-bold text-[var(--accent)]">
-                    {index === 0 ? "A" : "M"}
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold text-[var(--text-1)]">{t.name}</p>
-                    <p className="text-[10px] text-[var(--text-3)]">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>}
-
-          {/* Bottom stats */}
-          <div className="mt-6 flex items-center gap-6 border-t border-[var(--border)] pt-6">
-            <div>
-              <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">{customer ? "81" : "1000+"}</p>
-              <p className="text-[10px] text-[var(--text-3)]">{customer ? "Şehirde Keşif" : "Aktif İşletme"}</p>
-            </div>
-            <div>
-              <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">50K+</p>
-              <p className="text-[10px] text-[var(--text-3)]">Aylık Randevu</p>
-            </div>
-            <div>
-              <p className="text-xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">4.9</p>
-              <p className="text-[10px] text-[var(--text-3)]">Ortalama Puan</p>
-            </div>
+          <div className="auth-capability-strip mt-6">
+            {(customer ? [["81", "şehirde keşif"], ["7/24", "randevu erişimi"], ["Tek", "kişisel merkez"]] : [["90 gün", "tüm özellikler"], ["7/24", "online randevu"], ["Tek", "bağlı operasyon"]]).map(([value,label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
           </div>
         </div>
       </section>
 
       {/* Right — Form */}
-      <section id="kayit-formu" className="auth-form-stage order-1 w-full max-w-xl scroll-mt-6 justify-self-center lg:order-2"><div className="mb-6"><span className="text-[10px] font-black uppercase tracking-[.18em] text-[var(--accent)]">GÜVENLİ HESAP ERİŞİMİ</span><h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[var(--text-1)]">{customer ? "Randevularınıza kaldığınız yerden devam edin." : "İşletmenize kaldığınız yerden devam edin."}</h2></div>{children}</section>
+      <section id="kayit-formu" className="auth-form-stage order-1 w-full max-w-xl scroll-mt-6 justify-self-center lg:order-2"><div className="auth-form-stage__head mb-6"><span>GÜVENLİ HESAP ERİŞİMİ</span><h2>{customer ? "Randevularınıza kaldığınız yerden devam edin." : "İşletmenize kaldığınız yerden devam edin."}</h2><p>{customer ? "Planlarınız ve favorileriniz sizi bekliyor." : "Canlı operasyon merkezinize tek adımda bağlanın."}</p></div>{children}</section>
     </main>
   );
 }

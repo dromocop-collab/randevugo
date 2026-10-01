@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, writeBatch } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { getDb } from "@/lib/firebase/firestore";
@@ -28,6 +28,31 @@ export async function createOrUpdateCustomer(
   const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "upsertCustomer");
   const result = await callable({ businessId, ...input });
   return String((result.data as { customerId?: string }).customerId ?? "");
+}
+
+export async function renameCustomer(
+  businessId: string,
+  input: Pick<Customer, "fullName" | "phone" | "email">
+): Promise<string> {
+  const db = getDb();
+  const phone = normalizeCustomerPhone(input.phone);
+  const snapshot = await getDocs(query(collection(db, "businesses", businessId, "customers")));
+  const matches = snapshot.docs.filter((item) => normalizeCustomerPhone(String(item.data().phoneKey ?? item.data().phone ?? "")) === phone);
+
+  if (matches.length) {
+    const batch = writeBatch(db);
+    matches.forEach((item) => batch.update(item.ref, { fullName: input.fullName.trim(), updatedAt: serverTimestamp() }));
+    await batch.commit();
+  }
+
+  try {
+    const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "renameCustomer");
+    const result = await callable({ businessId, ...input });
+    return String((result.data as { customerId?: string }).customerId ?? matches[0]?.id ?? "");
+  } catch (error) {
+    if (matches.length) return matches[0].id;
+    throw error;
+  }
 }
 
 export function normalizeCustomerPhone(value: string): string {

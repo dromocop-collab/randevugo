@@ -13,18 +13,18 @@ import { DashboardCommandCenter } from "@/components/dashboard/command-center";
 import { getDashboardAppearancePreferences, saveDashboardAppearancePreferences } from "@/features/users/appearance-preferences-repository";
 
 const dashboardSkins = [
-  { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#0b6b45", "#bdf65e"] },
-  { id: "midnight", name: "Gece", note: "Odaklı ve güçlü", colors: ["#172554", "#22d3ee"] },
-  { id: "pearl", name: "İnci", note: "Sade ve premium", colors: ["#64748b", "#f59e0b"] },
-  { id: "ocean", name: "Okyanus", note: "Ferah ve berrak", colors: ["#0891b2", "#67e8f9"] },
-  { id: "violet", name: "Lavanta", note: "Yaratıcı ve seçkin", colors: ["#7c3aed", "#c4b5fd"] },
-  { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#ea580c", "#fde047"] },
-  { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#e11d48", "#fda4af"] },
-  { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#334155", "#38bdf8"] },
-  { id: "champagne", name: "Şampanya", note: "Sıcak ve sofistike", colors: ["#a16207", "#fde68a"] },
-  { id: "forest", name: "Orman", note: "Doğal ve prestijli", colors: ["#166534", "#86efac"] },
-  { id: "ruby", name: "Yakut", note: "Güçlü ve seçkin", colors: ["#be123c", "#fbbf24"] },
-  { id: "indigo", name: "İndigo", note: "Teknolojik ve sakin", colors: ["#4338ca", "#a5b4fc"] },
+  { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#061d15", "#0b6b45", "#39c98b", "#bdf65e"] },
+  { id: "midnight", name: "Gece", note: "Odaklı ve güçlü", colors: ["#07152f", "#2563eb", "#22d3ee"] },
+  { id: "pearl", name: "İnci", note: "Sade ve premium", colors: ["#18202b", "#64748b", "#f5b942", "#fffdf8"] },
+  { id: "ocean", name: "Okyanus", note: "Ferah ve berrak", colors: ["#083344", "#0891b2", "#67e8f9"] },
+  { id: "violet", name: "Lavanta", note: "Yaratıcı ve seçkin", colors: ["#2e1065", "#7c3aed", "#9f7aea", "#c4b5fd"] },
+  { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#431407", "#ea580c", "#fde047"] },
+  { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#4c0519", "#be123c", "#e11d48", "#fda4af"] },
+  { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#0f172a", "#334155", "#38bdf8"] },
+  { id: "champagne", name: "Şampanya", note: "Sıcak ve sofistike", colors: ["#422006", "#a16207", "#f5b942", "#fde68a"] },
+  { id: "forest", name: "Orman", note: "Doğal ve prestijli", colors: ["#052e16", "#166534", "#86efac"] },
+  { id: "ruby", name: "Yakut", note: "Güçlü ve seçkin", colors: ["#4c0519", "#9f1239", "#e11d48", "#fbbf24"] },
+  { id: "indigo", name: "İndigo", note: "Teknolojik ve sakin", colors: ["#1e1b4b", "#4338ca", "#a5b4fc"] },
 ] as const;
 
 type DashboardSkin = (typeof dashboardSkins)[number]["id"];

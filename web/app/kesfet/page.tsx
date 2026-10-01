@@ -20,7 +20,7 @@ export default function DiscoverPage() {
           <aside className="discover-business-portal">
             <div className="business-portal-icon"><BriefcaseBusiness size={23} /></div>
             <span>İŞLETME SAHİPLERİ İÇİN</span>
-            <h2>Takviminizi değil,<br />işletmenizi büyütün.</h2>
+            <h2>Takviminizi değil,<br />işletmenizi yönetin.</h2>
             <p>Randevu, ekip, müşteri ve gelirinizi tek profesyonel çalışma alanında yönetin.</p>
             <Link href="/ozellikler">İşletme çözümlerini keşfet <ArrowUpRight size={16} /></Link>
             <small><BadgeCheck size={13} /> Yeni işletmelere ilk 3 ay ücretsiz</small>

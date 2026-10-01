@@ -82,6 +82,7 @@ export default function SettingsPage() {
   const [slotInterval, setSlotInterval] = useState(15);
   const [allowCancel, setAllowCancel] = useState(true);
   const [allowReschedule, setAllowReschedule] = useState(true);
+  const [allowOnlineBooking, setAllowOnlineBooking] = useState(true);
   const [cancelDeadline, setCancelDeadline] = useState(60);
   const [smsPreferences, setSmsPreferences] = useState<SmsPreferences>({ confirmation: true, reminder: true, cancellation: true, reschedule: true });
 
@@ -110,6 +111,7 @@ export default function SettingsPage() {
       setSlotInterval(biz.slotIntervalMinutes ?? 15);
       setAllowCancel(biz.allowCancellation ?? true);
       setAllowReschedule(biz.allowReschedule ?? true);
+      setAllowOnlineBooking(biz.allowOnlineBooking !== false);
       setCancelDeadline(biz.cancellationDeadlineMinutes ?? 60);
       setSmsPreferences({
         confirmation: biz.smsPreferences?.confirmation !== false,
@@ -218,6 +220,7 @@ export default function SettingsPage() {
         slotIntervalMinutes: slotInterval,
         allowCancellation: allowCancel,
         allowReschedule,
+        allowOnlineBooking,
         cancellationDeadlineMinutes: cancelDeadline,
         smsPreferences,
       });
@@ -560,6 +563,12 @@ export default function SettingsPage() {
         <Card title="Randevu Ayarları" description="Randevu sisteminizin kurallarını belirleyin.">
           <div className="settings-preset-grid"><button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={16}/><span><b>Esnek</b><small>Daha fazla müsaitlik</small></span></button><button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={16}/><span><b>Dengeli</b><small>Önerilen çalışma düzeni</small></span></button><button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={16}/><span><b>Korumalı</b><small>Daha geniş hazırlık süresi</small></span></button></div>
           <form className="settings-form space-y-4" onSubmit={handleSaveAppointment}>
+            <div className="settings-policy-card rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <label className="settings-switch-row">
+                <input type="checkbox" checked={allowOnlineBooking} onChange={(event) => setAllowOnlineBooking(event.target.checked)}/>
+                <i/><span><b>Müşteri online randevusu</b><small>Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir.</small></span>
+              </label>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Input

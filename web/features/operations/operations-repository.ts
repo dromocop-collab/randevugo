@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -67,6 +68,10 @@ export async function saveProduct(
   }, { merge: true });
 }
 
+export async function deleteProduct(businessId: string, productId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), "businesses", businessId, "products", productId));
+}
+
 export async function saveServicePackage(
   businessId: string,
   input: Omit<ServicePackage, "id" | "createdAt" | "updatedAt"> & { id?: string }
@@ -81,6 +86,10 @@ export async function saveServicePackage(
     validityDays: Math.max(1, Math.floor(input.validityDays)), isActive: input.isActive,
     updatedAt: now, ...(!input.id ? { createdAt: now } : {}),
   }, { merge: true });
+}
+
+export async function deleteServicePackage(businessId: string, packageId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), "businesses", businessId, "servicePackages", packageId));
 }
 
 export async function createExpense(businessId: string, input: {

@@ -13,7 +13,7 @@ export default function LoginPage() {
     <AuthShell
       eyebrow="YENİDEN HOŞ GELDİNİZ"
       title="Günün kontrolü yeniden sizde."
-      subtitle="Randevu, ekip, müşteri ve büyüme verilerinize güvenli oturumunuzla her cihazdan ulaşın."
+      subtitle="Randevu, ekip, müşteri, kasa ve işletme verilerinize güvenli oturumunuzla her cihazdan ulaşın."
     >
       <LoginForm />
     </AuthShell>

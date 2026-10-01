@@ -28,7 +28,7 @@ type SubscriptionRow = {
   isLifetime: boolean;
 };
 
-const DEFAULT_PLAN: PlatformPlan = { id: "RANDEVUGO", label: PLAN_LABEL, yearlyPrice: PLAN_PRICE.yearly, monthlyPrice: PLAN_PRICE.monthlyEquivalent, currency: "TRY", trialDays: PLAN_PRICE.trialDays, maxStores: 3, maxStaff: 250, isActive: true, isRecommended: true, description: "Tüm randevu operasyonunu tek merkezden yönetin.", features: [...PLAN_FEATURE_LIST] };
+const DEFAULT_PLAN: PlatformPlan = { id: "RANDEVUGO", label: PLAN_LABEL, yearlyPrice: PLAN_PRICE.yearly, monthlyPrice: PLAN_PRICE.monthly, currency: "TRY", trialDays: PLAN_PRICE.trialDays, maxStores: 3, maxStaff: 250, isActive: true, isRecommended: true, description: "Tüm randevu operasyonunu tek merkezden yönetin.", features: [...PLAN_FEATURE_LIST] };
 
 function readDate(value: unknown): string | undefined {
   if (typeof value === "string") return value;
@@ -285,7 +285,7 @@ export default function SuperAdminSubscriptionsPage() {
                 </span>
                 <span className="text-sm text-[var(--text-3)]"> / yıl</span>
                 <p className="text-xs text-[var(--text-3)]">
-                  Ayda yaklaşık {PLAN_PRICE.monthlyEquivalent} ₺
+                  Aylık {PLAN_PRICE.monthly} ₺
                 </p>
               </div>
             </div>

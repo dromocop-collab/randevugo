@@ -292,8 +292,13 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="tr" dir="ltr" className={`${jakarta.variable} ${spaceGrotesk.variable} h-full antialiased`}>
+    <html lang="tr" dir="ltr" suppressHydrationWarning className={`${jakarta.variable} ${spaceGrotesk.variable} h-full antialiased`}>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var s=localStorage.getItem("sr-dashboard-skin");if(["emerald","midnight","pearl","ocean","violet","sunset","rose","graphite","champagne","forest","ruby","indigo"].includes(s)){document.documentElement.dataset.dashboardSkin=s}}catch(e){}`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

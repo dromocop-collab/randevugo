@@ -35,6 +35,10 @@ export interface OnboardingInput {
   description?: string;
   slug: string;
   workingHours: DaySchedule[];
+  onboardingGoals?: string[];
+  appointmentManagers?: "owner" | "team";
+  dailyAppointmentVolume?: "0-5" | "6-10" | "11-20" | "21+";
+  allowOnlineBooking?: boolean;
 }
 
 export async function getBusinessesForUser(uid: string): Promise<Business[]> {

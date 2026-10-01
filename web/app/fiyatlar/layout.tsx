@@ -5,7 +5,7 @@ const SITE_URL = "https://seninrandevun.com";
 
 export const metadata: Metadata = {
   title: "Online Randevu Sistemi Fiyatları | İşletme Planları",
-  description: `Yeni işletmelere SeninRandevun ilk 3 ay ücretsiz. Sonrasında yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
+  description: `Yeni işletmelere SeninRandevun ilk 3 ay ücretsiz. Sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
   keywords: [
     "online randevu sistemi fiyatları",
     "randevu yazılımı fiyat",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `${SITE_URL}/fiyatlar` },
   openGraph: {
     title: "Online Randevu Sistemi Fiyatları | SeninRandevun",
-    description: `Yeni işletmelere ilk 3 ay ücretsiz; sonrasında yılda ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Tüm özellikler dahil.`,
+    description: `Yeni işletmelere ilk 3 ay ücretsiz; sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Tüm özellikler dahil.`,
     url: `${SITE_URL}/fiyatlar`,
     type: "website",
   },
@@ -34,19 +34,16 @@ const pricingJsonLd = {
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       url: `${SITE_URL}/fiyatlar`,
-      offers: {
-        "@type": "Offer",
-        price: PLAN_PRICE.yearly,
-        priceCurrency: PLAN_PRICE.currency,
-        priceValidUntil: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
-        availability: "https://schema.org/InStock",
-        description: `${PLAN_LABEL} — tüm özellikler dahil yıllık plan`,
-        seller: {
-          "@type": "Organization",
-          name: "SeninRandevun",
-          url: SITE_URL,
+      offers: [
+        {
+          "@type": "Offer", price: PLAN_PRICE.monthly, priceCurrency: PLAN_PRICE.currency,
+          availability: "https://schema.org/InStock", description: `${PLAN_LABEL} — tüm özellikler dahil aylık plan`,
         },
-      },
+        {
+          "@type": "Offer", price: PLAN_PRICE.yearly, priceCurrency: PLAN_PRICE.currency,
+          availability: "https://schema.org/InStock", description: `${PLAN_LABEL} — tüm özellikler dahil yıllık plan`,
+        },
+      ],
       featureList: PLAN_FEATURE_LIST,
       aggregateRating: undefined, // Add when you have real ratings
     },

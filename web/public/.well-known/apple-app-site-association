@@ -1,0 +1,25 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "G4KKMJ85R7.com.cihat.Senin-Randevun"
+        ],
+        "components": [
+          {
+            "/": "/isletme/*",
+            "comment": "İşletme vitrini ve randevu akışı"
+          },
+          {
+            "/": "/hesabim*",
+            "comment": "Müşteri hesabı"
+          },
+          {
+            "/": "/siram*",
+            "comment": "Canlı sıra"
+          }
+        ]
+      }
+    ]
+  }
+}

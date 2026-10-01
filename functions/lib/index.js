@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = void 0;
+exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.renameCustomer = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -344,6 +344,10 @@ function normalizedPhoneKey(raw) {
 function customerDocumentId(phone) {
     return (0, crypto_1.createHash)("sha256").update(phone).digest("hex").slice(0, 32);
 }
+function isGeneratedCustomerName(value) {
+    const normalized = value.trim().toLocaleLowerCase("tr-TR");
+    return !normalized || normalized === "müşteri" || normalized.startsWith("telefon müşterisi");
+}
 async function upsertBusinessCustomer(input) {
     const phone = normalizedPhoneKey(input.phone);
     const customers = db.collection(`businesses/${input.businessId}/customers`);
@@ -361,9 +365,14 @@ async function upsertBusinessCustomer(input) {
     const numberTotal = (key) => matches.reduce((sum, document) => sum + Math.max(0, Number(document.data()[key] ?? 0)), 0);
     const existingCanonical = matches.find((document) => document.ref.path === canonicalRef.path);
     const fallback = existingCanonical?.data() ?? matches[0]?.data() ?? {};
+    const requestedName = input.fullName.trim();
+    const previousName = String(fallback.fullName ?? "").trim();
+    const fullName = isGeneratedCustomerName(requestedName) && !isGeneratedCustomerName(previousName)
+        ? previousName
+        : requestedName || previousName || "Müşteri";
     const batch = db.batch();
     batch.set(canonicalRef, {
-        fullName: input.fullName || String(fallback.fullName ?? "Müşteri"),
+        fullName,
         phone,
         phoneKey: phone,
         email: input.email || fallback.email || null,
@@ -395,6 +404,67 @@ exports.upsertCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (
         email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
         userId: typeof request.data?.userId === "string" ? request.data.userId : null,
     });
+});
+function customerPhoneCandidates(raw) {
+    const canonical = normalizedPhoneKey(raw);
+    const local = canonical.slice(-10);
+    return [...new Set([canonical, `0${local}`, `90${local}`, local, raw.trim()])].filter(Boolean);
+}
+async function propagateCustomerName(businessId, phone, fullName) {
+    const targets = ["appointments", "customerPackages", "checkoutReceipts", "loyaltyAccounts", "waitlist"];
+    const matched = new Map();
+    for (const collectionName of targets) {
+        for (const candidate of customerPhoneCandidates(phone)) {
+            const snapshot = await db.collection(`businesses/${businessId}/${collectionName}`)
+                .where("customerPhone", "==", candidate).limit(2_000).get();
+            snapshot.docs.forEach((document) => matched.set(document.ref.path, document));
+        }
+    }
+    const appointmentIds = new Set();
+    const packageIds = new Set();
+    const writes = [];
+    matched.forEach((document) => {
+        writes.push({ ref: document.ref, data: { customerName: fullName, updatedAt: firestore_1.FieldValue.serverTimestamp() } });
+        if (document.ref.parent.id === "appointments")
+            appointmentIds.add(document.id);
+        if (document.ref.parent.id === "customerPackages")
+            packageIds.add(document.id);
+    });
+    // Kasa hareketleri telefonu ayrı bir alan olarak tutmadığı için ilgili randevu/paket
+    // bağlantısından bulunur; geçmiş tutarlar korunur, yalnız görünen müşteri adı yenilenir.
+    const financeSnapshot = await db.collection(`businesses/${businessId}/financeTransactions`).limit(2_000).get();
+    financeSnapshot.docs.forEach((document) => {
+        const row = document.data();
+        const linked = appointmentIds.has(String(row.appointmentId ?? "")) || packageIds.has(String(row.customerPackageId ?? ""));
+        if (!linked)
+            return;
+        const description = String(row.description ?? "");
+        const detail = description.includes(" · ") ? description.slice(description.indexOf(" · ") + 3) : description;
+        writes.push({ ref: document.ref, data: { description: detail ? `${fullName} · ${detail}` : fullName, updatedAt: firestore_1.FieldValue.serverTimestamp() } });
+    });
+    for (let offset = 0; offset < writes.length; offset += 450) {
+        const batch = db.batch();
+        writes.slice(offset, offset + 450).forEach(({ ref, data }) => batch.set(ref, data, { merge: true }));
+        await batch.commit();
+    }
+    return writes.length;
+}
+exports.renameCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    const fullName = requireString(request.data?.fullName, "Ad soyad").slice(0, 80);
+    const phone = normalizedPhoneKey(requireString(request.data?.phone, "Telefon"));
+    const result = await upsertBusinessCustomer({
+        businessId,
+        fullName,
+        phone,
+        email: typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : null,
+    });
+    const updatedRecords = await propagateCustomerName(businessId, phone, fullName);
+    return { ...result, updatedRecords };
 });
 const BUSINESS_PAYMENT_METHODS = ["cash", "card", "transfer", "other"];
 function businessPaymentMethod(value) {
@@ -903,6 +973,16 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : null,
             coverUrl: typeof data.coverUrl === "string" ? data.coverUrl : null,
             description: typeof data.description === "string" ? data.description.slice(0, 600) : "",
+            onboardingGoals: Array.isArray(data.onboardingGoals)
+                ? data.onboardingGoals.map(String).filter(Boolean).slice(0, 8)
+                : [],
+            appointmentManagers: ["owner", "team"].includes(String(data.appointmentManagers ?? ""))
+                ? String(data.appointmentManagers)
+                : "owner",
+            dailyAppointmentVolume: ["0-5", "6-10", "11-20", "21+"].includes(String(data.dailyAppointmentVolume ?? ""))
+                ? String(data.dailyAppointmentVolume)
+                : "0-5",
+            allowOnlineBooking: data.allowOnlineBooking !== false,
             isPublished: !needsApproval,
             status: needsApproval ? "pending_review" : "active",
             approvalStatus: needsApproval ? "pending" : "approved",
@@ -2490,9 +2570,15 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
     if (!customerPhone || !/^\+90\d{10}$/.test(customerPhone)) {
         throw new https_1.HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
-    const customerName = bookingFields.collectName
+    let customerName = bookingFields.collectName
         ? suppliedCustomerName
         : `Telefon müşterisi • ${customerPhone.slice(-4)}`;
+    if (!bookingFields.collectName) {
+        const customer = await db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`).get();
+        const savedName = String(customer.data()?.fullName ?? "").trim();
+        if (!isGeneratedCustomerName(savedName))
+            customerName = savedName;
+    }
     const customerEmail = bookingFields.collectEmail && typeof data.customerEmail === "string" && data.customerEmail.trim()
         ? data.customerEmail.trim().toLowerCase()
         : null;
@@ -2507,6 +2593,13 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
         throw new https_1.HttpsError("invalid-argument", "startAtMillis zorunludur.");
     }
     const context = await loadBookingContext(businessId, serviceId, staffId);
+    if (context.business.allowOnlineBooking === false) {
+        const uid = request.auth?.uid;
+        const member = uid ? await db.doc(`businesses/${businessId}/members/${uid}`).get() : null;
+        if (!member?.exists) {
+            throw new https_1.HttpsError("failed-precondition", "Bu işletme müşteri tarafından online randevu kabul etmiyor.");
+        }
+    }
     const serviceData = context.service;
     const durationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
     const staffData = context.staff;

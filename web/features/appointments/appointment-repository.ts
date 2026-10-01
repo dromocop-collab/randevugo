@@ -26,6 +26,42 @@ async function staffScope(businessId: string): Promise<string | null> {
   return staffId;
 }
 
+function appointmentPhoneKey(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.startsWith("90") && digits.length === 12) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+90${digits.slice(1)}`;
+  if (digits.length === 10) return `+90${digits}`;
+  return String(value ?? "").trim();
+}
+
+function isSavedCustomerName(value: unknown): boolean {
+  const name = String(value ?? "").trim();
+  const normalized = name.toLocaleLowerCase("tr-TR");
+  return Boolean(name) && normalized !== "müşteri" && !normalized.startsWith("telefon müşterisi");
+}
+
+async function hydrateCurrentCustomerNames(businessId: string, appointments: Appointment[]): Promise<Appointment[]> {
+  try {
+    const customers = await getDocs(collection(getDb(), "businesses", businessId, "customers"));
+    const names = new Map<string, string>();
+    customers.docs.forEach((customer) => {
+      const row = customer.data();
+      const name = row.fullName;
+      const phone = appointmentPhoneKey(row.phoneKey ?? row.phone);
+      if (phone && isSavedCustomerName(name)) names.set(phone, String(name).trim());
+    });
+    return appointments.map((appointment) => {
+      const currentName = names.get(appointmentPhoneKey(appointment.customerPhone));
+      return currentName && currentName !== appointment.customerName
+        ? { ...appointment, customerName: currentName }
+        : appointment;
+    });
+  } catch {
+    // Some staff roles can read assigned appointments but not the full CRM list.
+    return appointments;
+  }
+}
+
 export async function listAppointments(businessId: string): Promise<Appointment[]> {
   const db = getDb();
   const ref = collection(db, "businesses", businessId, "appointments");
@@ -33,7 +69,7 @@ export async function listAppointments(businessId: string): Promise<Appointment[
   const snap = await getDocs(ownStaffId
     ? query(ref, where("staffId", "==", ownStaffId), orderBy("startAt", "asc"))
     : query(ref, orderBy("startAt", "asc")));
-  return snap.docs.map((item) => mapDoc<Appointment>(item));
+  return hydrateCurrentCustomerNames(businessId, snap.docs.map((item) => mapDoc<Appointment>(item)));
 }
 
 export async function listAppointmentsByDateRange(
@@ -58,7 +94,7 @@ export async function listAppointmentsByDateRange(
       orderBy("startAt", "asc")
     )
   );
-  return snap.docs.map((item) => mapDoc<Appointment>(item));
+  return hydrateCurrentCustomerNames(businessId, snap.docs.map((item) => mapDoc<Appointment>(item)));
 }
 
 export async function updateAppointmentStatus(

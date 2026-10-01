@@ -21,9 +21,21 @@ export function BrandPageLoader({
       <section className="brand-loader-card">
         <div className="brand-loader-status"><span/><LockKeyhole size={13}/>{eyebrow}</div>
         <div className="brand-loader-mark" aria-hidden="true">
-          <span className="brand-loader-ring ring-one"/><span className="brand-loader-ring ring-two"/>
-          <span className="brand-loader-orbit-dot dot-one"/><span className="brand-loader-orbit-dot dot-two"/>
-          <span className="brand-loader-logo"><Image src="/logo.png" alt="" width={72} height={72} priority/></span>
+          <span className="brand-loader-floor" />
+          <span className="brand-loader-ring ring-one" />
+          <span className="brand-loader-ring ring-two" />
+          <span className="brand-loader-ring ring-three" />
+          <span className="brand-loader-orbit-dot dot-one" />
+          <span className="brand-loader-orbit-dot dot-two" />
+          <span className="brand-loader-orbit-dot dot-three" />
+          <span className="brand-loader-cube">
+            <span className="brand-loader-face face-front"><Image src="/logo.png" alt="" width={72} height={72} priority /></span>
+            <span className="brand-loader-face face-back" />
+            <span className="brand-loader-face face-left" />
+            <span className="brand-loader-face face-right" />
+            <span className="brand-loader-face face-top" />
+            <span className="brand-loader-face face-bottom" />
+          </span>
         </div>
         <strong className="brand-loader-wordmark">Senin<span>Randevun</span></strong>
         <div className="brand-loader-copy"><h1>{title}</h1><p>{label}</p></div>

@@ -96,6 +96,11 @@ export interface Business extends EntityBase {
   liveQueueIntakePaused?: boolean;
   availabilityAlertsEnabled?: boolean;
   lastMinuteSlotsEnabled?: boolean;
+  /** Whether customers can create appointments from the public storefront. */
+  allowOnlineBooking?: boolean;
+  onboardingGoals?: string[];
+  appointmentManagers?: "owner" | "team";
+  dailyAppointmentVolume?: "0-5" | "6-10" | "11-20" | "21+";
   minimumBookingNoticeMinutes: number;
   maximumBookingDaysAhead: number;
   appointmentBufferMinutes: number;

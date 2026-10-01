@@ -175,7 +175,7 @@ export function AdminAssistant() {
     const text = raw.toLocaleLowerCase("tr-TR");
     const outcome = stats.completed + stats.cancelled + stats.noShow;
     const problemRate = outcome ? ((stats.cancelled + stats.noShow) / outcome) * 100 : 0;
-    const mrr = Math.round(stats.activeSubscriptions * PLAN_PRICE.monthlyEquivalent);
+    const mrr = Math.round(stats.activeSubscriptions * PLAN_PRICE.monthly);
     const moderation = stats.pendingReviews + stats.pendingCategories;
     if (/^(selam|merhaba|hey|sa|günaydın|iyi akşamlar)[!. ]*$/.test(text)) return { body: `Merhaba! Ben iyiyim ve platform için hazırım 🙂 Şu anda sağlık puanı ${healthScore}/100; ${stats.pendingBusinesses + stats.criticalSupport + moderation} operasyon kaydı dikkatinizi bekliyor. Siz nasılsınız, bugün neyi birlikte yönetelim?` };
     if (/nasılsın|ne haber|naber/.test(text)) return { body: `Gayet iyiyim, teşekkür ederim 🙂 Platformu da kontrol ettim: ${stats.healthySources}/${stats.totalSources} veri kaynağı canlı ve sağlık puanı ${healthScore}/100. İsterseniz size bugünün önceliklerini hemen sıralayayım.` };

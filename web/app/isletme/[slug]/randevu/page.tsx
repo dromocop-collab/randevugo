@@ -47,6 +47,10 @@ export default function BookingPage() {
           setError("Bu işletme şu anda aktif değil.");
           return;
         }
+        if (row.allowOnlineBooking === false) {
+          setError("Bu işletme randevularını şu anda doğrudan yönetiyor.");
+          return;
+        }
 
         const [schedules, services] = await Promise.all([
           listBusinessWorkingHours(row.id),

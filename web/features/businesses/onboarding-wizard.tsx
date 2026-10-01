@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useBusiness } from "@/hooks/use-business";
 import { firstErrorMessage, onboardingSchema } from "@/lib/validation/schemas";
 import { listDynamicCategories } from "@/features/categories/category-request-repository";
+import { clearBusinessOnboardingDraft, readBusinessOnboardingDraft } from "@/features/businesses/onboarding-draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -137,6 +138,28 @@ export function OnboardingWizard() {
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
 
+  const [goals, setGoals] = useState<string[]>([]);
+  const [appointmentManagers, setAppointmentManagers] = useState<"owner" | "team">("owner");
+  const [dailyAppointmentVolume, setDailyAppointmentVolume] = useState<"0-5" | "6-10" | "11-20" | "21+">("0-5");
+  const [allowOnlineBooking, setAllowOnlineBooking] = useState(true);
+
+  useEffect(() => {
+    const draft = readBusinessOnboardingDraft();
+    queueMicrotask(() => {
+      if (draft.name) setName(draft.name);
+      if (draft.category) setCategory(draft.category);
+      if (draft.phone) setPhone(draft.phone.startsWith("0") ? draft.phone : `0${draft.phone}`);
+      if (draft.city) setCity(draft.city);
+      if (draft.slug) setSlug(draft.slug);
+      if (draft.goals) setGoals(draft.goals);
+      if (draft.appointmentManagers) setAppointmentManagers(draft.appointmentManagers);
+      if (draft.dailyAppointmentVolume) setDailyAppointmentVolume(draft.dailyAppointmentVolume);
+      if (typeof draft.allowOnlineBooking === "boolean") setAllowOnlineBooking(draft.allowOnlineBooking);
+      if (user?.email) setEmail((current) => current || user.email || "");
+      if (draft.name && draft.category && draft.phone && draft.city && draft.slug) setStep(1);
+    });
+  }, [user?.email]);
+
   const computedSlug = useMemo(() => slugify(name), [name]);
   const finalSlug = slug || computedSlug;
 
@@ -229,6 +252,10 @@ export function OnboardingWizard() {
         description,
         slug: payload.slug,
         workingHours: defaultWorkingHours,
+        onboardingGoals: goals,
+        appointmentManagers,
+        dailyAppointmentVolume,
+        allowOnlineBooking,
       });
       const businessId = creation.businessId;
 
@@ -252,6 +279,7 @@ export function OnboardingWizard() {
       }
 
       setBusinessId(businessId);
+      clearBusinessOnboardingDraft();
       toast.success(`🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`);
       if (mediaWarning) toast.warning("Mağazan oluşturuldu ancak bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin.", { duration: 9000 });
       router.push("/dashboard");

@@ -3,38 +3,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import {
+  ArrowRight, ArrowUpRight, Building2, CalendarCheck2, CalendarDays,
+  CircleDollarSign, Clock3, FileText, FolderOpen, ImageIcon,
+  MessageCircleMore, Scissors, Settings2, Sparkles, UserRound, UsersRound,
+  WalletCards, Zap, type LucideIcon,
+} from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessById, listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { listAppointments } from "@/features/appointments/appointment-repository";
 import { listCustomers } from "@/features/customers/customer-repository";
 import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
-import type { Appointment } from "@/types/appointments";
-import type { Business } from "@/types/business";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { SetupAssistant, type SetupAssistantStep } from "@/components/dashboard/setup-assistant";
-import {
-  ArrowUpRight, Building2, CalendarCheck2, CalendarDays, CheckCircle2,
-  CircleDollarSign, Clock3, Copy, Eye, FileText, FolderOpen, ImageIcon,
-  ArrowRight, BarChart3, CalendarPlus2, Gauge, Inbox, ListChecks, PartyPopper, Rocket, Scissors, Settings2,
-  Sparkles, Target, TrendingUp, UserRound, UsersRound, XCircle, Zap, type LucideIcon,
-} from "lucide-react";
+import type { Appointment } from "@/types/appointments";
+import type { Business } from "@/types/business";
 
 interface DashboardData {
   todayCount: number;
-  pending: number;
-  completed: number;
-  cancelled: number;
+  waitingCount: number;
+  completedCount: number;
   customerCount: number;
-  serviceCount: number;
-  staffCount: number;
   todayRevenue: number;
   upcoming: Appointment[];
-  weekRevenue: number;
-  weekAppointments: number;
-  completionRate: number;
-  returningCustomers: number;
-  weeklyActivity: Array<{ label: string; value: number }>;
 }
 
 interface SetupItem {
@@ -45,64 +37,26 @@ interface SetupItem {
   icon: LucideIcon;
 }
 
-type DashboardHomeModule = "command" | "insights" | "profile" | "kpis" | "operations";
-type DashboardHomePreference = { id: DashboardHomeModule; enabled: boolean };
-const DEFAULT_HOME_MODULES: DashboardHomePreference[] = ["command", "insights", "profile", "kpis", "operations"].map((id) => ({ id: id as DashboardHomeModule, enabled: true }));
-
 const EMPTY_DATA: DashboardData = {
-  todayCount: 0, pending: 0, completed: 0, cancelled: 0,
-  customerCount: 0, serviceCount: 0, staffCount: 0, todayRevenue: 0, upcoming: [],
-  weekRevenue: 0, weekAppointments: 0, completionRate: 0, returningCustomers: 0, weeklyActivity: [],
+  todayCount: 0,
+  waitingCount: 0,
+  completedCount: 0,
+  customerCount: 0,
+  todayRevenue: 0,
+  upcoming: [],
 };
-
-function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    const duration = 600;
-    const start = performance.now();
-    function tick(now: number) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(eased * value));
-      if (progress < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  }, [value]);
-  return <>{display.toLocaleString("tr-TR")}{suffix || ""}</>;
-}
 
 export default function DashboardHomePage() {
   const { businessId, access } = useBusiness();
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [modulePreferences, setModulePreferences] = useState<DashboardHomePreference[]>(DEFAULT_HOME_MODULES);
-
-  useEffect(() => {
-    const read = () => {
-      try {
-        const stored = JSON.parse(window.localStorage.getItem("sr-dashboard-modules") ?? "[]") as DashboardHomePreference[];
-        const valid = stored.filter((item) => DEFAULT_HOME_MODULES.some((module) => module.id === item.id));
-        const next = valid.length ? [...valid, ...DEFAULT_HOME_MODULES.filter((module) => !valid.some((item) => item.id === module.id))] : DEFAULT_HOME_MODULES;
-        queueMicrotask(() => setModulePreferences(next));
-      } catch { queueMicrotask(() => setModulePreferences(DEFAULT_HOME_MODULES)); }
-    };
-    const changed = (event: Event) => {
-      const detail = (event as CustomEvent<DashboardHomePreference[]>).detail;
-      if (Array.isArray(detail)) setModulePreferences(detail);
-      else read();
-    };
-    read();
-    window.addEventListener("sr-dashboard-layout-change", changed);
-    return () => window.removeEventListener("sr-dashboard-layout-change", changed);
-  }, []);
 
   useEffect(() => {
     if (!businessId) return;
-    let alive = true;
+    let active = true;
 
     Promise.all([
       listAppointments(businessId),
@@ -112,490 +66,466 @@ export default function DashboardHomePage() {
       getBusinessById(businessId),
       listBusinessWorkingHours(businessId),
     ])
-      .then(([appts, customers, services, staff, biz, workingHours]) => {
-        if (!alive) return;
-        setLoadError(null);
-        setBusiness(biz);
-
+      .then(([appointments, customers, services, staff, currentBusiness, workingHours]) => {
+        if (!active) return;
         const now = Date.now();
-        const todayString = new Date(now).toDateString();
-        const todayAppts = appts.filter((item) => new Date(item.startAt).toDateString() === todayString);
-        const completed = appts.filter((item) => item.status === "completed").length;
-        const pending = appts.filter((item) => item.status === "pending" || item.status === "confirmed").length;
-        const cancelled = appts.filter((item) => item.status === "cancelled").length;
-        const todayRevenue = todayAppts
-          .filter((a) => a.status === "completed")
-          .reduce((sum, a) => sum + (a.servicePrice ?? 0), 0);
+        const today = new Date(now).toDateString();
+        const todayAppointments = appointments.filter(
+          (item) => new Date(item.startAt).toDateString() === today,
+        );
+        const upcoming = appointments
+          .filter(
+            (item) =>
+              ["pending", "confirmed"].includes(item.status) &&
+              new Date(item.startAt).getTime() > now,
+          )
+          .sort(
+            (left, right) =>
+              new Date(left.startAt).getTime() - new Date(right.startAt).getTime(),
+          )
+          .slice(0, 4);
 
-        const weekStart = now - 7 * 86_400_000;
-        const weekAppointments = appts.filter((item) => new Date(item.startAt).getTime() >= weekStart);
-        const weekCompleted = weekAppointments.filter((item) => item.status === "completed");
-        const weekRevenue = weekCompleted.reduce((sum, item) => sum + (item.servicePrice ?? 0), 0);
-        const resolved = appts.filter((item) => ["completed", "cancelled", "no_show"].includes(item.status));
-        const completionRate = resolved.length ? Math.round(completed / resolved.length * 100) : 0;
-        const returningCustomers = customers.filter((item) => item.completedAppointments > 1).length;
-        const weeklyActivity = Array.from({ length: 7 }, (_, index) => {
-          const date = new Date(now - (6 - index) * 86_400_000);
-          return {
-            label: date.toLocaleDateString("tr-TR", { weekday: "short" }).slice(0, 3),
-            value: weekAppointments.filter((item) => new Date(item.startAt).toDateString() === date.toDateString()).length,
-          };
+        setBusiness(currentBusiness);
+        setData({
+          todayCount: todayAppointments.length,
+          waitingCount: todayAppointments.filter((item) => item.status === "pending").length,
+          completedCount: todayAppointments.filter((item) => item.status === "completed").length,
+          customerCount: customers.length,
+          todayRevenue: todayAppointments
+            .filter((item) => item.status === "completed")
+            .reduce((sum, item) => sum + (item.servicePrice ?? 0), 0),
+          upcoming,
         });
-
-        const upcoming = appts
-          .filter((a) => (a.status === "confirmed" || a.status === "pending") && new Date(a.startAt).getTime() > now)
-          .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
-          .slice(0, 5);
-
-        setData({ todayCount: todayAppts.length, pending, completed, cancelled, customerCount: customers.length, serviceCount: services.length, staffCount: staff.length, todayRevenue, upcoming, weekRevenue, weekAppointments: weekAppointments.length, completionRate, returningCustomers, weeklyActivity });
-
-        // Dynamic labels with actual counts
-        const items: SetupItem[] = [
+        setSetupItems([
           {
             id: "business",
-            label: biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district
-              ? "İşletme bilgileri tamamlandı" : "İşletme bilgilerini tamamla",
-            done: !!(biz?.name && biz.phone && biz.email && biz.address && biz.city && biz.district),
-            href: "/dashboard/ayarlar", icon: Building2,
+            label: "İşletme bilgilerini tamamla",
+            done: Boolean(
+              currentBusiness?.name &&
+                currentBusiness.phone &&
+                currentBusiness.email &&
+                currentBusiness.address &&
+                currentBusiness.city &&
+                currentBusiness.district,
+            ),
+            href: "/dashboard/ayarlar",
+            icon: Building2,
           },
           {
             id: "category",
-            label: biz?.category && biz.category !== "diger" ? `Kategori: ${biz.category}` : "Kategori seçilmedi",
-            done: !!(biz?.category && biz.category !== "diger"),
-            href: "/dashboard/ayarlar", icon: FolderOpen,
+            label: "İşletme kategorisini seç",
+            done: Boolean(currentBusiness?.category && currentBusiness.category !== "diger"),
+            href: "/dashboard/ayarlar",
+            icon: FolderOpen,
           },
           {
             id: "hours",
-            label: workingHours.length > 0 ? "Çalışma saatleri ayarlandı" : "Çalışma saatlerini ayarla",
-            done: workingHours.length > 0, href: "/dashboard/calisma-saatleri", icon: Clock3,
+            label: "Çalışma saatlerini ayarla",
+            done: workingHours.length > 0,
+            href: "/dashboard/calisma-saatleri",
+            icon: Clock3,
           },
           {
             id: "services",
-            label: services.length > 0 ? `${services.length} hizmet eklendi` : "Henüz hizmet eklenmedi",
-            done: services.length > 0, href: "/dashboard/hizmetler", icon: Scissors,
+            label: "İlk hizmetini ekle",
+            done: services.length > 0,
+            href: "/dashboard/hizmetler",
+            icon: Scissors,
           },
           {
             id: "staff",
-            label: staff.length > 0 ? `${staff.length} çalışan eklendi` : "Henüz çalışan eklenmedi",
-            done: staff.length > 0, href: "/dashboard/calisanlar", icon: UserRound,
+            label: "Ekibini tanımla",
+            done: staff.length > 0,
+            href: "/dashboard/calisanlar",
+            icon: UserRound,
           },
           {
             id: "logo",
-            label: biz?.logoUrl ? "Logo yüklendi" : "Logo yükle",
-            done: !!biz?.logoUrl, href: "/dashboard/ayarlar", icon: ImageIcon,
+            label: "Logo ekle",
+            done: Boolean(currentBusiness?.logoUrl),
+            href: "/dashboard/ayarlar",
+            icon: ImageIcon,
           },
           {
             id: "description",
-            label: biz?.description && biz.description.length > 10 ? "Açıklama eklendi" : "Açıklama ekle",
-            done: !!(biz?.description && biz.description.length > 10), href: "/dashboard/ayarlar", icon: FileText,
+            label: "İşletme açıklamasını ekle",
+            done: Boolean(currentBusiness?.description && currentBusiness.description.length > 10),
+            href: "/dashboard/ayarlar",
+            icon: FileText,
           },
-        ];
-        setSetupItems(items);
-        setTimeout(() => setReady(true), 50);
+        ]);
+        setLoadError(null);
+        setReady(true);
       })
       .catch((error) => {
-        if (!alive) return;
-        setData(EMPTY_DATA);
-        const message = userFacingError(error, "İşletme verileri şu anda alınamadı. Lütfen yeniden deneyin.");
+        if (!active) return;
+        const message = userFacingError(
+          error,
+          "İşletme verileri şu anda alınamadı. Lütfen yeniden deneyin.",
+        );
         setLoadError(message);
+        setReady(true);
         toast.error(message);
       });
 
-    return () => { alive = false; };
+    return () => {
+      active = false;
+    };
   }, [businessId]);
 
   const completedSteps = setupItems.filter((item) => item.done).length;
-  const totalSteps = setupItems.length;
-  const completionPercent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
-  const allComplete = completedSteps === totalSteps;
+  const nextSetupItem = setupItems.find((item) => !item.done);
   const isPublished = business?.status === "active" && business.isPublished === true;
-  const setupDone = (id: SetupItem["id"]) => setupItems.find((item) => item.id === id)?.done === true;
+  const bookingHref = business?.slug
+    ? `/isletme/${business.slug}/randevu`
+    : "/dashboard/randevular";
+  const setupDone = (id: SetupItem["id"]) =>
+    setupItems.find((item) => item.id === id)?.done === true;
+
   const assistantSteps: SetupAssistantStep[] = [
     {
       title: "Mağaza profilini tamamla",
-      description: "Sol menüden Ayarlar'a gir; işletme bilgilerini, kategoriyi, açıklamayı ve logonu tamamla.",
+      description: "İşletme bilgilerini, kategoriyi, açıklamayı ve logonu tamamla.",
       href: "/dashboard/ayarlar",
       action: "Profil ayarlarını aç",
-      done: ["business", "category", "logo", "description"].every((id) => setupDone(id as SetupItem["id"])),
+      done: ["business", "category", "logo", "description"].every((id) =>
+        setupDone(id as SetupItem["id"]),
+      ),
     },
     {
       title: "Çalışma saatlerini kontrol et",
-      description: "Sol menüde Çalışma Saatleri'ne tıkla; açık günleri, molaları ve kapanış saatini işletmene göre düzenle.",
+      description: "Açık günleri, molaları ve kapanış saatini düzenle.",
       href: "/dashboard/calisma-saatleri",
       action: "Saatleri kontrol et",
       done: setupDone("hours"),
     },
     {
-      title: "Randevu alınacak hizmetleri ekle",
-      description: "Hizmetler sayfasında ad, süre ve fiyat bilgisiyle en az bir gerçek hizmet oluştur.",
+      title: "Hizmetlerini ekle",
+      description: "Randevu alınacak hizmetleri, sürelerini ve fiyatlarını ekle.",
       href: "/dashboard/hizmetler",
       action: "Hizmet ekle",
       done: setupDone("services"),
     },
     {
-      title: "Ekibini ve uzmanlıklarını tanımla",
-      description: "Çalışanlar sayfasında hizmet verecek kişileri ekle ve hangi hizmetleri sunduklarını seç.",
+      title: "Ekibini tanımla",
+      description: "Hizmet verecek kişileri ve uzmanlıklarını seç.",
       href: "/dashboard/calisanlar",
       action: "Çalışan ekle",
       done: setupDone("staff"),
     },
   ];
 
-  const statCards = [
-    { label: "Bugünkü Randevular", value: data.todayCount, icon: CalendarDays, tone: "ocean", note: "Günlük program" },
-    { label: "Bekleyen", value: data.pending, icon: Clock3, tone: "amber", note: "Aksiyon bekliyor" },
-    { label: "Tamamlanan", value: data.completed, icon: CheckCircle2, tone: "emerald", note: "Başarıyla tamamlandı" },
-    { label: "İptaller", value: data.cancelled, icon: XCircle, tone: "rose", note: "Toplam iptal" },
-    { label: "Toplam Müşteri", value: data.customerCount, icon: UsersRound, tone: "violet", note: "CRM büyüklüğü" },
-    { label: "Toplam Hizmet", value: data.serviceCount, icon: Scissors, tone: "magenta", note: "Aktif portföy" },
-    { label: "Toplam Çalışan", value: data.staffCount, icon: UserRound, tone: "indigo", note: "Ekip kapasitesi" },
-    { label: "Bugünkü Gelir", value: data.todayRevenue, icon: CircleDollarSign, tone: "gold", note: "Tamamlanan işlemler", currency: true },
+  const summary = [
+    {
+      label: "Bugünkü randevu",
+      value: data.todayCount.toLocaleString("tr-TR"),
+      note: `${data.completedCount} tamamlandı`,
+      href: "/dashboard/randevular",
+      icon: CalendarDays,
+      tone: "is-core",
+    },
+    {
+      label: "Onay bekleyen",
+      value: data.waitingCount.toLocaleString("tr-TR"),
+      note: data.waitingCount ? "Kontrol etmeniz gerekiyor" : "Bekleyen işlem yok",
+      href: "/dashboard/randevular",
+      icon: Clock3,
+      tone: "is-deep",
+    },
+    {
+      label: "Bugünkü tahsilat",
+      value: `${data.todayRevenue.toLocaleString("tr-TR")} ₺`,
+      note: "Tamamlanan işlemler",
+      href: "/dashboard/operasyon",
+      icon: CircleDollarSign,
+      tone: "is-bright",
+    },
+    {
+      label: "Kayıtlı müşteri",
+      value: data.customerCount.toLocaleString("tr-TR"),
+      note: "Müşteri kayıtları",
+      href: "/dashboard/musteriler",
+      icon: UsersRound,
+      tone: "is-blend",
+    },
   ];
 
-  const moduleProps = (id: DashboardHomeModule) => ({
-    className: "dashboard-home-module",
-    style: { order: Math.max(0, modulePreferences.findIndex((item) => item.id === id)) },
-    hidden: modulePreferences.find((item) => item.id === id)?.enabled === false,
-  });
+  const quickActions = [
+    {
+      label: "Yeni randevu",
+      text: "Takvime yeni kayıt ekle",
+      href: bookingHref,
+      icon: CalendarCheck2,
+      tone: "is-core",
+    },
+    {
+      label: "Müşteriler",
+      text: "Kayıtları ve geçmişi gör",
+      href: "/dashboard/musteriler",
+      icon: UsersRound,
+      tone: "is-blend",
+    },
+    {
+      label: "Kasa & işlemler",
+      text: "Tahsilat ve paketleri yönet",
+      href: "/dashboard/operasyon",
+      icon: WalletCards,
+      tone: "is-bright",
+    },
+    {
+      label: "Çalışma ayarları",
+      text: "Hizmet, ekip ve saatler",
+      href: "/dashboard/ayarlar",
+      icon: Settings2,
+      tone: "is-deep",
+    },
+  ];
 
   return (
-    <div className="dashboard-command-home">
-      {access?.role !== "staff" && <SetupAssistant businessId={businessId ?? ""} ready={ready} steps={assistantSteps}/>}
+    <main className="space-y-5 pb-10">
+      {access?.role !== "staff" && (
+        <SetupAssistant
+          businessId={businessId ?? ""}
+          ready={ready}
+          steps={assistantSteps}
+        />
+      )}
+
       {loadError && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-          <p className="text-sm text-rose-600">{loadError}</p>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          {loadError}
         </div>
       )}
 
-      <div {...moduleProps("command")}><section className="dashboard-ops-hero">
-        <div className="dashboard-ops-orb dashboard-ops-orb-a"/><div className="dashboard-ops-orb dashboard-ops-orb-b"/>
-        <div className="dashboard-ops-main">
-          <div className="dashboard-ops-copy">
-            <span className="dashboard-ops-kicker"><Sparkles size={14}/> BUGÜNÜN KOMUTA MERKEZİ</span>
-            <h2>{business?.name ?? "İşletmeniz"} için ritim <em>kontrol altında.</em></h2>
-            <p>{!isPublished ? "Kurulum bilgilerini tamamla; süper admin onayından sonra mağazan müşterilere açılacak." : data.todayCount ? `Bugün ${data.todayCount} randevunuz var. ${data.pending ? `${data.pending} kayıt aksiyon bekliyor.` : "Bekleyen aksiyon bulunmuyor."}` : "Bugün için programınız açık. Yeni talepleri karşılamaya hazırsınız."}</p>
-            <div className="dashboard-ops-actions"><Link href="/dashboard/takvim"><CalendarPlus2 size={17}/> Takvimi aç</Link><Link href="/dashboard/buyume">Büyüme merkezine git <ArrowRight size={15}/></Link></div>
-          </div>
-          <div className="dashboard-ops-focus">
-            <header><span><i/> CANLI AKIŞ</span><small>{new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })}</small></header>
-            {data.upcoming[0] ? <div className="dashboard-next-appointment"><time>{new Date(data.upcoming[0].startAt).toLocaleTimeString("tr-TR", {hour:"2-digit",minute:"2-digit"})}</time><div><small>SIRADAKİ RANDEVU</small><b>{data.upcoming[0].customerName}</b><span>{data.upcoming[0].serviceName ?? "Hizmet"}{data.upcoming[0].staffName ? ` · ${data.upcoming[0].staffName}` : ""}</span></div><ArrowUpRight size={18}/></div> : <div className="dashboard-next-empty"><CalendarCheck2 size={25}/><div><b>Takvim şu an sakin</b><span>Yeni randevular burada belirecek.</span></div></div>}
-            <div className="dashboard-live-mini"><span><b>{data.todayRevenue.toLocaleString("tr-TR")} ₺</b><small>Bugünkü gelir</small></span><span><b>%{data.completionRate}</b><small>Başarı oranı</small></span><span><b>{data.pending}</b><small>Bekleyen</small></span></div>
-          </div>
-        </div>
-        <div className="dashboard-ops-signals">
-          <span><Gauge size={16}/><b>{isPublished ? "Sistem hazır" : "Onay bekleniyor"}</b><small>{isPublished ? "Randevu altyapısı aktif" : "Onaydan sonra yayına açılır"}</small></span>
-          <span><Target size={16}/><b>{data.weekAppointments} randevu</b><small>Son 7 günlük hacim</small></span>
-          <span><TrendingUp size={16}/><b>{data.weekRevenue.toLocaleString("tr-TR")} ₺</b><small>Haftalık gerçekleşen</small></span>
-          <span><UsersRound size={16}/><b>{data.returningCustomers} sadık müşteri</b><small>Tekrar gelen kitle</small></span>
-        </div>
-      </section></div>
-
-      <section {...moduleProps("insights")}><div className="dashboard-intelligence-row">
-        <article className="dashboard-week-pulse"><div><span><BarChart3 size={16}/> 7 GÜNLÜK NABIZ</span><b>{data.weekAppointments} toplam randevu</b></div><div className="dashboard-week-bars">{data.weeklyActivity.map((day) => { const max = Math.max(...data.weeklyActivity.map((item) => item.value), 1); return <span key={day.label}><i style={{height:`${Math.max(day.value ? 18 : 4, day.value / max * 100)}%`}}/><small>{day.label}</small></span>; })}</div></article>
-        <Link href="/dashboard/buyume" className="dashboard-ai-brief"><span><Rocket size={20}/></span><div><small>AKILLI İŞLETME ÖZETİ</small><b>Büyüme fırsatlarını keşfet</b><p>Yoğun saat, geri kazanım ve performans önerileri hazır.</p></div><ArrowUpRight size={18}/></Link>
-      </div></section>
-
-      {/* Setup Progress */}
-      <section {...moduleProps("profile")}><div className="dashboard-profile-module">
-      {setupItems.length > 0 && !allComplete && (
-        <div
-          className="rounded-2xl border border-[var(--accent)]/20 bg-[var(--surface-1)] p-6 shadow-sm"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 0.5s ease, transform 0.5s ease",
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><ListChecks size={20} /> Profil Durumu</h3>
-              <p className="mt-0.5 text-sm text-[var(--text-3)]">
-                {completedSteps}/{totalSteps} adım tamamlandı
-              </p>
-            </div>
-            <div className="relative flex h-16 w-16 items-center justify-center">
-              <svg className="h-16 w-16 -rotate-90" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--surface-3)" strokeWidth="4" />
-                <circle
-                  cx="32" cy="32" r="28" fill="none"
-                  stroke="var(--accent)" strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={`${completionPercent * 1.76} 176`}
-                  style={{ transition: "stroke-dasharray 1s ease" }}
-                />
-              </svg>
-              <span className="absolute text-sm font-bold text-[var(--accent)]">{completionPercent}%</span>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            {setupItems.map((item, i) => (
-              (() => {
-                const ItemIcon = item.icon;
-                return (
+      <section className="dashboard-today-hero dashboard-theme-hero relative overflow-hidden rounded-[28px] p-5 text-white sm:p-7">
+        <div className="grid gap-6 lg:grid-cols-[1.25fr_.75fr] lg:items-center">
+          <div>
+            <span className="dashboard-theme-hero__kicker inline-flex items-center gap-2 text-[11px] font-black tracking-[.16em]">
+              <Sparkles size={14} /> BUGÜN
+            </span>
+            <h1 className="mt-3 text-3xl font-black tracking-[-.04em] sm:text-4xl">
+              {business?.name ?? "İşletmeniz"} için günün özeti
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-white/75 sm:text-base">
+              {!isPublished
+                ? "Kurulumunuzu tamamlayın; mağazanız onaylandığında randevu almaya hazır olacak."
+                : data.todayCount
+                  ? `Bugün ${data.todayCount} randevunuz var. ${data.waitingCount ? `${data.waitingCount} randevu onayınızı bekliyor.` : "Bekleyen onay bulunmuyor."}`
+                  : "Bugün için kayıtlı randevu yok. Takviminizi buradan yönetebilirsiniz."}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2.5">
               <Link
-                key={item.id}
-                href={item.href}
-                className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition-all duration-300 hover:scale-[1.01] hover:shadow-sm ${
-                  item.done
-                    ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-600"
-                    : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
-                }`}
-                style={{
-                  opacity: ready ? 1 : 0, transform: ready ? "translateX(0)" : "translateX(-8px)",
-                  transition: `opacity 0.4s ease ${i * 0.06}s, transform 0.4s ease ${i * 0.06}s`,
-                }}
+                href={bookingHref}
+                className="dashboard-theme-hero__primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-black transition"
               >
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/50">{item.done ? <CheckCircle2 size={16} /> : <ItemIcon size={16} />}</span>
-                <span className={item.done ? "line-through opacity-60" : ""}>{item.label}</span>
-                {!item.done && (
-                  <svg className="ml-auto h-4 w-4 text-[var(--text-3)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                )}
+                <CalendarCheck2 size={17} /> Yeni randevu
               </Link>
-                );
-              })()
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* All Complete Banner — Ultra Premium */}
-      {allComplete && setupItems.length > 0 && (
-        <div
-          className="dashboard-profile-ready"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 0.5s ease, transform 0.5s ease",
-          }}
-        >
-          {/* Animated gradient top border */}
-          <div className="absolute left-0 right-0 top-0 h-1 bg-[linear-gradient(90deg,#10b981,#06b6d4,#8b5cf6,#10b981)] bg-[length:200%_100%]" style={{ animation: "shimmer 3s linear infinite" }} />
-          
-          {/* Background particles */}
-          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
-          <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-cyan-500/10 blur-3xl" />
-          <div className="absolute right-1/3 top-1/2 h-20 w-20 rounded-full bg-violet-500/5 blur-2xl" />
-
-          <div className="dashboard-profile-ready__inner">
-            <div className="dashboard-profile-ready__main">
-              {/* Left side */}
-              <div className="dashboard-profile-ready__identity">
-                <div className="dashboard-profile-ready__icon">
-                  <PartyPopper size={25} strokeWidth={1.8} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-extrabold text-[var(--text-1)]">
-                    {isPublished ? "Profiliniz hazır!" : "Kurulum tamam, onay bekleniyor"}
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--text-3)]">
-                    {isPublished ? "İşletmeniz aktif — müşterileriniz online randevu alabiliyor." : "Bilgilerin kaydedildi. Süper admin incelemesi tamamlandığında mağazan yayınlanacak."}
-                  </p>
-                  
-                  {/* Store URL display */}
-                  {business?.slug && isPublished ? (
-                    <div className="dashboard-profile-ready__url">
-                      <Copy size={14} className="text-[var(--text-3)]" />
-                      <code className="text-xs font-medium text-[var(--text-2)]">
-                        seninrandevun.com/isletme/{business.slug}
-                      </code>
-                    </div>
-                  ) : <div className="dashboard-profile-ready__url"><Clock3 size={14}/><span className="text-xs font-medium">Mağaza bağlantısı onaydan sonra paylaşılabilir olacak.</span></div>}
-                </div>
-              </div>
-
-              {/* Right side — Action buttons */}
-              <div className="dashboard-profile-ready__actions">
-                {business?.slug && isPublished && (
-                  <>
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/isletme/${business.slug}`;
-                        navigator.clipboard.writeText(url).then(() => {
-                          toast.success("Mağaza linki kopyalandı.");
-                        }).catch(() => {
-                          toast.error("Kopyalama başarısız");
-                        });
-                      }}
-                      className="profile-ready-copy"
-                    >
-                      <Copy size={17} />
-                      Linki Kopyala
-                    </button>
-                    {isPublished && <Link
-                      href={`/isletme/${business.slug}`}
-                      className="profile-ready-view"
-                    >
-                      <Eye size={17} /> Profili Gör <ArrowUpRight size={15} />
-                    </Link>}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Completion badges */}
-            <div className="dashboard-profile-ready__checks">
-              {setupItems.map((item) => (
-                <span key={item.id}>{(() => { const SetupIcon = item.icon; return <SetupIcon size={14} />; })()}<b>{item.label}</b><CheckCircle2 size={13} /></span>
-              ))}
+              <Link
+                href="/dashboard/takvim"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white transition hover:bg-white/15"
+              >
+                Takvimi aç <ArrowRight size={15} />
+              </Link>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Store Link Quick Copy — shows even when profile incomplete */}
-      {!allComplete && business?.slug && isPublished && setupItems.length > 0 && (
-        <div
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-5 py-3.5"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(8px)",
-            transition: "opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s",
-          }}
-        >
-          <Copy size={15} />
-          <code className="text-xs font-medium text-[var(--text-2)]">
-            seninrandevun.com/isletme/{business.slug}
-          </code>
-          <button
-            onClick={() => {
-              const url = `${window.location.origin}/isletme/${business.slug}`;
-              navigator.clipboard.writeText(url).then(() => {
-                toast.success("Mağaza linki kopyalandı.");
-              }).catch(() => {
-                toast.error("Kopyalama başarısız");
-              });
-            }}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 active:scale-[0.97]"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-            </svg>
-            Kopyala
-          </button>
-        </div>
-      )}
-      </div></section>
-
-      {/* Stats Grid */}
-      <section {...moduleProps("kpis")}><div className="dashboard-kpi-grid">
-        {statCards.map((stat, i) => (
-          (() => {
-            const StatIcon = stat.icon;
-            return (
-          <Link
-            key={stat.label}
-            href={stat.label.includes("Müşteri") ? "/dashboard/musteriler" : stat.label.includes("Hizmet") ? "/dashboard/hizmetler" : stat.label.includes("Çalışan") ? "/dashboard/calisanlar" : "/dashboard/randevular"}
-            className={`dashboard-kpi-card kpi-${stat.tone}`}
-            style={{
-              opacity: ready ? 1 : 0, transform: ready ? undefined : "translateY(16px)",
-              transition: `opacity 0.4s ease ${i * 0.05 + 0.2}s, transform 0.4s ease ${i * 0.05 + 0.2}s`,
-            }}
-          >
-            <div className="dashboard-kpi-head"><p>{stat.label}</p><span><StatIcon size={21} strokeWidth={1.8} /></span></div>
-            <strong><AnimatedNumber value={stat.value} suffix={stat.currency ? " ₺" : undefined} /></strong>
-            <small>{stat.note}<ArrowUpRight size={13} /></small>
-          </Link>
-            );
-          })()
-        ))}
-      </div></section>
-
-      <section {...moduleProps("operations")}><div className="grid gap-4 lg:grid-cols-2">
-        {/* Upcoming Appointments */}
-        <div
-          className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 0.5s ease 0.6s, transform 0.5s ease 0.6s",
-          }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h3 className="flex items-center gap-2 font-bold text-[var(--text-1)]"><CalendarCheck2 size={19} /> Yaklaşan Randevular</h3>
-              <p className="text-xs text-[var(--text-3)]">Sıradaki operasyon akışı</p>
+          <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-black tracking-[.14em] text-emerald-100">
+                SIRADAKİ RANDEVU
+              </span>
+              <span className="text-xs font-semibold text-white/65">
+                {new Date().toLocaleDateString("tr-TR", {
+                  day: "numeric",
+                  month: "long",
+                })}
+              </span>
             </div>
-            {data.upcoming.length > 0 && (
-              <Link href="/dashboard/randevular" className="text-xs font-medium text-[var(--accent)] hover:underline">Tümünü Gör →</Link>
+            {data.upcoming[0] ? (
+              <Link
+                href="/dashboard/randevular"
+                className="mt-4 flex items-center gap-4 rounded-xl bg-white p-4 text-[#10291d]"
+              >
+                <time className="text-2xl font-black">
+                  {new Date(data.upcoming[0].startAt).toLocaleTimeString("tr-TR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-base">{data.upcoming[0].customerName}</b>
+                  <small className="block truncate text-xs font-semibold text-slate-500">
+                    {data.upcoming[0].serviceName ?? "Hizmet"}
+                    {data.upcoming[0].staffName ? ` · ${data.upcoming[0].staffName}` : ""}
+                  </small>
+                </span>
+                <ArrowUpRight size={18} />
+              </Link>
+            ) : (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-white/20 p-4">
+                <CalendarDays size={23} />
+                <span>
+                  <b className="block text-sm">Yaklaşan randevu yok</b>
+                  <small className="text-xs text-white/65">Yeni kayıtlar burada görünecek.</small>
+                </span>
+              </div>
             )}
           </div>
-          {data.upcoming.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] p-8 text-center">
-              <Inbox className="mx-auto text-[var(--text-3)]" size={31} strokeWidth={1.5} />
-              <p className="mt-2 text-sm font-medium text-[var(--text-2)]">Yaklaşan randevu yok</p>
-              <p className="mt-1 text-xs text-[var(--text-3)]">Yeni randevular burada görünecek</p>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {summary.map(({ icon: Icon, ...item }) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="group rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-bold text-[var(--text-3)] sm:text-sm">{item.label}</span>
+              <i className={`dashboard-kpi-tone ${item.tone} grid h-9 w-9 shrink-0 place-items-center rounded-xl`}>
+                <Icon size={18} />
+              </i>
+            </div>
+            <strong className="mt-3 block text-2xl font-black tracking-tight text-[var(--text-1)] sm:text-3xl">
+              {item.value}
+            </strong>
+            <small className="mt-1 block text-[11px] font-semibold text-[var(--text-3)] sm:text-xs">
+              {item.note}
+            </small>
+          </Link>
+        ))}
+      </section>
+
+      {nextSetupItem && (
+        <section className="dashboard-setup-nudge rounded-2xl p-4 sm:flex sm:items-center sm:gap-4 sm:p-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="dashboard-setup-nudge__icon grid h-11 w-11 shrink-0 place-items-center rounded-xl">
+              <nextSetupItem.icon size={21} />
+            </span>
+            <div className="min-w-0">
+              <span className="dashboard-setup-nudge__label text-[10px] font-black tracking-[.12em]">
+                KURULUM · {completedSteps}/{setupItems.length}
+              </span>
+              <h2 className="truncate text-base font-black text-[var(--text-1)]">
+                Sıradaki adım: {nextSetupItem.label}
+              </h2>
+            </div>
+          </div>
+          <Link
+            href={nextSetupItem.href}
+            className="dashboard-setup-nudge__action mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold sm:mt-0 sm:w-auto"
+          >
+            Adımı tamamla <ArrowRight size={15} />
+          </Link>
+        </section>
+      )}
+
+      <section className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
+        <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-sm sm:p-5">
+          <header className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-black text-[var(--text-1)]">
+                <CalendarCheck2 size={20} /> Yaklaşan randevular
+              </h2>
+              <p className="mt-0.5 text-xs font-medium text-[var(--text-3)]">Sıradaki dört kayıt</p>
+            </div>
+            <Link href="/dashboard/randevular" className="text-xs font-bold text-[var(--accent)]">
+              Tümünü gör
+            </Link>
+          </header>
+
+          {data.upcoming.length ? (
+            <div className="space-y-2">
+              {data.upcoming.map((appointment) => (
+                <Link
+                  key={appointment.id}
+                  href={`/dashboard/randevular?appointment=${encodeURIComponent(appointment.id)}`}
+                  className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 transition hover:border-[var(--accent)]/30"
+                >
+                  <time className="w-12 shrink-0 text-base font-black text-[var(--accent)]">
+                    {new Date(appointment.startAt).toLocaleTimeString("tr-TR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-sm text-[var(--text-1)]">{appointment.customerName}</b>
+                    <small className="block truncate text-xs font-medium text-[var(--text-3)]">
+                      {appointment.serviceName ?? "Hizmet"}
+                      {appointment.staffName ? ` · ${appointment.staffName}` : ""}
+                    </small>
+                  </span>
+                  <span className="hidden rounded-full bg-[var(--surface-1)] px-2.5 py-1 text-[10px] font-bold text-[var(--text-2)] sm:inline-flex">
+                    {appointment.status === "confirmed" ? "Onaylı" : "Bekliyor"}
+                  </span>
+                  <ArrowRight size={15} className="text-[var(--text-3)]" />
+                </Link>
+              ))}
             </div>
           ) : (
-            <ul className="space-y-2.5">
-              {data.upcoming.map((item, i) => (
-                <li
-                  key={item.id}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 transition-all duration-200 hover:shadow-sm"
-                  style={{
-                    opacity: ready ? 1 : 0, transform: ready ? "translateX(0)" : "translateX(-8px)",
-                    transition: `opacity 0.3s ease ${i * 0.08 + 0.7}s, transform 0.3s ease ${i * 0.08 + 0.7}s`,
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[var(--text-1)]">{item.customerName}</p>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                      item.status === "confirmed" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
-                    }`}>
-                      {item.status === "confirmed" ? <><CheckCircle2 size={12} /> Onaylı</> : <><Clock3 size={12} /> Bekliyor</>}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--text-3)]">
-                    {new Date(item.startAt).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                    {item.serviceName ? ` · ${item.serviceName}` : ""}
-                    {item.staffName ? ` · ${item.staffName}` : ""}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-5 py-9 text-center">
+              <CalendarDays className="mx-auto text-[var(--text-3)]" size={30} />
+              <b className="mt-2 block text-sm text-[var(--text-1)]">Yaklaşan randevu yok</b>
+              <p className="mt-1 text-xs font-medium text-[var(--text-3)]">
+                Yeni randevu eklediğinizde burada görünecek.
+              </p>
+            </div>
           )}
-        </div>
+        </article>
 
-        {/* Quick Links */}
-        <div
-          className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5"
-          style={{
-            opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 0.5s ease 0.7s, transform 0.5s ease 0.7s",
-          }}
-        >
-          <h3 className="mb-4 flex items-center gap-2 font-bold text-[var(--text-1)]"><Zap size={19} /> Hızlı Erişim</h3>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {[
-              { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors, desc: "Hizmet ekle/düzenle", hoverColor: "hover:border-pink-400/40" },
-              { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: UsersRound, desc: "Ekip yönetimi", hoverColor: "hover:border-indigo-400/40" },
-              { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: Clock3, desc: "Saat ayarları", hoverColor: "hover:border-amber-400/40" },
-              { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2, desc: "İşletme bilgileri", hoverColor: "hover:border-sky-400/40" },
-              { href: "/dashboard/musteriler", label: "Müşteriler", icon: UserRound, desc: "Müşteri listesi", hoverColor: "hover:border-violet-400/40" },
-              { href: "/dashboard/randevular", label: "Randevular", icon: CalendarDays, desc: "Tüm randevular", hoverColor: "hover:border-emerald-400/40" },
-            ].map((link, i) => (
-              (() => {
-                const LinkIcon = link.icon;
-                return (
+        <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-sm sm:p-5">
+          <header className="mb-4">
+            <h2 className="flex items-center gap-2 text-lg font-black text-[var(--text-1)]">
+              <Zap size={20} /> Sık kullanılanlar
+            </h2>
+            <p className="mt-0.5 text-xs font-medium text-[var(--text-3)]">
+              En çok ihtiyaç duyacağınız işlemler
+            </p>
+          </header>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            {quickActions.map(({ icon: Icon, ...action }) => (
               <Link
-                key={link.href}
-                href={link.href}
-                className={`flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3.5 transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${link.hoverColor}`}
-                style={{
-                  opacity: ready ? 1 : 0, transform: ready ? "translateY(0)" : "translateY(8px)",
-                  transition: `opacity 0.3s ease ${i * 0.05 + 0.8}s, transform 0.3s ease ${i * 0.05 + 0.8}s`,
-                }}
+                key={action.label}
+                href={action.href}
+                className="flex min-h-16 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 transition hover:border-[var(--accent)]/35"
               >
-                <span className="quick-link-icon"><LinkIcon size={20} strokeWidth={1.8} /></span>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--text-1)]">{link.label}</p>
-                  <p className="text-[10px] text-[var(--text-3)]">{link.desc}</p>
-                </div>
+                <span className={`dashboard-action-icon ${action.tone} grid h-9 w-9 shrink-0 place-items-center rounded-xl`}>
+                  <Icon size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <b className="block text-sm text-[var(--text-1)]">{action.label}</b>
+                  <small className="block truncate text-[11px] font-medium text-[var(--text-3)]">
+                    {action.text}
+                  </small>
+                </span>
+                <ArrowRight size={15} className="text-[var(--text-3)]" />
               </Link>
-                );
-              })()
             ))}
           </div>
+        </article>
+      </section>
+
+      <section className="dashboard-rovi-prompt flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:p-5">
+        <span className="dashboard-rovi-prompt__icon grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white">
+          <MessageCircleMore size={21} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className="dashboard-rovi-prompt__label text-[10px] font-black tracking-[.12em]">
+            ROVİ YARDIMCINIZ
+          </span>
+          <h2 className="text-base font-black text-[var(--text-1)]">Bir işlemi bulamadınız mı?</h2>
+          <p className="text-xs font-medium text-[var(--text-3)]">
+            Rovi&apos;ye sorun; sizi doğru ekrana yönlendirsin ve işletme verilerinizi açıklasın.
+          </p>
         </div>
-      </div></section>
-    </div>
+        <Link
+          href="/dashboard/asistan"
+          className="dashboard-rovi-prompt__action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-white"
+        >
+          Rovi&apos;ye sor <Sparkles size={15} />
+        </Link>
+      </section>
+    </main>
   );
 }

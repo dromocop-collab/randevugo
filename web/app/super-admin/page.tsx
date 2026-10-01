@@ -144,7 +144,7 @@ export default function SuperAdminDashboard() {
         openSupportTickets: supportTickets.length,
         criticalSupportTickets: supportTickets.filter((item) => ["critical", "high"].includes(String(item.data().priority))).length,
         pendingCategoryRequests: docs("categories").length, pendingReviews: docs("reviews").length,
-        estimatedMRR: Math.round(subscribedBusinesses * PLAN_PRICE.monthlyEquivalent),
+        estimatedMRR: Math.round(subscribedBusinesses * PLAN_PRICE.monthly),
         estimatedARR: subscribedBusinesses * PLAN_PRICE.yearly, sourceHealth, updatedAt: new Date(),
       });
     } catch (error) { setFatalError((error as Error).message || "Platform özeti yüklenemedi."); }

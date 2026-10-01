@@ -1,41 +1,65 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, ClipboardList, Clock3, ContactRound, Mail, PencilLine, Phone, RefreshCw, Save, Search, Sparkles, TrendingUp, UsersRound, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, Clock3, ContactRound, Phone, RefreshCw, Search, Sparkles, TrendingUp, UsersRound } from "lucide-react";
 import { toast } from "sonner";
+import { CustomerProfileStudio } from "@/components/dashboard/customer-profile-studio";
 import { listAppointments } from "@/features/appointments/appointment-repository";
-import { createOrUpdateCustomer, listCustomers, normalizeCustomerPhone } from "@/features/customers/customer-repository";
+import { createOrUpdateCustomer, listCustomers, normalizeCustomerPhone, renameCustomer } from "@/features/customers/customer-repository";
+import { listCheckoutReceipts, listCustomerPackages, listFinanceTransactions, listServicePackages } from "@/features/operations/operations-repository";
+import { listServices } from "@/features/services/service-repository";
 import { useBusiness } from "@/hooks/use-business";
 import { formatMoney } from "@/lib/utils/date";
 import type { Appointment } from "@/types/appointments";
 import type { Customer } from "@/types/customer";
+import type { CheckoutReceipt, CustomerPackage, FinanceTransaction, ServicePackage } from "@/types/operations";
+import type { Service } from "@/types/service";
 
 type SortKey = "name" | "appointments" | "spent" | "lastVisit";
 type SortDir = "asc" | "desc";
-const statusLabels: Record<string, string> = { completed: "Tamamlandı", confirmed: "Onaylı", cancelled: "İptal", pending: "Bekliyor" };
+const numberOrZero = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 export default function CustomersPage() {
   const { businessId } = useBusiness();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicePackages, setServicePackages] = useState<ServicePackage[]>([]);
+  const [customerPackages, setCustomerPackages] = useState<CustomerPackage[]>([]);
+  const [receipts, setReceipts] = useState<CheckoutReceipt[]>([]);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("lastVisit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
-  const [savingName, setSavingName] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async (showLoader = false) => {
     if (!businessId) return;
-    queueMicrotask(() => setLoading(true));
-    Promise.all([listCustomers(businessId), listAppointments(businessId)])
-      .then(([custs, appts]) => { setCustomers(custs); setAppointments(appts); setLoading(false); })
-      .catch(() => setLoading(false));
+    if (showLoader) setLoading(true);
+      const results = await Promise.allSettled([
+        listCustomers(businessId), listAppointments(businessId), listServices(businessId, true), listServicePackages(businessId),
+        listCustomerPackages(businessId), listCheckoutReceipts(businessId), listFinanceTransactions(businessId),
+      ]);
+      if (results[0].status === "fulfilled") setCustomers(results[0].value);
+      if (results[1].status === "fulfilled") setAppointments(results[1].value);
+      if (results[2].status === "fulfilled") setServices(results[2].value);
+      if (results[3].status === "fulfilled") setServicePackages(results[3].value);
+      if (results[4].status === "fulfilled") setCustomerPackages(results[4].value);
+      if (results[5].status === "fulfilled") setReceipts(results[5].value);
+      if (results[6].status === "fulfilled") setTransactions(results[6].value);
+    if (results[0].status === "rejected" || results[1].status === "rejected") toast.error("Müşteri verileri yüklenemedi.");
+    setLoading(false);
   }, [businessId]);
+
+  useEffect(() => {
+    queueMicrotask(() => void loadData(true));
+  }, [loadData]);
 
   useEffect(() => {
     if (!selectedId || typeof window === "undefined" || window.innerWidth >= 1024) return;
@@ -62,8 +86,8 @@ export default function CustomersPage() {
     list.sort((a, b) => {
       let comparison = 0;
       if (sortKey === "name") comparison = a.fullName.localeCompare(b.fullName, "tr");
-      if (sortKey === "appointments") comparison = a.totalAppointments - b.totalAppointments;
-      if (sortKey === "spent") comparison = a.totalSpent - b.totalSpent;
+      if (sortKey === "appointments") comparison = numberOrZero(a.totalAppointments) - numberOrZero(b.totalAppointments);
+      if (sortKey === "spent") comparison = numberOrZero(a.totalSpent) - numberOrZero(b.totalSpent);
       if (sortKey === "lastVisit") comparison = new Date(a.lastVisitAt || 0).getTime() - new Date(b.lastVisitAt || 0).getTime();
       return sortDir === "desc" ? -comparison : comparison;
     });
@@ -73,8 +97,9 @@ export default function CustomersPage() {
   const selectedCustomer = selectedId ? customers.find((customer) => customer.id === selectedId) : null;
   const selectedAppts = selectedCustomer ? [...(customerApptsMap[normalizeCustomerPhone(selectedCustomer.phone)] || [])].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()) : [];
   const totalCustomers = customers.length;
-  const totalRevenue = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
-  const avgAppointments = totalCustomers > 0 ? Math.round((customers.reduce((sum, customer) => sum + customer.totalAppointments, 0) / totalCustomers) * 10) / 10 : 0;
+  const totalRevenue = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalSpent), 0);
+  const totalAppointmentCount = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalAppointments), 0);
+  const avgAppointments = totalCustomers > 0 ? Math.round((totalAppointmentCount / totalCustomers) * 10) / 10 : 0;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -97,26 +122,28 @@ export default function CustomersPage() {
     finally { setSyncing(false); }
   }
 
-  async function saveCustomerName(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const fullName = nameDraft.trim();
-    if (!businessId || !selectedCustomer || fullName.length < 2) return toast.error("Müşteri adı en az 2 karakter olmalıdır.");
-    setSavingName(true);
+  async function saveCustomerName(fullName: string) {
+    if (!businessId || !selectedCustomer || fullName.length < 2) {
+      toast.error("Müşteri adı en az 2 karakter olmalıdır.");
+      return;
+    }
     try {
-      const customerId = await createOrUpdateCustomer(businessId, {
+      const previousId = selectedCustomer.id;
+      const customerPhone = normalizeCustomerPhone(selectedCustomer.phone);
+      const customerId = await renameCustomer(businessId, {
         fullName,
         phone: selectedCustomer.phone,
         email: selectedCustomer.email,
       });
-      setCustomers(await listCustomers(businessId));
-      setSelectedId(customerId || selectedCustomer.id);
-      setNameDraft(fullName);
-      setEditingName(false);
-      toast.success("Müşteri adı güncellendi.");
+      await loadData();
+      setCustomers((current) => current.map((customer) => normalizeCustomerPhone(customer.phone) === customerPhone ? { ...customer, fullName } : customer));
+      setAppointments((current) => current.map((appointment) => normalizeCustomerPhone(appointment.customerPhone ?? "") === customerPhone ? { ...appointment, customerName: fullName } : appointment));
+      setCustomerPackages((current) => current.map((item) => normalizeCustomerPhone(item.customerPhone) === customerPhone ? { ...item, customerName: fullName } : item));
+      setReceipts((current) => current.map((item) => normalizeCustomerPhone(item.customerPhone ?? "") === customerPhone ? { ...item, customerName: fullName } : item));
+      setSelectedId(customerId || previousId);
+      toast.success("Müşteri adı tüm kayıtlarda güncellendi.");
     } catch {
       toast.error("Müşteri adı güncellenemedi.");
-    } finally {
-      setSavingName(false);
     }
   }
 
@@ -148,27 +175,19 @@ export default function CustomersPage() {
       </section>
 
       {filtered.length === 0 ? <section className="crm-empty"><i><UsersRound size={32} /></i><h2>{search ? "Aramanızla eşleşen müşteri yok" : "Henüz müşteri kaydı yok"}</h2><p>{search ? "Farklı bir isim, telefon veya e-posta deneyin." : "Randevular geldikçe müşteri portföyünüz burada oluşacak."}</p></section> : (
-        <section className="crm-workspace">
+        <section className={`crm-workspace${selectedCustomer ? " has-selection" : ""}`}>
           <div className="crm-customer-list">
             {filtered.map((customer) => {
               const isActive = selectedId === customer.id;
-              return <button key={customer.id} onClick={() => {setSelectedId(customer.id);setNameDraft(customer.fullName);setEditingName(false);}} className={`crm-customer-card${isActive ? " active" : ""}`} aria-pressed={isActive}>
-                <span className="crm-customer-main"><span className="crm-avatar">{customer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="crm-customer-name"><strong>{customer.fullName}</strong><small><Phone size={13} /> {customer.phone}</small></span><span className="crm-customer-value"><b><CalendarDays size={14} /> {customer.totalAppointments}</b>{customer.totalSpent > 0 && <small>{formatMoney(customer.totalSpent)}</small>}</span><ChevronRight className="crm-card-arrow" size={19} /></span>
-                <span className="crm-tags"><small className="is-complete"><CheckCircle2 size={13} /> {customer.completedAppointments} tamamlanan</small>{customer.cancelledAppointments > 0 && <small className="is-cancelled"><CircleX size={13} /> {customer.cancelledAppointments} iptal</small>}{customer.lastVisitAt && <small className="is-visit"><Clock3 size={13} /> {new Date(customer.lastVisitAt).toLocaleDateString("tr-TR")}</small>}</span>
+              return <button key={customer.id} onClick={() => setSelectedId(customer.id)} className={`crm-customer-card${isActive ? " active" : ""}`} aria-pressed={isActive}>
+                  <span className="crm-customer-main"><span className="crm-avatar">{customer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="crm-customer-name"><strong>{customer.fullName}</strong><small><Phone size={13} /> {customer.phone}</small></span><span className="crm-customer-value"><b><CalendarDays size={14} /> {numberOrZero(customer.totalAppointments)}</b>{numberOrZero(customer.totalSpent) > 0 && <small>{formatMoney(numberOrZero(customer.totalSpent))}</small>}</span><ChevronRight className="crm-card-arrow" size={19} /></span>
+                  <span className="crm-tags"><small className="is-complete"><CheckCircle2 size={13} /> {numberOrZero(customer.completedAppointments)} tamamlanan</small>{numberOrZero(customer.cancelledAppointments) > 0 && <small className="is-cancelled"><CircleX size={13} /> {numberOrZero(customer.cancelledAppointments)} iptal</small>}{customer.lastVisitAt && <small className="is-visit"><Clock3 size={13} /> {new Date(customer.lastVisitAt).toLocaleDateString("tr-TR")}</small>}</span>
               </button>;
             })}
           </div>
 
           <div className="crm-detail-column" ref={detailRef}>
-            {selectedCustomer ? <article className="crm-detail-card">
-              <header className="crm-detail-head"><button className="crm-detail-close" onClick={() => setSelectedId(null)} aria-label="Müşteri detayını kapat"><X size={18} /></button><span className="crm-detail-avatar">{selectedCustomer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><div><small>MÜŞTERİ PROFİLİ</small>{editingName?<form className="crm-name-editor" onSubmit={saveCustomerName}><input autoFocus maxLength={80} value={nameDraft} onChange={(event)=>setNameDraft(event.target.value)} placeholder="Müşteri adı soyadı" aria-label="Müşteri adı soyadı"/><button type="submit" disabled={savingName||nameDraft.trim().length<2} aria-label="Müşteri adını kaydet">{savingName?<RefreshCw size={15} className="animate-spin"/>:<Save size={15}/>}</button><button type="button" onClick={()=>{setEditingName(false);setNameDraft(selectedCustomer.fullName);}} aria-label="Düzenlemeyi iptal"><X size={15}/></button></form>:<div className="crm-name-row"><h2>{selectedCustomer.fullName}</h2><button type="button" onClick={()=>setEditingName(true)}><PencilLine size={14}/>{selectedCustomer.fullName.startsWith("Telefon müşterisi")?"İsim ekle":"Düzenle"}</button></div>}<p><Phone size={14} /> {selectedCustomer.phone}</p>{selectedCustomer.email && <p><Mail size={14} /> {selectedCustomer.email}</p>}</div></header>
-              <div className="crm-detail-metrics">
-                {([{ label: "Toplam", value: selectedCustomer.totalAppointments, icon: CalendarDays, tone: "ocean" }, { label: "Tamamlanan", value: selectedCustomer.completedAppointments, icon: CheckCircle2, tone: "emerald" }, { label: "İptal", value: selectedCustomer.cancelledAppointments, icon: CircleX, tone: "rose" }, { label: "Harcama", value: formatMoney(selectedCustomer.totalSpent), icon: CircleDollarSign, tone: "amber" }]).map(({ label, value, icon: Icon, tone }) => <div className={`crm-detail-stat crm-detail-stat--${tone}`} key={label}><i><Icon size={19} /></i><strong>{value}</strong><small>{label}</small></div>)}
-              </div>
-              <section className="crm-history"><h3><ClipboardList size={19} /> Randevu geçmişi <span>{selectedAppts.length}</span></h3>
-                {selectedAppts.length === 0 ? <p className="crm-history-empty">Henüz randevu geçmişi bulunmuyor.</p> : <div className="crm-history-list">{selectedAppts.map((appointment) => <article key={appointment.id}><div><strong>{appointment.serviceName || "Hizmet"}</strong><span className={`status-${appointment.status}`}>{statusLabels[appointment.status] || "Bekliyor"}</span></div><p><CalendarDays size={13} />{new Date(appointment.startAt).toLocaleString("tr-TR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>{(appointment.staffName || appointment.servicePrice) && <small>{appointment.staffName || "Ekip"}{appointment.servicePrice ? ` · ${formatMoney(appointment.servicePrice)}` : ""}</small>}</article>)}</div>}
-              </section>
-            </article> : <div className="crm-select-hint"><i><ContactRound size={29} /></i><h3>Bir müşteri seçin</h3><p>Profil, değer ve randevu geçmişi burada görüntülenecek.</p></div>}
+              {selectedCustomer && businessId ? <CustomerProfileStudio key={selectedCustomer.id} businessId={businessId} customer={selectedCustomer} appointments={selectedAppts} services={services} servicePackages={servicePackages} customerPackages={customerPackages} receipts={receipts} transactions={transactions} onClose={() => setSelectedId(null)} onRename={saveCustomerName} onRefresh={() => loadData()} /> : <div className="crm-select-hint"><i><ContactRound size={29} /></i><h3>Bir müşteri seçin</h3><p>Bilgiler, randevular, hizmetler, paketler, borçlar ve ödemeler burada yönetilecek.</p></div>}
           </div>
         </section>
       )}
