@@ -4526,13 +4526,41 @@ export const sendPasswordResetCode = onCall(
       throw new HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
     }
 
-    const codeDocRef = db.doc(`passwordResetCodes/${email}`);
-    const existing = await codeDocRef.get();
+    const forwardedFor = String(request.rawRequest.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    const requestIp = forwardedFor || request.rawRequest.ip || "unknown";
+    await Promise.all([
+      consumeSecurityLimit(`password-reset:email:hour:${email}`, 5, 60 * 60_000),
+      consumeSecurityLimit(`password-reset:email:day:${email}`, 10, 24 * 60 * 60_000),
+      consumeSecurityLimit(`password-reset:ip:hour:${requestIp}`, 20, 60 * 60_000),
+      consumeSecurityLimit(`password-reset:ip:day:${requestIp}`, 60, 24 * 60 * 60_000),
+    ]);
 
-    if (existing.exists) {
+    // Kayıtlı olmayan adreslere posta yollamayarak bu endpoint'in spam için
+    // kullanılmasını engelle. Bekleme ve yanıt davranışı iki durumda da aynı
+    // kalır; böylece endpoint hesap keşfi için kullanılamaz.
+    let accountExists = true;
+    try {
+      await auth.getUserByEmail(email);
+    } catch (error) {
+      if ((error as { code?: string }).code === "auth/user-not-found") {
+        accountExists = false;
+      } else {
+        throw error;
+      }
+    }
+
+    const codeDocRef = db.doc(`passwordResetCodes/${email}`);
+    const mailDocRef = db.collection("mail").doc();
+    const code = String(randomInt(100000, 1000000));
+    const now = Date.now();
+
+    // Bekleme kontrolü, yeni kod kaydı ve posta kuyruğu tek transaction'dadır.
+    // Böylece eş zamanlı istekler farklı kodlar üretip limiti aşamaz.
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(codeDocRef);
       const lastSent = existing.data()?.sentAt as Timestamp | undefined;
       if (lastSent) {
-        const secondsAgo = (Date.now() - lastSent.toMillis()) / 1000;
+        const secondsAgo = (now - lastSent.toMillis()) / 1000;
         if (secondsAgo < 60) {
           throw new HttpsError(
             "resource-exhausted",
@@ -4540,26 +4568,24 @@ export const sendPasswordResetCode = onCall(
           );
         }
       }
-    }
 
-    const code = String(randomInt(100000, 999999));
-
-    await codeDocRef.set({
-      code,
-      email,
-      type: "password_reset",
-      attempts: 0,
-      verified: false,
-      sentAt: FieldValue.serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
-    });
-
-    await db.collection("mail").add({
-      to: email,
-      message: {
-        subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
-        html: buildEmailTemplate(code, "reset"),
-      },
+      tx.set(codeDocRef, {
+        codeHash: otpHash(email, code),
+        email,
+        type: "password_reset",
+        attempts: 0,
+        sentAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(now + 5 * 60 * 1000),
+      });
+      if (accountExists) {
+        tx.set(mailDocRef, {
+          to: email,
+          message: {
+            subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
+            html: buildEmailTemplate(code, "reset"),
+          },
+        });
+      }
     });
 
     return { success: true, message: "Şifre sıfırlama kodu e-posta adresinize gönderildi." };
@@ -4575,49 +4601,105 @@ export const resetPasswordWithCode = onCall(
     const inputCode = requireString(data.code, "code");
     const newPassword = requireString(data.newPassword, "newPassword");
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
+    }
+    if (!/^\d{6}$/.test(inputCode.trim())) {
+      throw new HttpsError("invalid-argument", "Doğrulama kodu 6 haneli olmalıdır.");
+    }
     if (newPassword.length < 8) {
       throw new HttpsError("invalid-argument", "Şifre en az 8 karakter olmalıdır.");
     }
 
     const codeDocRef = db.doc(`passwordResetCodes/${email}`);
-    const codeSnap = await codeDocRef.get();
+    const normalizedCode = inputCode.trim();
 
-    if (!codeSnap.exists) {
+    type ResetCodeResult =
+      | { status: "valid" }
+      | { status: "missing" }
+      | { status: "expired" }
+      | { status: "locked" }
+      | { status: "invalid"; remainingAttempts: number };
+
+    const verification = await db.runTransaction<ResetCodeResult>(async (tx) => {
+      const codeSnap = await tx.get(codeDocRef);
+      if (!codeSnap.exists) return { status: "missing" };
+
+      const codeData = codeSnap.data()!;
+      const expiresAt = codeData.expiresAt as Timestamp | undefined;
+      if (!expiresAt || expiresAt.toMillis() < Date.now()) {
+        tx.delete(codeDocRef);
+        return { status: "expired" };
+      }
+
+      const attempts = Number(codeData.attempts ?? 0);
+      if (!Number.isFinite(attempts) || attempts >= 5) {
+        tx.delete(codeDocRef);
+        return { status: "locked" };
+      }
+
+      const storedHash = typeof codeData.codeHash === "string" ? codeData.codeHash : "";
+      // Eski, henüz süresi dolmamış kayıtları yalnızca geçiş süresince kabul et.
+      const legacyCode = typeof codeData.code === "string" ? codeData.code : "";
+      const codeMatches = storedHash
+        ? storedHash === otpHash(email, normalizedCode)
+        : legacyCode === normalizedCode;
+
+      if (!codeMatches) {
+        const nextAttempts = attempts + 1;
+        if (nextAttempts >= 5) {
+          tx.delete(codeDocRef);
+        } else {
+          tx.update(codeDocRef, { attempts: nextAttempts });
+        }
+        return { status: "invalid", remainingAttempts: Math.max(0, 5 - nextAttempts) };
+      }
+
+      // Doğru kod transaction içinde tüketilir. Paralel doğru isteklerden
+      // yalnızca biri commit olabilir; diğerleri yeniden okuyup "missing" alır.
+      tx.delete(codeDocRef);
+      return { status: "valid" };
+    });
+
+    if (verification.status === "missing") {
       throw new HttpsError("not-found", "Sıfırlama kodu bulunamadı. Lütfen tekrar kod gönderin.");
     }
-
-    const codeData = codeSnap.data()!;
-
-    const expiresAt = codeData.expiresAt as Timestamp | undefined;
-    if (expiresAt && expiresAt.toMillis() < Date.now()) {
-      await codeDocRef.delete();
+    if (verification.status === "expired") {
       throw new HttpsError("deadline-exceeded", "Kodun süresi doldu. Lütfen yeni kod gönderin.");
     }
-
-    const attempts = Number(codeData.attempts ?? 0);
-    if (attempts >= 5) {
-      await codeDocRef.delete();
+    if (verification.status === "locked") {
       throw new HttpsError("permission-denied", "Çok fazla hatalı deneme. Yeni kod gönderin.");
     }
-
-    if (codeData.code !== inputCode.trim()) {
-      await codeDocRef.update({ attempts: FieldValue.increment(1) });
-      throw new HttpsError("invalid-argument", `Yanlış kod. ${4 - attempts} deneme hakkınız kaldı.`);
+    if (verification.status === "invalid") {
+      throw new HttpsError(
+        verification.remainingAttempts === 0 ? "permission-denied" : "invalid-argument",
+        verification.remainingAttempts === 0
+          ? "Çok fazla hatalı deneme. Yeni kod gönderin."
+          : `Yanlış kod. ${verification.remainingAttempts} deneme hakkınız kaldı.`
+      );
     }
 
-    // Code is correct — update password via Admin SDK
-    const { getAuth } = await import("firebase-admin/auth");
-    const auth = getAuth();
+    // Hesap sorgusu yalnızca geçerli ve tek kullanımlık kod tüketildikten sonra
+    // yapılır; hatalı kodlarla kayıtlı e-posta adresleri keşfedilemez.
+    let userRecord;
+    try {
+      userRecord = await auth.getUserByEmail(email);
+    } catch (error) {
+      if ((error as { code?: string }).code === "auth/user-not-found") {
+        throw new HttpsError("not-found", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+      }
+      throw error;
+    }
 
     try {
-      const userRecord = await auth.getUserByEmail(email);
       await auth.updateUser(userRecord.uid, { password: newPassword });
-    } catch {
-      throw new HttpsError("not-found", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+    } catch (error) {
+      logger.error("Şifre sıfırlama sırasında kullanıcı güncellenemedi.", {
+        uid: userRecord.uid,
+        error,
+      });
+      throw new HttpsError("internal", "Şifre şu anda güncellenemedi. Lütfen yeni kod isteyip tekrar deneyin.");
     }
-
-    // Clean up the code
-    await codeDocRef.delete();
 
     return { success: true, message: "Şifreniz başarıyla güncellendi." };
   }

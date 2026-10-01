@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,7 @@ import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, quer
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { updateProfile } from "firebase/auth";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, PackageCheck, RotateCcw, Search, Settings2, ShieldCheck, Sparkles, Star, Store, TicketCheck, Trash2, UserRound, WandSparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, PackageCheck, RotateCcw, Search, Settings2, ShieldCheck, Sparkles, Star, Store, TicketCheck, Trash2, UserRound, X } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -325,7 +325,28 @@ export default function CustomerAccountPage() {
 
   return <div className="customer-account"><MarketingHeader/>
     <main>
-      <section className="account-hero"><div className="account-hero-grid"/><div className="account-hero-copy"><span><Sparkles size={15}/> KİŞİSEL RANDEVU MERKEZİNİZ</span><h1>Planınız net,<br/><em>gününüz size kalsın.</em></h1><p>Yaklaşan randevularınızı yönetin, geçmiş deneyimlerinizi değerlendirin ve sevdiğiniz işletmelere hızla geri dönün.</p><div className="account-hero-actions"><Link href="/kesfet"><Compass size={17}/> Yeni randevu keşfet</Link>{activeBusiness&&<Link href="/dashboard" className="account-dashboard-hero"><BriefcaseBusiness size={17}/> İşletme paneline geç</Link>}<SupportRequestModal audience="customer" triggerLabel="Yardım iste" triggerClassName="account-support-trigger"/></div></div><div className="account-hero-visual"><Image src="/images/help-customer.png" alt="Randevu ve müşteri hesabı görseli" fill priority sizes="(max-width:900px) 100vw, 42vw"/><div className="account-floating-card"><TicketCheck size={20}/><span><b>{upcoming.length} yaklaşan randevu</b><small>Her şey tek yerde</small></span></div></div></section>
+      <section className="account-hero account-hero--compact">
+        <div className="account-hero-grid"/>
+        <div className="account-hero-copy">
+          <span><Sparkles size={15}/> KİŞİSEL HESABINIZ</span>
+          <h1>Merhaba, <em>{profileName?.split(" ")[0]||user?.displayName?.split(" ")[0]||"hoş geldiniz"}.</em></h1>
+          <p>Randevularınız, paketleriniz ve sevdiğiniz işletmeler tek yerde. İhtiyacınız olan işleme kolayca ulaşın.</p>
+          <div className="account-hero-actions">
+            <Link href="/kesfet"><CalendarPlus size={17}/> Yeni randevu al</Link>
+            {activeBusiness&&<Link href="/dashboard" className="account-dashboard-hero"><BriefcaseBusiness size={17}/> İşletme paneli</Link>}
+            <SupportRequestModal audience="customer" triggerLabel="Yardım" triggerClassName="account-support-trigger"/>
+          </div>
+        </div>
+        <div className={`account-hero-summary ${next?"has-appointment":"is-empty"}`}>
+          <div className="account-hero-summary-icon">{next?<CalendarDays size={23}/>:<Compass size={23}/>}</div>
+          <div className="account-hero-summary-copy">
+            <span>{next?"SIRADAKİ RANDEVUNUZ":"BUGÜNÜN PLANI"}</span>
+            <h2>{next?next.businessName:"Yaklaşan randevunuz yok"}</h2>
+            <p>{next?`${formatDate(next.startAt)} · ${next.serviceName}`:"Yeni bir randevuyu birkaç adımda planlayabilirsiniz."}</p>
+          </div>
+          {next?.publicToken?<Link href={`/randevu/${next.publicToken}`}>Detayları aç <ArrowRight size={15}/></Link>:<Link href="/kesfet">Uygun yerleri gör <ArrowRight size={15}/></Link>}
+        </div>
+      </section>
 
       {suspendedBusinesses.map((business)=><section key={business.id} className="mx-auto mt-5 flex w-[calc(100%_-_32px)] max-w-[1180px] flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950"><div><small className="font-bold tracking-wider">ASKIYA ALINAN İŞLETME</small><h2 className="text-lg font-extrabold">{business.name}</h2><p className="text-sm">{business.adminNote||"İşletmeniz inceleme nedeniyle geçici olarak panel listesinden kaldırıldı."}</p></div><SupportRequestModal audience="business" businessId={business.id} businessName={business.name} triggerLabel="İnceleme / itiraz talebi gönder" triggerClassName="account-support-trigger"/></section>)}
 
@@ -334,11 +355,7 @@ export default function CustomerAccountPage() {
 
         <div className="account-content" id="account-tab-panel" role="tabpanel" aria-labelledby={`account-tab-${tab}`} tabIndex={0}>
           {tab==="overview"&&<>
-            <div className="account-section-head"><div><span>GENEL BAKIŞ</span><h2>Bugünün randevu özeti.</h2></div><button onClick={()=>setTab("appointments")}>Tüm randevular <ChevronRight size={16}/></button></div>
-            <section className="account-vip-overview">
-              <div className="account-vip-copy"><span><Crown size={15}/> SENİNRANDEVUN MEMBER</span><h3>{profileName?`${profileName.split(" ")[0]}, kontrol sende.`:"Randevu dünyanız hazır."}</h3><p>{next?`${relativeAppointmentLabel(next.startAt)} ${next.businessName} randevunuz var.`:"Yeni deneyiminizi birkaç dokunuşla planlayın."}</p><div><button type="button" onClick={()=>setTab("appointments")}><CalendarDays size={15}/> Planımı aç</button><Link href="/kesfet"><WandSparkles size={15}/> Bana uygun yeri bul</Link></div></div>
-              <div className="account-profile-score" style={{"--account-score":`${profileScore*3.6}deg`} as CSSProperties}><span><b>%{profileScore}</b><small>profil hazır</small></span></div>
-            </section>
+            <div className="account-section-head"><div><span>GENEL BAKIŞ</span><h2>Randevularınız bir bakışta.</h2></div><button onClick={()=>setTab("appointments")}>Tümünü gör <ChevronRight size={16}/></button></div>
             <div className="account-metrics"><article><span><CalendarDays/></span><div><b>{upcoming.length}</b><small>Yaklaşan</small></div></article><article><span><Check/></span><div><b>{completed.length}</b><small>Tamamlanan</small></div></article><article><span><Store/></span><div><b>{visitedBusinessCount}</b><small>Deneyim noktası</small></div></article><article><span><Heart/></span><div><b>{favorites.length}</b><small>Favori işletme</small></div></article></div>
             {next?<section className="account-next"><div className="account-next-date"><strong>{new Date(next.startAt).toLocaleDateString("tr-TR",{day:"2-digit"})}</strong><span>{new Date(next.startAt).toLocaleDateString("tr-TR",{month:"short"}).toUpperCase()}</span><small>{new Date(next.startAt).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</small></div><div className="account-next-info"><span>SIRADAKİ RANDEVUNUZ</span><h3>{next.businessName}</h3><p>{next.serviceName} · {next.staffName}</p><small><MapPin size={13}/>{next.businessCity||"Konum bilgisi işletmede"}</small></div><div className="account-next-actions">{next.publicToken&&<Link href={`/randevu/${next.publicToken}`}>Detayları aç <ArrowRight size={14}/></Link>}<button onClick={()=>setCancelling(next)}>Randevuyu iptal et</button></div></section>:<section className="account-empty-premium account-empty-rande"><div><Image src="/mascots/randevu-rehberi.png" alt="Rovi keşif yardımcısı" width={104} height={95}/></div><span>ROVİ ÖNERİYOR</span><h3>Takviminizde yaklaşan randevu yok.</h3><p>Aradığınız hizmeti söyleyin; Rovi size uygun işletmeleri keşfetmeniz için yolu açsın.</p><Link href="/kesfet">Rovi ile keşfet <ArrowRight size={15}/></Link></section>}
             <section className="account-quick-grid"><button type="button" onClick={()=>setTab("alerts")}><i><BellRing/></i><span><small>AKILLI TAKİP</small><b>Müsait saat yakala</b><em>Dolu saat açıldığında haberdar olun.</em></span><ChevronRight/></button><button type="button" onClick={()=>setTab("favorites")}><i><Heart/></i><span><small>HIZLI ERİŞİM</small><b>Favorilerime git</b><em>Sevdiğiniz işletmeler tek ekranda.</em></span><ChevronRight/></button>{lastCompleted?<Link href={lastCompleted.businessSlug?`/isletme/${lastCompleted.businessSlug}/randevu?service=${encodeURIComponent(lastCompleted.serviceId)}`:"/kesfet"}><i><RotateCcw/></i><span><small>TEKRARLA</small><b>{lastCompleted.serviceName}</b><em>{lastCompleted.businessName} için yeniden planlayın.</em></span><ChevronRight/></Link>:<button type="button" onClick={()=>setTab("profile")}><i><Fingerprint/></i><span><small>HESAP GÜVENLİĞİ</small><b>Profilimi tamamla</b><em>İletişim bilgilerinizi güncel tutun.</em></span><ChevronRight/></button>}</section>
@@ -394,7 +411,6 @@ function AppointmentRow({item,now,onCancel,onReview}:{item:CustomerAppointment;n
 function formatDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"Tarih bilgisi yok":date.toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})+" · "+date.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
 function formatLastSignIn(value?:string|null){if(!value)return"Bilgi yok";const date=new Date(value);return Number.isNaN(date.getTime())?"Bilgi yok":date.toLocaleString("tr-TR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
 function formatMoney(value:number){return new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:0}).format(value)}
-function relativeAppointmentLabel(value:string){const difference=new Date(value).getTime()-Date.now();const hours=Math.max(0,Math.round(difference/3_600_000));if(hours<24)return hours<=1?"Yaklaşık bir saat içinde":"Bugün";const days=Math.ceil(hours/24);return days===1?"Yarın":`${days} gün sonra`}
 function formatShortDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"Tarih bilgisi yok":date.toLocaleDateString("tr-TR",{day:"2-digit",month:"short",year:"numeric"})}
 function packageStatusLabel(value:string){return value==="active"?"Aktif":value==="used"?"Tamamlandı":value==="expired"?"Süresi doldu":value==="cancelled"?"İptal":"Beklemede"}
 function downloadCalendarEvent(item:CustomerAppointment){const stamp=(value:string)=>new Date(value).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");const escape=(value:string)=>value.replace(/\\/g,"\\\\").replace(/,/g,"\\,").replace(/;/g,"\\;").replace(/\n/g,"\\n");const services=[item.serviceName,...(item.additionalServices??[]).map(service=>service.name)].filter(Boolean).join(" + ");const content=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//SeninRandevun//TR","BEGIN:VEVENT",`UID:${item.id}@seninrandevun.com`,`DTSTAMP:${stamp(new Date().toISOString())}`,`DTSTART:${stamp(item.startAt)}`,`DTEND:${stamp(item.endAt)}`,`SUMMARY:${escape(`${services} · ${item.businessName}`)}`,`DESCRIPTION:${escape(`Çalışan: ${item.staffName}`)}`,`LOCATION:${escape(item.businessCity)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");const url=URL.createObjectURL(new Blob([content],{type:"text/calendar;charset=utf-8"}));const anchor=document.createElement("a");anchor.href=url;anchor.download=`randevu-${item.id}.ics`;anchor.click();URL.revokeObjectURL(url)}

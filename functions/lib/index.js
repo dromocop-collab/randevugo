@@ -4042,33 +4042,61 @@ exports.sendPasswordResetCode = (0, https_1.onCall)({ region: "europe-west1" }, 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new https_1.HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
     }
+    const forwardedFor = String(request.rawRequest.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    const requestIp = forwardedFor || request.rawRequest.ip || "unknown";
+    await Promise.all([
+        consumeSecurityLimit(`password-reset:email:hour:${email}`, 5, 60 * 60_000),
+        consumeSecurityLimit(`password-reset:email:day:${email}`, 10, 24 * 60 * 60_000),
+        consumeSecurityLimit(`password-reset:ip:hour:${requestIp}`, 20, 60 * 60_000),
+        consumeSecurityLimit(`password-reset:ip:day:${requestIp}`, 60, 24 * 60 * 60_000),
+    ]);
+    // Kayıtlı olmayan adreslere posta yollamayarak bu endpoint'in spam için
+    // kullanılmasını engelle. Bekleme ve yanıt davranışı iki durumda da aynı
+    // kalır; böylece endpoint hesap keşfi için kullanılamaz.
+    let accountExists = true;
+    try {
+        await auth.getUserByEmail(email);
+    }
+    catch (error) {
+        if (error.code === "auth/user-not-found") {
+            accountExists = false;
+        }
+        else {
+            throw error;
+        }
+    }
     const codeDocRef = db.doc(`passwordResetCodes/${email}`);
-    const existing = await codeDocRef.get();
-    if (existing.exists) {
+    const mailDocRef = db.collection("mail").doc();
+    const code = String((0, crypto_1.randomInt)(100000, 1000000));
+    const now = Date.now();
+    // Bekleme kontrolü, yeni kod kaydı ve posta kuyruğu tek transaction'dadır.
+    // Böylece eş zamanlı istekler farklı kodlar üretip limiti aşamaz.
+    await db.runTransaction(async (tx) => {
+        const existing = await tx.get(codeDocRef);
         const lastSent = existing.data()?.sentAt;
         if (lastSent) {
-            const secondsAgo = (Date.now() - lastSent.toMillis()) / 1000;
+            const secondsAgo = (now - lastSent.toMillis()) / 1000;
             if (secondsAgo < 60) {
                 throw new https_1.HttpsError("resource-exhausted", `Lütfen ${Math.ceil(60 - secondsAgo)} saniye bekleyin.`);
             }
         }
-    }
-    const code = String((0, crypto_1.randomInt)(100000, 999999));
-    await codeDocRef.set({
-        code,
-        email,
-        type: "password_reset",
-        attempts: 0,
-        verified: false,
-        sentAt: firestore_1.FieldValue.serverTimestamp(),
-        expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
-    });
-    await db.collection("mail").add({
-        to: email,
-        message: {
-            subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
-            html: buildEmailTemplate(code, "reset"),
-        },
+        tx.set(codeDocRef, {
+            codeHash: otpHash(email, code),
+            email,
+            type: "password_reset",
+            attempts: 0,
+            sentAt: firestore_1.FieldValue.serverTimestamp(),
+            expiresAt: firestore_1.Timestamp.fromMillis(now + 5 * 60 * 1000),
+        });
+        if (accountExists) {
+            tx.set(mailDocRef, {
+                to: email,
+                message: {
+                    subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
+                    html: buildEmailTemplate(code, "reset"),
+                },
+            });
+        }
     });
     return { success: true, message: "Şifre sıfırlama kodu e-posta adresinize gönderildi." };
 });
@@ -4078,41 +4106,89 @@ exports.resetPasswordWithCode = (0, https_1.onCall)({ region: "europe-west1" }, 
     const email = requireString(data.email, "email").toLowerCase();
     const inputCode = requireString(data.code, "code");
     const newPassword = requireString(data.newPassword, "newPassword");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new https_1.HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
+    }
+    if (!/^\d{6}$/.test(inputCode.trim())) {
+        throw new https_1.HttpsError("invalid-argument", "Doğrulama kodu 6 haneli olmalıdır.");
+    }
     if (newPassword.length < 8) {
         throw new https_1.HttpsError("invalid-argument", "Şifre en az 8 karakter olmalıdır.");
     }
     const codeDocRef = db.doc(`passwordResetCodes/${email}`);
-    const codeSnap = await codeDocRef.get();
-    if (!codeSnap.exists) {
+    const normalizedCode = inputCode.trim();
+    const verification = await db.runTransaction(async (tx) => {
+        const codeSnap = await tx.get(codeDocRef);
+        if (!codeSnap.exists)
+            return { status: "missing" };
+        const codeData = codeSnap.data();
+        const expiresAt = codeData.expiresAt;
+        if (!expiresAt || expiresAt.toMillis() < Date.now()) {
+            tx.delete(codeDocRef);
+            return { status: "expired" };
+        }
+        const attempts = Number(codeData.attempts ?? 0);
+        if (!Number.isFinite(attempts) || attempts >= 5) {
+            tx.delete(codeDocRef);
+            return { status: "locked" };
+        }
+        const storedHash = typeof codeData.codeHash === "string" ? codeData.codeHash : "";
+        // Eski, henüz süresi dolmamış kayıtları yalnızca geçiş süresince kabul et.
+        const legacyCode = typeof codeData.code === "string" ? codeData.code : "";
+        const codeMatches = storedHash
+            ? storedHash === otpHash(email, normalizedCode)
+            : legacyCode === normalizedCode;
+        if (!codeMatches) {
+            const nextAttempts = attempts + 1;
+            if (nextAttempts >= 5) {
+                tx.delete(codeDocRef);
+            }
+            else {
+                tx.update(codeDocRef, { attempts: nextAttempts });
+            }
+            return { status: "invalid", remainingAttempts: Math.max(0, 5 - nextAttempts) };
+        }
+        // Doğru kod transaction içinde tüketilir. Paralel doğru isteklerden
+        // yalnızca biri commit olabilir; diğerleri yeniden okuyup "missing" alır.
+        tx.delete(codeDocRef);
+        return { status: "valid" };
+    });
+    if (verification.status === "missing") {
         throw new https_1.HttpsError("not-found", "Sıfırlama kodu bulunamadı. Lütfen tekrar kod gönderin.");
     }
-    const codeData = codeSnap.data();
-    const expiresAt = codeData.expiresAt;
-    if (expiresAt && expiresAt.toMillis() < Date.now()) {
-        await codeDocRef.delete();
+    if (verification.status === "expired") {
         throw new https_1.HttpsError("deadline-exceeded", "Kodun süresi doldu. Lütfen yeni kod gönderin.");
     }
-    const attempts = Number(codeData.attempts ?? 0);
-    if (attempts >= 5) {
-        await codeDocRef.delete();
+    if (verification.status === "locked") {
         throw new https_1.HttpsError("permission-denied", "Çok fazla hatalı deneme. Yeni kod gönderin.");
     }
-    if (codeData.code !== inputCode.trim()) {
-        await codeDocRef.update({ attempts: firestore_1.FieldValue.increment(1) });
-        throw new https_1.HttpsError("invalid-argument", `Yanlış kod. ${4 - attempts} deneme hakkınız kaldı.`);
+    if (verification.status === "invalid") {
+        throw new https_1.HttpsError(verification.remainingAttempts === 0 ? "permission-denied" : "invalid-argument", verification.remainingAttempts === 0
+            ? "Çok fazla hatalı deneme. Yeni kod gönderin."
+            : `Yanlış kod. ${verification.remainingAttempts} deneme hakkınız kaldı.`);
     }
-    // Code is correct — update password via Admin SDK
-    const { getAuth } = await import("firebase-admin/auth");
-    const auth = getAuth();
+    // Hesap sorgusu yalnızca geçerli ve tek kullanımlık kod tüketildikten sonra
+    // yapılır; hatalı kodlarla kayıtlı e-posta adresleri keşfedilemez.
+    let userRecord;
     try {
-        const userRecord = await auth.getUserByEmail(email);
+        userRecord = await auth.getUserByEmail(email);
+    }
+    catch (error) {
+        if (error.code === "auth/user-not-found") {
+            throw new https_1.HttpsError("not-found", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+        }
+        throw error;
+    }
+    try {
         await auth.updateUser(userRecord.uid, { password: newPassword });
     }
-    catch {
-        throw new https_1.HttpsError("not-found", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+    catch (error) {
+        firebase_functions_1.logger.error("Şifre sıfırlama sırasında kullanıcı güncellenemedi.", {
+            uid: userRecord.uid,
+            error,
+        });
+        throw new https_1.HttpsError("internal", "Şifre şu anda güncellenemedi. Lütfen yeni kod isteyip tekrar deneyin.");
     }
-    // Clean up the code
-    await codeDocRef.delete();
     return { success: true, message: "Şifreniz başarıyla güncellendi." };
 });
 function assistantConversationId(scope, businessId) {
