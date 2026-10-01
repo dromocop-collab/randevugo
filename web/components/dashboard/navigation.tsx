@@ -165,36 +165,65 @@ export function DashboardBottomNav() {
     return () => window.removeEventListener("dashboard:tour-reveal", revealTourTarget);
   }, [moreItems]);
 
+  useEffect(() => {
+    if (!moreOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [moreOpen]);
+
   return (
-    <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-30 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
-      <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
-      <ul className="dashboard-bottom-primary">
-        {primaryItems.map((item) => {
-          const Icon = item.icon;
-          const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                data-dashboard-tour={item.href === "/dashboard" ? "overview" : item.href.replace("/dashboard/", "")}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "dashboard-bottom-nav-link",
-                  active ? "active" : ""
-                )}
-              >
-                <span className="dashboard-bottom-nav-icon"><Icon aria-hidden="true" size={20} strokeWidth={2} /></span>
-                <span>{item.label}</span>
-              </Link>
-            </li>
-          );
-        })}
-        <li><button type="button" className={cn("dashboard-bottom-nav-link", moreOpen ? "active" : "")} onClick={() => setMoreOpen((current) => !current)} aria-expanded={moreOpen}><span className="dashboard-bottom-nav-icon">{moreOpen ? <X size={20}/> : <Menu size={20}/>}</span><span>Diğer</span></button></li>
-      </ul>
-      {moreOpen && <><button type="button" className="dashboard-more-backdrop" aria-label="Menüyü kapat" onClick={() => setMoreOpen(false)}/><aside className="dashboard-more-sheet"><header><div><small>İŞLETME MENÜSÜ</small><b>Tüm çalışma alanları</b></div><button type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat"><X size={18}/></button></header><div>{(Object.keys(GROUP_LABELS) as NavGroup[]).map((group) => { const grouped = moreItems.filter((item) => item.group === group); if (!grouped.length) return null; return <section key={group}><p>{GROUP_LABELS[group]}</p><nav>{grouped.map((item) => { const Icon=item.icon; return <Link key={item.href} href={item.href} data-dashboard-tour={item.href.replace("/dashboard/", "")} onClick={() => setMoreOpen(false)} className={pathname.startsWith(item.href) ? "active" : ""}><span><Icon size={17}/></span>{item.label}<i>›</i></Link>})}</nav></section>})}{isAdmin && <section><p>Platform</p><nav><Link href="/super-admin" onClick={() => setMoreOpen(false)}><span><ShieldCheck size={17}/></span>Süper Admin<i>↗</i></Link></nav></section>}</div></aside></>}
-    </nav>
+    <>
+      {moreOpen && <>
+        <button type="button" className="dashboard-more-backdrop lg:hidden" aria-label="Menüyü kapat" onClick={() => setMoreOpen(false)}/>
+        <aside id="dashboard-more-menu" className="dashboard-more-sheet lg:hidden" role="dialog" aria-modal="true" aria-label="İşletme menüsü">
+          <header><div><small>İŞLETME MENÜSÜ</small><b>Tüm çalışma alanları</b></div><button type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat"><X size={18}/></button></header>
+          <div>{(Object.keys(GROUP_LABELS) as NavGroup[]).map((group) => {
+            const grouped = moreItems.filter((item) => item.group === group);
+            if (!grouped.length) return null;
+            return <section key={group}><p>{GROUP_LABELS[group]}</p><nav>{grouped.map((item) => {
+              const Icon=item.icon;
+              return <Link key={item.href} href={item.href} data-dashboard-tour={item.href.replace("/dashboard/", "")} onClick={() => setMoreOpen(false)} className={pathname.startsWith(item.href) ? "active" : ""}><span><Icon size={17}/></span>{item.label}<i>›</i></Link>;
+            })}</nav></section>;
+          })}{isAdmin && <section><p>Platform</p><nav><Link href="/super-admin" onClick={() => setMoreOpen(false)}><span><ShieldCheck size={17}/></span>Süper Admin<i>↗</i></Link></nav></section>}</div>
+        </aside>
+      </>}
+      <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-40 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
+        <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
+        <ul className="dashboard-bottom-primary">
+          {primaryItems.map((item) => {
+            const Icon = item.icon;
+            const active =
+              item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  data-dashboard-tour={item.href === "/dashboard" ? "overview" : item.href.replace("/dashboard/", "")}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "dashboard-bottom-nav-link",
+                    active ? "active" : ""
+                  )}
+                >
+                  <span className="dashboard-bottom-nav-icon"><Icon aria-hidden="true" size={20} strokeWidth={2} /></span>
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+          <li><button type="button" className={cn("dashboard-bottom-nav-link", moreOpen ? "active" : "")} onClick={() => setMoreOpen((current) => !current)} aria-expanded={moreOpen} aria-controls="dashboard-more-menu"><span className="dashboard-bottom-nav-icon">{moreOpen ? <X size={20}/> : <Menu size={20}/>}</span><span>Diğer</span></button></li>
+        </ul>
+      </nav>
+    </>
   );
 }
