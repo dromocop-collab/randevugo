@@ -184,7 +184,7 @@ export function DashboardBottomNav() {
       {moreOpen && <>
         <button type="button" className="dashboard-more-backdrop lg:hidden" aria-label="Menüyü kapat" onClick={() => setMoreOpen(false)}/>
         <aside id="dashboard-more-menu" className="dashboard-more-sheet lg:hidden" role="dialog" aria-modal="true" aria-label="İşletme menüsü">
-          <header><div><small>İŞLETME MENÜSÜ</small><b>Tüm çalışma alanları</b></div><button type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat"><X size={18}/></button></header>
+          <header><div><small>İŞLETME MENÜSÜ</small><b>Diğer araçlar</b></div><button type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat"><X size={18}/></button></header>
           <div>{(Object.keys(GROUP_LABELS) as NavGroup[]).map((group) => {
             const grouped = moreItems.filter((item) => item.group === group);
             if (!grouped.length) return null;
@@ -221,7 +221,7 @@ export function DashboardBottomNav() {
               </li>
             );
           })}
-          <li><button type="button" className={cn("dashboard-bottom-nav-link", moreOpen ? "active" : "")} onClick={() => setMoreOpen((current) => !current)} aria-expanded={moreOpen} aria-controls="dashboard-more-menu"><span className="dashboard-bottom-nav-icon">{moreOpen ? <X size={20}/> : <Menu size={20}/>}</span><span>Diğer</span></button></li>
+          <li><button type="button" className={cn("dashboard-bottom-nav-link", moreOpen ? "menu-open" : "")} onClick={() => setMoreOpen((current) => !current)} aria-expanded={moreOpen} aria-controls="dashboard-more-menu"><span className="dashboard-bottom-nav-icon">{moreOpen ? <X size={20}/> : <Menu size={20}/>}</span><span>Diğer</span></button></li>
         </ul>
       </nav>
     </>
