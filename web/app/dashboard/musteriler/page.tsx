@@ -74,13 +74,19 @@ export default function CustomersPage() {
   useEffect(() => {
     if (!isMobileDetail || !selectedId) return;
     const previousOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSelectedId(null);
     };
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [isMobileDetail, selectedId]);
