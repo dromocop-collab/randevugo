@@ -29448,6 +29448,8 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   inset: 0;
   display: grid;
   height: 100dvh;
+  width: 100vw;
+  max-width: 100vw;
   place-items: center;
   overflow: hidden;
   background: color-mix(in srgb, var(--dash-deep, #061d15) 78%, transparent);
@@ -29458,7 +29460,10 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 .crm-mobile-detail-shell {
   overflow: hidden;
   width: min(900px, 100%);
-  height: min(920px, calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom))));
+  height: calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  max-width: 100%;
+  min-width: 0;
+  contain: layout paint;
   border: 1px solid color-mix(in srgb, var(--dash-core) 22%, var(--border));
   border-radius: 28px;
   background: var(--surface-1);
@@ -29510,6 +29515,13 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   background: var(--surface-1);
   color: var(--text-1);
   scrollbar-color: color-mix(in srgb, var(--dash-core) 35%, transparent) transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.crm-mobile-detail-shell :is(.crm-studio-head,.crm-studio-tabs,.crm-studio-content,.crm-overview-grid,.crm-overview-kpis,.crm-overview-activity,.crm-overview-actions,.crm-info-panel,.crm-record-section,.crm-package-assign,.crm-last-session-banner,.crm-record-list) {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .crm-mobile-detail-shell :is(.crm-overview-kpis article,.crm-overview-activity,.crm-overview-actions,.crm-info-panel,.crm-record-section,.crm-package-assign,.crm-last-session-banner) {
@@ -29529,18 +29541,21 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 .crm-mobile-detail-shell .crm-last-session-banner :is(small,button) { color: var(--dash-core) }
 .crm-mobile-detail-shell .crm-last-session-banner button { background: var(--surface-1) }
 
-@media (max-width: 640px) {
+@media (max-width: 1023px) {
   .crm-mobile-detail-backdrop { padding: max(6px, env(safe-area-inset-top)) 5px max(6px, env(safe-area-inset-bottom)) }
   .crm-mobile-detail-shell { height: calc(100dvh - max(12px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); border-radius: 22px }
   .crm-mobile-detail-shell .crm-studio-head { grid-template-columns: 46px minmax(0,1fr); gap: 11px; padding: 16px 49px 14px 14px }
+  .crm-mobile-detail-shell .crm-studio-identity { overflow:hidden }
   .crm-mobile-detail-shell .crm-detail-avatar { width: 46px; height: 46px; border-radius: 14px; font-size: 17px }
   .crm-mobile-detail-shell .crm-studio-identity>small { color: var(--dash-bright); font-size: 10px }
   .crm-mobile-detail-shell .crm-studio-head .crm-name-row h2 { font-size: 24px }
   .crm-mobile-detail-shell .crm-name-row { align-items:flex-start; flex-direction:column; gap:6px }
   .crm-mobile-detail-shell .crm-name-row button { min-height: 34px; padding-inline:10px; font-size:11px }
-  .crm-mobile-detail-shell .crm-studio-identity>p { flex-wrap: wrap; gap: 7px; margin-top: 9px; font-size: 13px; line-height: 1.4 }
+  .crm-mobile-detail-shell .crm-studio-identity>p { align-items:flex-start; flex-direction:column; gap:7px; margin-top:9px; font-size:13px; line-height:1.4 }
+  .crm-mobile-detail-shell .crm-contact-line>i { display:none }
+  .crm-mobile-detail-shell .crm-contact-line a { max-width:100% }
   .crm-mobile-detail-shell .crm-detail-close { right: 12px; top: 12px; width: 36px; height: 36px; border-radius: 12px; background: rgb(255 255 255 / .13) }
-  .crm-mobile-detail-shell .crm-studio-side { grid-column: 1/-1; grid-template-columns: minmax(0,1.25fr) minmax(0,.75fr); gap: 6px }
+  .crm-mobile-detail-shell .crm-studio-side { grid-column: 1/-1; grid-template-columns:1fr; gap:6px }
   .crm-mobile-detail-shell :is(.crm-studio-last,.crm-studio-health) { min-height: 68px; border-radius: 14px; padding: 10px 11px }
   .crm-mobile-detail-shell :is(.crm-studio-last small,.crm-studio-health small) { font-size:9px }
   .crm-mobile-detail-shell :is(.crm-studio-last b,.crm-studio-health b) { font-size: 12px }
@@ -29550,7 +29565,7 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   .crm-mobile-detail-shell .crm-studio-tabs button b { font-size:10px }
   .crm-mobile-detail-shell .crm-studio-content { padding: 13px 11px max(20px,env(safe-area-inset-bottom)) }
   .crm-mobile-detail-shell .crm-overview-grid { gap: 9px }
-  .crm-mobile-detail-shell .crm-overview-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px }
+  .crm-mobile-detail-shell .crm-overview-kpis { width:100%; grid-template-columns:1fr; gap:7px }
   .crm-mobile-detail-shell .crm-overview-kpis article { gap: 8px; min-height: 82px; padding: 10px }
   .crm-mobile-detail-shell .crm-overview-kpis article>span { width: 35px; height: 35px; flex-basis: 35px }
   .crm-mobile-detail-shell .crm-overview-kpis article small { font-size: 9px }
