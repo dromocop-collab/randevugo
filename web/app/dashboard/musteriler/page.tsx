@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, Clock3, ContactRound, Phone, RefreshCw, Search, Sparkles, TrendingUp, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerProfileStudio } from "@/components/dashboard/customer-profile-studio";
@@ -37,6 +38,7 @@ export default function CustomersPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [isMobileDetail, setIsMobileDetail] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async (showLoader = false) => {
@@ -62,9 +64,26 @@ export default function CustomersPage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (!selectedId || typeof window === "undefined" || window.innerWidth >= 1024) return;
-    window.requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [selectedId]);
+    const query = window.matchMedia("(max-width: 1023px)");
+    const syncViewport = () => setIsMobileDetail(query.matches);
+    syncViewport();
+    query.addEventListener("change", syncViewport);
+    return () => query.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileDetail || !selectedId) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedId(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMobileDetail, selectedId]);
 
   const customerApptsMap = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
@@ -100,6 +119,25 @@ export default function CustomersPage() {
   const totalRevenue = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalSpent), 0);
   const totalAppointmentCount = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalAppointments), 0);
   const avgAppointments = totalCustomers > 0 ? Math.round((totalAppointmentCount / totalCustomers) * 10) / 10 : 0;
+
+  const customerDetail = selectedCustomer && businessId ? (
+    <CustomerProfileStudio
+      key={selectedCustomer.id}
+      businessId={businessId}
+      customer={selectedCustomer}
+      appointments={selectedAppts}
+      services={services}
+      servicePackages={servicePackages}
+      customerPackages={customerPackages}
+      receipts={receipts}
+      transactions={transactions}
+      onClose={() => setSelectedId(null)}
+      onRename={saveCustomerName}
+      onRefresh={() => loadData()}
+    />
+  ) : (
+    <div className="crm-select-hint"><i><ContactRound size={29} /></i><h3>Bir müşteri seçin</h3><p>Bilgiler, randevular, hizmetler, paketler, borçlar ve ödemeler burada yönetilecek.</p></div>
+  );
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -186,11 +224,18 @@ export default function CustomersPage() {
             })}
           </div>
 
-          <div className="crm-detail-column" ref={detailRef}>
-              {selectedCustomer && businessId ? <CustomerProfileStudio key={selectedCustomer.id} businessId={businessId} customer={selectedCustomer} appointments={selectedAppts} services={services} servicePackages={servicePackages} customerPackages={customerPackages} receipts={receipts} transactions={transactions} onClose={() => setSelectedId(null)} onRename={saveCustomerName} onRefresh={() => loadData()} /> : <div className="crm-select-hint"><i><ContactRound size={29} /></i><h3>Bir müşteri seçin</h3><p>Bilgiler, randevular, hizmetler, paketler, borçlar ve ödemeler burada yönetilecek.</p></div>}
-          </div>
-        </section>
-      )}
-    </div>
+            <div className="crm-detail-column" ref={detailRef}>{!isMobileDetail && customerDetail}</div>
+          </section>
+        )}
+
+        {isMobileDetail && selectedCustomer && businessId && typeof document !== "undefined" && createPortal(
+          <div className="crm-mobile-detail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}>
+            <div className="crm-mobile-detail-shell" role="dialog" aria-modal="true" aria-label={`${selectedCustomer.fullName} müşteri profili`}>
+              {customerDetail}
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
   );
 }

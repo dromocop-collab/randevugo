@@ -217,7 +217,7 @@ export function CustomerProfileStudio({
   return (
     <article className="crm-studio">
       <header className="crm-studio-head">
-        <button className="crm-detail-close" onClick={onClose} aria-label="Müşteri detayını kapat"><X size={18}/></button>
+        <button type="button" className="crm-detail-close" onClick={onClose} aria-label="Müşteri detayını kapat"><X size={18}/></button>
         <span className="crm-detail-avatar">{customer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span>
         <div className="crm-studio-identity">
           <small>MÜŞTERİ PROFİLİ</small>
@@ -230,7 +230,10 @@ export function CustomerProfileStudio({
           ) : (
             <div className="crm-name-row"><h2>{customer.fullName}</h2><button type="button" onClick={() => setEditingName(true)}><PencilLine size={14}/> Düzenle</button></div>
           )}
-          <p><Phone size={14}/> {customer.phone}{customer.email && <><span>•</span><Mail size={14}/> {customer.email}</>}</p>
+          <p className="crm-contact-line">
+            <a href={`tel:${customer.phone}`}><Phone size={14}/><span>{customer.phone}</span></a>
+            {customer.email && <><i aria-hidden="true">•</i><a href={`mailto:${customer.email}`}><Mail size={14}/><span>{customer.email}</span></a></>}
+          </p>
         </div>
         <aside className="crm-studio-side">
           <div className="crm-studio-last"><Clock3 size={17}/><span><small>SON SEANS</small><b>{lastSessionAt ? displayDate(lastSessionAt) : "Henüz gelmedi"}</b><em>{lastSessionLabel}</em></span></div>
