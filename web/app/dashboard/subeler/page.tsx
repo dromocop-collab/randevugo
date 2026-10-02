@@ -2,6 +2,7 @@
 
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   ArrowRight, BadgeCheck, Building2, CirclePlus, Crown, ExternalLink, GitBranch,
@@ -141,8 +142,8 @@ export default function BranchesPage() {
         })}
       </section>
 
-      {showForm && (
-        <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-emerald-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setShowForm(false); }}>
+      {showForm && typeof document !== "undefined" && createPortal((
+        <div className="fixed inset-0 z-[10000] grid place-items-center overflow-y-auto bg-emerald-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setShowForm(false); }}>
           <form onSubmit={submit} className="my-6 w-full max-w-3xl overflow-hidden rounded-[30px] border border-white/20 bg-[var(--surface-1)] shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="branch-form-title">
             <header className="flex items-start justify-between bg-[linear-gradient(120deg,#073b2c,#087451)] p-6 text-white"><div><p className="flex items-center gap-2 text-[10px] font-bold tracking-[.2em] text-lime-200"><GitBranch size={14}/> YENİ ŞUBE KURULUMU</p><h2 id="branch-form-title" className="mt-2 text-2xl font-black">Firma ağına şube ekle</h2><p className="mt-1 text-sm text-emerald-50/70">Şube ayrı bir operasyon alanı olarak açılır ve yayın öncesi Süper Admin onayına gider.</p></div><button type="button" disabled={busy} onClick={() => setShowForm(false)} className="rounded-xl border border-white/15 p-2" aria-label="Kapat"><X size={18}/></button></header>
             <div className="grid gap-4 p-6 sm:grid-cols-2">
@@ -159,7 +160,7 @@ export default function BranchesPage() {
             <footer className="flex items-center justify-end gap-3 border-t border-[var(--border)] p-5"><Button type="button" variant="ghost" disabled={busy} onClick={() => setShowForm(false)}>Vazgeç</Button><Button type="submit" loading={busy} iconLeft={<Building2 size={17}/>}>Şubeyi oluştur ve onaya gönder</Button></footer>
           </form>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

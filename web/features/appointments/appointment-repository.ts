@@ -14,7 +14,7 @@ import { getFunctions, httpsCallable as call } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { mapDoc } from "@/lib/firebase/mapper";
-import type { Appointment, AppointmentCreateInput, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
+import type { Appointment, AppointmentCreateInput, AppointmentServiceLine, AppointmentStatus, DashboardAppointmentCreateInput, DashboardAppointmentUpdateInput } from "@/types/appointments";
 
 async function staffScope(businessId: string): Promise<string | null> {
   const user = getAuth(getFirebaseApp()).currentUser;
@@ -95,6 +95,29 @@ export async function listAppointmentsByDateRange(
     )
   );
   return hydrateCurrentCustomerNames(businessId, snap.docs.map((item) => mapDoc<Appointment>(item)));
+}
+
+export async function createDashboardAppointment(
+  input: DashboardAppointmentCreateInput,
+): Promise<string> {
+  const functions = getFunctions(getFirebaseApp(), "europe-west1");
+  const callable = call<DashboardAppointmentCreateInput, { appointmentId?: string }>(
+    functions,
+    "createDashboardAppointment",
+  );
+  const result = await callable(input);
+  return String(result.data.appointmentId ?? "");
+}
+
+export async function updateDashboardAppointment(
+  input: DashboardAppointmentUpdateInput,
+): Promise<void> {
+  const functions = getFunctions(getFirebaseApp(), "europe-west1");
+  const callable = call<DashboardAppointmentUpdateInput, { success?: boolean }>(
+    functions,
+    "updateDashboardAppointment",
+  );
+  await callable(input);
 }
 
 export async function updateAppointmentStatus(

@@ -59,3 +59,15 @@ export interface AppointmentCreateInput {
   notes?: string;
   startAtMillis: number;
 }
+
+export interface DashboardAppointmentCreateInput {
+  businessId: string;
+  startAtMillis: number;
+  customerName?: string;
+  serviceId?: string;
+  staffId?: string;
+}
+
+export interface DashboardAppointmentUpdateInput extends DashboardAppointmentCreateInput {
+  appointmentId: string;
+}

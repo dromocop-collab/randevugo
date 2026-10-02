@@ -2907,6 +2907,184 @@ export const createAppointment = onCall(
   }
 );
 
+export const createDashboardAppointment = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
+      throw new HttpsError("invalid-argument", "Randevu saati zorunludur.");
+    }
+
+    const customerName = typeof data.customerName === "string" && data.customerName.trim()
+      ? data.customerName.trim().slice(0, 80)
+      : "Rezerve saat";
+    const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
+    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const [serviceSnap, staffSnap] = await Promise.all([
+      serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
+      staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
+    ]);
+    if (serviceId && !serviceSnap?.exists) throw new HttpsError("not-found", "Hizmet bulunamadı.");
+    if (staffId && !staffSnap?.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
+
+    const service = serviceSnap?.data() ?? null;
+    const staff = staffSnap?.data() ?? null;
+    const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
+    const startAt = Timestamp.fromMillis(data.startAtMillis);
+    const endAt = Timestamp.fromMillis(data.startAtMillis + durationMinutes * 60_000);
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const selectedLocal = localParts(startAt.toDate(), timeZone);
+    const dayStartMs = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+    const selectedUTCDate = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
+    selectedUTCDate.setUTCDate(selectedUTCDate.getUTCDate() + 1);
+    const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
+    const appointments = db.collection(`businesses/${businessId}/appointments`);
+    const conflictQuery = appointments
+      .where("startAt", ">=", Timestamp.fromMillis(dayStartMs))
+      .where("startAt", "<", Timestamp.fromMillis(dayEndMs));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
+
+    const appointmentId = await db.runTransaction(async (tx) => {
+      const [bookingLock, conflictSnap] = await Promise.all([
+        tx.get(bookingLockRef),
+        tx.get(conflictQuery),
+      ]);
+      const hasConflict = conflictSnap.docs.some((document) => {
+        const item = document.data();
+        if (!["pending", "confirmed"].includes(String(item.status ?? ""))) return false;
+        if (staffId && item.staffId && item.staffId !== staffId) return false;
+        const existingStart = item.startAt as Timestamp | undefined;
+        const existingEnd = item.endAt as Timestamp | undefined;
+        return Boolean(existingStart && existingEnd &&
+          existingStart.toMillis() < endAt.toMillis() &&
+          existingEnd.toMillis() > startAt.toMillis());
+      });
+      if (hasConflict) throw new HttpsError("already-exists", "Bu saat dolu. Lütfen başka bir saat seçin.");
+
+      const appointmentRef = appointments.doc();
+      tx.set(bookingLockRef, {
+        revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
+      }, { merge: true });
+      tx.set(appointmentRef, {
+        businessId,
+        staffId,
+        serviceId,
+        customerId: `dashboard_${appointmentRef.id}`,
+        customerName,
+        customerPhone: null,
+        customerEmail: null,
+        startAt,
+        endAt,
+        status: "confirmed",
+        paymentStatus: "unpaid",
+        notes: null,
+        serviceName: service ? String(service.name ?? "") : "",
+        staffName: staff ? String(staff.fullName ?? "") : "",
+        primaryServicePrice: Number(service?.price ?? 0),
+        primaryServiceDurationMinutes: durationMinutes,
+        additionalServices: [],
+        servicePrice: Number(service?.price ?? 0),
+        serviceDurationMinutes: durationMinutes,
+        source: "dashboard",
+        createdByUid: uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return appointmentRef.id;
+    });
+
+    return { success: true, appointmentId };
+  },
+);
+
+export const updateDashboardAppointment = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
+      throw new HttpsError("invalid-argument", "Randevu tarihi ve saati zorunludur.");
+    }
+    const customerName = typeof data.customerName === "string" && data.customerName.trim()
+      ? data.customerName.trim().slice(0, 80) : "Rezerve saat";
+    const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
+    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const [serviceSnap, staffSnap] = await Promise.all([
+      serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
+      staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
+    ]);
+    if (serviceId && !serviceSnap?.exists) throw new HttpsError("not-found", "Hizmet bulunamadı.");
+    if (staffId && !staffSnap?.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
+    const service = serviceSnap?.data() ?? null;
+    const staff = staffSnap?.data() ?? null;
+    const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
+    const startAt = Timestamp.fromMillis(data.startAtMillis);
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const selectedLocal = localParts(startAt.toDate(), timeZone);
+    const dayStartMs = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+    const selectedUTCDate = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
+    selectedUTCDate.setUTCDate(selectedUTCDate.getUTCDate() + 1);
+    const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
+    const appointments = db.collection(`businesses/${businessId}/appointments`);
+    const appointmentRef = appointments.doc(appointmentId);
+    const conflictQuery = appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs)).where("startAt", "<", Timestamp.fromMillis(dayEndMs));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
+
+    await db.runTransaction(async (tx) => {
+      const [current, bookingLock, conflictSnap] = await Promise.all([
+        tx.get(appointmentRef), tx.get(bookingLockRef), tx.get(conflictQuery),
+      ]);
+      if (!current.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
+      const currentData = current.data()!;
+      const additionalServices = Array.isArray(currentData.additionalServices) ? currentData.additionalServices : [];
+      const additionalPrice = additionalServices.reduce((sum: number, item: unknown) =>
+        sum + numberOr((item as Record<string, unknown> | null)?.price, 0), 0);
+      const additionalDuration = additionalServices.reduce((sum: number, item: unknown) =>
+        sum + Math.max(0, numberOr((item as Record<string, unknown> | null)?.durationMinutes, 0)), 0);
+      const totalDuration = durationMinutes + additionalDuration;
+      const endAt = Timestamp.fromMillis(data.startAtMillis + totalDuration * 60_000);
+      const hasConflict = conflictSnap.docs.some((document) => {
+        if (document.id === appointmentId) return false;
+        const item = document.data();
+        if (!["pending", "confirmed"].includes(String(item.status ?? ""))) return false;
+        if (staffId && item.staffId && item.staffId !== staffId) return false;
+        const existingStart = item.startAt as Timestamp | undefined;
+        const existingEnd = item.endAt as Timestamp | undefined;
+        return Boolean(existingStart && existingEnd && existingStart.toMillis() < endAt.toMillis() && existingEnd.toMillis() > startAt.toMillis());
+      });
+      if (hasConflict) throw new HttpsError("already-exists", "Bu saat dolu. Lütfen başka bir saat seçin.");
+      tx.set(bookingLockRef, {
+        revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
+      }, { merge: true });
+      tx.update(appointmentRef, {
+        customerName, serviceId, staffId, startAt, endAt,
+        serviceName: service ? String(service.name ?? "") : "",
+        staffName: staff ? String(staff.fullName ?? "") : "",
+        primaryServicePrice: Number(service?.price ?? 0),
+        primaryServiceDurationMinutes: durationMinutes,
+        servicePrice: Number(service?.price ?? 0) + additionalPrice,
+        serviceDurationMinutes: totalDuration,
+        updatedByUid: uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return { success: true };
+  },
+);
+
 type BusinessAutomationTrigger = "appointment_created" | "appointment_cancelled" | "appointment_completed" | "waitlist_created";
 
 function renderAutomationText(template: unknown, payload: Record<string, unknown>) {

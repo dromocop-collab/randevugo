@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.renameCustomer = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = void 0;
+exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.updateDashboardAppointment = exports.createDashboardAppointment = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.renameCustomer = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -2703,6 +2703,181 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
         appointmentId: result,
         publicToken,
     };
+});
+exports.createDashboardAppointment = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
+        throw new https_1.HttpsError("invalid-argument", "Randevu saati zorunludur.");
+    }
+    const customerName = typeof data.customerName === "string" && data.customerName.trim()
+        ? data.customerName.trim().slice(0, 80)
+        : "Rezerve saat";
+    const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
+    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const [serviceSnap, staffSnap] = await Promise.all([
+        serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
+        staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
+    ]);
+    if (serviceId && !serviceSnap?.exists)
+        throw new https_1.HttpsError("not-found", "Hizmet bulunamadı.");
+    if (staffId && !staffSnap?.exists)
+        throw new https_1.HttpsError("not-found", "Çalışan bulunamadı.");
+    const service = serviceSnap?.data() ?? null;
+    const staff = staffSnap?.data() ?? null;
+    const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
+    const startAt = firestore_1.Timestamp.fromMillis(data.startAtMillis);
+    const endAt = firestore_1.Timestamp.fromMillis(data.startAtMillis + durationMinutes * 60_000);
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const selectedLocal = localParts(startAt.toDate(), timeZone);
+    const dayStartMs = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+    const selectedUTCDate = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
+    selectedUTCDate.setUTCDate(selectedUTCDate.getUTCDate() + 1);
+    const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
+    const appointments = db.collection(`businesses/${businessId}/appointments`);
+    const conflictQuery = appointments
+        .where("startAt", ">=", firestore_1.Timestamp.fromMillis(dayStartMs))
+        .where("startAt", "<", firestore_1.Timestamp.fromMillis(dayEndMs));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
+    const appointmentId = await db.runTransaction(async (tx) => {
+        const [bookingLock, conflictSnap] = await Promise.all([
+            tx.get(bookingLockRef),
+            tx.get(conflictQuery),
+        ]);
+        const hasConflict = conflictSnap.docs.some((document) => {
+            const item = document.data();
+            if (!["pending", "confirmed"].includes(String(item.status ?? "")))
+                return false;
+            if (staffId && item.staffId && item.staffId !== staffId)
+                return false;
+            const existingStart = item.startAt;
+            const existingEnd = item.endAt;
+            return Boolean(existingStart && existingEnd &&
+                existingStart.toMillis() < endAt.toMillis() &&
+                existingEnd.toMillis() > startAt.toMillis());
+        });
+        if (hasConflict)
+            throw new https_1.HttpsError("already-exists", "Bu saat dolu. Lütfen başka bir saat seçin.");
+        const appointmentRef = appointments.doc();
+        tx.set(bookingLockRef, {
+            revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            expiresAt: firestore_1.Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
+        }, { merge: true });
+        tx.set(appointmentRef, {
+            businessId,
+            staffId,
+            serviceId,
+            customerId: `dashboard_${appointmentRef.id}`,
+            customerName,
+            customerPhone: null,
+            customerEmail: null,
+            startAt,
+            endAt,
+            status: "confirmed",
+            paymentStatus: "unpaid",
+            notes: null,
+            serviceName: service ? String(service.name ?? "") : "",
+            staffName: staff ? String(staff.fullName ?? "") : "",
+            primaryServicePrice: Number(service?.price ?? 0),
+            primaryServiceDurationMinutes: durationMinutes,
+            additionalServices: [],
+            servicePrice: Number(service?.price ?? 0),
+            serviceDurationMinutes: durationMinutes,
+            source: "dashboard",
+            createdByUid: uid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        return appointmentRef.id;
+    });
+    return { success: true, appointmentId };
+});
+exports.updateDashboardAppointment = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
+        throw new https_1.HttpsError("invalid-argument", "Randevu tarihi ve saati zorunludur.");
+    }
+    const customerName = typeof data.customerName === "string" && data.customerName.trim()
+        ? data.customerName.trim().slice(0, 80) : "Rezerve saat";
+    const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
+    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const [serviceSnap, staffSnap] = await Promise.all([
+        serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
+        staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
+    ]);
+    if (serviceId && !serviceSnap?.exists)
+        throw new https_1.HttpsError("not-found", "Hizmet bulunamadı.");
+    if (staffId && !staffSnap?.exists)
+        throw new https_1.HttpsError("not-found", "Çalışan bulunamadı.");
+    const service = serviceSnap?.data() ?? null;
+    const staff = staffSnap?.data() ?? null;
+    const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
+    const startAt = firestore_1.Timestamp.fromMillis(data.startAtMillis);
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const selectedLocal = localParts(startAt.toDate(), timeZone);
+    const dayStartMs = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+    const selectedUTCDate = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
+    selectedUTCDate.setUTCDate(selectedUTCDate.getUTCDate() + 1);
+    const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
+    const appointments = db.collection(`businesses/${businessId}/appointments`);
+    const appointmentRef = appointments.doc(appointmentId);
+    const conflictQuery = appointments.where("startAt", ">=", firestore_1.Timestamp.fromMillis(dayStartMs)).where("startAt", "<", firestore_1.Timestamp.fromMillis(dayEndMs));
+    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
+    await db.runTransaction(async (tx) => {
+        const [current, bookingLock, conflictSnap] = await Promise.all([
+            tx.get(appointmentRef), tx.get(bookingLockRef), tx.get(conflictQuery),
+        ]);
+        if (!current.exists)
+            throw new https_1.HttpsError("not-found", "Randevu bulunamadı.");
+        const currentData = current.data();
+        const additionalServices = Array.isArray(currentData.additionalServices) ? currentData.additionalServices : [];
+        const additionalPrice = additionalServices.reduce((sum, item) => sum + numberOr(item?.price, 0), 0);
+        const additionalDuration = additionalServices.reduce((sum, item) => sum + Math.max(0, numberOr(item?.durationMinutes, 0)), 0);
+        const totalDuration = durationMinutes + additionalDuration;
+        const endAt = firestore_1.Timestamp.fromMillis(data.startAtMillis + totalDuration * 60_000);
+        const hasConflict = conflictSnap.docs.some((document) => {
+            if (document.id === appointmentId)
+                return false;
+            const item = document.data();
+            if (!["pending", "confirmed"].includes(String(item.status ?? "")))
+                return false;
+            if (staffId && item.staffId && item.staffId !== staffId)
+                return false;
+            const existingStart = item.startAt;
+            const existingEnd = item.endAt;
+            return Boolean(existingStart && existingEnd && existingStart.toMillis() < endAt.toMillis() && existingEnd.toMillis() > startAt.toMillis());
+        });
+        if (hasConflict)
+            throw new https_1.HttpsError("already-exists", "Bu saat dolu. Lütfen başka bir saat seçin.");
+        tx.set(bookingLockRef, {
+            revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            expiresAt: firestore_1.Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
+        }, { merge: true });
+        tx.update(appointmentRef, {
+            customerName, serviceId, staffId, startAt, endAt,
+            serviceName: service ? String(service.name ?? "") : "",
+            staffName: staff ? String(staff.fullName ?? "") : "",
+            primaryServicePrice: Number(service?.price ?? 0),
+            primaryServiceDurationMinutes: durationMinutes,
+            servicePrice: Number(service?.price ?? 0) + additionalPrice,
+            serviceDurationMinutes: totalDuration,
+            updatedByUid: uid,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    });
+    return { success: true };
 });
 function renderAutomationText(template, payload) {
     return String(template ?? "").replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key) => String(payload[key] ?? "—")).slice(0, 500);

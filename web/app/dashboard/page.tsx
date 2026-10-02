@@ -176,9 +176,7 @@ export default function DashboardHomePage() {
   const completedSteps = setupItems.filter((item) => item.done).length;
   const nextSetupItem = setupItems.find((item) => !item.done);
   const isPublished = business?.status === "active" && business.isPublished === true;
-  const bookingHref = business?.slug
-    ? `/isletme/${business.slug}/randevu`
-    : "/dashboard/randevular";
+  const bookingHref = "/dashboard/takvim?new=1";
   const setupDone = (id: SetupItem["id"]) =>
     setupItems.find((item) => item.id === id)?.done === true;
 

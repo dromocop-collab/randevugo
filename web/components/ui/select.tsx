@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type SelectHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type SelectHTMLAttributes } from "react";
 
 export interface SelectOption {
   value: string;
@@ -12,15 +13,17 @@ export interface SelectOption {
 interface Props extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "children" | "multiple"> {
   label: string;
   options: SelectOption[];
+  inlineMenu?: boolean;
 }
 
-export function Select({ label, options, value, defaultValue, onChange, disabled, required, name, id, ...props }: Props) {
+export function Select({ label, options, value, defaultValue, onChange, disabled, required, name, id, inlineMenu = false, ...props }: Props) {
   const generatedId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [internalValue, setInternalValue] = useState(String(defaultValue ?? ""));
+  const [portalStyle, setPortalStyle] = useState<CSSProperties>({});
   const selectedValue = String(value ?? internalValue);
   const selected = options.find((item) => item.value === selectedValue) ?? options[0];
   const controlId = id ?? generatedId;
@@ -32,7 +35,7 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
 
   useEffect(() => {
     function close(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) setOpen(false);
     }
     function escape(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -45,6 +48,37 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
     };
   }, []);
 
+  const positionPortalMenu = useCallback(() => {
+    if (inlineMenu || !rootRef.current) return;
+    const rect = rootRef.current.getBoundingClientRect();
+    const gap = 8;
+    const edge = 8;
+    const roomBelow = window.innerHeight - rect.bottom - gap - edge;
+    const roomAbove = rect.top - gap - edge;
+    const openAbove = roomBelow < 220 && roomAbove > roomBelow;
+    const availableHeight = Math.max(120, Math.min(290, openAbove ? roomAbove : roomBelow));
+    setPortalStyle({
+      position: "fixed",
+      zIndex: 100_000,
+      left: Math.max(edge, Math.min(rect.left, window.innerWidth - rect.width - edge)),
+      top: openAbove ? undefined : rect.bottom + gap,
+      bottom: openAbove ? window.innerHeight - rect.top + gap : undefined,
+      width: Math.min(rect.width, window.innerWidth - edge * 2),
+      maxHeight: availableHeight,
+    });
+  }, [inlineMenu]);
+
+  useEffect(() => {
+    if (!open || inlineMenu) return;
+    positionPortalMenu();
+    window.addEventListener("resize", positionPortalMenu);
+    window.addEventListener("scroll", positionPortalMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionPortalMenu);
+      window.removeEventListener("scroll", positionPortalMenu, true);
+    };
+  }, [inlineMenu, open, positionPortalMenu]);
+
   function choose(nextValue: string) {
     setInternalValue(nextValue);
     onChange?.({ target: { value: nextValue }, currentTarget: { value: nextValue } } as ChangeEvent<HTMLSelectElement>);
@@ -53,6 +87,7 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
 
   function openMenu() {
     setHighlightedIndex(Math.max(0, options.findIndex((item) => item.value === selectedValue)));
+    positionPortalMenu();
     setOpen(true);
   }
 
@@ -74,6 +109,16 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
     menuRef.current?.querySelector<HTMLElement>(`[data-index="${highlightedIndex}"]`)?.scrollIntoView({ block: "nearest" });
   }, [highlightedIndex, open]);
 
+  const menu = open && <div className={`sr-select__menu${inlineMenu ? "" : " sr-select__menu--portal"}`} style={inlineMenu ? undefined : portalStyle} ref={menuRef} role="listbox" aria-labelledby={`${controlId}-label`}>
+    {options.map((item, index) => {
+      const active = item.value === selectedValue;
+      return <button type="button" role="option" data-index={index} aria-selected={active} className={`${active ? "is-selected" : ""} ${highlightedIndex === index ? "is-highlighted" : ""}`} key={item.value} onMouseEnter={() => setHighlightedIndex(index)} onClick={() => choose(item.value)}>
+        <span><strong>{item.label}</strong>{item.description && <small>{item.description}</small>}</span>
+        <i>{active && <Check size={15}/>}</i>
+      </button>;
+    })}
+  </div>;
+
   return (
     <div className="sr-select" ref={rootRef}>
       <label className="sr-select__label" id={`${controlId}-label`}>{label}{required && <span aria-hidden="true"> *</span>}</label>
@@ -91,15 +136,7 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
         <span><strong>{selected?.label ?? "Seçim yapın"}</strong>{selected?.description && <small>{selected.description}</small>}</span>
         <ChevronDown size={18} className={open ? "is-open" : ""}/>
       </button>
-      {open && <div className="sr-select__menu" ref={menuRef} role="listbox" aria-labelledby={`${controlId}-label`}>
-        {options.map((item, index) => {
-          const active = item.value === selectedValue;
-          return <button type="button" role="option" data-index={index} aria-selected={active} className={`${active ? "is-selected" : ""} ${highlightedIndex === index ? "is-highlighted" : ""}`} key={item.value} onMouseEnter={() => setHighlightedIndex(index)} onClick={() => choose(item.value)}>
-            <span><strong>{item.label}</strong>{item.description && <small>{item.description}</small>}</span>
-            <i>{active && <Check size={15}/>}</i>
-          </button>;
-        })}
-      </div>}
+      {inlineMenu ? menu : open && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
       {name && <select className="sr-only" tabIndex={-1} aria-hidden="true" name={name} value={selectedValue} onChange={() => undefined} {...props}>{options.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select>}
     </div>
   );
