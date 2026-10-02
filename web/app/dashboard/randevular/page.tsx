@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -370,8 +371,8 @@ export default function AppointmentsPage() {
         })}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2"><CalendarDays size={16} className="text-[var(--accent)]"/><label htmlFor="appointment-date-scope" className="text-xs font-bold text-[var(--text-2)]">Tarih aralığı</label><select id="appointment-date-scope" value={dateScope} onChange={(event) => setDateScope(event.target.value as DateScope)} className="rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2 text-xs font-semibold text-[var(--text-1)] outline-none focus:border-[var(--accent)]"><option value="all">Tüm zamanlar</option><option value="today">Bugün</option><option value="upcoming">Yaklaşan</option><option value="past">Geçmiş</option></select><span className="text-[10px] text-[var(--text-3)]">{filtered.length} sonuç</span></div>
+      <div className="appointment-date-toolbar">
+        <div className="appointment-date-scope"><span><CalendarDays size={17}/> Tarih</span>{([{key:"all",label:"Tümü"},{key:"today",label:"Bugün"},{key:"upcoming",label:"Yaklaşan"},{key:"past",label:"Geçmiş"}] as const).map((scope) => <button type="button" key={scope.key} className={dateScope === scope.key ? "active" : ""} onClick={() => setDateScope(scope.key)}>{scope.label}</button>)}<small>{filtered.length} sonuç</small></div>
         <button type="button" onClick={exportAppointments} disabled={filtered.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"><Download size={15}/> CSV dışa aktar</button>
       </div>
 
@@ -421,22 +422,22 @@ export default function AppointmentsPage() {
               <div
                 key={appointment.id}
                 style={{ animationDelay: `${idx * 50}ms` }}
-                className="animate-[fadeInUp_0.4s_ease_forwards] overflow-hidden opacity-0 rounded-[24px] border border-[var(--border)] bg-[var(--surface-1)] shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                className={`appointment-admin-card status-${appointment.status} animate-[fadeInUp_0.4s_ease_forwards] opacity-0 ${expanded ? "is-expanded" : ""}`}
               >
                 {/* Main row */}
                 <div
-                  className="flex cursor-pointer items-center gap-4 p-4 sm:p-5"
+                  className="appointment-admin-summary"
                   onClick={() => setExpandedId(expanded ? null : appointment.id)}
                 >
                   {/* Avatar */}
-                  <div className="appointment-customer-avatar flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] text-lg font-bold text-white shadow-md">
+                  <div className="appointment-customer-avatar appointment-admin-avatar">
                     {appointment.customerName.charAt(0).toUpperCase()}
                   </div>
 
                   {/* Info */}
-                  <div className="min-w-0 flex-1">
+                  <div className="appointment-admin-person">
                     <div className="flex items-center gap-2">
-                      <h3 className="truncate text-sm font-bold text-[var(--text-1)]">
+                      <h3>
                         {appointment.customerName}
                       </h3>
                       {todayBadge && (
@@ -445,7 +446,7 @@ export default function AppointmentsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--text-3)]">
+                    <div className="appointment-admin-meta">
                       <span className="flex items-center gap-1">
                         <CalendarDays size={13}/> {formatDate(appointment.startAt)}
                       </span>
@@ -467,7 +468,7 @@ export default function AppointmentsPage() {
                   </div>
 
                   {/* Status Badge */}
-                  <div className="hidden sm:block">
+                  <div className="appointment-admin-status hidden sm:block">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${statusCfg.bg} ${statusCfg.color}`}
                     >
@@ -477,7 +478,7 @@ export default function AppointmentsPage() {
 
                   {/* Price */}
                   {appointment.servicePrice != null && appointment.servicePrice > 0 && (
-                    <p className="hidden text-sm font-bold text-[var(--text-1)] sm:block">
+                    <p className="appointment-admin-price hidden sm:block">
                       {appointment.servicePrice.toLocaleString("tr-TR")} ₺
                     </p>
                   )}
@@ -491,7 +492,7 @@ export default function AppointmentsPage() {
                 </div>
 
                 {/* Mobile Status Badge */}
-                <div className="flex items-center gap-2 px-5 pb-2 sm:hidden">
+                <div className="appointment-admin-mobile-status sm:hidden">
                   <span
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusCfg.bg} ${statusCfg.color}`}
                   >
@@ -507,12 +508,12 @@ export default function AppointmentsPage() {
                 {/* Expanded Details */}
                 <div
                   className={`overflow-hidden transition-all duration-300 ${
-                    expanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+                    expanded ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"
                   }`}
                 >
-                  <div className="border-t border-[var(--border)] px-5 pb-5 pt-4">
+                  <div className="appointment-admin-details">
                     {/* Detail Grid */}
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="appointment-admin-facts">
                       {appointment.staffName && (
                         <DetailItem icon={<UserRound size={16}/>} label="Çalışan" value={appointment.staffName} />
                       )}
@@ -574,11 +575,11 @@ export default function AppointmentsPage() {
                     )}
 
                     {/* Action Buttons */}
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="appointment-admin-actions"><div><small>HIZLI İŞLEMLER</small><b>Randevuyu buradan yönetin</b></div><nav>
                       {canManageStatus && !["cancelled", "no_show"].includes(appointment.status) && appointment.paymentStatus !== "paid" && (
                         <Link
                           href={`/dashboard/operasyon?appointment=${encodeURIComponent(appointment.id)}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800 hover:shadow-md"
+                          className="appointment-action appointment-action--checkout"
                         >
                           <ReceiptText size={15}/> Adisyon aç
                         </Link>
@@ -588,7 +589,7 @@ export default function AppointmentsPage() {
                           type="button"
                           onClick={() => openServiceEditor(appointment)}
                           disabled={isUpdating}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-xs font-semibold text-violet-700 transition-all duration-200 hover:bg-violet-100 hover:shadow-md active:scale-95 disabled:opacity-50"
+                          className="appointment-action appointment-action--service"
                         >
                           <Plus size={15}/> Hizmet Ekle / Düzenle
                         </button>
@@ -632,12 +633,12 @@ export default function AppointmentsPage() {
                       {canViewCustomerContact && appointment.customerPhone && (
                         <a
                           href={`tel:${appointment.customerPhone}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3.5 py-2 text-xs font-semibold text-[var(--text-2)] transition hover:bg-[var(--field-bg-hover)]"
+                          className="appointment-action appointment-action--contact"
                         >
                           <Phone size={15}/> Ara
                         </a>
                       )}
-                    </div>
+                    </nav></div>
                   </div>
                 </div>
               </div>
@@ -646,15 +647,15 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {serviceEditor && (
+      {serviceEditor && typeof document !== "undefined" && createPortal((
         <div
-          className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#07160f]/75 px-3 py-5 backdrop-blur-lg sm:px-6"
+          className="appointment-services-backdrop"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !savingServices) setServiceEditor(null);
           }}
         >
-          <section role="dialog" aria-modal="true" aria-labelledby="extra-services-title" className="my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/60 bg-[var(--surface-1)] shadow-[0_35px_100px_rgba(3,22,14,.42)]">
-            <header className="relative shrink-0 overflow-hidden bg-[linear-gradient(125deg,#101a31_0%,#173d4c_55%,#117254_100%)] px-5 py-5 text-white sm:px-7 sm:py-6">
+          <section role="dialog" aria-modal="true" aria-labelledby="extra-services-title" className="appointment-services-modal">
+            <header className="appointment-services-head">
               <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-cyan-300/15 blur-2xl"/>
               <div className="relative flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
@@ -714,7 +715,7 @@ export default function AppointmentsPage() {
             </footer>
           </section>
         </div>
-      )}
+      ), document.body)}
 
       {/* Inline keyframes */}
       <style jsx global>{`
@@ -745,7 +746,7 @@ function DetailItem({
   value: string;
 }) {
   return (
-    <div className="rounded-xl bg-[var(--surface-2)] p-2.5">
+    <div className="appointment-admin-fact">
       <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-3)]">
         <span className="inline-flex items-center gap-1.5">{icon} {label}</span>
       </p>
@@ -768,14 +769,10 @@ function ActionButton({
   children: ReactNode;
 }) {
   const styles = {
-    confirm:
-      "bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100",
-    complete:
-      "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100",
-    cancel:
-      "bg-red-50 border-red-200 text-red-700 hover:bg-red-100",
-    noshow:
-      "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100",
+    confirm: "appointment-action--confirm",
+    complete: "appointment-action--complete",
+    cancel: "appointment-action--cancel",
+    noshow: "appointment-action--noshow",
   };
 
   return (
@@ -783,10 +780,10 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-200 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`appointment-action ${styles[variant]}`}
     >
       {disabled ? (
-        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+        <svg className="appointment-action-spinner animate-spin" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
