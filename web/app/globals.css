@@ -2388,18 +2388,23 @@
   .quick-appointment-backdrop {
     z-index: 9999;
     align-items: center;
-    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom))
+    overflow: hidden;
+    padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom))
   }
   .quick-appointment-modal {
-    width: min(100%, 520px);
-    max-height: calc(100dvh - max(16px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
-    overflow-y: auto;
+    display: flex;
+    width: min(520px, calc(100vw - 12px));
+    max-width: calc(100vw - 12px);
+    height: auto;
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+    flex-direction: column;
+    overflow: hidden;
     overscroll-behavior: contain;
-    border-radius: 22px
+    border-radius: 22px;
+    box-sizing: border-box
   }
   .quick-appointment-modal>header {
-    position: sticky;
-    top: 0;
+    flex: 0 0 auto;
     z-index: 5;
     gap: 10px;
     border-radius: 22px 22px 0 0;
@@ -2409,12 +2414,19 @@
   .quick-appointment-modal h2 { font-size: 20px }
   .quick-appointment-modal>header p { margin-top: 2px; font-size: 11px; line-height: 1.35 }
   .quick-appointment-modal>header>button { flex-basis: 36px; height: 36px; border-radius: 11px }
-  .quick-appointment-modal form { gap: 11px; padding: 13px 14px 0 }
+  .quick-appointment-modal form {
+    min-height: 0;
+    gap: 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 13px 14px 0;
+    overscroll-behavior: contain
+  }
   .quick-appointment-time-grid,
   .quick-appointment-selects { grid-template-columns: 1fr }
   .quick-appointment-modal label>span,
   .quick-appointment-name>span { margin-bottom: 5px; font-size: 11px }
-  .quick-appointment-modal input { height: 44px; border-radius: 12px; font-size: 13px }
+  .quick-appointment-modal input { height: 48px; border-radius: 12px; font-size: 16px }
   .quick-appointment-modal .sr-select__label { margin-bottom: 5px; font-size: 11px }
   .quick-appointment-modal .sr-select__trigger { min-height: 48px; border-radius: 12px; padding: 8px 11px }
   .quick-appointment-modal .sr-select__trigger strong,
@@ -2443,13 +2455,14 @@
     position: sticky;
     z-index: 4;
     bottom: 0;
+    display: grid;
+    grid-template-columns: minmax(0,.78fr) minmax(0,1.22fr);
     margin: 2px -14px 0;
     padding: 10px 14px max(10px, env(safe-area-inset-bottom));
     background: var(--surface-1);
     border-top: 1px solid var(--border)
   }
-  .quick-appointment-modal footer button { min-height: 42px; padding: 0 10px; font-size: 11px }
-  .quick-appointment-modal footer button { flex: 1 }
+  .quick-appointment-modal footer button { min-width:0; min-height:46px; padding:0 8px; font-size:12px }
   .month-day__number button,
   .time-cell__add { opacity: 1 }
   .time-cell__add span { display: none }
@@ -29521,30 +29534,40 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   .crm-mobile-detail-shell { height: calc(100dvh - max(12px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); border-radius: 22px }
   .crm-mobile-detail-shell .crm-studio-head { grid-template-columns: 46px minmax(0,1fr); gap: 11px; padding: 16px 49px 14px 14px }
   .crm-mobile-detail-shell .crm-detail-avatar { width: 46px; height: 46px; border-radius: 14px; font-size: 17px }
-  .crm-mobile-detail-shell .crm-studio-identity>small { color: var(--dash-bright); font-size: 8px }
-  .crm-mobile-detail-shell .crm-studio-head .crm-name-row h2 { font-size: 20px }
+  .crm-mobile-detail-shell .crm-studio-identity>small { color: var(--dash-bright); font-size: 10px }
+  .crm-mobile-detail-shell .crm-studio-head .crm-name-row h2 { font-size: 24px }
   .crm-mobile-detail-shell .crm-name-row { align-items:flex-start; flex-direction:column; gap:6px }
-  .crm-mobile-detail-shell .crm-name-row button { min-height: 29px }
-  .crm-mobile-detail-shell .crm-studio-identity>p { flex-wrap: wrap; gap: 5px; margin-top: 7px; font-size: 10px; line-height: 1.35 }
+  .crm-mobile-detail-shell .crm-name-row button { min-height: 34px; padding-inline:10px; font-size:11px }
+  .crm-mobile-detail-shell .crm-studio-identity>p { flex-wrap: wrap; gap: 7px; margin-top: 9px; font-size: 13px; line-height: 1.4 }
   .crm-mobile-detail-shell .crm-detail-close { right: 12px; top: 12px; width: 36px; height: 36px; border-radius: 12px; background: rgb(255 255 255 / .13) }
   .crm-mobile-detail-shell .crm-studio-side { grid-column: 1/-1; grid-template-columns: minmax(0,1.25fr) minmax(0,.75fr); gap: 6px }
-  .crm-mobile-detail-shell :is(.crm-studio-last,.crm-studio-health) { min-height: 58px; border-radius: 13px; padding: 8px 9px }
-  .crm-mobile-detail-shell :is(.crm-studio-last b,.crm-studio-health b) { font-size: 9px }
+  .crm-mobile-detail-shell :is(.crm-studio-last,.crm-studio-health) { min-height: 68px; border-radius: 14px; padding: 10px 11px }
+  .crm-mobile-detail-shell :is(.crm-studio-last small,.crm-studio-health small) { font-size:9px }
+  .crm-mobile-detail-shell :is(.crm-studio-last b,.crm-studio-health b) { font-size: 12px }
+  .crm-mobile-detail-shell .crm-studio-last em { font-size:10px }
   .crm-mobile-detail-shell .crm-studio-tabs { display: flex; gap: 5px; overflow-x: auto; padding: 7px; scroll-snap-type: x proximity }
-  .crm-mobile-detail-shell .crm-studio-tabs button { min-height: 43px; flex: 0 0 auto; scroll-snap-align: start; padding: 0 11px; font-size: 10px }
-  .crm-mobile-detail-shell .crm-studio-content { padding: 11px 10px max(18px,env(safe-area-inset-bottom)) }
+  .crm-mobile-detail-shell .crm-studio-tabs button { min-height: 48px; flex: 0 0 auto; scroll-snap-align: start; padding: 0 13px; font-size: 12px }
+  .crm-mobile-detail-shell .crm-studio-tabs button b { font-size:10px }
+  .crm-mobile-detail-shell .crm-studio-content { padding: 13px 11px max(20px,env(safe-area-inset-bottom)) }
   .crm-mobile-detail-shell .crm-overview-grid { gap: 9px }
   .crm-mobile-detail-shell .crm-overview-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px }
   .crm-mobile-detail-shell .crm-overview-kpis article { gap: 8px; min-height: 82px; padding: 10px }
   .crm-mobile-detail-shell .crm-overview-kpis article>span { width: 35px; height: 35px; flex-basis: 35px }
-  .crm-mobile-detail-shell .crm-overview-kpis article small { font-size: 7px }
-  .crm-mobile-detail-shell .crm-overview-kpis article strong { font-size: 17px }
-  .crm-mobile-detail-shell .crm-overview-kpis article em { font-size: 8px }
+  .crm-mobile-detail-shell .crm-overview-kpis article small { font-size: 9px }
+  .crm-mobile-detail-shell .crm-overview-kpis article strong { font-size: 20px }
+  .crm-mobile-detail-shell .crm-overview-kpis article em { font-size: 10px }
   .crm-mobile-detail-shell .crm-last-session-banner { grid-template-columns: 38px minmax(0,1fr); gap: 9px; padding: 11px }
   .crm-mobile-detail-shell .crm-last-session-banner>span { width: 38px; height: 38px }
   .crm-mobile-detail-shell .crm-last-session-banner button { grid-column: 1/-1; min-height: 39px; justify-content: center }
   .crm-mobile-detail-shell .crm-overview-actions>div { grid-template-columns: 1fr }
   .crm-mobile-detail-shell .crm-overview-actions>div button { min-height: 54px }
+  .crm-mobile-detail-shell :is(.crm-info-panel header small,.crm-record-section header small,.crm-package-assign header small) { font-size:9px }
+  .crm-mobile-detail-shell :is(.crm-info-panel header h3,.crm-record-section header h3,.crm-package-assign header h3) { font-size:17px }
+  .crm-mobile-detail-shell :is(.crm-record>div b,.crm-record>strong,.crm-package-card>header b) { font-size:13px }
+  .crm-mobile-detail-shell :is(.crm-record>div small,.crm-record-section>header>p small,.crm-package-card small) { font-size:11px; line-height:1.45 }
+  .crm-mobile-detail-shell :is(.crm-status,.crm-package-card>header>span) { font-size:10px }
+  .crm-mobile-detail-shell .crm-record { gap:11px; padding:13px }
+  .crm-mobile-detail-shell .crm-record-icon { width:42px; height:42px }
 }
 
 @media (max-width: 380px) {

@@ -145,7 +145,7 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
             </label>
             <label>
               <span><Clock3 size={15} /> Saat <b>*</b></span>
-              <input type="time" required step="900" value={time} onChange={(event) => setTime(event.target.value)} autoFocus />
+              <input type="time" required step="900" value={time} onChange={(event) => setTime(event.target.value)} />
             </label>
           </div>
           <label className="quick-appointment-name">
