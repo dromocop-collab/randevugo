@@ -2632,12 +2632,15 @@
   .setup-assistant { right:8px!important; bottom:8px!important; width:calc(100vw - 16px)!important; max-height:calc(100dvh - 16px); overflow:hidden!important; border-radius:25px!important; overscroll-behavior:contain }.setup-assistant__current-actions { grid-template-columns:1fr }.setup-assistant__tour-start { width:100% }
   body.dashboard-tour-active .panel-shell.dashboard-v2 { isolation:auto; }
   body.dashboard-tour-active .dashboard-bottom-nav { z-index:15001!important; box-shadow:0 0 0 2px color-mix(in srgb,var(--dash-bright) 58%,transparent),0 20px 46px rgb(var(--dash-rgb)/.38),inset 0 1px 0 rgb(255 255 255/.2); }
+  body.dashboard-tour-active .dashboard-bottom-nav [data-dashboard-tour-active="true"] { z-index:4; overflow:visible; }
+  body.dashboard-tour-active .dashboard-bottom-nav [data-dashboard-tour-active="true"]:before { position:absolute; z-index:5; inset:-5px; border:2px solid #fff; border-radius:23px; content:""; box-shadow:0 0 0 3px color-mix(in srgb,var(--dash-bright) 72%,transparent),0 0 24px color-mix(in srgb,var(--dash-bright) 48%,transparent); pointer-events:none; animation:dashboardTourNavTarget 1.45s ease-in-out infinite; }
   .dashboard-tour-card { right:10px; bottom:calc(104px + env(safe-area-inset-bottom)); width:calc(100vw - 20px); max-height:calc(100dvh - 124px - env(safe-area-inset-bottom)); border-radius:23px; padding:16px }.dashboard-tour-card h2 { font-size:20px }.dashboard-tour-card>p { font-size:10px }.dashboard-tour-coach>span { width:52px; height:52px }.dashboard-tour-coach img { width:58px; height:53px }
   .dashboard-tour-spotlight { border-radius:15px }
 }
 @media(max-width:380px) { .dashboard-tour-card { bottom:calc(104px + env(safe-area-inset-bottom)); padding:14px }.dashboard-tour-coach { gap:8px }.dashboard-tour-card h2 { font-size:18px }.dashboard-tour-card>p { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:3 } }
-@media(prefers-reduced-motion:reduce) { .home-queue-trigger.has-active:after,.home-queue-modal,.dashboard-tour-card,.dashboard-tour-spotlight { animation:none!important; transition:none!important } }
+@media(prefers-reduced-motion:reduce) { .home-queue-trigger.has-active:after,.home-queue-modal,.dashboard-tour-card,.dashboard-tour-spotlight,body.dashboard-tour-active .dashboard-bottom-nav [data-dashboard-tour-active="true"]:before { animation:none!important; transition:none!important } }
 @keyframes dashboardTourScanner { 0% { transform:translateX(-55%); opacity:0; } 35%,65% { opacity:1; } 100% { transform:translateX(55%); opacity:0; } }
+@keyframes dashboardTourNavTarget { 50% { border-color:var(--dash-bright); box-shadow:0 0 0 6px color-mix(in srgb,var(--dash-bright) 24%,transparent),0 0 30px color-mix(in srgb,var(--dash-bright) 65%,transparent); transform:scale(1.025); } }
 @keyframes bookingDotPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07);box-shadow:0 0 0 5px rgb(11 107 69/.08),0 10px 22px rgb(11 107 69/.28)} }
 @media(prefers-reduced-motion:reduce) { .booking-step-rail li.is-current>span { animation:none!important; } }
 
