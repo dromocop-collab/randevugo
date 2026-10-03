@@ -7,27 +7,33 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:unit": "node --test --experimental-strip-types features/live-queue/*.test.mjs features/platform/live-feature-flags.test.mjs",
+    "test:e2e": "playwright test",
     "test:booking:emulator": "cd .. && npm --prefix functions run build && firebase --project demo-availability-phase8 emulators:exec --only auth,firestore,functions \"node --test web/features/platform/availability-functions.test.mjs\""
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "firebase": "^12.4.0",
+    "firebase": "12.19.0",
     "lucide-react": "^1.32.0",
-    "next": "16.3.1",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sonner": "^2.0.7",
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
   }
 }

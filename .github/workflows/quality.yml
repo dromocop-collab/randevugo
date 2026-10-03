@@ -25,8 +25,14 @@ jobs:
       - name: Install web dependencies
         run: npm ci
         working-directory: web
+      - name: Audit production web dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: web
       - name: Lint web
         run: npm run lint
+        working-directory: web
+      - name: Test web domain logic
+        run: npm run test:unit
         working-directory: web
       - name: Check internal links
         run: node scripts/check-internal-links.mjs
@@ -36,6 +42,40 @@ jobs:
       - name: Install function dependencies
         run: npm ci
         working-directory: functions
+      - name: Audit production function dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: functions
       - name: Type-check functions
         run: npm run lint
         working-directory: functions
+      - name: Test function domain logic
+        run: npm test
+        working-directory: functions
+
+  browser-smoke:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+        working-directory: web
+      - name: Test desktop and mobile public flows
+        run: npm run test:e2e
+        working-directory: web
+      - name: Upload browser test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
