@@ -131,6 +131,12 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
     };
   }, [tourIndex, tourStep]);
 
+  useEffect(() => {
+    if (tourIndex === null) return;
+    document.body.classList.add("dashboard-tour-active");
+    return () => document.body.classList.remove("dashboard-tour-active");
+  }, [tourIndex]);
+
   if (!businessId || !ready || !nextStep || !preferenceLoaded) return null;
 
   function dismiss() {
