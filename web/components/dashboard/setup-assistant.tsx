@@ -153,7 +153,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
       <button
         type="button"
         onClick={reopen}
-        className="setup-assistant-trigger fixed bottom-24 right-4 z-[25] inline-flex min-h-14 items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-left shadow-2xl transition hover:-translate-y-0.5 lg:bottom-6 lg:right-6 lg:z-[70]"
+        className="setup-assistant-trigger fixed bottom-24 right-4 z-[60] inline-flex min-h-14 items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-left shadow-2xl transition hover:-translate-y-0.5 lg:bottom-6 lg:right-6 lg:z-[70]"
         aria-label={`Rovi ile kurulum rehberini aç. ${completed}/${steps.length} adım tamamlandı`}
       >
         <span className="setup-assistant-trigger__mascot" aria-hidden="true"><Image src="/mascots/randevu-rehberi.png" alt="" width={54} height={50}/></span>
@@ -166,7 +166,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
   return (
     <>
       <aside
-      className="setup-assistant fixed bottom-3 right-3 z-[25] w-[calc(100vw-1.5rem)] max-w-[500px] overflow-hidden rounded-[30px] lg:bottom-6 lg:right-6 lg:z-[80]"
+      className="setup-assistant fixed bottom-3 right-3 z-[60] w-[calc(100vw-1.5rem)] max-w-[500px] overflow-hidden rounded-[30px] lg:bottom-6 lg:right-6 lg:z-[80]"
       aria-label="Rovi kurulum koçu"
     >
       <div className="setup-assistant__header text-white">
