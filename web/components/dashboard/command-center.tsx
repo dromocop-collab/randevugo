@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/features/businesses/business-context";
+import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 import { BarChart3, Bot, CalendarDays, Check, Clipboard, Command, LayoutPanelTop, Palette, Plus, ReceiptText, Rocket, Scissors, Search, Settings2, UsersRound, WandSparkles, X } from "lucide-react";
 
 type PaletteCommand = {
@@ -20,6 +21,7 @@ type PaletteCommand = {
 export function DashboardCommandCenter() {
   const router = useRouter();
   const { businesses, businessId, access } = useBusinessContext();
+  const { can } = useSubscriptionPlan();
   const activeBusiness = businesses.find((item) => item.id === businessId) ?? businesses[0];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -52,9 +54,10 @@ export function DashboardCommandCenter() {
   })();
 
   const filtered = (() => {
+    const entitledCommands = commands.filter((item) => ({ calendar: can("appointments"), appointments: can("appointments"), assistant: can("assistant"), automation: can("automations"), "new-store": can("branches"), operations: can("checkout"), customers: can("customers"), services: can("services"), growth: can("analytics"), analytics: can("analytics") }[item.id] ?? true));
     const availableCommands = access?.role === "staff"
-      ? commands.filter((item) => ["calendar", "appointments", ...(access.permissions.viewCustomers ? ["customers"] : []), ...((access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance) ? ["operations"] : [])].includes(item.id))
-      : commands;
+      ? entitledCommands.filter((item) => ["calendar", "appointments", ...(access.permissions.viewCustomers ? ["customers"] : []), ...((access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance) ? ["operations"] : [])].includes(item.id))
+      : entitledCommands;
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
     const matches = normalized ? availableCommands.filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLocaleLowerCase("tr-TR").includes(normalized)) : availableCommands;
     return [...matches].sort((a, b) => Number(recent.includes(b.id)) - Number(recent.includes(a.id)));

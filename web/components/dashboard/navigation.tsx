@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-operations-available";
+import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
+import { DASHBOARD_ROUTE_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 import {
   Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, ChevronDown, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones, Menu, ReceiptText, X,
   LayoutDashboard, MessageSquareText, Scissors, Settings2,
@@ -17,10 +19,10 @@ import {
 const ADMIN_EMAIL = "cihatwin@gmail.com";
 
 type NavGroup = "merkez" | "operasyon" | "buyume" | "yonetim" | "sistem";
-interface NavItem { href: string; label: string; icon: LucideIcon; group: NavGroup }
+interface NavItem { href: string; label: string; icon: LucideIcon; group: NavGroup; entitlement?: SubscriptionEntitlement }
 const GROUP_LABELS: Record<NavGroup, string> = { merkez: "Çalışma alanı", operasyon: "Canlı operasyon", buyume: "Analiz ve otomasyon", yonetim: "İşletme yönetimi", sistem: "Hesap ve sistem" };
 
-const navItems: NavItem[] = [
+const navItems: NavItem[] = ([
   { href: "/dashboard", label: "Genel Bakış", icon: LayoutDashboard, group: "merkez" },
   { href: "/dashboard/subeler", label: "Şubeler", icon: GitBranch, group: "merkez" },
   { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot, group: "merkez" },
@@ -40,11 +42,12 @@ const navItems: NavItem[] = [
   { href: "/dashboard/abonelik", label: "Abonelik", icon: CreditCard, group: "sistem" },
   { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2, group: "sistem" },
   { href: "/hesabim", label: "Müşteri Modu", icon: CircleUserRound, group: "sistem" },
-];
+] satisfies Omit<NavItem, "entitlement">[]).map((item) => ({ ...item, entitlement: DASHBOARD_ROUTE_ENTITLEMENTS[item.href] }));
 
-function visibleItems(showLiveOperations: boolean, canOpenOperations: boolean, access: ReturnType<typeof useBusinessContext>["access"]) {
+function visibleItems(showLiveOperations: boolean, canOpenOperations: boolean, access: ReturnType<typeof useBusinessContext>["access"], canUse: (entitlement: SubscriptionEntitlement) => boolean) {
   return navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
     (item.href !== "/dashboard/operasyon" || canOpenOperations) &&
+    (!item.entitlement || canUse(item.entitlement)) &&
     (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access?.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href)));
 }
 
@@ -53,9 +56,10 @@ export function DashboardSidebar() {
   const { user } = useAuth();
   const { businesses, businessId, access } = useBusinessContext();
   const showLiveOperations = useLiveOperationsAvailable();
+  const { can } = useSubscriptionPlan();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
   const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
-  const items = visibleItems(showLiveOperations, canOpenOperations, access);
+  const items = visibleItems(showLiveOperations, canOpenOperations, access, can);
   const primaryHrefs = ["/dashboard", "/dashboard/takvim", "/dashboard/randevular", "/dashboard/operasyon", "/dashboard/musteriler"];
   const primaryItems = items.filter((item) => primaryHrefs.includes(item.href));
   const secondaryItems = items.filter((item) => !primaryHrefs.includes(item.href));
@@ -146,10 +150,11 @@ export function DashboardBottomNav() {
   const { user } = useAuth();
   const { access } = useBusinessContext();
   const showLiveOperations = useLiveOperationsAvailable();
+  const { can } = useSubscriptionPlan();
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
   const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
   const [moreOpen, setMoreOpen] = useState(false);
-  const items = visibleItems(showLiveOperations, canOpenOperations, access);
+  const items = visibleItems(showLiveOperations, canOpenOperations, access, can);
   const primaryHrefs = ["/dashboard", "/dashboard/takvim", "/dashboard/randevular", canOpenOperations ? "/dashboard/operasyon" : "/dashboard/musteriler"];
   const primaryItems = primaryHrefs.map((href) => items.find((item) => item.href === href)).filter(Boolean) as NavItem[];
   const moreItems = items.filter((item) => !primaryHrefs.includes(item.href));

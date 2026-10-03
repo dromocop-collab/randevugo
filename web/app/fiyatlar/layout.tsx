@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { PLAN_PRICE, PLAN_FEATURE_LIST, PLAN_LABEL } from "@/constants/plans";
 import { createPublicMetadata, safeJsonLd } from "@/lib/seo/metadata";
 
 const SITE_URL = "https://seninrandevun.com";
 
 export const metadata: Metadata = createPublicMetadata({
   title: "Randevu Sistemi Fiyatları",
-  description: `Lansmana özel SeninRandevun ilk 3 ay ücretsiz. Sonrasında aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺. Takvim, çalışan, müşteri CRM, analitik ve online rezervasyon dahil.`,
+  description: "SeninRandevun işletme paketlerini, güncel aylık ve yıllık fiyatları, deneme sürelerini, şube ve çalışan limitlerini karşılaştırın.",
   keywords: [
     "online randevu sistemi fiyatları",
     "randevu yazılımı fiyat",
@@ -26,21 +25,10 @@ const pricingJsonLd = {
   "@graph": [
     {
       "@type": "SoftwareApplication",
-      name: PLAN_LABEL,
+      name: "SeninRandevun",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       url: `${SITE_URL}/fiyatlar`,
-      offers: [
-        {
-          "@type": "Offer", price: PLAN_PRICE.monthly, priceCurrency: PLAN_PRICE.currency,
-          availability: "https://schema.org/InStock", description: `${PLAN_LABEL} — tüm özellikler dahil aylık plan`,
-        },
-        {
-          "@type": "Offer", price: PLAN_PRICE.yearly, priceCurrency: PLAN_PRICE.currency,
-          availability: "https://schema.org/InStock", description: `${PLAN_LABEL} — tüm özellikler dahil yıllık plan`,
-        },
-      ],
-      featureList: PLAN_FEATURE_LIST,
       aggregateRating: undefined, // Add when you have real ratings
     },
     {
@@ -48,13 +36,13 @@ const pricingJsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "İlk 3 ay ücretsiz kampanyası nasıl çalışır?",
-          acceptedAnswer: { "@type": "Answer", text: "Lansman döneminde açılan işletme hesapları tüm özellikleri kayıt tarihinden itibaren 3 ay ücretsiz kullanır. Kart bilgisi istenmez." },
+          name: "Ücretsiz deneme kampanyası nasıl çalışır?",
+          acceptedAnswer: { "@type": "Answer", text: "İşletmeler seçtikleri pakette belirtilen deneme süresinden yararlanır. Güncel süre ve paket kapsamı fiyatlar sayfasında gösterilir." },
         },
         {
           "@type": "Question",
           name: "Çalışan veya randevu limiti var mı?",
-          acceptedAnswer: { "@type": "Answer", text: "250 çalışana kadar destek verilir; müşteri ve randevu sayısı sınırsızdır." },
+          acceptedAnswer: { "@type": "Answer", text: "Çalışan ve şube limitleri pakete göre değişir; güncel kapasite her paket kartında gösterilir." },
         },
         {
           "@type": "Question",

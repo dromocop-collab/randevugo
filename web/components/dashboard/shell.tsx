@@ -4,17 +4,21 @@ import { ReactNode } from "react";
 import { DashboardBottomNav, DashboardSidebar } from "@/components/dashboard/navigation";
 import { DashboardTopBar } from "@/components/dashboard/topbar";
 import { SubscriptionStatusBanner } from "@/components/dashboard/subscription-status-banner";
+import { SubscriptionFeatureGate } from "@/components/dashboard/subscription-feature-gate";
+import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-plan-context";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   return (
-    <div className="panel-shell dashboard-v2 flex w-full max-w-none gap-5 px-3 py-3 lg:px-5 lg:py-5">
-      <DashboardSidebar />
-      <div className="min-w-0 flex-1 pb-28 lg:pb-6">
-        <DashboardTopBar />
-        <SubscriptionStatusBanner />
-        <div className="mt-5">{children}</div>
+    <SubscriptionPlanProvider>
+      <div className="panel-shell dashboard-v2 flex w-full max-w-none gap-5 px-3 py-3 lg:px-5 lg:py-5">
+        <DashboardSidebar />
+        <div className="min-w-0 flex-1 pb-28 lg:pb-6">
+          <DashboardTopBar />
+          <SubscriptionStatusBanner />
+          <div className="mt-5"><SubscriptionFeatureGate>{children}</SubscriptionFeatureGate></div>
+        </div>
+        <DashboardBottomNav />
       </div>
-      <DashboardBottomNav />
-    </div>
+    </SubscriptionPlanProvider>
   );
 }

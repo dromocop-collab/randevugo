@@ -1,5 +1,6 @@
 import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
+import { ALL_SUBSCRIPTION_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 
 export interface PlatformPlan {
   id: string;
@@ -14,6 +15,7 @@ export interface PlatformPlan {
   isRecommended: boolean;
   description: string;
   features: string[];
+  entitlements: SubscriptionEntitlement[];
 }
 
 export async function listPlatformPlans(): Promise<PlatformPlan[]> {
@@ -33,16 +35,24 @@ export async function listPlatformPlans(): Promise<PlatformPlan[]> {
       isRecommended: data.isRecommended === true,
       description: String(data.description ?? ""),
       features: Array.isArray(data.features) ? data.features.map(String) : [],
+      entitlements: Array.isArray(data.entitlements)
+        ? data.entitlements.map(String).filter((key): key is SubscriptionEntitlement => ALL_SUBSCRIPTION_ENTITLEMENTS.includes(key as SubscriptionEntitlement))
+        : [],
     };
   });
 }
 
 export async function savePlatformPlan(plan: PlatformPlan): Promise<void> {
-  const planRef = doc(getDb(), "platformPlans", plan.id.toUpperCase());
+  const planId = plan.id.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{1,40}$/.test(planId)) throw new Error("Paket kodu geçersiz.");
+  const entitlements = [...new Set(plan.entitlements)].filter((key) => ALL_SUBSCRIPTION_ENTITLEMENTS.includes(key));
+  if (entitlements.length === 0) throw new Error("Pakete en az bir özellik seçin.");
+  const planRef = doc(getDb(), "platformPlans", planId);
   const existing = await getDoc(planRef);
   await setDoc(planRef, {
     ...plan,
-    id: plan.id.toUpperCase(),
+    id: planId,
+    entitlements,
     updatedAt: serverTimestamp(),
     ...(!existing.exists() ? { createdAt: serverTimestamp() } : {}),
   }, { merge: true });

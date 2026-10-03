@@ -1,4 +1,3 @@
-import type { AnyPlanType } from "@/constants/plans";
 import type { EntityBase } from "@/types/common";
 
 export type SubscriptionStatus =
@@ -12,7 +11,7 @@ export type PaymentProviderKey = "manual" | "iyzico" | "paytr";
 
 export interface Subscription extends EntityBase {
   businessId: string;
-  plan: AnyPlanType;
+  plan: string;
   status: SubscriptionStatus;
   accessMode?: "timed" | "lifetime";
   isLifetime?: boolean;

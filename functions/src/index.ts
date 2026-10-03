@@ -236,6 +236,22 @@ type BookingEntitlement = {
   endsAtMillis: number | null;
 };
 
+const PLAN_ENTITLEMENTS = ["appointments", "branches", "staff", "services", "customers", "reviews", "waitlist", "live_queue", "checkout", "packages", "finance", "analytics", "automations", "assistant"] as const;
+type PlanEntitlement = typeof PLAN_ENTITLEMENTS[number];
+
+async function requirePlanEntitlement(businessId: string, entitlement: PlanEntitlement) {
+  const subscription = await db.doc(`subscriptions/${businessId}`).get();
+  const planId = String(subscription.data()?.plan ?? "RANDEVUGO");
+  const plan = await db.doc(`platformPlans/${planId}`).get();
+  // Backward compatibility: plans created before the entitlement matrix keep
+  // their existing access until an admin explicitly saves a matrix for them.
+  const entitlements = plan.data()?.entitlements;
+  if (!plan.exists || !Array.isArray(entitlements) || entitlements.length === 0) return;
+  if (!entitlements.map(String).includes(entitlement)) {
+    throw new HttpsError("permission-denied", `PLAN_FEATURE_REQUIRED: Bu özellik ${String(plan.data()?.label ?? planId)} paketinde bulunmuyor.`);
+  }
+}
+
 function entitlementDateMillis(value: unknown): number | null {
   if (value instanceof Timestamp) return value.toMillis();
   if (typeof value === "string") {
@@ -449,6 +465,7 @@ export const upsertCustomer = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
     const business = await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "customers");
     return upsertBusinessCustomer({
       businessId,
       fullName: requireString(request.data?.fullName, "Ad soyad").slice(0, 80),
@@ -512,6 +529,7 @@ export const renameCustomer = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
+    await requirePlanEntitlement(businessId, "customers");
     await requireBusinessManager(uid, businessId);
     const fullName = requireString(request.data?.fullName, "Ad soyad").slice(0, 80);
     const phone = normalizedPhoneKey(requireString(request.data?.phone, "Telefon"));
@@ -622,6 +640,7 @@ export const finalizeAppointmentCheckout = onCall(
     const businessId = requireString(request.data?.businessId, "businessId");
     const appointmentId = requireString(request.data?.appointmentId, "appointmentId");
     const business = await requireBusinessOperation(uid, businessId, "manageCheckout");
+    await requirePlanEntitlement(businessId, "checkout");
     const rewardProgram = rewardProgramSettings(business.rewardProgram);
     const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
     const discount = finiteMoney(request.data?.discount ?? 0, "İndirim");
@@ -759,6 +778,7 @@ export const sellServicePackage = onCall(
     const customerPhone = normalizedPhoneKey(requireString(request.data?.customerPhone, "Telefon"));
     const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
     const business = await requireBusinessOperation(uid, businessId, "managePackages");
+    await requirePlanEntitlement(businessId, "packages");
     const rewardProgram = rewardProgramSettings(business.rewardProgram);
     const linkedCustomerRef = db.doc(`businesses/${businessId}/customers/${businessCustomerId || customerDocumentId(customerPhone)}`);
     const linkedCustomer = await linkedCustomerRef.get();
@@ -832,6 +852,7 @@ export const redeemServicePackage = onCall(
     const businessId = requireString(request.data?.businessId, "businessId");
     const customerPackageId = requireString(request.data?.customerPackageId, "customerPackageId");
     await requireBusinessOperation(uid, businessId, "managePackages");
+    await requirePlanEntitlement(businessId, "packages");
     const ref = db.doc(`businesses/${businessId}/customerPackages/${customerPackageId}`);
     await db.runTransaction(async (tx) => {
       const snapshot = await tx.get(ref);
@@ -993,7 +1014,7 @@ export const createBusiness = onCall(
         throw new HttpsError("permission-denied", "Yalnızca sahibi olduğunuz firmaya şube ekleyebilirsiniz.");
       }
       const reservedCount = Math.max(Number(account.data()?.storeCount ?? 0), owned.size);
-      if (reservedCount >= 10) throw new HttpsError("resource-exhausted", "Firma başına en fazla 10 şube açılabilir.");
+      if (reservedCount >= 25) throw new HttpsError("resource-exhausted", "Firma başına en fazla 25 şube açılabilir.");
       position = reservedCount + 1;
       organizationId = String(parent?.data().organizationId ?? account.data()?.organizationId ?? fallbackOrganizationRef.id);
       const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
@@ -1016,6 +1037,19 @@ export const createBusiness = onCall(
         organization.data()?.name ?? sourceBusiness?.data().organizationName ?? sourceBusiness?.data().name ?? name
       ).slice(0, 100);
       const inheritedPlan = String(sourceBusiness?.data().plan ?? "RANDEVUGO");
+      const inheritedPlanSnapshot = sourceBusiness
+        ? await transaction.get(db.doc(`platformPlans/${inheritedPlan}`))
+        : null;
+      const inheritedEntitlements = inheritedPlanSnapshot?.data()?.entitlements;
+      if (sourceBusiness && Array.isArray(inheritedEntitlements) && inheritedEntitlements.length > 0 && !inheritedEntitlements.map(String).includes("branches")) {
+        throw new HttpsError("permission-denied", "PLAN_FEATURE_REQUIRED: Mevcut paketiniz yeni şube açmayı desteklemiyor.");
+      }
+      const planBranchLimit = inheritedPlanSnapshot?.exists
+        ? Math.max(1, Math.min(25, Number(inheritedPlanSnapshot.data()?.maxStores ?? 1)))
+        : 10;
+      if (sourceBusiness && reservedCount >= planBranchLimit) {
+        throw new HttpsError("resource-exhausted", `Paketiniz en fazla ${planBranchLimit} şubeye izin veriyor.`);
+      }
       // Every storefront must pass platform review before becoming public.
       // This includes the account's first store.
       const needsApproval = true;
@@ -1028,7 +1062,7 @@ export const createBusiness = onCall(
         name: organizationName,
         headquartersBusinessId,
         branchCount: position,
-        maxBranches: 10,
+        maxBranches: planBranchLimit,
         status: organization.data()?.status ?? "active",
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: organization.data()?.createdAt ?? FieldValue.serverTimestamp(),
@@ -1356,6 +1390,8 @@ export const assignBusinessPlan = onCall(
     await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
     const businessId = requireString(request.data?.businessId, "businessId");
     const plan = requireString(request.data?.plan, "Paket").toUpperCase().slice(0, 40);
+    const planSnapshot = await db.doc(`platformPlans/${plan}`).get();
+    if (!planSnapshot.exists && !["RANDEVUGO", "FREE", "PRO", "BUSINESS"].includes(plan)) throw new HttpsError("not-found", "Seçilen paket bulunamadı.");
     const business = await db.doc(`businesses/${businessId}`).get();
     if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
     const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
@@ -1426,6 +1462,9 @@ export const updateBusinessSubscription = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
     const businessId = requireString(request.data?.businessId, "businessId");
+    const planId = requireString(request.data?.planId, "Paket").toUpperCase().slice(0, 40);
+    const planSnapshot = await db.doc(`platformPlans/${planId}`).get();
+    if (!planSnapshot.exists && !["RANDEVUGO", "FREE", "PRO", "BUSINESS"].includes(planId)) throw new HttpsError("not-found", "Seçilen paket bulunamadı.");
     const mode = String(request.data?.mode ?? "") as SubscriptionAdminMode;
     if (!SUBSCRIPTION_ADMIN_MODES.includes(mode)) {
       throw new HttpsError("invalid-argument", "Abonelik durumu geçersiz.");
@@ -1450,10 +1489,12 @@ export const updateBusinessSubscription = onCall(
     const patch = adminSubscriptionPatch(mode, Number.isFinite(rawEnd) ? rawEnd : undefined);
     const batch = db.batch();
     affected.forEach((document) => {
+      batch.update(document.ref, { plan: planId, updatedAt: FieldValue.serverTimestamp() });
       batch.set(db.doc(`subscriptions/${document.id}`), {
         businessId: document.id,
         ...(organizationId ? { organizationId } : {}),
         ...patch,
+        plan: planId,
         updatedBy: uid,
       }, { merge: true });
     });
@@ -1464,6 +1505,7 @@ export const updateBusinessSubscription = onCall(
       businessId,
       organizationId: organizationId || null,
       mode,
+      plan: planId,
       endAt: Number.isFinite(rawEnd) ? new Date(rawEnd).toISOString() : null,
       affectedBranches: affected.length,
       actorUid: uid,
@@ -1471,6 +1513,179 @@ export const updateBusinessSubscription = onCall(
     });
     await batch.commit();
     return { success: true, mode, affectedBranches: affected.length };
+  }
+);
+
+export const requestSubscriptionPurchase = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Paket satın almak için giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const planId = requireString(request.data?.planId, "Paket").toUpperCase().slice(0, 40);
+    const billingCycle = request.data?.billingCycle === "yearly" ? "yearly" : "monthly";
+    const business = await requireBusinessManager(uid, businessId);
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    if (!plan.exists || plan.data()?.isActive === false) throw new HttpsError("not-found", "Seçilen paket şu anda satışta değil.");
+    const amount = Math.max(0, Number(plan.data()?.[billingCycle === "yearly" ? "yearlyPrice" : "monthlyPrice"] ?? 0));
+    const requestRef = db.doc(`subscriptionPurchaseRequests/${businessId}`);
+    const now = FieldValue.serverTimestamp();
+    await requestRef.set({
+      businessId,
+      organizationId: business.organizationId ?? null,
+      ownerUid: String(business.ownerUid ?? uid),
+      requestedBy: uid,
+      planId,
+      planLabel: String(plan.data()?.label ?? planId),
+      billingCycle,
+      amount,
+      currency: String(plan.data()?.currency ?? "TRY"),
+      status: amount === 0 ? "completed" : "pending_payment",
+      updatedAt: now,
+      createdAt: now,
+    }, { merge: true });
+
+    if (amount === 0) {
+      const endAtMillis = Date.now() + (billingCycle === "yearly" ? 366 : 31) * 86_400_000;
+      const organizationId = typeof business.organizationId === "string" ? business.organizationId : "";
+      const affected = organizationId
+        ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(25).get()).docs
+        : [await db.doc(`businesses/${businessId}`).get()];
+      const batch = db.batch();
+      affected.forEach((document) => {
+        batch.update(document.ref, { plan: planId, updatedAt: FieldValue.serverTimestamp() });
+        batch.set(db.doc(`subscriptions/${document.id}`), {
+          businessId: document.id, plan: planId, status: "active", accessMode: "timed", isLifetime: false,
+          subscriptionStartedAt: new Date().toISOString(), subscriptionEndsAt: new Date(endAtMillis).toISOString(),
+          renewalEnabled: false, paymentProvider: "manual", updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      await batch.commit();
+      return { status: "completed", requestId: requestRef.id, checkoutUrl: null };
+    }
+
+    const paymentSettings = await db.doc("platformPrivateSettings/subscriptionPayments").get();
+    const configuredUrl = typeof paymentSettings.data()?.checkoutUrl === "string" ? paymentSettings.data()!.checkoutUrl.trim() : "";
+    let checkoutUrl: string | null = null;
+    if (configuredUrl) {
+      try {
+        const url = new URL(configuredUrl);
+        if (url.protocol === "https:") {
+          url.searchParams.set("businessId", businessId);
+          url.searchParams.set("plan", planId);
+          url.searchParams.set("cycle", billingCycle);
+          url.searchParams.set("requestId", requestRef.id);
+          checkoutUrl = url.toString();
+        }
+      } catch { /* Invalid configuration safely falls back to manual approval. */ }
+    }
+    return { status: checkoutUrl ? "checkout_ready" : "pending_payment", requestId: requestRef.id, checkoutUrl };
+  }
+);
+
+export const completeSubscriptionPurchase = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const purchaseRef = db.doc(`subscriptionPurchaseRequests/${businessId}`);
+    const [purchase, business] = await Promise.all([purchaseRef.get(), db.doc(`businesses/${businessId}`).get()]);
+    if (!purchase.exists || !business.exists) throw new HttpsError("not-found", "Paket talebi veya işletme bulunamadı.");
+    if (purchase.data()?.status !== "pending_payment") throw new HttpsError("failed-precondition", "Bu paket talebi ödeme onayı beklemiyor.");
+    const planId = String(purchase.data()?.planId ?? "");
+    const cycle = purchase.data()?.billingCycle === "yearly" ? "yearly" : "monthly";
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    if (!plan.exists) throw new HttpsError("not-found", "Talepteki paket artık bulunamıyor.");
+    const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
+    const affected = organizationId
+      ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(25).get()).docs
+      : [business];
+    const endsAt = new Date(Date.now() + (cycle === "yearly" ? 366 : 31) * 86_400_000).toISOString();
+    const batch = db.batch();
+    affected.forEach((document) => {
+      batch.update(document.ref, { plan: planId, updatedAt: FieldValue.serverTimestamp() });
+      batch.set(db.doc(`subscriptions/${document.id}`), {
+        businessId: document.id, plan: planId, status: "active", accessMode: "timed", isLifetime: false,
+        subscriptionStartedAt: new Date().toISOString(), subscriptionEndsAt: endsAt,
+        renewalEnabled: false, paymentProvider: "manual", updatedAt: FieldValue.serverTimestamp(), updatedBy: uid,
+      }, { merge: true });
+    });
+    batch.set(purchaseRef, { status: "completed", completedBy: uid, completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    batch.set(db.collection("platformAuditLogs").doc(), { action: "subscription.purchase_completed", businessId, plan: planId, billingCycle: cycle, affectedBranches: affected.length, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { success: true, affectedBranches: affected.length };
+  }
+);
+
+export const deleteBusinessPermanently = onCall(
+  { region: "europe-west1", timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    if (String(request.data?.confirmation ?? "").trim().toLocaleUpperCase("tr-TR") !== "EVET") {
+      throw new HttpsError("invalid-argument", "Kalıcı silme için EVET yazarak onaylayın.");
+    }
+    const businessRef = db.doc(`businesses/${businessId}`);
+    const business = await businessRef.get();
+    if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
+    const organizationBusinesses = organizationId
+      ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(26).get()).docs
+      : [business];
+    const ownerUid = typeof business.data()?.ownerUid === "string" ? String(business.data()?.ownerUid) : "";
+    const ownerBusinesses = ownerUid
+      ? (await db.collection("businesses").where("ownerUid", "==", ownerUid).limit(101).get()).docs
+      : [];
+    const remainingOrganizationBusinesses = organizationBusinesses.filter((document) => document.id !== businessId);
+    const promotedHeadquarters = business.data()?.isHeadquarters === true
+      ? remainingOrganizationBusinesses[0]
+      : undefined;
+
+    await db.recursiveDelete(businessRef);
+    const batch = db.batch();
+    const slug = typeof business.data()?.slug === "string" ? String(business.data()?.slug) : "";
+    if (slug) batch.delete(db.doc(`businessSlugs/${slug}`));
+    for (const path of [
+      `subscriptions/${businessId}`,
+      `subscriptionPurchaseRequests/${businessId}`,
+      `businessApprovalRequests/${businessId}`,
+      `businessProfileChangeRequests/${businessId}`,
+      `liveQueueDiscovery/${businessId}`,
+      `liveQueueWaitSummaries/${businessId}`,
+    ]) batch.delete(db.doc(path));
+
+    const relatedTokens = await db.collection("appointmentTokens").where("businessId", "==", businessId).limit(450).get();
+    relatedTokens.docs.forEach((document) => batch.delete(document.ref));
+    // Bu işlem yalnızca seçilen mağazayı siler. Kullanıcı hesabı, diğer
+    // mağazalar ve organizasyon kaydı korunur. Silinen kayıt merkez ise kalan
+    // mağazalardan biri merkez olarak devralır.
+    if (organizationId) {
+      batch.set(db.doc(`businessOrganizations/${organizationId}`), {
+        branchCount: remainingOrganizationBusinesses.length,
+        ...(promotedHeadquarters ? { headquartersBusinessId: promotedHeadquarters.id } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    if (promotedHeadquarters) {
+      batch.set(promotedHeadquarters.ref, { isHeadquarters: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    if (ownerUid) {
+      batch.set(db.doc(`businessAccounts/${ownerUid}`), {
+        storeCount: Math.max(0, ownerBusinesses.length - 1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    batch.set(db.collection("platformAuditLogs").doc(), {
+      action: "business.permanently_deleted", entityType: "business", entityId: businessId,
+      businessId, businessName: String(business.data()?.name ?? ""), organizationId: organizationId || null,
+      actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true };
   }
 );
 
@@ -2408,6 +2623,45 @@ export const rescheduleAppointment = onCall(
   }
 );
 
+export const createStaffMember = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "staff");
+    const subscription = await db.doc(`subscriptions/${businessId}`).get();
+    const planId = String(subscription.data()?.plan ?? "RANDEVUGO");
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    const maxStaff = plan.exists ? Math.max(1, Math.min(1_000, Number(plan.data()?.maxStaff ?? 250))) : 250;
+    const existing = await db.collection(`businesses/${businessId}/staff`).where("isActive", "==", true).limit(maxStaff + 1).get();
+    if (existing.size >= maxStaff) throw new HttpsError("resource-exhausted", `Paketiniz en fazla ${maxStaff} aktif çalışana izin veriyor.`);
+    const input = data.staff && typeof data.staff === "object" ? data.staff as Record<string, unknown> : {};
+    const ref = db.collection(`businesses/${businessId}/staff`).doc();
+    await ref.set({
+      fullName: requireString(input.fullName, "Ad soyad").slice(0, 80),
+      phone: requireString(input.phone, "Telefon").slice(0, 30),
+      email: requireString(input.email, "E-posta").toLowerCase().slice(0, 160),
+      position: requireString(input.position, "Pozisyon").slice(0, 80),
+      photoUrl: typeof input.photoUrl === "string" ? input.photoUrl.slice(0, 1_000) : "",
+      specialtyCategoryIds: Array.isArray(input.specialtyCategoryIds) ? input.specialtyCategoryIds.map(String).slice(0, 50) : [],
+      expertiseLevel: ["junior", "specialist", "senior", "trainer"].includes(String(input.expertiseLevel)) ? input.expertiseLevel : "specialist",
+      commissionRate: Math.max(0, Math.min(100, Number(input.commissionRate ?? 0))),
+      serviceOverrides: input.serviceOverrides && typeof input.serviceOverrides === "object" ? input.serviceOverrides : {},
+      permissions: input.permissions && typeof input.permissions === "object" ? input.permissions : {},
+      isActive: input.isActive !== false,
+      serviceIds: Array.isArray(input.serviceIds) ? input.serviceIds.map(String).slice(0, 200) : [],
+      workingHours: Array.isArray(input.workingHours) ? input.workingHours.slice(0, 7) : [],
+      leaveDates: Array.isArray(input.leaveDates) ? input.leaveDates.map(String).slice(0, 366) : [],
+      appointmentCapacity: Math.max(1, Math.min(20, Number(input.appointmentCapacity ?? 1))),
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { staffId: ref.id };
+  }
+);
+
 export const archiveStaff = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -2416,6 +2670,7 @@ export const archiveStaff = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const staffId = requireString(data.staffId, "staffId");
+    await requirePlanEntitlement(businessId, "staff");
     const replacementStaffId = typeof data.replacementStaffId === "string" && data.replacementStaffId.trim()
       ? data.replacementStaffId.trim()
       : null;
@@ -2508,6 +2763,7 @@ export const linkStaffAccount = onCall(
     const businessId = requireString(data.businessId, "businessId");
     const staffId = requireString(data.staffId, "staffId");
     const business = await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "staff");
     const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
     const staffSnapshot = await staffRef.get();
     if (!staffSnapshot.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
@@ -2585,6 +2841,7 @@ export const getAvailableSlots = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const serviceId = requireString(data.serviceId, "serviceId");
     const date = requireString(data.date, "date");
     const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -2633,6 +2890,7 @@ export const getAvailableDates = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const serviceId = requireString(data.serviceId, "serviceId");
     const startDate = requireString(data.startDate, "startDate");
     const endDate = requireString(data.endDate, "endDate");
@@ -2697,6 +2955,7 @@ export const joinWaitlist = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "waitlist");
     const serviceId = requireString(data.serviceId, "serviceId");
     const preferredDate = requireString(data.preferredDate, "preferredDate");
     const customerName = requireString(data.customerName, "customerName");
@@ -2731,6 +2990,7 @@ export const createAppointment = onCall(
 
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const staffId = typeof data.staffId === "string" && data.staffId.trim().length > 0
       ? data.staffId.trim()
       : null;
@@ -2916,6 +3176,7 @@ export const createDashboardAppointment = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    await requirePlanEntitlement(businessId, "appointments");
     if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
       throw new HttpsError("invalid-argument", "Randevu saati zorunludur.");
     }
@@ -3013,6 +3274,7 @@ export const updateDashboardAppointment = onCall(
     const businessId = requireString(data.businessId, "businessId");
     const appointmentId = requireString(data.appointmentId, "appointmentId");
     const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    await requirePlanEntitlement(businessId, "appointments");
     if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
       throw new HttpsError("invalid-argument", "Randevu tarihi ve saati zorunludur.");
     }
@@ -4975,6 +5237,7 @@ export const assistantChat = onCall(
     const scope: AssistantScope = request.data?.scope === "platform" ? "platform" : "business";
     const businessId = typeof request.data?.businessId === "string" ? request.data.businessId.trim() : undefined;
     await requireAssistantAccess(uid, request.auth?.token.email as string | undefined, scope, businessId);
+    if (scope === "business" && businessId) await requirePlanEntitlement(businessId, "assistant");
 
     const message = redactAssistantText(requireString(request.data?.message, "Mesaj")).slice(0, 1_200);
     const history = sanitizeAssistantHistory(request.data?.history);
@@ -6051,6 +6314,7 @@ export const joinQueue = onCall(protectedCallableOptions, async (request) => {
   if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
   const businessId = requireQueueId(request.data?.businessId, "businessId");
   await requireBookingEntitlement(businessId);
+  await requirePlanEntitlement(businessId, "live_queue");
   const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
   const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
   const mode = staffId ? "specific_staff" : "first_available";

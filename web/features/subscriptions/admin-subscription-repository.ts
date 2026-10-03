@@ -7,6 +7,7 @@ export async function updateBusinessSubscription(input: {
   businessId: string;
   mode: AdminSubscriptionMode;
   endAtMillis?: number;
+  planId: string;
 }): Promise<{ affectedBranches: number }> {
   const callable = httpsCallable<typeof input, { success: boolean; affectedBranches: number }>(
     getFunctions(getFirebaseApp(), "europe-west1"),
@@ -40,4 +41,21 @@ export async function backfillLegacyBusinessSubscriptions(): Promise<{ processed
     cursor = result.data.nextCursor || undefined;
   } while (cursor);
   return { processed, updated };
+}
+
+export async function completeSubscriptionPurchase(businessId: string): Promise<{ affectedBranches: number }> {
+  const callable = httpsCallable<{ businessId: string }, { success: boolean; affectedBranches: number }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "completeSubscriptionPurchase",
+  );
+  const result = await callable({ businessId });
+  return { affectedBranches: Number(result.data.affectedBranches ?? 1) };
+}
+
+export async function deleteBusinessPermanently(businessId: string, confirmation: string): Promise<void> {
+  const callable = httpsCallable<{ businessId: string; confirmation: string }, { success: boolean }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "deleteBusinessPermanently",
+  );
+  await callable({ businessId, confirmation });
 }

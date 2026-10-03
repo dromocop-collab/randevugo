@@ -18,21 +18,22 @@ function isAppleMobile() {
 export function IosSmartBanner() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
+  const hiddenOnRoute = PRIVATE_ROUTES.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
-    if (PRIVATE_ROUTES.some((route) => pathname.startsWith(route)) || !isAppleMobile()) return;
+    if (hiddenOnRoute || !isAppleMobile()) return;
     const hiddenUntil = Number(window.localStorage.getItem(HIDDEN_KEY) ?? 0);
     if (hiddenUntil > Date.now()) return;
     const timer = window.setTimeout(() => setVisible(true), 1200);
     return () => window.clearTimeout(timer);
-  }, [pathname]);
+  }, [hiddenOnRoute, pathname]);
 
   function dismiss() {
     window.localStorage.setItem(HIDDEN_KEY, String(Date.now() + 7 * 86_400_000));
     setVisible(false);
   }
 
-  if (!visible) return null;
+  if (hiddenOnRoute || !visible) return null;
 
   return <aside className="ios-smart-banner" aria-label="SeninRandevun iOS uygulamasını indir">
     <span className="ios-smart-banner-shine"/>

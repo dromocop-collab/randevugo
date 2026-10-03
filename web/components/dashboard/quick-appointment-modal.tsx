@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, Clock3, Plus, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +35,9 @@ function defaultStart() {
 }
 
 export function QuickAppointmentModal({ businessId, open, initialStartAt, appointment, onClose, onCreated }: Props) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  const savingRef = useRef(false);
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -43,6 +46,9 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => { savingRef.current = saving; }, [saving]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,12 +70,70 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
 
   useEffect(() => {
     if (!open) return;
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+
+    const body = document.body;
+    const root = document.documentElement;
+    const scrollY = window.scrollY;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousBodyStyles = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    const previousRootStyles = {
+      overflow: root.style.overflow,
+      overscrollBehavior: root.style.overscrollBehavior,
+    };
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !savingRef.current) {
+        if (dialogRef.current?.querySelector(".sr-select__trigger[aria-expanded='true']")) return;
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
+      )).filter((element) => !element.hidden && element.getClientRects().length > 0);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, open]);
+
+    document.addEventListener("keydown", handleKeyDown);
+    const focusFrame = window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLInputElement>("input[type='date']")?.focus({ preventScroll: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      Object.assign(body.style, previousBodyStyles);
+      Object.assign(root.style, previousRootStyles);
+      window.scrollTo(0, scrollY);
+      previouslyFocused?.focus({ preventScroll: true });
+    };
+  }, [open]);
 
   const serviceOptions = useMemo(() => [
     { value: "", label: "İşlem seçmeden devam et", description: "İsterseniz daha sonra ekleyebilirsiniz" },
@@ -85,6 +149,10 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
   ], [staff]);
 
   if (!open) return null;
+
+  function requestClose() {
+    if (!savingRef.current) onCloseRef.current();
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -119,22 +187,29 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
   }
 
   return createPortal((
-    <div className="quick-appointment-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="quick-appointment-backdrop" role="presentation" onMouseDown={requestClose}>
       <section
+        ref={dialogRef}
         className="quick-appointment-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-appointment-title"
+        aria-describedby="quick-appointment-description"
+        aria-busy={saving}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
           <span className="quick-appointment-icon"><CalendarDays size={23} /></span>
-          <div>
+          <div className="quick-appointment-heading">
             <span>{appointment ? "HIZLI DÜZENLEME" : "HIZLI KAYIT"}</span>
             <h2 id="quick-appointment-title">{appointment ? "Randevuyu düzenle" : "Takvime randevu ekle"}</h2>
-            <p>Tarih ve saati seçin. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz.</p>
+            <p id="quick-appointment-description">Tarih ve saati seçin. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz.</p>
+            <div className="quick-appointment-hints" aria-label="Kayıt bilgisi">
+              <span><Clock3 size={12} /> 1 dakikada hazır</span>
+              <span>Tarih + saat yeterli</span>
+            </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Pencereyi kapat"><X size={20} /></button>
+          <button type="button" onClick={requestClose} disabled={saving} aria-label="Pencereyi kapat"><X size={20} /></button>
         </header>
 
         <form onSubmit={submit}>
@@ -157,7 +232,7 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
             <Select inlineMenu label="Kişi (isteğe bağlı)" options={staffOptions} value={staffId} onChange={(event) => setStaffId(event.target.value)} />
           </div>
           <footer>
-            <button type="button" className="quick-appointment-cancel" onClick={onClose}>Vazgeç</button>
+            <button type="button" className="quick-appointment-cancel" onClick={requestClose} disabled={saving}>Vazgeç</button>
             <button type="submit" className="quick-appointment-save" disabled={saving || !date || !time}>
               <Plus size={17} /> {saving ? "Kaydediliyor…" : appointment ? "Değişiklikleri kaydet" : "Randevuyu kaydet"}
             </button>

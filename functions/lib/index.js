@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.updateDashboardAppointment = exports.createDashboardAppointment = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.renameCustomer = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
-exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = void 0;
+exports.expireBusinessSubscriptions = exports.cleanupExpiredOperationalData = exports.checkMutlucellDeliveryReports = exports.sendAppointmentSmsJobs = exports.moderateReview = exports.submitReview = exports.waitlistAutomationCreated = exports.appointmentAutomationUpdated = exports.appointmentCreated = exports.getAppointmentByPublicToken = exports.updateDashboardAppointment = exports.createDashboardAppointment = exports.createAppointment = exports.joinWaitlist = exports.getAvailableDates = exports.getAvailableSlots = exports.linkStaffAccount = exports.archiveStaff = exports.createStaffMember = exports.rescheduleAppointment = exports.cancelCustomerAppointment = exports.submitPublicSupportRequest = exports.sendBusinessPush = exports.getPlatformPushOperations = exports.sendPlatformPush = exports.deleteMyAccount = exports.unregisterPushToken = exports.registerPushToken = exports.backfillLegacyBusinessSubscriptions = exports.ensureAdminOwnedBusinessesLifetime = exports.deleteBusinessPermanently = exports.completeSubscriptionPurchase = exports.requestSubscriptionPurchase = exports.updateBusinessSubscription = exports.assignBusinessPlan = exports.reviewBusinessProfileChange = exports.submitBusinessProfileChange = exports.reviewBusiness = exports.createBusiness = exports.getMyCustomerBenefits = exports.redeemServicePackage = exports.sellServicePackage = exports.finalizeAppointmentCheckout = exports.updateRewardProgramSettings = exports.getRewardProgramSettings = exports.renameCustomer = exports.upsertCustomer = exports.updateLiveFeatureFlags = exports.updateBookingFieldSettings = exports.getBookingFieldSettings = void 0;
+exports.callNextCustomer = exports.getLiveOperationsCapabilities = exports.transitionQueueEntry = exports.confirmQueuePresence = exports.markOnTheWay = exports.leaveQueue = exports.getMyActiveQueueEntries = exports.getMyActiveQueueEntry = exports.joinQueue = exports.listLiveQueueDiscovery = exports.liveQueueDiscoverySpecialDaysUpdated = exports.liveQueueDiscoveryHoursUpdated = exports.liveQueueDiscoveryStaffUpdated = exports.liveQueueDiscoveryServicesUpdated = exports.liveQueueDiscoveryBusinessUpdated = exports.availabilityNoticeCreated = exports.listLastMinuteOpenings = exports.availabilityAppointmentChanged = exports.availabilityBusinessScheduleChanged = exports.availabilityServiceChanged = exports.availabilityStaffChanged = exports.availabilitySpecialDayChanged = exports.availabilityWorkingHoursChanged = exports.cancelAvailabilityAlert = exports.createAvailabilityAlert = exports.liveQueueWaitAppointmentChanged = exports.retryLiveQueueNotices = exports.liveQueueNoticeCreated = exports.liveQueueNoticeQueueChanged = exports.liveQueueWaitQueueChanged = exports.getBusinessLiveWaitEstimates = exports.getLiveQueueWaitOptions = exports.getLiveQueueWaitEstimate = exports.clearAssistantHistory = exports.getAssistantHistory = exports.assistantChat = exports.resetPasswordWithCode = exports.sendPasswordResetCode = exports.verifyEmailCode = exports.sendEmailVerificationCode = exports.verifyPhoneCode = exports.sendVerificationCode = exports.testMutlucellSettings = exports.updateMutlucellSettings = exports.getMutlucellSettings = exports.getSmsOperations = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
@@ -209,6 +209,20 @@ async function requireBusinessOperation(uid, businessId, permission) {
         return business.data();
     throw new https_1.HttpsError("permission-denied", "Bu işletme işlemi için yetkiniz bulunmuyor.");
 }
+const PLAN_ENTITLEMENTS = ["appointments", "branches", "staff", "services", "customers", "reviews", "waitlist", "live_queue", "checkout", "packages", "finance", "analytics", "automations", "assistant"];
+async function requirePlanEntitlement(businessId, entitlement) {
+    const subscription = await db.doc(`subscriptions/${businessId}`).get();
+    const planId = String(subscription.data()?.plan ?? "RANDEVUGO");
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    // Backward compatibility: plans created before the entitlement matrix keep
+    // their existing access until an admin explicitly saves a matrix for them.
+    const entitlements = plan.data()?.entitlements;
+    if (!plan.exists || !Array.isArray(entitlements) || entitlements.length === 0)
+        return;
+    if (!entitlements.map(String).includes(entitlement)) {
+        throw new https_1.HttpsError("permission-denied", `PLAN_FEATURE_REQUIRED: Bu özellik ${String(plan.data()?.label ?? planId)} paketinde bulunmuyor.`);
+    }
+}
 function entitlementDateMillis(value) {
     if (value instanceof firestore_1.Timestamp)
         return value.toMillis();
@@ -397,6 +411,7 @@ exports.upsertCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
     const business = await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "customers");
     return upsertBusinessCustomer({
         businessId,
         fullName: requireString(request.data?.fullName, "Ad soyad").slice(0, 80),
@@ -454,6 +469,7 @@ exports.renameCustomer = (0, https_1.onCall)({ region: "europe-west1" }, async (
     if (!uid)
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
+    await requirePlanEntitlement(businessId, "customers");
     await requireBusinessManager(uid, businessId);
     const fullName = requireString(request.data?.fullName, "Ad soyad").slice(0, 80);
     const phone = normalizedPhoneKey(requireString(request.data?.phone, "Telefon"));
@@ -537,6 +553,7 @@ exports.finalizeAppointmentCheckout = (0, https_1.onCall)(protectedCallableOptio
     const businessId = requireString(request.data?.businessId, "businessId");
     const appointmentId = requireString(request.data?.appointmentId, "appointmentId");
     const business = await requireBusinessOperation(uid, businessId, "manageCheckout");
+    await requirePlanEntitlement(businessId, "checkout");
     const rewardProgram = rewardProgramSettings(business.rewardProgram);
     const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
     const discount = finiteMoney(request.data?.discount ?? 0, "İndirim");
@@ -672,6 +689,7 @@ exports.sellServicePackage = (0, https_1.onCall)(protectedCallableOptions, async
     const customerPhone = normalizedPhoneKey(requireString(request.data?.customerPhone, "Telefon"));
     const paymentMethod = businessPaymentMethod(request.data?.paymentMethod);
     const business = await requireBusinessOperation(uid, businessId, "managePackages");
+    await requirePlanEntitlement(businessId, "packages");
     const rewardProgram = rewardProgramSettings(business.rewardProgram);
     const linkedCustomerRef = db.doc(`businesses/${businessId}/customers/${businessCustomerId || customerDocumentId(customerPhone)}`);
     const linkedCustomer = await linkedCustomerRef.get();
@@ -746,6 +764,7 @@ exports.redeemServicePackage = (0, https_1.onCall)(protectedCallableOptions, asy
     const businessId = requireString(request.data?.businessId, "businessId");
     const customerPackageId = requireString(request.data?.customerPackageId, "customerPackageId");
     await requireBusinessOperation(uid, businessId, "managePackages");
+    await requirePlanEntitlement(businessId, "packages");
     const ref = db.doc(`businesses/${businessId}/customerPackages/${customerPackageId}`);
     await db.runTransaction(async (tx) => {
         const snapshot = await tx.get(ref);
@@ -903,8 +922,8 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             throw new https_1.HttpsError("permission-denied", "Yalnızca sahibi olduğunuz firmaya şube ekleyebilirsiniz.");
         }
         const reservedCount = Math.max(Number(account.data()?.storeCount ?? 0), owned.size);
-        if (reservedCount >= 10)
-            throw new https_1.HttpsError("resource-exhausted", "Firma başına en fazla 10 şube açılabilir.");
+        if (reservedCount >= 25)
+            throw new https_1.HttpsError("resource-exhausted", "Firma başına en fazla 25 şube açılabilir.");
         position = reservedCount + 1;
         organizationId = String(parent?.data().organizationId ?? account.data()?.organizationId ?? fallbackOrganizationRef.id);
         const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
@@ -921,6 +940,19 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
         const headquartersBusinessId = String(sourceBusiness?.data().headquartersBusinessId ?? existingHeadquarters?.id ?? sourceBusiness?.id ?? businessRef.id);
         const organizationName = String(organization.data()?.name ?? sourceBusiness?.data().organizationName ?? sourceBusiness?.data().name ?? name).slice(0, 100);
         const inheritedPlan = String(sourceBusiness?.data().plan ?? "RANDEVUGO");
+        const inheritedPlanSnapshot = sourceBusiness
+            ? await transaction.get(db.doc(`platformPlans/${inheritedPlan}`))
+            : null;
+        const inheritedEntitlements = inheritedPlanSnapshot?.data()?.entitlements;
+        if (sourceBusiness && Array.isArray(inheritedEntitlements) && inheritedEntitlements.length > 0 && !inheritedEntitlements.map(String).includes("branches")) {
+            throw new https_1.HttpsError("permission-denied", "PLAN_FEATURE_REQUIRED: Mevcut paketiniz yeni şube açmayı desteklemiyor.");
+        }
+        const planBranchLimit = inheritedPlanSnapshot?.exists
+            ? Math.max(1, Math.min(25, Number(inheritedPlanSnapshot.data()?.maxStores ?? 1)))
+            : 10;
+        if (sourceBusiness && reservedCount >= planBranchLimit) {
+            throw new https_1.HttpsError("resource-exhausted", `Paketiniz en fazla ${planBranchLimit} şubeye izin veriyor.`);
+        }
         // Every storefront must pass platform review before becoming public.
         // This includes the account's first store.
         const needsApproval = true;
@@ -933,7 +965,7 @@ exports.createBusiness = (0, https_1.onCall)({ region: "europe-west1" }, async (
             name: organizationName,
             headquartersBusinessId,
             branchCount: position,
-            maxBranches: 10,
+            maxBranches: planBranchLimit,
             status: organization.data()?.status ?? "active",
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
             createdAt: organization.data()?.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
@@ -1290,6 +1322,9 @@ exports.assignBusinessPlan = (0, https_1.onCall)({ region: "europe-west1" }, asy
     await requirePlatformAdmin(uid, request.auth?.token.email);
     const businessId = requireString(request.data?.businessId, "businessId");
     const plan = requireString(request.data?.plan, "Paket").toUpperCase().slice(0, 40);
+    const planSnapshot = await db.doc(`platformPlans/${plan}`).get();
+    if (!planSnapshot.exists && !["RANDEVUGO", "FREE", "PRO", "BUSINESS"].includes(plan))
+        throw new https_1.HttpsError("not-found", "Seçilen paket bulunamadı.");
     const business = await db.doc(`businesses/${businessId}`).get();
     if (!business.exists)
         throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
@@ -1357,6 +1392,10 @@ exports.updateBusinessSubscription = (0, https_1.onCall)({ region: "europe-west1
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     await requirePlatformAdmin(uid, request.auth?.token.email);
     const businessId = requireString(request.data?.businessId, "businessId");
+    const planId = requireString(request.data?.planId, "Paket").toUpperCase().slice(0, 40);
+    const planSnapshot = await db.doc(`platformPlans/${planId}`).get();
+    if (!planSnapshot.exists && !["RANDEVUGO", "FREE", "PRO", "BUSINESS"].includes(planId))
+        throw new https_1.HttpsError("not-found", "Seçilen paket bulunamadı.");
     const mode = String(request.data?.mode ?? "");
     if (!SUBSCRIPTION_ADMIN_MODES.includes(mode)) {
         throw new https_1.HttpsError("invalid-argument", "Abonelik durumu geçersiz.");
@@ -1381,10 +1420,12 @@ exports.updateBusinessSubscription = (0, https_1.onCall)({ region: "europe-west1
     const patch = adminSubscriptionPatch(mode, Number.isFinite(rawEnd) ? rawEnd : undefined);
     const batch = db.batch();
     affected.forEach((document) => {
+        batch.update(document.ref, { plan: planId, updatedAt: firestore_1.FieldValue.serverTimestamp() });
         batch.set(db.doc(`subscriptions/${document.id}`), {
             businessId: document.id,
             ...(organizationId ? { organizationId } : {}),
             ...patch,
+            plan: planId,
             updatedBy: uid,
         }, { merge: true });
     });
@@ -1395,6 +1436,7 @@ exports.updateBusinessSubscription = (0, https_1.onCall)({ region: "europe-west1
         businessId,
         organizationId: organizationId || null,
         mode,
+        plan: planId,
         endAt: Number.isFinite(rawEnd) ? new Date(rawEnd).toISOString() : null,
         affectedBranches: affected.length,
         actorUid: uid,
@@ -1402,6 +1444,174 @@ exports.updateBusinessSubscription = (0, https_1.onCall)({ region: "europe-west1
     });
     await batch.commit();
     return { success: true, mode, affectedBranches: affected.length };
+});
+exports.requestSubscriptionPurchase = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Paket satın almak için giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const planId = requireString(request.data?.planId, "Paket").toUpperCase().slice(0, 40);
+    const billingCycle = request.data?.billingCycle === "yearly" ? "yearly" : "monthly";
+    const business = await requireBusinessManager(uid, businessId);
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    if (!plan.exists || plan.data()?.isActive === false)
+        throw new https_1.HttpsError("not-found", "Seçilen paket şu anda satışta değil.");
+    const amount = Math.max(0, Number(plan.data()?.[billingCycle === "yearly" ? "yearlyPrice" : "monthlyPrice"] ?? 0));
+    const requestRef = db.doc(`subscriptionPurchaseRequests/${businessId}`);
+    const now = firestore_1.FieldValue.serverTimestamp();
+    await requestRef.set({
+        businessId,
+        organizationId: business.organizationId ?? null,
+        ownerUid: String(business.ownerUid ?? uid),
+        requestedBy: uid,
+        planId,
+        planLabel: String(plan.data()?.label ?? planId),
+        billingCycle,
+        amount,
+        currency: String(plan.data()?.currency ?? "TRY"),
+        status: amount === 0 ? "completed" : "pending_payment",
+        updatedAt: now,
+        createdAt: now,
+    }, { merge: true });
+    if (amount === 0) {
+        const endAtMillis = Date.now() + (billingCycle === "yearly" ? 366 : 31) * 86_400_000;
+        const organizationId = typeof business.organizationId === "string" ? business.organizationId : "";
+        const affected = organizationId
+            ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(25).get()).docs
+            : [await db.doc(`businesses/${businessId}`).get()];
+        const batch = db.batch();
+        affected.forEach((document) => {
+            batch.update(document.ref, { plan: planId, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+            batch.set(db.doc(`subscriptions/${document.id}`), {
+                businessId: document.id, plan: planId, status: "active", accessMode: "timed", isLifetime: false,
+                subscriptionStartedAt: new Date().toISOString(), subscriptionEndsAt: new Date(endAtMillis).toISOString(),
+                renewalEnabled: false, paymentProvider: "manual", updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        });
+        await batch.commit();
+        return { status: "completed", requestId: requestRef.id, checkoutUrl: null };
+    }
+    const paymentSettings = await db.doc("platformPrivateSettings/subscriptionPayments").get();
+    const configuredUrl = typeof paymentSettings.data()?.checkoutUrl === "string" ? paymentSettings.data().checkoutUrl.trim() : "";
+    let checkoutUrl = null;
+    if (configuredUrl) {
+        try {
+            const url = new URL(configuredUrl);
+            if (url.protocol === "https:") {
+                url.searchParams.set("businessId", businessId);
+                url.searchParams.set("plan", planId);
+                url.searchParams.set("cycle", billingCycle);
+                url.searchParams.set("requestId", requestRef.id);
+                checkoutUrl = url.toString();
+            }
+        }
+        catch { /* Invalid configuration safely falls back to manual approval. */ }
+    }
+    return { status: checkoutUrl ? "checkout_ready" : "pending_payment", requestId: requestRef.id, checkoutUrl };
+});
+exports.completeSubscriptionPurchase = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const purchaseRef = db.doc(`subscriptionPurchaseRequests/${businessId}`);
+    const [purchase, business] = await Promise.all([purchaseRef.get(), db.doc(`businesses/${businessId}`).get()]);
+    if (!purchase.exists || !business.exists)
+        throw new https_1.HttpsError("not-found", "Paket talebi veya işletme bulunamadı.");
+    if (purchase.data()?.status !== "pending_payment")
+        throw new https_1.HttpsError("failed-precondition", "Bu paket talebi ödeme onayı beklemiyor.");
+    const planId = String(purchase.data()?.planId ?? "");
+    const cycle = purchase.data()?.billingCycle === "yearly" ? "yearly" : "monthly";
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    if (!plan.exists)
+        throw new https_1.HttpsError("not-found", "Talepteki paket artık bulunamıyor.");
+    const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
+    const affected = organizationId
+        ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(25).get()).docs
+        : [business];
+    const endsAt = new Date(Date.now() + (cycle === "yearly" ? 366 : 31) * 86_400_000).toISOString();
+    const batch = db.batch();
+    affected.forEach((document) => {
+        batch.update(document.ref, { plan: planId, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        batch.set(db.doc(`subscriptions/${document.id}`), {
+            businessId: document.id, plan: planId, status: "active", accessMode: "timed", isLifetime: false,
+            subscriptionStartedAt: new Date().toISOString(), subscriptionEndsAt: endsAt,
+            renewalEnabled: false, paymentProvider: "manual", updatedAt: firestore_1.FieldValue.serverTimestamp(), updatedBy: uid,
+        }, { merge: true });
+    });
+    batch.set(purchaseRef, { status: "completed", completedBy: uid, completedAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
+    batch.set(db.collection("platformAuditLogs").doc(), { action: "subscription.purchase_completed", businessId, plan: planId, billingCycle: cycle, affectedBranches: affected.length, actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { success: true, affectedBranches: affected.length };
+});
+exports.deleteBusinessPermanently = (0, https_1.onCall)({ region: "europe-west1", timeoutSeconds: 120, memory: "512MiB" }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    if (String(request.data?.confirmation ?? "").trim().toLocaleUpperCase("tr-TR") !== "EVET") {
+        throw new https_1.HttpsError("invalid-argument", "Kalıcı silme için EVET yazarak onaylayın.");
+    }
+    const businessRef = db.doc(`businesses/${businessId}`);
+    const business = await businessRef.get();
+    if (!business.exists)
+        throw new https_1.HttpsError("not-found", "İşletme bulunamadı.");
+    const organizationId = typeof business.data()?.organizationId === "string" ? String(business.data()?.organizationId) : "";
+    const organizationBusinesses = organizationId
+        ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(26).get()).docs
+        : [business];
+    const ownerUid = typeof business.data()?.ownerUid === "string" ? String(business.data()?.ownerUid) : "";
+    const ownerBusinesses = ownerUid
+        ? (await db.collection("businesses").where("ownerUid", "==", ownerUid).limit(101).get()).docs
+        : [];
+    const remainingOrganizationBusinesses = organizationBusinesses.filter((document) => document.id !== businessId);
+    const promotedHeadquarters = business.data()?.isHeadquarters === true
+        ? remainingOrganizationBusinesses[0]
+        : undefined;
+    await db.recursiveDelete(businessRef);
+    const batch = db.batch();
+    const slug = typeof business.data()?.slug === "string" ? String(business.data()?.slug) : "";
+    if (slug)
+        batch.delete(db.doc(`businessSlugs/${slug}`));
+    for (const path of [
+        `subscriptions/${businessId}`,
+        `subscriptionPurchaseRequests/${businessId}`,
+        `businessApprovalRequests/${businessId}`,
+        `businessProfileChangeRequests/${businessId}`,
+        `liveQueueDiscovery/${businessId}`,
+        `liveQueueWaitSummaries/${businessId}`,
+    ])
+        batch.delete(db.doc(path));
+    const relatedTokens = await db.collection("appointmentTokens").where("businessId", "==", businessId).limit(450).get();
+    relatedTokens.docs.forEach((document) => batch.delete(document.ref));
+    // Bu işlem yalnızca seçilen mağazayı siler. Kullanıcı hesabı, diğer
+    // mağazalar ve organizasyon kaydı korunur. Silinen kayıt merkez ise kalan
+    // mağazalardan biri merkez olarak devralır.
+    if (organizationId) {
+        batch.set(db.doc(`businessOrganizations/${organizationId}`), {
+            branchCount: remainingOrganizationBusinesses.length,
+            ...(promotedHeadquarters ? { headquartersBusinessId: promotedHeadquarters.id } : {}),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
+    if (promotedHeadquarters) {
+        batch.set(promotedHeadquarters.ref, { isHeadquarters: true, updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    if (ownerUid) {
+        batch.set(db.doc(`businessAccounts/${ownerUid}`), {
+            storeCount: Math.max(0, ownerBusinesses.length - 1),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
+    batch.set(db.collection("platformAuditLogs").doc(), {
+        action: "business.permanently_deleted", entityType: "business", entityId: businessId,
+        businessId, businessName: String(business.data()?.name ?? ""), organizationId: organizationId || null,
+        actorUid: uid, createdAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return { success: true };
 });
 exports.ensureAdminOwnedBusinessesLifetime = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;
@@ -2247,6 +2457,43 @@ exports.rescheduleAppointment = (0, https_1.onCall)(protectedCallableOptions, as
     });
     return { success: true };
 });
+exports.createStaffMember = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "staff");
+    const subscription = await db.doc(`subscriptions/${businessId}`).get();
+    const planId = String(subscription.data()?.plan ?? "RANDEVUGO");
+    const plan = await db.doc(`platformPlans/${planId}`).get();
+    const maxStaff = plan.exists ? Math.max(1, Math.min(1_000, Number(plan.data()?.maxStaff ?? 250))) : 250;
+    const existing = await db.collection(`businesses/${businessId}/staff`).where("isActive", "==", true).limit(maxStaff + 1).get();
+    if (existing.size >= maxStaff)
+        throw new https_1.HttpsError("resource-exhausted", `Paketiniz en fazla ${maxStaff} aktif çalışana izin veriyor.`);
+    const input = data.staff && typeof data.staff === "object" ? data.staff : {};
+    const ref = db.collection(`businesses/${businessId}/staff`).doc();
+    await ref.set({
+        fullName: requireString(input.fullName, "Ad soyad").slice(0, 80),
+        phone: requireString(input.phone, "Telefon").slice(0, 30),
+        email: requireString(input.email, "E-posta").toLowerCase().slice(0, 160),
+        position: requireString(input.position, "Pozisyon").slice(0, 80),
+        photoUrl: typeof input.photoUrl === "string" ? input.photoUrl.slice(0, 1_000) : "",
+        specialtyCategoryIds: Array.isArray(input.specialtyCategoryIds) ? input.specialtyCategoryIds.map(String).slice(0, 50) : [],
+        expertiseLevel: ["junior", "specialist", "senior", "trainer"].includes(String(input.expertiseLevel)) ? input.expertiseLevel : "specialist",
+        commissionRate: Math.max(0, Math.min(100, Number(input.commissionRate ?? 0))),
+        serviceOverrides: input.serviceOverrides && typeof input.serviceOverrides === "object" ? input.serviceOverrides : {},
+        permissions: input.permissions && typeof input.permissions === "object" ? input.permissions : {},
+        isActive: input.isActive !== false,
+        serviceIds: Array.isArray(input.serviceIds) ? input.serviceIds.map(String).slice(0, 200) : [],
+        workingHours: Array.isArray(input.workingHours) ? input.workingHours.slice(0, 7) : [],
+        leaveDates: Array.isArray(input.leaveDates) ? input.leaveDates.map(String).slice(0, 366) : [],
+        appointmentCapacity: Math.max(1, Math.min(20, Number(input.appointmentCapacity ?? 1))),
+        createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { staffId: ref.id };
+});
 exports.archiveStaff = (0, https_1.onCall)(protectedCallableOptions, async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
@@ -2254,6 +2501,7 @@ exports.archiveStaff = (0, https_1.onCall)(protectedCallableOptions, async (requ
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const staffId = requireString(data.staffId, "staffId");
+    await requirePlanEntitlement(businessId, "staff");
     const replacementStaffId = typeof data.replacementStaffId === "string" && data.replacementStaffId.trim()
         ? data.replacementStaffId.trim()
         : null;
@@ -2343,6 +2591,7 @@ exports.linkStaffAccount = (0, https_1.onCall)(protectedCallableOptions, async (
     const businessId = requireString(data.businessId, "businessId");
     const staffId = requireString(data.staffId, "staffId");
     const business = await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "staff");
     const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
     const staffSnapshot = await staffRef.get();
     if (!staffSnapshot.exists)
@@ -2418,6 +2667,7 @@ exports.getAvailableSlots = (0, https_1.onCall)(publicCallableOptions, async (re
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const serviceId = requireString(data.serviceId, "serviceId");
     const date = requireString(data.date, "date");
     const staffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
@@ -2460,6 +2710,7 @@ exports.getAvailableDates = (0, https_1.onCall)(publicCallableOptions, async (re
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const serviceId = requireString(data.serviceId, "serviceId");
     const startDate = requireString(data.startDate, "startDate");
     const endDate = requireString(data.endDate, "endDate");
@@ -2522,6 +2773,7 @@ exports.joinWaitlist = (0, https_1.onCall)(publicCallableOptions, async (request
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "waitlist");
     const serviceId = requireString(data.serviceId, "serviceId");
     const preferredDate = requireString(data.preferredDate, "preferredDate");
     const customerName = requireString(data.customerName, "customerName");
@@ -2555,6 +2807,7 @@ exports.createAppointment = (0, https_1.onCall)(publicCallableOptions, async (re
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
     const staffId = typeof data.staffId === "string" && data.staffId.trim().length > 0
         ? data.staffId.trim()
         : null;
@@ -2711,6 +2964,7 @@ exports.createDashboardAppointment = (0, https_1.onCall)(protectedCallableOption
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    await requirePlanEntitlement(businessId, "appointments");
     if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
         throw new https_1.HttpsError("invalid-argument", "Randevu saati zorunludur.");
     }
@@ -2805,6 +3059,7 @@ exports.updateDashboardAppointment = (0, https_1.onCall)(protectedCallableOption
     const businessId = requireString(data.businessId, "businessId");
     const appointmentId = requireString(data.appointmentId, "appointmentId");
     const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    await requirePlanEntitlement(businessId, "appointments");
     if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
         throw new https_1.HttpsError("invalid-argument", "Randevu tarihi ve saati zorunludur.");
     }
@@ -4456,6 +4711,8 @@ exports.assistantChat = (0, https_1.onCall)({ ...protectedCallableOptions, secre
     const scope = request.data?.scope === "platform" ? "platform" : "business";
     const businessId = typeof request.data?.businessId === "string" ? request.data.businessId.trim() : undefined;
     await requireAssistantAccess(uid, request.auth?.token.email, scope, businessId);
+    if (scope === "business" && businessId)
+        await requirePlanEntitlement(businessId, "assistant");
     const message = redactAssistantText(requireString(request.data?.message, "Mesaj")).slice(0, 1_200);
     const history = sanitizeAssistantHistory(request.data?.history);
     let context = "{}";
@@ -5550,6 +5807,7 @@ exports.joinQueue = (0, https_1.onCall)(protectedCallableOptions, async (request
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireQueueId(request.data?.businessId, "businessId");
     await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "live_queue");
     const serviceId = requireQueueId(request.data?.serviceId, "serviceId");
     const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
     const mode = staffId ? "specific_staff" : "first_available";

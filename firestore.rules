@@ -61,6 +61,15 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/businesses/$(businessId)).data.isPublished == true;
     }
 
+    function hasPlanEntitlement(businessId, entitlement) {
+      return isPlatformAdmin() ||
+        !exists(/databases/$(database)/documents/subscriptions/$(businessId)) ||
+        !exists(/databases/$(database)/documents/platformPlans/$(get(/databases/$(database)/documents/subscriptions/$(businessId)).data.plan)) ||
+        !(get(/databases/$(database)/documents/platformPlans/$(get(/databases/$(database)/documents/subscriptions/$(businessId)).data.plan)).data.entitlements is list) ||
+        get(/databases/$(database)/documents/platformPlans/$(get(/databases/$(database)/documents/subscriptions/$(businessId)).data.plan)).data.entitlements.size() == 0 ||
+        get(/databases/$(database)/documents/platformPlans/$(get(/databases/$(database)/documents/subscriptions/$(businessId)).data.plan)).data.entitlements.hasAny([entitlement]);
+    }
+
     // Protect fields that should only be changed by server/admin
     function protectedFieldsUnchanged() {
       return (!request.resource.data.diff(resource.data).affectedKeys()
@@ -114,7 +123,9 @@ service cloud.firestore {
     }
 
     match /platformPlans/{planId} {
-      allow read: if isAuthenticated();
+      // Satışa açık paketler herkese açık fiyatlar sayfasında gösterilir.
+      // Oluşturma ve değişiklik yetkisi yalnızca platform yöneticisindedir.
+      allow read: if true;
       allow write: if isPlatformAdmin();
     }
 
@@ -210,6 +221,11 @@ service cloud.firestore {
       allow create: if isPlatformAdmin();
       allow update: if isPlatformAdmin();
       allow delete: if isPlatformAdmin();
+    }
+
+    match /subscriptionPurchaseRequests/{businessId} {
+      allow read: if isPlatformAdmin() || isMember(businessId) || isBusinessOwner(businessId);
+      allow write: if false;
     }
 
     // ────────────────────────────────────────────────
@@ -366,31 +382,31 @@ service cloud.firestore {
       // Services (public read for storefront)
       match /services/{serviceId} {
         allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId) || isPlatformAdmin();
+        allow write: if (canManage(businessId) && hasPlanEntitlement(businessId, "services")) || isPlatformAdmin();
       }
 
       // Service Categories (public read, owner/manager write)
       match /serviceCategories/{categoryId} {
         allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
+        allow write: if ((canManage(businessId) || isBusinessOwner(businessId)) && hasPlanEntitlement(businessId, "services")) || isPlatformAdmin();
       }
 
       // Staff (public read for storefront)
       match /staff/{staffId} {
         allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId) || isPlatformAdmin();
+        allow write: if (canManage(businessId) && hasPlanEntitlement(businessId, "staff")) || isPlatformAdmin();
       }
 
       // Working Hours (public read for availability)
       match /workingHours/{hourId} {
         allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId) || isBusinessOwner(businessId) || isPlatformAdmin();
+        allow write: if ((canManage(businessId) || isBusinessOwner(businessId)) && hasPlanEntitlement(businessId, "staff")) || isPlatformAdmin();
       }
 
       // Special Days (holidays, leaves, custom)
       match /specialDays/{dayId} {
         allow read: if isPublicBusiness(businessId) || canOperate(businessId) || isPlatformAdmin();
-        allow write: if canManage(businessId) || isPlatformAdmin();
+        allow write: if (canManage(businessId) && hasPlanEntitlement(businessId, "staff")) || isPlatformAdmin();
       }
 
       // Appointments — created via Cloud Function only
@@ -401,7 +417,7 @@ service cloud.firestore {
           (isAuthenticated() && resource.data.customerId == uid());
         allow create: if false; // Only via Cloud Function
         allow update: if isPlatformAdmin() ||
-          (canManage(businessId) &&
+          (canManage(businessId) && hasPlanEntitlement(businessId, "appointments") &&
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(["status", "paymentStatus", "primaryServicePrice",
                "primaryServiceDurationMinutes", "additionalServices", "servicePrice",
@@ -448,7 +464,7 @@ service cloud.firestore {
       // Customers (private CRM data)
       match /customers/{customerId} {
         allow read: if canManage(businessId) || staffPermission(businessId, "viewCustomers") || isPlatformAdmin();
-        allow write: if canManage(businessId) || isPlatformAdmin();
+        allow write: if (canManage(businessId) && hasPlanEntitlement(businessId, "customers")) || isPlatformAdmin();
       }
 
       // Reviews are created and moderated by callable Cloud Functions.
@@ -456,7 +472,7 @@ service cloud.firestore {
         allow read: if resource.data.isVisible == true ||
           canManage(businessId) || isPlatformAdmin();
         allow create: if false;
-        allow update: if canManage(businessId) &&
+        allow update: if canManage(businessId) && hasPlanEntitlement(businessId, "reviews") &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(["ownerReply", "ownerReplyAt", "updatedAt"]);
         allow delete: if isPlatformAdmin();
@@ -471,19 +487,19 @@ service cloud.firestore {
       // Event-driven business automation rules
       match /automationRules/{ruleId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow create, update, delete: if canManage(businessId) || isPlatformAdmin();
+        allow create, update, delete: if (canManage(businessId) && hasPlanEntitlement(businessId, "automations")) || isPlatformAdmin();
       }
 
       // Products and package templates are business-managed catalog data.
       match /products/{productId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow create, update: if canManage(businessId) || staffPermission(businessId, "manageCatalog") || isPlatformAdmin();
-        allow delete: if canManage(businessId) || staffPermission(businessId, "manageCatalog") || isPlatformAdmin();
+        allow create, update: if ((canManage(businessId) || staffPermission(businessId, "manageCatalog")) && hasPlanEntitlement(businessId, "finance")) || isPlatformAdmin();
+        allow delete: if ((canManage(businessId) || staffPermission(businessId, "manageCatalog")) && hasPlanEntitlement(businessId, "finance")) || isPlatformAdmin();
       }
 
       match /servicePackages/{packageId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();
-        allow create, update, delete: if canManage(businessId) || staffPermission(businessId, "managePackages") || isPlatformAdmin();
+        allow create, update, delete: if ((canManage(businessId) || staffPermission(businessId, "managePackages")) && hasPlanEntitlement(businessId, "packages")) || isPlatformAdmin();
       }
 
       // Package sales, receipts and loyalty balances are finalized by callable
@@ -509,7 +525,7 @@ service cloud.firestore {
 
       match /financeTransactions/{transactionId} {
         allow read: if canManage(businessId) || staffPermission(businessId, "manageFinance") || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
-        allow create: if (canManage(businessId) || staffPermission(businessId, "manageFinance") || isPlatformAdmin()) &&
+        allow create: if ((canManage(businessId) || staffPermission(businessId, "manageFinance")) && hasPlanEntitlement(businessId, "finance") || isPlatformAdmin()) &&
           request.resource.data.type == "expense" &&
           request.resource.data.amount is number && request.resource.data.amount >= 0 &&
           request.resource.data.keys().hasOnly([

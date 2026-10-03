@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { useBusinessContext } from "@/features/businesses/business-context";
-import { ArrowDown, ArrowUp, Check, CirclePlus, Clock3, Cloud, CloudOff, Compass, Eye, EyeOff, ExternalLink, Gauge, LayoutPanelTop, LoaderCircle, LogOut, MousePointer2, Palette, RotateCcw, Sparkles, Store, UserRound, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, CirclePlus, Clock3, Cloud, CloudOff, Compass, Eye, EyeOff, ExternalLink, Gauge, LayoutPanelTop, LoaderCircle, LogOut, MousePointer2, Palette, RotateCcw, Sparkles, Store, UserRound, X, Zap } from "lucide-react";
 import { NotificationCenter } from "@/components/dashboard/notification-center";
 import { DashboardCommandCenter } from "@/components/dashboard/command-center";
 import { getDashboardAppearancePreferences, saveDashboardAppearancePreferences } from "@/features/users/appearance-preferences-repository";
+import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 
 const dashboardSkins = [
   { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#061d15", "#0b6b45", "#39c98b", "#bdf65e"] },
@@ -42,6 +43,7 @@ const dashboardCursors = [
 
 type DashboardCursor = (typeof dashboardCursors)[number]["id"];
 type AppearanceSyncState = "loading" | "saved" | "offline";
+type AppearanceSection = "colors" | "behavior" | "cursor" | "layout";
 
 const defaultDashboardModules = [
   { id: "command", label: "Komuta merkezi" },
@@ -57,10 +59,12 @@ type DashboardModulePreference = { id: DashboardModuleId; enabled: boolean };
 export function DashboardTopBar() {
   const { user } = useAuth();
   const { businesses, businessId, setBusinessId, access } = useBusinessContext();
+  const { can, plan } = useSubscriptionPlan();
   const isStaff = access?.role === "staff";
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   const router = useRouter();
   const [skinOpen, setSkinOpen] = useState(false);
+  const [appearanceSection, setAppearanceSection] = useState<AppearanceSection | null>("colors");
   const [skin, setSkin] = useState<DashboardSkin>("emerald");
   const [density, setDensity] = useState<DashboardDensity>("comfortable");
   const [motion, setMotion] = useState<DashboardMotion>("alive");
@@ -235,19 +239,31 @@ export function DashboardTopBar() {
               ))}
             </select>
           )}
-          {!isStaff && businesses.length < 10 && <Link href="/dashboard/subeler" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni şube</span></Link>}
+          {!isStaff && can("branches") && businesses.length < (plan?.maxStores ?? 10) && <Link href="/dashboard/subeler" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni şube</span></Link>}
           {activeBusiness?.status === "pending_review" && <span className="command-link command-pending text-amber-700"><Clock3 size={16} /><span>Süper admin onayı bekleniyor</span></span>}
           {!isStaff && <NotificationCenter key={businessId} businessId={businessId}/>}
           <DashboardCommandCenter />
           <div className="dashboard-skin-picker" ref={skinPanelRef}>
             <button type="button" className="command-link dashboard-skin-trigger" onClick={() => setSkinOpen((value) => !value)} aria-expanded={skinOpen} aria-label="Panel görünümünü değiştir"><Palette size={17}/><span>Görünüm</span></button>
             <div className={`dashboard-skin-menu ${skinOpen ? "open" : ""}`} role="dialog" aria-label="Panel görünümü ayarları">
-              <header><span><Sparkles size={14}/> Görünüm stüdyosu</span><small>Tercihlerin hesabına kaydedilir ve giriş yaptığın tüm cihazlarda uygulanır.</small></header>
+              <header><span><Sparkles size={14}/> Görünüm stüdyosu</span><small>Tercihlerin hesabına kaydedilir ve giriş yaptığın tüm cihazlarda uygulanır.</small><button type="button" className="dashboard-skin-close" onClick={() => setSkinOpen(false)} aria-label="Görünüm stüdyosunu kapat"><X size={17}/></button></header>
               <div className="dashboard-skin-preview" aria-hidden="true"><i/><span><b>{dashboardSkins.find((item) => item.id === skin)?.name}</b><small>Canlı panel önizlemesi</small></span><em><i/><i/><i/></em></div>
-              <section className="dashboard-skin-section"><div className="dashboard-skin-section-title"><Palette size={13}/><span>Renk atmosferi</span><small>{dashboardSkins.length} palet</small></div><div className="dashboard-skin-grid">{dashboardSkins.map((item) => <button type="button" key={item.id} onClick={() => chooseSkin(item.id)} className={skin === item.id ? "active" : ""} aria-pressed={skin === item.id}><i>{item.colors.map((color) => <b key={color} style={{background:color}}/>)}</i><span>{item.name}<small>{item.note}</small></span>{skin === item.id && <Check size={15}/>}</button>)}</div></section>
-              <section className="dashboard-skin-controls"><div><span><Gauge size={13}/> Yerleşim</span><div className="dashboard-segmented"><button type="button" className={density === "comfortable" ? "active" : ""} onClick={() => setDensity("comfortable")}>Rahat</button><button type="button" className={density === "compact" ? "active" : ""} onClick={() => setDensity("compact")}>Kompakt</button></div></div><div><span><Zap size={13}/> Hareket</span><div className="dashboard-segmented"><button type="button" className={motion === "alive" ? "active" : ""} onClick={() => setMotion("alive")}>Canlı</button><button type="button" className={motion === "calm" ? "active" : ""} onClick={() => setMotion("calm")}>Sakin</button></div></div></section>
-              <section className="dashboard-cursor-section"><div className="dashboard-skin-section-title"><MousePointer2 size={13}/><span>Mouse imleci</span><small>Normal + 5 özel</small></div><div className="dashboard-cursor-grid">{dashboardCursors.map((item) => <button type="button" key={item.id} className={cursor === item.id ? "active" : ""} onClick={() => setCursor(item.id)} aria-pressed={cursor === item.id}><i data-cursor-preview={item.id}><b/><em/></i><span>{item.name}<small>{item.note}</small></span>{cursor === item.id && <Check size={14}/>}</button>)}</div></section>
-              <section className="dashboard-module-editor"><div className="dashboard-skin-section-title"><LayoutPanelTop size={13}/><span>Ana panel düzeni</span><small>Sırala veya gizle</small></div><div>{modulePreferences.map((item, index) => <article key={item.id}><button type="button" onClick={() => setModulePreferences((items) => items.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={`${defaultDashboardModules.find((module) => module.id === item.id)?.label} modülünü ${item.enabled ? "gizle" : "göster"}`}>{item.enabled ? <Eye size={14}/> : <EyeOff size={14}/>}</button><span>{defaultDashboardModules.find((module) => module.id === item.id)?.label}</span><div><button type="button" disabled={index === 0} onClick={() => moveModule(index, -1)} aria-label="Yukarı taşı"><ArrowUp size={13}/></button><button type="button" disabled={index === modulePreferences.length - 1} onClick={() => moveModule(index, 1)} aria-label="Aşağı taşı"><ArrowDown size={13}/></button></div></article>)}</div></section>
+              <section className={`dashboard-skin-accordion ${appearanceSection === "colors" ? "open" : ""}`}>
+                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "colors"} onClick={() => setAppearanceSection((value) => value === "colors" ? null : "colors")}><i><Palette size={14}/></i><span><b>Renk atmosferi</b><small>{dashboardSkins.length} paletten görünümünü seç</small></span><ChevronDown size={16}/></button>
+                {appearanceSection === "colors" && <div className="dashboard-skin-accordion__content"><div className="dashboard-skin-grid">{dashboardSkins.map((item) => <button type="button" key={item.id} onClick={() => chooseSkin(item.id)} className={skin === item.id ? "active" : ""} aria-pressed={skin === item.id}><i>{item.colors.map((color) => <b key={color} style={{background:color}}/>)}</i><span>{item.name}<small>{item.note}</small></span>{skin === item.id && <Check size={15}/>}</button>)}</div></div>}
+              </section>
+              <section className={`dashboard-skin-accordion ${appearanceSection === "behavior" ? "open" : ""}`}>
+                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "behavior"} onClick={() => setAppearanceSection((value) => value === "behavior" ? null : "behavior")}><i><Gauge size={14}/></i><span><b>Panel davranışı</b><small>Yerleşim ve hareket yoğunluğu</small></span><ChevronDown size={16}/></button>
+                {appearanceSection === "behavior" && <div className="dashboard-skin-accordion__content"><div className="dashboard-skin-controls"><div><span><Gauge size={13}/> Yerleşim</span><div className="dashboard-segmented"><button type="button" className={density === "comfortable" ? "active" : ""} onClick={() => setDensity("comfortable")}>Rahat</button><button type="button" className={density === "compact" ? "active" : ""} onClick={() => setDensity("compact")}>Kompakt</button></div></div><div><span><Zap size={13}/> Hareket</span><div className="dashboard-segmented"><button type="button" className={motion === "alive" ? "active" : ""} onClick={() => setMotion("alive")}>Canlı</button><button type="button" className={motion === "calm" ? "active" : ""} onClick={() => setMotion("calm")}>Sakin</button></div></div></div></div>}
+              </section>
+              <section className={`dashboard-skin-accordion ${appearanceSection === "cursor" ? "open" : ""}`}>
+                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "cursor"} onClick={() => setAppearanceSection((value) => value === "cursor" ? null : "cursor")}><i><MousePointer2 size={14}/></i><span><b>Mouse imleci</b><small>Normal ve 5 özel imleç</small></span><ChevronDown size={16}/></button>
+                {appearanceSection === "cursor" && <div className="dashboard-skin-accordion__content"><div className="dashboard-cursor-grid">{dashboardCursors.map((item) => <button type="button" key={item.id} className={cursor === item.id ? "active" : ""} onClick={() => setCursor(item.id)} aria-pressed={cursor === item.id}><i data-cursor-preview={item.id}><b/><em/></i><span>{item.name}<small>{item.note}</small></span>{cursor === item.id && <Check size={14}/>}</button>)}</div></div>}
+              </section>
+              <section className={`dashboard-skin-accordion ${appearanceSection === "layout" ? "open" : ""}`}>
+                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "layout"} onClick={() => setAppearanceSection((value) => value === "layout" ? null : "layout")}><i><LayoutPanelTop size={14}/></i><span><b>Ana panel düzeni</b><small>Modülleri sırala veya gizle</small></span><ChevronDown size={16}/></button>
+                {appearanceSection === "layout" && <div className="dashboard-skin-accordion__content"><div className="dashboard-module-editor"><div>{modulePreferences.map((item, index) => <article key={item.id}><button type="button" onClick={() => setModulePreferences((items) => items.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={`${defaultDashboardModules.find((module) => module.id === item.id)?.label} modülünü ${item.enabled ? "gizle" : "göster"}`}>{item.enabled ? <Eye size={14}/> : <EyeOff size={14}/>}</button><span>{defaultDashboardModules.find((module) => module.id === item.id)?.label}</span><div><button type="button" disabled={index === 0} onClick={() => moveModule(index, -1)} aria-label="Yukarı taşı"><ArrowUp size={13}/></button><button type="button" disabled={index === modulePreferences.length - 1} onClick={() => moveModule(index, 1)} aria-label="Aşağı taşı"><ArrowDown size={13}/></button></div></article>)}</div></div></div>}
+              </section>
               <footer><span className={`appearance-sync ${syncState}`}>{syncState === "loading" ? <LoaderCircle size={13}/> : syncState === "offline" ? <CloudOff size={13}/> : <Cloud size={13}/>} {syncState === "loading" ? "Hesaba kaydediliyor" : syncState === "offline" ? "Yerelde saklandı" : "Hesabınla senkronize"}</span><button type="button" onClick={resetAppearance}><RotateCcw size={13}/> Sıfırla</button></footer>
             </div>
           </div>
@@ -262,7 +278,7 @@ export function DashboardTopBar() {
               router.push("/isletmeler/giris");
             }}
           >
-            <LogOut size={16} /><span>Çıkış</span>
+            <LogOut size={16} /><span>Çıkış yap</span>
           </Button>
         </div>
       </div>

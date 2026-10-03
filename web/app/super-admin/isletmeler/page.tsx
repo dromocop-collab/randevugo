@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/states";
+import { listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 
 interface BusinessItem {
   id: string;
@@ -40,6 +41,7 @@ interface BusinessItem {
 
 export default function SuperAdminBusinessesPage() {
   const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
+  const [plans, setPlans] = useState<PlatformPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -85,6 +87,10 @@ export default function SuperAdminBusinessesPage() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    listPlatformPlans().then(setPlans).catch(() => setPlans([]));
   }, []);
 
   async function loadBusinesses() {
@@ -286,9 +292,8 @@ export default function SuperAdminBusinessesPage() {
                       disabled={busyId === biz.id}
                       className="rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-2 py-1.5 text-xs text-[var(--text-1)]"
                     >
-                      <option value="FREE">FREE</option>
-                      <option value="PRO">PRO</option>
-                      <option value="BUSINESS">BUSINESS</option>
+                      {!plans.some((plan) => plan.id === biz.plan) && <option value={biz.plan}>{biz.plan} (eski)</option>}
+                      {plans.filter((plan) => plan.isActive).map((plan) => <option key={plan.id} value={plan.id}>{plan.label}</option>)}
                     </select>
                     {confirmAction?.id === biz.id ? (
                       <div className="flex items-center gap-1">

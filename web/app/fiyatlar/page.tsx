@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight, ArrowUpRight, BadgeCheck, BarChart3, CalendarCheck2, Check,
   CircleCheckBig, Clock3, Gift, Headphones, ShieldCheck, Sparkles, Store,
@@ -8,6 +9,8 @@ import {
 } from "lucide-react";
 import { BusinessPage } from "@/components/marketing/business-shell";
 import { PLAN_FEATURE_LIST, PLAN_PRICE } from "@/constants/plans";
+import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
+import { listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 import { useAuth } from "@/hooks/use-auth";
 
 const featureGroups = [
@@ -17,52 +20,81 @@ const featureGroups = [
   { icon: Sparkles, title: "Sıradaki adımı bilin", text: "Rovi günün akışını özetlesin, bekleyen işleri göstersin ve işletmenize uygun öneriler sunsun.", items: ["Günlük özet", "Akıllı öneriler", "Kurulum rehberi"] },
 ];
 
-const faqs = [
-  ["Lansmana özel 3 ay ücretsiz dönem nasıl çalışır?", "İşletme hesabınızı lansman döneminde açtığınızda tüm özellikler 90 gün boyunca ücretsiz kullanıma açılır. Başlamak için kredi kartı gerekmez."],
-  ["Ücretsiz dönemde özellik kısıtlaması var mı?", "Hayır. Takvim, müşteri yönetimi, kasa, paketler, raporlar, mağaza ve işletme asistanı dahil plan kapsamındaki özellikleri deneyebilirsiniz."],
-  ["Ücretsiz dönem bitince hangi seçenekler var?", `Aylık ${PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺ veya iki ay avantaj sağlayan yıllık ${PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺ seçeneklerinden size uygun olanla devam edebilirsiniz.`],
-  ["Çalışan, müşteri veya randevu sınırı var mı?", "Müşteri ve randevu sayısı sınırsızdır. Tek başınıza başlayabilir, işletmeniz büyüdükçe ekibinizi ve şubelerinizi ekleyebilirsiniz."],
-  ["Mevcut müşteri kayıtlarımı taşıyabilir miyim?", "Evet. Müşteri listenizi sisteme aktarabilir, hızlı kurulum rehberinden ve ekibimizin desteğinden yararlanabilirsiniz."],
-];
+const FALLBACK_PLAN: PlatformPlan = {
+  id: "RANDEVUGO", label: "SeninRandevun", yearlyPrice: PLAN_PRICE.yearly,
+  monthlyPrice: PLAN_PRICE.monthly, currency: PLAN_PRICE.currency, trialDays: PLAN_PRICE.trialDays,
+  maxStores: 3, maxStaff: 250, isActive: true, isRecommended: true,
+  description: "Tüm randevu operasyonunu tek merkezden yönetin.",
+  features: [...PLAN_FEATURE_LIST], entitlements: [...ALL_SUBSCRIPTION_ENTITLEMENTS],
+};
 
 export default function PricingPage() {
   const { user, status } = useAuth();
+  const [plans, setPlans] = useState<PlatformPlan[]>([FALLBACK_PLAN]);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly");
   const signedIn = status === "authenticated" && Boolean(user);
   const primaryHref = signedIn ? "/dashboard" : "/isletmeler/kayit";
-  const primaryLabel = signedIn ? "Panelime devam et" : "3 ay ücretsiz başla";
+  const primaryLabel = signedIn ? "Panelime devam et" : "Ücretsiz denemeyi başlat";
+  const featuredPlan = plans.find((plan) => plan.isRecommended) ?? plans[0] ?? FALLBACK_PLAN;
+  const maximumTrialDays = Math.max(0, ...plans.map((plan) => plan.trialDays));
+  const allPublishedFeatures = useMemo(() => plans.flatMap((plan) => {
+    const entitlementFeatures = (plan.entitlements.length ? plan.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS).map(entitlementLabel);
+    return [...plan.features, ...entitlementFeatures];
+  }).filter((feature, index, values) => values.indexOf(feature) === index), [plans]);
+  const faqs = useMemo(() => [
+    ["Ücretsiz deneme dönemi nasıl çalışır?", `Seçtiğiniz pakette ${maximumTrialDays || featuredPlan.trialDays} güne kadar ücretsiz deneme sunulur. Başlamak için kredi kartı gerekmez.`],
+    ["Ücretsiz dönemde özellik kısıtlaması var mı?", "Deneme boyunca seçtiğiniz paketin kapsamındaki özellikleri kullanabilirsiniz. Her paketin özellikleri fiyat kartında açıkça listelenir."],
+    ["Ücretsiz dönem bitince hangi seçenekler var?", "Aylık veya yıllık ödeme seçeneğini tercih edebilir, işletmeniz büyüdükçe paketinizi değiştirebilirsiniz."],
+    ["Çalışan ve şube sınırı var mı?", "Her paketin çalışan ve şube kapasitesi farklıdır. Güncel limitleri paket kartlarından karşılaştırabilirsiniz."],
+    ["Mevcut müşteri kayıtlarımı taşıyabilir miyim?", "Evet. Müşteri listenizi sisteme aktarabilir, hızlı kurulum rehberinden ve ekibimizin desteğinden yararlanabilirsiniz."],
+  ], [featuredPlan.trialDays, maximumTrialDays]);
+
+  useEffect(() => {
+    let active = true;
+    listPlatformPlans()
+      .then((rows) => {
+        const available = rows.filter((plan) => plan.isActive);
+        if (active && available.length) setPlans(available);
+      })
+      .catch(() => { /* Güvenli varsayılan paket görünmeye devam eder. */ });
+    return () => { active = false; };
+  }, []);
+
+  const pricingJsonLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "SeninRandevun",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    url: "https://seninrandevun.com/fiyatlar",
+    offers: plans.flatMap((plan) => [
+      { "@type": "Offer", name: `${plan.label} aylık`, price: plan.monthlyPrice, priceCurrency: plan.currency, availability: "https://schema.org/InStock" },
+      { "@type": "Offer", name: `${plan.label} yıllık`, price: plan.yearlyPrice, priceCurrency: plan.currency, availability: "https://schema.org/InStock" },
+    ]),
+    featureList: plans.flatMap((plan) => plan.entitlements.map(entitlementLabel)).filter((value, index, values) => values.indexOf(value) === index),
+  }), [plans]);
 
   return <BusinessPage className="pricing-v2"><main>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd).replace(/</g, "\\u003c") }} />
     <section className="pricing-hero">
-      <div className="pricing-hero__eyebrow"><Gift size={15}/> LANSMANA ÖZEL · 90 GÜN ÜCRETSİZ</div>
+      <div className="pricing-hero__eyebrow"><Gift size={15}/> LANSMANA ÖZEL · {maximumTrialDays} GÜNE KADAR ÜCRETSİZ</div>
       <h1>Randevularınız, müşterileriniz<br/><em>ve kasanız tek yerde.</em></h1>
       <p>Dağınık defterler ve ayrı uygulamalar yerine işletmenizi tek ekrandan yönetin. Daha az operasyon yükü, daha düzenli ve daha net bir gün.</p>
         <div className="pricing-hero__actions"><Link href={primaryHref}>{primaryLabel}<ArrowUpRight size={18}/></Link><a href="#urun-onizleme">Nasıl çalıştığını gör<ArrowRight size={17}/></a></div>
-      <div className="pricing-hero__trust"><span><CircleCheckBig/> Kredi kartı gerekmez</span><span><CircleCheckBig/> Kolay kurulum</span><span><CircleCheckBig/> Tüm özellikler açık</span></div>
+      <div className="pricing-hero__trust"><span><CircleCheckBig/> Kredi kartı gerekmez</span><span><CircleCheckBig/> Kolay kurulum</span><span><CircleCheckBig/> İhtiyacına uygun paket</span></div>
     </section>
 
-    <section className="pricing-stage" aria-label="Fiyatlandırma">
-      <article className="pricing-card">
-        <div className="pricing-card__campaign"><span><Sparkles size={14}/> LANSMAN FIRSATI</span><b>İlk 3 ay bizden</b></div>
-        <div className="pricing-card__free"><strong>0</strong><span><b>₺</b><small>90 gün boyunca</small></span></div>
-        <p className="pricing-card__lead">İşletme akışınızı kurun ve tüm sistemi kendi çalışma düzeninizle ücretsiz deneyin.</p>
-        <div className="pricing-card__options">
-          <div><small>AYLIK PLAN</small><p><b>{PLAN_PRICE.monthly.toLocaleString("tr-TR")} ₺</b><span>/ ay</span></p><em>Esnek kullanım</em></div>
-          <div className="is-highlighted"><span className="pricing-save">2 AY BİZDEN</span><small>YILLIK PLAN</small><p><b>{PLAN_PRICE.yearly.toLocaleString("tr-TR")} ₺</b><span>/ yıl</span></p><em>Ayda yaklaşık {PLAN_PRICE.monthlyEquivalent} ₺</em></div>
-        </div>
-        <Link className="pricing-card__cta" href={primaryHref}><span>{primaryLabel}<small>Kurulum ücreti yok</small></span><ArrowUpRight size={21}/></Link>
-        <div className="pricing-card__foot"><ShieldCheck size={16}/><span>Kart bilgisi istemiyoruz. 90 gün sonunda siz seçmeden ücretli plan başlamaz.</span></div>
-      </article>
+    <section className="pricing-plan-stage" aria-label="Dinamik fiyatlandırma paketleri">
+      <div className="pricing-plan-stage__head"><div><span>İŞLETMENİZE UYGUN PAKET</span><h2>İhtiyacınız kadarını seçin.</h2><p>Paketler, fiyatlar ve kullanım hakları yönetim panelinden güncel olarak yayınlanır.</p></div><div className="pricing-cycle" aria-label="Ödeme dönemi"><button type="button" className={billingCycle === "monthly" ? "is-active" : ""} onClick={() => setBillingCycle("monthly")}>Aylık</button><button type="button" className={billingCycle === "yearly" ? "is-active" : ""} onClick={() => setBillingCycle("yearly")}>Yıllık</button></div></div>
+      <div className="pricing-plan-grid">{plans.map((plan) => <PublicPlanCard key={plan.id} plan={plan} cycle={billingCycle} href={primaryHref} ctaLabel={primaryLabel}/>)}</div>
+      <div className="pricing-plan-assurance"><ShieldCheck/><p><b>Güvenli ve şeffaf başlangıç</b><span>Ücret tahsil edilmeden ücretli paket açılmaz. Paket değişiminde mevcut işletme kayıtlarınız korunur.</span></p></div>
+    </section>
 
-      <aside className="pricing-value-panel">
-        <div className="pricing-value-panel__head"><span>TEK PAKETTE TAM OPERASYON</span><h2>Birden fazla araç yerine<br/>tek çalışma merkezi.</h2></div>
-        <div className="pricing-value-list">
-          <article><i><CalendarCheck2/></i><div><b>Randevularınız düzenli</b><p>Takvim, ekip ve müşteriler aynı akışta çalışır.</p></div><Check/></article>
-          <article><i><WalletCards/></i><div><b>Kasanız kontrol altında</b><p>Tahsilat, paket, seans ve stok birlikte güncellenir.</p></div><Check/></article>
-          <article><i><BarChart3/></i><div><b>Kararlarınız veriye dayalı</b><p>Nelerin iyi çalıştığını ve neyi düzenlemeniz gerektiğini görün.</p></div><Check/></article>
-          <article><i><Headphones/></i><div><b>Kurulumda yalnız değilsiniz</b><p>Akıllı rehber ve destek merkezi her adımda yanınızda.</p></div><Check/></article>
-        </div>
-        <div className="pricing-value-panel__numbers"><div><b>Tek kişi</b><span>kolayca başlayın</span></div><div><b>Ekibinizle</b><span>birlikte büyüyün</span></div><div><b>Tek ekran</b><span>her şeyi yönetin</span></div></div>
-      </aside>
+    <section className="pricing-value-strip" aria-label="SeninRandevun avantajları">
+      <article><i><CalendarCheck2/></i><div><b>Randevularınız düzenli</b><p>Takvim, ekip ve müşteriler aynı akışta çalışır.</p></div></article>
+      <article><i><WalletCards/></i><div><b>Kasanız kontrol altında</b><p>Tahsilat, paket ve seans birlikte güncellenir.</p></div></article>
+      <article><i><BarChart3/></i><div><b>Kararlarınız veriye dayalı</b><p>Performansı ve büyümeyi net biçimde görün.</p></div></article>
+      <article><i><Headphones/></i><div><b>Kurulumda yalnız değilsiniz</b><p>Akıllı rehber ve destek merkezi yanınızda.</p></div></article>
     </section>
 
     <section className="pricing-steps" aria-label="Başlangıç adımları">
@@ -82,16 +114,32 @@ export default function PricingPage() {
     <section className="pricing-features" id="paket-kapsami">
       <div className="pricing-section-heading"><div className="section-kicker">DÖRT TEMEL SONUÇ</div><h2>Daha az uğraşın.<br/>İşletmenize odaklanın.</h2><p>Uzun özellik listeleri yerine her gün doğrudan kullanacağınız dört temel fayda.</p></div>
       <div className="pricing-feature-grid">{featureGroups.map(({ icon: Icon, title, text, items }) => <article key={title}><i><Icon/></i><h3>{title}</h3><p>{text}</p><ul>{items.map(item => <li key={item}><BadgeCheck/>{item}</li>)}</ul></article>)}</div>
-      <details className="pricing-all-features"><summary>Plan kapsamındaki tüm özellikleri gör <span>+</span></summary><div>{PLAN_FEATURE_LIST.map(feature => <span key={feature}><Check/>{feature}</span>)}</div></details>
+      <details className="pricing-all-features"><summary>Yayınlanan paketlerdeki tüm özellikleri gör <span>+</span></summary><div>{allPublishedFeatures.map(feature => <span key={feature}><Check/>{feature}</span>)}</div></details>
     </section>
 
     <section className="pricing-promise">
       <div><span>RİSKSİZ BAŞLANGIÇ</span><h2>Önce işletmenizde deneyin.<br/>Değerini görün, sonra karar verin.</h2></div>
-      <div><p><strong>90 gün</strong> ücretsiz kullanım</p><p><strong>0 ₺</strong> kurulum maliyeti</p><p><strong>Siz seçmeden</strong> ücretli plan başlamaz</p></div>
+      <div><p><strong>{maximumTrialDays} güne kadar</strong> ücretsiz kullanım</p><p><strong>0 ₺</strong> kurulum maliyeti</p><p><strong>Siz seçmeden</strong> ücretli plan başlamaz</p></div>
     </section>
 
     <section className="pricing-faq"><div className="pricing-section-heading"><div className="section-kicker">MERAK EDİLENLER</div><h2>Sık sorulan sorular.</h2></div><div>{faqs.map(([question, answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div></section>
 
-    <section className="pricing-final-cta"><div><span><Sparkles/> LANSMANA ÖZEL</span><h2>İşletme sisteminizi kurmaya<br/>bugün başlayın.</h2><p>İlk 3 ay ücretsiz. Kredi kartı ve kurulum ücreti yok.</p></div><Link href={primaryHref}>{primaryLabel}<ArrowUpRight/></Link></section>
+    <section className="pricing-final-cta"><div><span><Sparkles/> LANSMANA ÖZEL</span><h2>İşletme sisteminizi kurmaya<br/>bugün başlayın.</h2><p>{maximumTrialDays} güne kadar ücretsiz. Kredi kartı ve kurulum ücreti yok.</p></div><Link href={primaryHref}>{primaryLabel}<ArrowUpRight/></Link></section>
   </main></BusinessPage>;
+}
+
+function PublicPlanCard({ plan, cycle, href, ctaLabel }: { plan: PlatformPlan; cycle: "monthly" | "yearly"; href: string; ctaLabel: string }) {
+  const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+  const currency = plan.currency === "TRY" ? "₺" : plan.currency;
+  const entitlements = plan.entitlements.length ? plan.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS;
+  const visibleFeatures = plan.features.length ? plan.features.slice(0, 6) : entitlements.slice(0, 6).map(entitlementLabel);
+  const monthlyEquivalent = plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : 0;
+  return <article className={`pricing-public-plan ${plan.isRecommended ? "is-recommended" : ""}`}>
+    {plan.isRecommended && <span className="pricing-public-plan__recommended"><Sparkles size={12}/> EN ÇOK TERCİH EDİLEN</span>}
+    <div className="pricing-public-plan__body">
+      <div className="pricing-public-plan__summary"><div className="pricing-public-plan__top"><span>{plan.id}</span><h3>{plan.label}</h3><p>{plan.description || "İşletmenizin ihtiyaçlarına göre hazırlanmış yönetim paketi."}</p></div><div className="pricing-public-plan__price"><b>{price.toLocaleString("tr-TR")} {currency}</b><span>/ {cycle === "yearly" ? "yıl" : "ay"}</span>{cycle === "yearly" && monthlyEquivalent > 0 && <small>Ayda yaklaşık {monthlyEquivalent.toLocaleString("tr-TR")} {currency}</small>}</div><div className="pricing-public-plan__limits"><span><Store/> {plan.maxStores} mağaza</span><span><UsersRound/> {plan.maxStaff} çalışan</span><span><Gift/> {plan.trialDays} gün deneme</span></div></div>
+      <div className="pricing-public-plan__benefits"><span className="pricing-public-plan__benefits-label">PAKETLE GELENLER</span><ul>{visibleFeatures.map((feature) => <li key={feature}><span><Check/></span>{feature}</li>)}</ul><details><summary>Tüm paket yetkilerini gör <span>+</span></summary><div>{entitlements.map((key) => <p key={key}><BadgeCheck/>{entitlementLabel(key)}</p>)}</div></details></div>
+    </div>
+    <Link href={href}>{ctaLabel}<ArrowUpRight size={18}/></Link>
+  </article>;
 }

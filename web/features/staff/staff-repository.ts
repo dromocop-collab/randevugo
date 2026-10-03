@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -27,12 +26,11 @@ export async function createStaff(
   businessId: string,
   input: Omit<Staff, "id" | "createdAt" | "updatedAt">
 ): Promise<void> {
-  const db = getDb();
-  await addDoc(collection(db, "businesses", businessId, "staff"), {
-    ...input,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  const callable = httpsCallable<{ businessId: string; staff: typeof input }, { staffId: string }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "createStaffMember",
+  );
+  await callable({ businessId, staff: input });
 }
 
 export async function updateStaff(
