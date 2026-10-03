@@ -23400,6 +23400,16 @@ body {
   backdrop-filter: blur(24px) saturate(1.25)
 }
 
+.dashboard-bottom-primary {
+  align-items: center
+}
+
+.dashboard-bottom-primary>li,
+.dashboard-bottom-primary .dashboard-bottom-nav-link {
+  height: 64px;
+  min-height: 64px
+}
+
 .dashboard-bottom-nav:before {
   content: "";
   position: absolute;
@@ -23483,7 +23493,7 @@ body {
   background: linear-gradient(145deg, #dcff78, #bdf046);
   color: #173424;
   box-shadow: 0 10px 24px rgb(0 28 18/.24), inset 0 1px 0 rgb(255 255 255/.72);
-  transform: translateY(-1px)
+  transform: none
 }
 
 .dashboard-bottom-nav-link.active:after {

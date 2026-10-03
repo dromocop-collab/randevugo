@@ -210,6 +210,7 @@ export function DashboardBottomNav() {
                   href={item.href}
                   data-dashboard-tour={item.href === "/dashboard" ? "overview" : item.href.replace("/dashboard/", "")}
                   aria-current={active ? "page" : undefined}
+                  onClick={() => setMoreOpen(false)}
                   className={cn(
                     "dashboard-bottom-nav-link",
                     active ? "active" : ""
