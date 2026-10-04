@@ -1,5 +1,6 @@
 "use client";
 
+import { getAuth } from "firebase/auth";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDoc, collection, collectionGroup, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
@@ -12,6 +13,12 @@ import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { PLAN_PRICE } from "@/constants/plans";
 import { askSmartAssistant, clearSmartAssistantHistory, getSmartAssistantHistory } from "@/features/assistant/assistant-repository";
+
+/** Denetim kaydını yazan kullanıcı (kural actorUid == auth.uid şartı arar). */
+function currentActorUid(): string {
+  return getAuth(getFirebaseApp()).currentUser?.uid ?? "";
+}
+
 
 type AssistantStats = {
   businesses: number;
@@ -328,7 +335,7 @@ export function AdminAssistant() {
           status: action.operation === "suspend" ? "suspended" : "active",
           updatedAt: serverTimestamp(),
         });
-        void addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.business_${action.operation}`, businessId: action.businessId, actorSource: "platform_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+        addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.business_${action.operation}`, businessId: action.businessId, actorSource: "platform_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       }
       const result = action.operation === "approve" ? "onaylandı ve yayına alındı" : action.operation === "suspend" ? "askıya alındı" : action.operation === "plan" ? `${action.plan} paketine geçirildi` : "aktif edildi";
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `İşlem tamamlandı ✅ ${action.businessName} ${result}. Canlı platform verilerini yeniledim.`, createdAt: new Date(), actions: [{ label: "İşletmeleri kontrol et", href: "/super-admin/isletmeler" }] }]);
@@ -343,7 +350,7 @@ export function AdminAssistant() {
     setRunningAction(action.ticketId);
     try {
       await updateDoc(doc(getDb(), "supportTickets", action.ticketId), { status: action.status, updatedAt: serverTimestamp(), assistantManaged: true });
-      void addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.support_${action.status}`, entityId: action.ticketId, actorSource: "platform_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.support_${action.status}`, entityId: action.ticketId, actorSource: "platform_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       const summary = action.status === "in_progress" ? "işleme alındı" : "çözüldü olarak kapatıldı";
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamlandı ✅ “${action.title}” destek kaydı ${summary}.`, createdAt: new Date(), actions: [{ label: "Destek merkezini aç", href: "/super-admin/destek" }] }]);
       await loadData();

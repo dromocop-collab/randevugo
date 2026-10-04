@@ -219,20 +219,15 @@ export function BookingWizard(props: Props) {
       setServices(serviceRows);
       setStaffList(staffRows);
       // Pre-select service: URL param takes priority, fallback to first
-      if (props.preselectedServiceId && serviceRows.some((s) => s.id === props.preselectedServiceId)) {
-        setServiceId(props.preselectedServiceId);
-      } else if (serviceRows[0]) {
-        setServiceId(serviceRows[0].id);
-      } else {
-        setServiceId("");
-      }
-      if (props.preselectedStaffId && staffRows.some((staff) => staff.id === props.preselectedStaffId)) {
-        setStaffId(props.preselectedStaffId);
-      } else if (staffRows[0]) {
-        setStaffId(staffRows[0].id);
-      } else {
-        setStaffId("");
-      }
+      const initialService = (props.preselectedServiceId && serviceRows.find((s) => s.id === props.preselectedServiceId)) || serviceRows[0];
+      setServiceId(initialService?.id ?? "");
+      // Yalnızca seçili hizmeti verebilen personel seçilir; aksi halde saatler yüklenemiyordu.
+      const canServe = (member: Staff) => !initialService || member.serviceIds.includes(initialService.id) || (
+        member.serviceIds.length === 0 &&
+        (!member.specialtyCategoryIds?.length || member.specialtyCategoryIds.includes(initialService.category))
+      );
+      const preselected = props.preselectedStaffId ? staffRows.find((staff) => staff.id === props.preselectedStaffId && canServe(staff)) : undefined;
+      setStaffId((preselected ?? staffRows.find(canServe))?.id ?? "");
     }).catch(() => toast.error("Randevu seçenekleri yüklenemedi."))
       .finally(() => setCatalogLoading(false));
   }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
@@ -381,13 +376,14 @@ export function BookingWizard(props: Props) {
     setVerifyError("");
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
-      const sendCode = httpsCallable<{ phone: string }, { success: boolean; smsDelivered?: boolean; fallbackCode?: string }>(functions, "sendVerificationCode");
+      const sendCode = httpsCallable<{ phone: string }, { success: boolean; smsDelivered?: boolean; message?: string }>(functions, "sendVerificationCode");
       const result = await sendCode({ phone: normalizedCustomerPhone });
-      setCodeSent(true);
-      setCountdown(60);
-      if (!result.data.smsDelivered && result.data.fallbackCode) {
-        toast.success(`SMS iletilemedi. Geçici doğrulama kodun: ${result.data.fallbackCode}`, { duration: 15000 });
+      if (result.data.smsDelivered === false) {
+        // SMS gitmediyse kod giriş adımına geçilmez; kullanıcı boşuna beklemez.
+        toast.error(result.data.message || "SMS şu anda iletilemedi. Lütfen birkaç dakika sonra tekrar deneyin.");
       } else {
+        setCodeSent(true);
+        setCountdown(60);
         toast.success("Doğrulama kodu gönderildi!");
       }
     } catch (error: unknown) {
@@ -1141,7 +1137,7 @@ export function BookingWizard(props: Props) {
                 value={selectedService ? `${displayName(selectedService.name)} (${formatServiceDuration(selectedService.durationMinutes)})` : ""}
               />
               <SummaryRow icon={UserRound} label="Çalışan" value={selectedStaff ? displayName(selectedStaff.fullName) : ""} delay={100} />
-              <SummaryRow icon={CalendarDays} label="Tarih" value={format(new Date(appointmentsDate), "dd.MM.yyyy")} delay={150} />
+              <SummaryRow icon={CalendarDays} label="Tarih" value={appointmentsDate.split("-").reverse().join(".")} delay={150} />
               <SummaryRow icon={Clock3} label="Saat" value={slot} delay={200} />
               <SummaryRow
                 icon={CircleDollarSign} label="Fiyat" delay={250}

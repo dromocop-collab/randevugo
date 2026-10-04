@@ -4,215 +4,410 @@
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "dateKey", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "serviceId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "serviceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "dateKey", "order": "ASCENDING" },
-        { "fieldPath": "serviceId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "serviceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "dateKey", "order": "ASCENDING" }
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateKey",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "availabilityAlerts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "queueEntries",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "businessDayKey", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "businessDayKey",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "queueEntries",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "joinedAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "joinedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "startAt", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "startAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "staffId", "order": "ASCENDING" },
-        { "fieldPath": "startAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "staffId", "order": "ASCENDING" },
-        { "fieldPath": "endAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "staffId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "endAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "customerId", "order": "ASCENDING" },
-        { "fieldPath": "startAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "customerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "customerId", "order": "ASCENDING" },
-        { "fieldPath": "startAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "customerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "services",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isActive", "order": "ASCENDING" },
-        { "fieldPath": "sortOrder", "order": "ASCENDING" }
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sortOrder",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "businesses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isPublished", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "rating", "order": "DESCENDING" }
+        {
+          "fieldPath": "isPublished",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rating",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "businesses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isPublished", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "rating", "order": "DESCENDING" }
+        {
+          "fieldPath": "isPublished",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rating",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "businesses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isPublished", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "city", "order": "ASCENDING" },
-        { "fieldPath": "rating", "order": "DESCENDING" }
+        {
+          "fieldPath": "isPublished",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "city",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rating",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "businesses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isPublished", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "city", "order": "ASCENDING" },
-        { "fieldPath": "rating", "order": "DESCENDING" }
+        {
+          "fieldPath": "isPublished",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "city",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rating",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "businesses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isPublished", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "reviewCount", "order": "DESCENDING" }
+        {
+          "fieldPath": "isPublished",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reviewCount",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "reviews",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isVisible", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "isVisible",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "reviews",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "supportTickets",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "supportTickets",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "platformAuditLogs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "action", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "action",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "categoryRequests",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],
@@ -221,104 +416,226 @@
       "collectionGroup": "bookingDayLocks",
       "fieldPath": "expiresAt",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "fieldPath": "status",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "reviews",
       "fieldPath": "status",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "devices",
       "fieldPath": "fcmToken",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "members",
       "fieldPath": "uid",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "services",
       "fieldPath": "isActive",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "customerPackages",
       "fieldPath": "customerPhone",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "customerPackages",
       "fieldPath": "customerUserId",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "customers",
       "fieldPath": "userId",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "customers",
       "fieldPath": "email",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "fieldPath": "customerId",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "appointments",
       "fieldPath": "customerEmail",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "loyaltyAccounts",
       "fieldPath": "customerPhone",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "fieldPath": "customerId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "queueEntries",
+      "fieldPath": "customerId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     }
   ]

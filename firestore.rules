@@ -15,7 +15,8 @@ service cloud.firestore {
 
     function isPlatformAdmin() {
       return isAuthenticated() &&
-        (request.auth.token.email == "cihatwin@gmail.com" ||
+        // E-posta yalnızca doğrulanmışsa güvenilir (doğrulanmamış hesapla taklit edilemez).
+        ((request.auth.token.email == "cihatwin@gmail.com" && request.auth.token.email_verified == true) ||
          exists(/databases/$(database)/documents/platformAdmins/$(uid())));
     }
 
@@ -76,7 +77,9 @@ service cloud.firestore {
         .hasAny(["rating", "reviewCount", "isVerified", "status", "isSuspended",
           "approvalStatus", "storePosition", "reviewedBy", "reviewedAt", "plan",
           "organizationId", "organizationName", "headquartersBusinessId", "branchNumber",
-          "branchCode", "isHeadquarters"]));
+          "branchCode", "isHeadquarters",
+          // Sahiplik, yayın durumu ve mağaza adresi yalnızca sunucu/platform yöneticisi tarafından değişir.
+          "ownerUid", "isPublished", "slug"]));
     }
 
     // Public storefront identity is published only after platform moderation.
@@ -137,7 +140,14 @@ service cloud.firestore {
 
     match /platformAuditLogs/{docId} {
       allow read: if isPlatformAdmin();
-      allow write: if false;
+      // Platform asistanı izi: yalnızca platform yöneticisi, sabit alanlar, gerçek aktör.
+      allow create: if isPlatformAdmin() &&
+        request.resource.data.keys().hasOnly(["action", "businessId", "entityId", "actorSource", "actorUid", "createdAt"]) &&
+        request.resource.data.action is string && request.resource.data.action.matches("assistant[.][a-z_]+") &&
+        request.resource.data.actorSource == "platform_assistant" &&
+        request.resource.data.actorUid == uid() &&
+        request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     // Company-level identity and branch limits are maintained by Cloud Functions.
@@ -180,7 +190,9 @@ service cloud.firestore {
     // Appointment Tokens (Public Access)
     // ────────────────────────────────────────────────
     match /appointmentTokens/{token} {
-      allow read: if true;
+      // İstemciler bu koleksiyonu okumaz; getAppointmentByPublicToken (Admin SDK) kullanılır.
+      // Listelemeye açık olması tüm randevu bağlantılarını ifşa ediyordu.
+      allow read: if false;
       allow write: if false;
     }
 
@@ -371,11 +383,14 @@ service cloud.firestore {
         allow read: if isMember(businessId) || isPlatformAdmin();
         // Allow initial member creation during onboarding:
         // The creator sets themselves as owner with their own uid
+        // Kendini "owner" olarak ekleme yalnızca işletmenin gerçek sahibine (ownerUid) açıktır;
+        // aksi halde her kullanıcı herhangi bir işletmeye sahip olarak sızabiliyordu.
         allow create: if isAuthenticated() &&
           (isOwner(businessId) || isPlatformAdmin() ||
            (memberId == uid() &&
             request.resource.data.uid == uid() &&
-            request.resource.data.role == "owner"));
+            request.resource.data.role == "owner" &&
+            isBusinessOwner(businessId)));
         allow update, delete: if isOwner(businessId) || isPlatformAdmin();
       }
 
@@ -538,7 +553,15 @@ service cloud.firestore {
       // Audit Logs (business-level, server-write only)
       match /auditLogs/{logId} {
         allow read: if canManage(businessId) || isPlatformAdmin();
-        allow write: if false;
+        // İşletme asistanının yaptığı değişikliklerin izi: yalnızca yöneticiler, sabit alanlar,
+        // gerçek aktör ve sunucu saatiyle. Güncelleme/silme yok.
+        allow create: if canManage(businessId) &&
+          request.resource.data.keys().hasOnly(["action", "entityId", "summary", "status", "source", "actorUid", "createdAt"]) &&
+          request.resource.data.action is string && request.resource.data.action.matches("assistant[.][a-z_]+") &&
+          request.resource.data.source == "business_assistant" &&
+          request.resource.data.actorUid == uid() &&
+          request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
       }
 
       // Branches

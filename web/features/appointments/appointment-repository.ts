@@ -137,41 +137,25 @@ export async function updateAppointmentStatus(
  * original booked service as the primary line. Total price, duration and end
  * time are stored as snapshots so reporting and customer views stay in sync.
  */
+/**
+ * Ek hizmetleri sunucuda günceller: bitiş saati uzadığında çakışma kontrolü ve gün kilidi
+ * transaction içinde yapılır (istemciden doğrudan endAt yazmak çift rezervasyona yol açıyordu).
+ */
 export async function updateAppointmentAdditionalServices(
   businessId: string,
   appointment: Appointment,
   additionalServices: AppointmentServiceLine[]
 ): Promise<void> {
-  const previousExtras = appointment.additionalServices ?? [];
-  const previousExtraPrice = previousExtras.reduce((sum, item) => sum + Number(item.price || 0), 0);
-  const previousExtraDuration = previousExtras.reduce((sum, item) => sum + Number(item.durationMinutes || 0), 0);
-  const primaryServicePrice = Math.max(
-    0,
-    appointment.primaryServicePrice ?? Number(appointment.servicePrice ?? 0) - previousExtraPrice
-  );
-  const primaryServiceDurationMinutes = Math.max(
-    0,
-    appointment.primaryServiceDurationMinutes ?? Number(appointment.serviceDurationMinutes ?? 0) - previousExtraDuration
-  );
-  const sanitized = additionalServices.map((item) => ({
-    serviceId: String(item.serviceId),
-    name: String(item.name).trim(),
-    price: Math.max(0, Number(item.price) || 0),
-    durationMinutes: Math.max(1, Math.round(Number(item.durationMinutes) || 1)),
-  }));
-  const servicePrice = primaryServicePrice + sanitized.reduce((sum, item) => sum + item.price, 0);
-  const serviceDurationMinutes = primaryServiceDurationMinutes + sanitized.reduce((sum, item) => sum + item.durationMinutes, 0);
-  const startAtMillis = new Date(appointment.startAt).getTime();
-  if (!Number.isFinite(startAtMillis)) throw new Error("Randevu başlangıç zamanı geçersiz.");
-
-  await updateDoc(doc(getDb(), "businesses", businessId, "appointments", appointment.id), {
-    primaryServicePrice,
-    primaryServiceDurationMinutes,
-    additionalServices: sanitized,
-    servicePrice,
-    serviceDurationMinutes,
-    endAt: Timestamp.fromMillis(startAtMillis + serviceDurationMinutes * 60_000),
-    updatedAt: Timestamp.now(),
+  const callable = call(getFunctions(getFirebaseApp(), "europe-west1"), "updateAppointmentServices");
+  await callable({
+    businessId,
+    appointmentId: appointment.id,
+    additionalServices: additionalServices.map((item) => ({
+      serviceId: String(item.serviceId),
+      name: String(item.name).trim(),
+      price: Math.max(0, Number(item.price) || 0),
+      durationMinutes: Math.max(1, Math.round(Number(item.durationMinutes) || 1)),
+    })),
   });
 }
 

@@ -12,6 +12,7 @@ import { userFacingError } from "@/lib/errors/user-facing-error";
 import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import type { Appointment } from "@/types/appointments";
+import { millisToZonedDateTime, zonedDateTimeToMillis } from "@/lib/time/zoned";
 
 interface Props {
   businessId: string;
@@ -22,10 +23,6 @@ interface Props {
   onCreated?: () => void | Promise<void>;
 }
 
-function localDateValue(date: Date) {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
 
 function defaultStart() {
   const date = new Date();
@@ -54,8 +51,10 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
     if (!open) return;
     const start = appointment ? new Date(appointment.startAt) : initialStartAt ?? defaultStart();
     queueMicrotask(() => {
-      setDate(localDateValue(start));
-      setTime(`${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`);
+      // Ön doldurma da işletme saatiyle yapılır (tarayıcı saat diliminden bağımsız).
+      const zoned = millisToZonedDateTime(start.getTime());
+      setDate(zoned.date);
+      setTime(zoned.time);
       setCustomerName(appointment?.customerName === "Rezerve saat" ? "" : appointment?.customerName ?? "");
       setServiceId(appointment?.serviceId ?? "");
       setStaffId(appointment?.staffId ?? "");
@@ -160,7 +159,8 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       toast.error("Lütfen randevu tarihini ve saatini seçin.");
       return;
     }
-    const startAt = new Date(`${date}T${time}:00`);
+    // Tarih/saat işletme saatiyle (Europe/Istanbul) yorumlanır; tarayıcının saat dilimi farklı olsa da doğru kaydedilir.
+    const startAt = new Date(zonedDateTimeToMillis(date, time));
     if (Number.isNaN(startAt.getTime())) {
       toast.error("Tarih veya saat geçersiz.");
       return;

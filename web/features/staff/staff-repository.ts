@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
   query,
@@ -43,11 +42,6 @@ export async function updateStaff(
     ...input,
     updatedAt: serverTimestamp(),
   });
-}
-
-export async function removeStaff(businessId: string, staffId: string): Promise<void> {
-  const db = getDb();
-  await deleteDoc(doc(db, "businesses", businessId, "staff", staffId));
 }
 
 export async function archiveStaff(

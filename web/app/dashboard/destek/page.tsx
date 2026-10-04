@@ -6,6 +6,8 @@ import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, u
 import { toast } from "sonner";
 import { ArrowRight, CheckCircle2, Headphones, LoaderCircle, Mail, MessageCircleMore, Phone, Search, Send, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuthContext } from "@/features/auth/auth-context";
 import { useBusiness } from "@/hooks/use-business";
 import { EmptyState } from "@/components/ui/states";
@@ -38,7 +40,7 @@ export default function DashboardSupportPage(){
   const platformTickets=useMemo(()=>tickets.filter(item=>!(item.target==="business"||item.source==="storefront"||item.category==="customer_message")),[tickets]);
   const visible=(tab==="customers"?customerTickets:platformTickets).filter(item=>!search.trim()||`${item.title} ${item.requesterName} ${item.requesterPhone} ${item.message}`.toLocaleLowerCase("tr-TR").includes(search.trim().toLocaleLowerCase("tr-TR")));
 
-  async function submit(){if(!title.trim()||!message.trim()||!businessId||!user)return;setSubmitting(true);try{await addDoc(collection(getDb(),"supportTickets"),{title:title.trim(),category,message:message.trim(),priority:"medium",status:"open",source:"dashboard",target:"platform",businessId,userId:user.uid,userEmail:user.email,requesterName:user.displayName||user.email||"İşletme yetkilisi",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});toast.success("Talebiniz destek ekibine ulaştı.");setTitle("");setMessage("");setShowForm(false)}catch(error){toast.error((error as Error).message)}finally{setSubmitting(false)}}
+  async function submit(){if(!title.trim()||!message.trim()||!businessId||!user)return;setSubmitting(true);try{await httpsCallable(getFunctions(getFirebaseApp(),"europe-west1"),"createBusinessSupportTicket")({businessId,title:title.trim(),category,message:message.trim()});toast.success("Talebiniz destek ekibine ulaştı.");setTitle("");setMessage("");setShowForm(false)}catch(error){toast.error((error as Error).message)}finally{setSubmitting(false)}}
   async function resolveCustomer(id:string){try{await updateDoc(doc(getDb(),"supportTickets",id),{status:"resolved",updatedAt:serverTimestamp()});toast.success("Müşteri mesajı çözüldü olarak işaretlendi.")}catch(error){toast.error((error as Error).message)}}
 
   return <div className="support-dashboard-page space-y-5">

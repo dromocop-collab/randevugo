@@ -13,6 +13,15 @@ service firebase.storage {
         request.resource.size < 5 * 1024 * 1024;
     }
 
+    // İşletme vitrin görselleri yalnızca sahip/admin/müdür tarafından değiştirilebilir.
+    function canManageBusiness(businessId) {
+      return signedIn() && (
+        firestore.get(/databases/(default)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid ||
+        (firestore.exists(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid)).data.role in ["owner", "admin", "manager"])
+      );
+    }
+
     function isBusinessMember(businessId) {
       return signedIn() &&
         firestore.exists(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid));
@@ -25,13 +34,13 @@ service firebase.storage {
 
     match /businesses/{businessId}/public/{allPaths=**} {
       allow read: if true;
-      allow write: if isBusinessMember(businessId) && imageUpload();
+      allow write: if canManageBusiness(businessId) && imageUpload();
     }
 
-    // Review images are scoped to the authenticated reviewer.
+    // Yorum görselleri yorumu yazan kullanıcıya aittir; mevcut dosyanın üzerine yazılamaz.
     match /businesses/{businessId}/public/reviews/{uid}/{fileName} {
       allow read: if true;
-      allow write: if signedIn() && request.auth.uid == uid && imageUpload();
+      allow write: if signedIn() && request.auth.uid == uid && imageUpload() && resource == null;
     }
 
     match /businesses/{businessId}/private/{allPaths=**} {

@@ -1,5 +1,7 @@
 "use client";
 
+import { getFirebaseApp } from "@/lib/firebase/client";
+import { getAuth } from "firebase/auth";
 import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +18,12 @@ import { getDb } from "@/lib/firebase/firestore";
 import type { Staff } from "@/types/staff";
 import type { Service } from "@/types/service";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
+
+/** Denetim kaydını yazan kullanıcı (kural actorUid == auth.uid şartı arar). */
+function currentActorUid(): string {
+  return getAuth(getFirebaseApp()).currentUser?.uid ?? "";
+}
+
 
 type StoreStats = {
   appointments: number; today: number; upcoming: number; pending: number; completed: number; cancelled: number; noShow: number;
@@ -305,7 +313,7 @@ export function BusinessAssistant() {
     setRunningAction(action.staffId);
     try {
       await updateStaff(businessId, action.staffId, action.patch);
-      void addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.staff_updated", entityId: action.staffId, summary: action.summary, source: "business_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.staff_updated", entityId: action.staffId, summary: action.summary, source: "business_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamdır ✅ ${action.staffName} için ${action.summary} başarıyla güncellendi.`, time: new Date(), actions: [{ label: "Çalışanları kontrol et", href: "/dashboard/calisanlar" }] }]);
       await load();
     } catch (error) {
@@ -318,7 +326,7 @@ export function BusinessAssistant() {
     setRunningAction(action.serviceId);
     try {
       await updateService(businessId, action.serviceId, action.patch);
-      void addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.service_updated", entityId: action.serviceId, summary: action.summary, source: "business_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.service_updated", entityId: action.serviceId, summary: action.summary, source: "business_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamdır ✅ ${action.serviceName} hizmetinin ${action.summary} olarak güncellendi.`, time: new Date(), actions: [{ label: "Hizmetleri kontrol et", href: "/dashboard/hizmetler" }] }]);
       await load();
     } catch (error) {
@@ -331,7 +339,7 @@ export function BusinessAssistant() {
     setRunningAction(action.appointmentId);
     try {
       await updateAppointmentStatus(businessId, action.appointmentId, action.status);
-      void addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.appointment_updated", entityId: action.appointmentId, status: action.status, source: "business_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.appointment_updated", entityId: action.appointmentId, status: action.status, source: "business_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `İşlem tamamlandı ✅ ${action.customerName} randevusu ${action.summary}.`, time: new Date(), actions: [{ label: "Randevuyu kontrol et", href: `/dashboard/randevular?appointment=${encodeURIComponent(action.appointmentId)}` }] }]);
       await load();
     } catch (error) { setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Randevu güncellenemedi: ${(error as Error).message}`, time: new Date() }]); }
@@ -343,7 +351,7 @@ export function BusinessAssistant() {
     setRunningAction(action.itemId);
     try {
       await updateDoc(doc(getDb(), "businesses", businessId, "waitlist", action.itemId), { status: action.status, updatedAt: serverTimestamp() });
-      void addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.waitlist_updated", entityId: action.itemId, status: action.status, source: "business_assistant", createdAt: serverTimestamp() }).catch(() => undefined);
+      addDoc(collection(getDb(), "businesses", businessId, "auditLogs"), { action: "assistant.waitlist_updated", entityId: action.itemId, status: action.status, source: "business_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamdır ✅ ${action.customerName} için bekleme listesi talebi ${action.summary}.`, time: new Date(), actions: [{ label: "Bekleme listesini kontrol et", href: "/dashboard/bekleme-listesi" }] }]);
       await load();
     } catch (error) { setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Bekleme listesi güncellenemedi: ${(error as Error).message}`, time: new Date() }]); }

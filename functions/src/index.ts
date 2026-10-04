@@ -185,6 +185,15 @@ export const updateLiveFeatureFlags = onCall(protectedCallableOptions, async (re
   return { success: true };
 });
 
+/**
+ * İstemci IP'si: X-Forwarded-For'un ilk değeri istemci tarafından uydurulabilir; Google ön yüzü
+ * gerçek istemci IP'sini listenin sonuna ekler. Hız sınırları bu değere göre uygulanır.
+ */
+function clientIpFrom(raw: { headers: Record<string, unknown>; ip?: string }): string {
+  const chain = String(raw.headers["x-forwarded-for"] ?? "").split(",").map((part) => part.trim()).filter(Boolean);
+  return chain[chain.length - 1] || raw.ip || "unknown";
+}
+
 function htmlSafe(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
@@ -229,6 +238,19 @@ async function requireBusinessOperation(uid: string, businessId: string, permiss
   if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role) ||
       (role === "staff" && member.data()?.permissions?.[permission] === true)) return business.data()!;
   throw new HttpsError("permission-denied", "Bu işletme işlemi için yetkiniz bulunmuyor.");
+}
+
+/**
+ * Çalışan (staff) rolündeki kullanıcının kendi staffId'si; yönetici/sahip için null.
+ * Firestore kuralları çalışanı yalnızca kendi randevularıyla sınırlar; callable'lar da aynı sınırı uygular.
+ */
+async function staffScopeFor(uid: string, businessId: string, business: Record<string, unknown>): Promise<string | null> {
+  if (business.ownerUid === uid) return null;
+  const member = await db.doc(`businesses/${businessId}/members/${uid}`).get();
+  if (String(member.data()?.role ?? "") !== "staff") return null;
+  const staffId = String(member.data()?.staffId ?? "").trim();
+  if (!staffId) throw new HttpsError("permission-denied", "Çalışan hesabınız bir personel kaydına bağlı değil.");
+  return staffId;
 }
 
 type BookingEntitlement = {
@@ -881,12 +903,14 @@ export const getMyCustomerBenefits = onCall(
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
-    const [profile, authUser] = await Promise.all([
-      db.doc(`users/${uid}`).get(),
+    // Yalnızca doğrulanmış kimlik sinyalleri: kullanıcının kendi yazabildiği profil telefonu/e-postası
+    // başkasının paket ve puanlarını sahiplenmek için kullanılabiliyordu.
+    const [verifiedPhoneDoc, authUser] = await Promise.all([
+      db.doc(`users/${uid}/verifiedIdentity/phone`).get(),
       auth.getUser(uid),
     ]);
-    const rawPhone = String(profile.data()?.phone ?? "").trim();
-    const accountEmail = String(authUser.email ?? profile.data()?.email ?? "").trim().toLowerCase();
+    const rawPhone = String(verifiedPhoneDoc.data()?.phone ?? authUser.phoneNumber ?? "").trim();
+    const accountEmail = authUser.emailVerified ? String(authUser.email ?? "").trim().toLowerCase() : "";
     const [linkedCustomers, linkedAppointments, emailCustomers, emailAppointments] = await Promise.all([
       db.collectionGroup("customers").where("userId", "==", uid).limit(20).get(),
       db.collectionGroup("appointments").where("customerId", "==", uid).limit(100).get(),
@@ -1160,6 +1184,11 @@ export const createBusiness = onCall(
         ...(creatorIsPlatformAdmin ? {} : {
           trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
         }),
+        // Ücretli (active) merkez aboneliğinin bitiş tarihi şubeye de taşınır; aksi halde
+        // erişim kontrolü bitiş tarihi bulamayıp şubeyi ilk randevuda "süresi doldu" sayıyordu.
+        ...(!creatorIsPlatformAdmin && inheritedSubscription?.data()?.subscriptionEndsAt
+          ? { subscriptionEndsAt: inheritedSubscription.data()!.subscriptionEndsAt }
+          : {}),
         renewalEnabled: inheritedSubscription?.data()?.renewalEnabled === true,
         paymentProvider: String(inheritedSubscription?.data()?.paymentProvider ?? "manual"),
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -1904,29 +1933,100 @@ export const deleteMyAccount = onCall(
       await db.recursiveDelete(business.ref);
     }
 
-    // Remove customer-side records created inside businesses the user does not own.
-    const customerAppointments = await db.collectionGroup("appointments").where("customerId", "==", uid).get();
-    for (const appointment of customerAppointments.docs) {
-      const publicToken = String(appointment.data().publicToken ?? "");
-      if (publicToken) await db.doc(`appointmentTokens/${publicToken}`).delete();
-      await db.recursiveDelete(appointment.ref);
-    }
+    // Müşteri tarafı temizliği. Her adım bağımsızdır: biri başarısız olsa bile diğerleri çalışır ve
+    // hesap yine silinir (KVKK). Başarısız adımlar yönetici takibi için kayda geçer.
+    const failures: string[] = [];
+    const step = async (name: string, work: () => Promise<unknown>) => {
+      try { await work(); } catch (error) {
+        failures.push(name);
+        logger.error("Hesap silme adımı başarısız.", { uid, step: name, error: String(error) });
+      }
+    };
+
+    await step("appointments", async () => {
+      const customerAppointments = await db.collectionGroup("appointments").where("customerId", "==", uid).get();
+      for (const appointment of customerAppointments.docs) {
+        const publicToken = String(appointment.data().publicToken ?? "");
+        if (publicToken) await db.doc(`appointmentTokens/${publicToken}`).delete();
+        await db.recursiveDelete(appointment.ref);
+      }
+    });
+
+    await step("reviews", async () => {
+      const reviews = await db.collectionGroup("reviews").where("customerId", "==", uid).get();
+      for (const review of reviews.docs) {
+        const businessRef = review.ref.parent.parent;
+        if (!businessRef) { await review.ref.delete(); continue; }
+        // Onaylı yorum siliniyorsa işletme puan ortalamasından düşülür.
+        await db.runTransaction(async (tx) => {
+          const [current, business] = await Promise.all([tx.get(review.ref), tx.get(businessRef)]);
+          if (!current.exists) return;
+          const data = current.data() ?? {};
+          if (data.status === "approved" && business.exists) {
+            const oldCount = Math.max(0, Number(business.data()?.reviewCount ?? 0));
+            const oldRating = Math.max(0, Number(business.data()?.rating ?? 0));
+            const newCount = Math.max(0, oldCount - 1);
+            const newRating = newCount === 0 ? 0 : Math.max(0, (oldRating * oldCount - Number(data.rating ?? 0)) / newCount);
+            tx.update(businessRef, { rating: Math.round(newRating * 100) / 100, reviewCount: newCount, updatedAt: FieldValue.serverTimestamp() });
+          }
+          tx.delete(review.ref);
+        });
+        await bucket.deleteFiles({ prefix: `businesses/${businessRef.id}/public/reviews/${uid}/`, force: true });
+      }
+    });
+
+    await step("queueEntries", async () => {
+      const entries = await db.collectionGroup("queueEntries").where("customerId", "==", uid).get();
+      for (const entry of entries.docs) {
+        const active = ["waiting", "on_the_way", "called", "in_service"].includes(String(entry.data().status ?? ""));
+        await entry.ref.update({
+          customerId: `deleted_${entry.id}`,
+          customerName: "Silinmiş kullanıcı",
+          customerPhone: FieldValue.delete(),
+          ...(active ? { status: "cancelled", cancelledBy: "account_deleted", cancelledAt: FieldValue.serverTimestamp() } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    });
+
+    await step("customerPackages", async () => {
+      // Paket kayıtları işletmenin muhasebesidir; silinmez, yalnızca hesap bağlantısı kaldırılır.
+      const packages = await db.collectionGroup("customerPackages").where("customerUserId", "==", uid).get();
+      for (const row of packages.docs) await row.ref.update({ customerUserId: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+    });
+
+    await step("pushTopic", async () => {
+      const devices = await db.collection(`users/${uid}/devices`).get();
+      const tokens = devices.docs.map((row) => String(row.data().fcmToken ?? "")).filter(Boolean);
+      if (tokens.length) await messaging.unsubscribeFromTopic(tokens, GLOBAL_PUSH_TOPIC);
+    });
+
     await Promise.all([
-      deleteGroupMatches("customers", "userId", uid),
-      deleteGroupMatches("reviews", "customerId", uid),
-      deleteGroupMatches("members", "uid", uid),
-      deleteRootMatches("supportTickets", "userId", uid),
-      deleteRootMatches("notificationLogs", "senderUid", uid),
-      deleteRootMatches("platformAuditLogs", "actorUid", uid),
-      db.doc(`businessAccounts/${uid}`).delete(),
-      db.doc(`platformAdmins/${uid}`).delete(),
-      email ? db.doc(`emailVerificationCodes/${email}`).delete() : Promise.resolve(),
-      email ? db.doc(`passwordResetCodes/${email}`).delete() : Promise.resolve(),
-      email ? deleteRootMatches("mail", "to", email) : Promise.resolve(),
-      phone ? db.doc(`verificationCodes/${phone}`).delete() : Promise.resolve(),
+      step("customers", () => deleteGroupMatches("customers", "userId", uid)),
+      step("members", () => deleteGroupMatches("members", "uid", uid)),
+      step("availabilityAlerts", () => deleteRootMatches("availabilityAlerts", "userId", uid)),
+      step("supportTickets", () => deleteRootMatches("supportTickets", "userId", uid)),
+      step("notificationLogs", () => deleteRootMatches("notificationLogs", "senderUid", uid)),
+      step("platformAuditLogs", () => deleteRootMatches("platformAuditLogs", "actorUid", uid)),
+      step("businessAccounts", () => db.doc(`businessAccounts/${uid}`).delete()),
+      step("platformAdmins", () => db.doc(`platformAdmins/${uid}`).delete()),
+      step("emailCodes", async () => {
+        if (!email) return;
+        await Promise.all([
+          db.doc(`emailVerificationCodes/${email}`).delete(),
+          db.doc(`passwordResetCodes/${email}`).delete(),
+          deleteRootMatches("mail", "to", email),
+        ]);
+      }),
+      step("phoneCodes", async () => { if (phone) await db.doc(`verificationCodes/${phone}`).delete(); }),
     ]);
 
-    await db.recursiveDelete(db.doc(`users/${uid}`));
+    await step("userDocument", () => db.recursiveDelete(db.doc(`users/${uid}`)));
+    if (failures.length) {
+      await db.doc(`accountDeletionFollowups/${uid}`).set({
+        uid, failedSteps: failures, createdAt: FieldValue.serverTimestamp(),
+      }).catch(() => undefined);
+    }
     await auth.deleteUser(uid);
     return { success: true };
   }
@@ -2392,6 +2492,46 @@ function buildSlots(
   }
   return slots;
 }
+
+/**
+ * İşletme panelinden platform destek ekibine talep. supportTickets istemciden oluşturulamaz
+ * (kural: create false); web paneli eskiden addDoc kullandığı için talepler hiç gönderilemiyordu.
+ */
+export const createBusinessSupportTicket = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const title = requireString(data.title, "Başlık").slice(0, 120);
+    const message = requireString(data.message, "Mesaj");
+    const allowedCategories = ["technical", "billing", "account", "feature_request", "other"];
+    const category = allowedCategories.includes(String(data.category)) ? String(data.category) : "other";
+    if (title.length < 3) throw new HttpsError("invalid-argument", "Başlık en az 3 karakter olmalıdır.");
+    if (message.length < 10 || message.length > 2000) throw new HttpsError("invalid-argument", "Mesaj 10–2000 karakter olmalıdır.");
+    const [business, member, authUser] = await Promise.all([
+      db.doc(`businesses/${businessId}`).get(),
+      db.doc(`businesses/${businessId}/members/${uid}`).get(),
+      auth.getUser(uid),
+    ]);
+    if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    if (!member.exists && business.data()?.ownerUid !== uid) {
+      throw new HttpsError("permission-denied", "Bu işletme adına destek talebi açma yetkiniz yok.");
+    }
+    await consumeSecurityLimit(`support:business:${uid}`, 1, 60_000);
+    const ticketRef = db.collection("supportTickets").doc();
+    await ticketRef.set({
+      title, category, message, priority: "medium", status: "open",
+      source: "dashboard", target: "platform", businessId,
+      businessName: String(business.data()?.name ?? "İşletme"),
+      userId: uid, userEmail: authUser.email ?? null,
+      requesterName: authUser.displayName || authUser.email || "İşletme yetkilisi",
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true, ticketId: ticketRef.id };
+  }
+);
 
 export const submitPublicSupportRequest = onCall(
   publicCallableOptions,
@@ -3195,7 +3335,13 @@ export const createDashboardAppointment = onCall(
       ? data.customerName.trim().slice(0, 80)
       : "Rezerve saat";
     const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
-    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const ownStaffId = await staffScopeFor(uid, businessId, business);
+    const requestedStaffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    // Çalışan yalnızca kendi takvimine randevu ekleyebilir.
+    if (ownStaffId && requestedStaffId && requestedStaffId !== ownStaffId) {
+      throw new HttpsError("permission-denied", "Yalnızca kendi takviminize randevu ekleyebilirsiniz.");
+    }
+    const staffId = ownStaffId ?? requestedStaffId;
     const [serviceSnap, staffSnap] = await Promise.all([
       serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
       staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
@@ -3275,6 +3421,99 @@ export const createDashboardAppointment = onCall(
   },
 );
 
+/**
+ * Randevuya ek hizmet ekler/çıkarır. Bitiş saati uzadığı için çakışma kontrolü ve gün kilidi
+ * transaction içinde yapılır (web eskiden endAt'i doğrudan yazıyor, çift rezervasyona yol açıyordu).
+ */
+export const updateAppointmentServices = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    await requirePlanEntitlement(businessId, "appointments");
+    const ownStaffId = await staffScopeFor(uid, businessId, business);
+    const raw: unknown[] = Array.isArray(data.additionalServices) ? data.additionalServices.slice(0, 20) : [];
+    const additionalServices = raw.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const row = item as Record<string, unknown>;
+      const serviceId = String(row.serviceId ?? "").trim();
+      const name = String(row.name ?? "").trim().slice(0, 120);
+      if (!serviceId || !name) return [];
+      return [{
+        serviceId, name,
+        price: Math.max(0, numberOr(row.price, 0)),
+        durationMinutes: Math.min(480, Math.max(1, Math.round(numberOr(row.durationMinutes, 1)))),
+      }];
+    });
+    const appointments = db.collection(`businesses/${businessId}/appointments`);
+    const appointmentRef = appointments.doc(appointmentId);
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(appointmentRef);
+      if (!current.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
+      const appointment = current.data()!;
+      if (!["pending", "confirmed"].includes(String(appointment.status ?? ""))) {
+        throw new HttpsError("failed-precondition", "Yalnızca bekleyen veya onaylı randevularda hizmet değiştirilebilir.");
+      }
+      if (ownStaffId && String(appointment.staffId ?? "") !== ownStaffId) {
+        throw new HttpsError("permission-denied", "Bu randevu size atanmamış.");
+      }
+      const startAt = appointment.startAt as Timestamp | undefined;
+      if (!startAt) throw new HttpsError("failed-precondition", "Randevu başlangıç zamanı geçersiz.");
+      const previous = Array.isArray(appointment.additionalServices) ? appointment.additionalServices as Array<Record<string, unknown>> : [];
+      const previousPrice = previous.reduce((sum, item) => sum + numberOr(item?.price, 0), 0);
+      const previousDuration = previous.reduce((sum, item) => sum + Math.max(0, numberOr(item?.durationMinutes, 0)), 0);
+      const primaryPrice = Math.max(0, numberOr(appointment.primaryServicePrice, numberOr(appointment.servicePrice, 0) - previousPrice));
+      const primaryDuration = Math.max(1, numberOr(appointment.primaryServiceDurationMinutes, numberOr(appointment.serviceDurationMinutes, 30) - previousDuration));
+      const totalDuration = primaryDuration + additionalServices.reduce((sum, item) => sum + item.durationMinutes, 0);
+      const endAt = Timestamp.fromMillis(startAt.toMillis() + totalDuration * 60_000);
+
+      const local = localParts(startAt.toDate(), timeZone);
+      const dayStartMs = zonedTimeToMillis(local.dateKey, 0, timeZone);
+      const next = new Date(Date.UTC(local.year, local.month - 1, local.day));
+      next.setUTCDate(next.getUTCDate() + 1);
+      const dayEndMs = zonedTimeToMillis(next.toISOString().slice(0, 10), 0, timeZone);
+      const lockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${local.dateKey}`);
+      const [lock, sameDay] = await Promise.all([
+        tx.get(lockRef),
+        tx.get(appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs)).where("startAt", "<", Timestamp.fromMillis(dayEndMs))),
+      ]);
+      const staffId = String(appointment.staffId ?? "");
+      const conflict = sameDay.docs.some((doc) => {
+        if (doc.id === appointmentId) return false;
+        const item = doc.data();
+        if (!["pending", "confirmed"].includes(String(item.status ?? ""))) return false;
+        if (staffId && item.staffId && item.staffId !== staffId) return false;
+        const s = (item.startAt as Timestamp | undefined)?.toMillis();
+        const e = (item.endAt as Timestamp | undefined)?.toMillis();
+        return s !== undefined && e !== undefined && s < endAt.toMillis() && e > startAt.toMillis();
+      });
+      if (conflict) throw new HttpsError("already-exists", "Ek hizmetlerle randevu bir sonraki randevuyla çakışıyor. Süreyi kısaltın veya randevuyu taşıyın.");
+      tx.set(lockRef, {
+        revision: Number(lock.data()?.revision ?? 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
+      }, { merge: true });
+      tx.update(appointmentRef, {
+        additionalServices,
+        primaryServicePrice: primaryPrice,
+        primaryServiceDurationMinutes: primaryDuration,
+        servicePrice: primaryPrice + additionalServices.reduce((sum, item) => sum + item.price, 0),
+        serviceDurationMinutes: totalDuration,
+        endAt,
+        updatedByUid: uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return { success: true };
+  }
+);
+
 export const updateDashboardAppointment = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -3291,7 +3530,12 @@ export const updateDashboardAppointment = onCall(
     const customerName = typeof data.customerName === "string" && data.customerName.trim()
       ? data.customerName.trim().slice(0, 80) : "Rezerve saat";
     const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
-    const staffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    const ownStaffId = await staffScopeFor(uid, businessId, business);
+    const requestedStaffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    if (ownStaffId && requestedStaffId && requestedStaffId !== ownStaffId) {
+      throw new HttpsError("permission-denied", "Randevuyu başka bir çalışana taşıyamazsınız.");
+    }
+    const staffId = ownStaffId ?? requestedStaffId;
     const [serviceSnap, staffSnap] = await Promise.all([
       serviceId ? db.doc(`businesses/${businessId}/services/${serviceId}`).get() : null,
       staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`).get() : null,
@@ -3319,6 +3563,13 @@ export const updateDashboardAppointment = onCall(
       ]);
       if (!current.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
       const currentData = current.data()!;
+      // Yalnızca bekleyen/onaylı randevular düzenlenir; çalışan sadece kendi randevusunu düzenler.
+      if (!["pending", "confirmed"].includes(String(currentData.status ?? ""))) {
+        throw new HttpsError("failed-precondition", "Tamamlanmış, iptal edilmiş veya gelinmemiş randevu düzenlenemez.");
+      }
+      if (ownStaffId && String(currentData.staffId ?? "") !== ownStaffId) {
+        throw new HttpsError("permission-denied", "Bu randevu size atanmamış.");
+      }
       const additionalServices = Array.isArray(currentData.additionalServices) ? currentData.additionalServices : [];
       const additionalPrice = additionalServices.reduce((sum: number, item: unknown) =>
         sum + numberOr((item as Record<string, unknown> | null)?.price, 0), 0);
@@ -4400,10 +4651,12 @@ export const expireBusinessSubscriptions = onSchedule(
         const reminders = row.reminders && typeof row.reminders === "object"
           ? row.reminders as Record<string, unknown>
           : {};
-        if (!reminderKey || reminders[reminderKey]) return;
+        // Eski sürüm set() ile noktalı anahtarı düz alan olarak yazdı ("reminders.oneDayAt");
+        // her iki biçim de "gönderildi" sayılır, böylece hatırlatma saatlik tekrarlanmaz.
+        if (!reminderKey || reminders[reminderKey] || row[`reminders.${reminderKey}`]) return;
 
         batch.set(document.ref, {
-          [`reminders.${reminderKey}`]: FieldValue.serverTimestamp(),
+          reminders: { [reminderKey]: FieldValue.serverTimestamp() },
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
         batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
@@ -4589,7 +4842,7 @@ export const sendVerificationCode = onCall(
       );
     }
 
-    const forwardedFor = String(request.rawRequest.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    const forwardedFor = clientIpFrom(request.rawRequest);
     const requestIp = forwardedFor || request.rawRequest.ip || "unknown";
     await Promise.all([
       consumeSecurityLimit(`otp:phone:hour:${phone}`, 5, 60 * 60_000),
@@ -4735,86 +4988,55 @@ export const verifyPhoneCode = onCall(
       `verificationCodes/${phone}`
     );
 
-    const codeSnap = await codeDocRef.get();
-
-    if (!codeSnap.exists) {
-      throw new HttpsError(
-        "not-found",
-        "Doğrulama kodu bulunamadı. Lütfen tekrar kod gönderin."
-      );
-    }
-
-    const codeData = codeSnap.data()!;
-
-    const expiresAt =
-      codeData.expiresAt as Timestamp | undefined;
-
-    if (
-      !expiresAt ||
-      expiresAt.toMillis() < Date.now()
-    ) {
-      await codeDocRef.delete();
-
-      throw new HttpsError(
-        "deadline-exceeded",
-        "Doğrulama kodunun süresi doldu. Lütfen yeni kod gönderin."
-      );
-    }
-
-    if (codeData.verified === true) {
-      return {
-        success: true,
-        verified: true,
-      };
-    }
-
-    const attempts = Number(
-      codeData.attempts ?? 0
-    );
-
-    if (attempts >= 3) {
-      await codeDocRef.delete();
-
-      throw new HttpsError(
-        "permission-denied",
-        "Çok fazla hatalı deneme. Lütfen yeni kod gönderin."
-      );
-    }
-
-    const expectedHash =
-      String(codeData.codeHash ?? "");
-
-    const suppliedHash =
-      otpHash(phone, inputCode);
-
-    if (
-      !expectedHash ||
-      expectedHash !== suppliedHash
-    ) {
-      const nextAttempts = attempts + 1;
-
-      if (nextAttempts >= 3) {
-        await codeDocRef.delete();
-      } else {
-        await codeDocRef.update({
-          attempts: FieldValue.increment(1),
-        });
+    // Tüm kontrol tek transaction içinde: paralel tahminler deneme sınırını aşamaz.
+    type VerifyOutcome = { kind: "missing" | "expired" | "locked" | "ok" } | { kind: "wrong"; left: number };
+    const outcome = await db.runTransaction<VerifyOutcome>(async (tx) => {
+      const codeSnap = await tx.get(codeDocRef);
+      if (!codeSnap.exists) return { kind: "missing" };
+      const codeData = codeSnap.data()!;
+      const expiresAt = codeData.expiresAt as Timestamp | undefined;
+      if (!expiresAt || expiresAt.toMillis() < Date.now()) {
+        tx.delete(codeDocRef);
+        return { kind: "expired" };
       }
+      if (codeData.verified === true) return { kind: "ok" };
+      const attempts = Number(codeData.attempts ?? 0);
+      if (attempts >= 3) {
+        tx.delete(codeDocRef);
+        return { kind: "locked" };
+      }
+      const expectedHash = String(codeData.codeHash ?? "");
+      if (!expectedHash || expectedHash !== otpHash(phone, inputCode)) {
+        const nextAttempts = attempts + 1;
+        if (nextAttempts >= 3) tx.delete(codeDocRef);
+        else tx.update(codeDocRef, { attempts: nextAttempts });
+        return nextAttempts >= 3 ? { kind: "locked" } : { kind: "wrong", left: 3 - nextAttempts };
+      }
+      tx.update(codeDocRef, { verified: true, verifiedAt: FieldValue.serverTimestamp(), attempts: 0 });
+      return { kind: "ok" };
+    });
 
-      throw new HttpsError(
-        "invalid-argument",
-        nextAttempts >= 3
-          ? "Çok fazla hatalı deneme. Lütfen yeni kod gönderin."
-          : `Yanlış kod. ${3 - nextAttempts
-          } deneme hakkınız kaldı.`
-      );
+    if (outcome.kind === "missing") {
+      throw new HttpsError("not-found", "Doğrulama kodu bulunamadı. Lütfen tekrar kod gönderin.");
+    }
+    if (outcome.kind === "expired") {
+      throw new HttpsError("deadline-exceeded", "Doğrulama kodunun süresi doldu. Lütfen yeni kod gönderin.");
+    }
+    if (outcome.kind === "locked") {
+      throw new HttpsError("permission-denied", "Çok fazla hatalı deneme. Lütfen yeni kod gönderin.");
+    }
+    if (outcome.kind === "wrong") {
+      throw new HttpsError("invalid-argument", `Yanlış kod. ${outcome.left} deneme hakkınız kaldı.`);
     }
 
-    await codeDocRef.update({
-      verified: true,
-      verifiedAt: FieldValue.serverTimestamp(),
-      attempts: 0,
-    });
+    // Oturum açıksa doğrulanan telefonu istemcinin yazamadığı bir belgeye kaydet;
+    // müşteri avantajları (paket/puan) yalnızca bu doğrulanmış numarayla eşleştirilir.
+    const verifierUid = request.auth?.uid;
+    if (verifierUid) {
+      await db.doc(`users/${verifierUid}/verifiedIdentity/phone`).set({
+        phone, verifiedAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     return {
       success: true,
@@ -4952,7 +5174,7 @@ export const sendPasswordResetCode = onCall(
       throw new HttpsError("invalid-argument", "Geçerli bir e-posta adresi girin.");
     }
 
-    const forwardedFor = String(request.rawRequest.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    const forwardedFor = clientIpFrom(request.rawRequest);
     const requestIp = forwardedFor || request.rawRequest.ip || "unknown";
     await Promise.all([
       consumeSecurityLimit(`password-reset:email:hour:${email}`, 5, 60 * 60_000),
@@ -5745,6 +5967,8 @@ export const createAvailabilityAlert = onCall(protectedCallableOptions, async (r
   }
   const business = await availabilityGate(businessId, "availabilityAlerts");
   if (!business) throw new HttpsError("failed-precondition", "FEATURE_DISABLED");
+  // Kötüye kullanım sınırı: kullanıcı başına günde en fazla 20 yeni alarm denemesi.
+  await consumeSecurityLimit(`alerts:create:${uid}`, 20, 24 * 60 * 60_000);
   const context = await loadBookingContext(businessId, serviceId, staffId);
   if (context.service.isBookableOnline === false ||
       (staffId && Array.isArray(context.service.assignableStaffIds) && context.service.assignableStaffIds.length > 0 &&
@@ -6302,6 +6526,8 @@ export const joinQueue = onCall(protectedCallableOptions, async (request) => {
   const staffId = request.data?.staffId == null ? null : requireQueueId(request.data.staffId, "staffId");
   const mode = staffId ? "specific_staff" : "first_available";
   await readQueueGate(businessId, "join");
+  // Kötüye kullanım sınırı: kullanıcı başına saatte en fazla 10 sıraya katılma denemesi.
+  await consumeSecurityLimit(`queue:join:${uid}`, 10, 60 * 60_000);
 
   const context = await loadBookingContext(businessId, serviceId, staffId);
   if (validateQueueSelection(context.business, context.service, context.staff, serviceId, staffId)) {

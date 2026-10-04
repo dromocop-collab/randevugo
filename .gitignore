@@ -1,0 +1,24 @@
+# Bağımlılıklar ve derleme çıktıları (CI/deploy her seferinde temiz kurar ve derler)
+node_modules/
+functions/lib/
+
+# Firebase / emülatör logları
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+storage-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+
+# Ortam ve sırlar
+.env
+.env.*
+!.env.example
+*.pem
+service-account*.json
+
+# İşletim sistemi / editör
+.DS_Store
+.vscode/
+.idea/

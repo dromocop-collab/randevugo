@@ -52,6 +52,29 @@ jobs:
         run: npm test
         working-directory: functions
 
+  security-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install function dependencies
+        run: npm ci
+        working-directory: functions
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@15
+      - name: Firestore and Storage security rules (emulator)
+        run: npm run test:rules
+        working-directory: functions
+
   browser-smoke:
     needs: verify
     runs-on: ubuntu-latest
