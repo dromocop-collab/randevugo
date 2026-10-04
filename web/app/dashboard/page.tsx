@@ -342,7 +342,7 @@ export default function DashboardHomePage() {
             {data.upcoming[0] ? (
               <Link
                 href="/dashboard/randevular"
-                className="mt-4 flex items-center gap-4 rounded-xl bg-white p-4 text-[#10291d]"
+                className="dashboard-next-appointment mt-4 flex items-center gap-4 rounded-xl bg-white p-4 text-[#10291d]"
               >
                 <time className="text-2xl font-black">
                   {new Date(data.upcoming[0].startAt).toLocaleTimeString("tr-TR", {

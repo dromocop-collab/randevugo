@@ -14497,6 +14497,10 @@ body:has(.compare-dock) .support-popup { bottom:calc(max(18px,env(safe-area-inse
   line-height: 1
 }
 
+.command-notification-button {
+  overflow: visible;
+}
+
 .command-notification-panel {
   position: absolute;
   right: 0;
@@ -14509,6 +14513,11 @@ body:has(.compare-dock) .support-popup { bottom:calc(max(18px,env(safe-area-inse
   background: var(--surface-1);
   color: var(--text-1);
   box-shadow: 0 28px 70px rgb(8 42 27/.22)
+}
+
+.command-notification-panel--portal {
+  position: fixed;
+  z-index: 1200;
 }
 
 .command-notification-panel>header {
@@ -30386,6 +30395,31 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   border-color: rgb(var(--dash-rgb)/.28);
   background: var(--dash-soft);
   color: var(--dash-core);
+}
+
+/* The hero uses white typography globally; keep the white appointment card legible. */
+.dashboard-next-appointment,
+.dashboard-next-appointment time,
+.dashboard-next-appointment b,
+.dashboard-next-appointment svg {
+  color: #10291d !important;
+}
+
+.dashboard-next-appointment small {
+  color: #64748b !important;
+}
+
+@media (max-width: 760px) {
+  .command-notification-button b {
+    top: 2px;
+    right: 2px;
+    min-width: 17px;
+    height: 17px;
+    border-width: 1.5px;
+    padding: 0 3px;
+    font-size: 8px;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 520px) {

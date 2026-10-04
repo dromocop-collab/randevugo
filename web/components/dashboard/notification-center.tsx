@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Bell, CalendarDays, CheckCheck, CircleAlert, CreditCard, Info, LoaderCircle, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { deleteAllNotifications, deleteNotification, markAllNotificationsRead, markNotificationRead, subscribeNotifications } from "@/features/notifications/notification-repository";
@@ -21,7 +22,10 @@ export function NotificationCenter({ businessId }: { businessId: string | null }
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState("");
+  const [panelPosition, setPanelPosition] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const unreadCount = useMemo(() => items.filter((item) => !item.isRead).length, [items]);
 
   useEffect(() => {
@@ -35,13 +39,46 @@ export function NotificationCenter({ businessId }: { businessId: string | null }
 
   useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(target) &&
+        !panelRef.current?.contains(target)
+      ) setOpen(false);
     }
     function closeOnEscape(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }
     document.addEventListener("mousedown", closeOnOutsideClick);
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function updatePanelPosition() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      if (window.matchMedia("(max-width: 520px)").matches) {
+        setPanelPosition({ top: rect.bottom + 10, right: 12, left: 12 });
+        return;
+      }
+
+      setPanelPosition({
+        top: rect.bottom + 12,
+        right: Math.max(14, window.innerWidth - rect.right),
+        left: "auto",
+      });
+    }
+
+    updatePanelPosition();
+    window.addEventListener("resize", updatePanelPosition);
+    window.addEventListener("scroll", updatePanelPosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+    };
+  }, [open]);
 
   async function markOne(item: NotificationItem) {
     if (!businessId || item.isRead) return;
@@ -78,22 +115,24 @@ export function NotificationCenter({ businessId }: { businessId: string | null }
     finally { setDeleting(""); }
   }
 
+  const panel = <section ref={panelRef} className="command-notification-panel command-notification-panel--portal" style={panelPosition} role="dialog" aria-label="Bildirim merkezi">
+    <header><div><small>CANLI AKIŞ</small><h2>Bildirimler</h2></div><nav><button type="button" onClick={() => void markAll()} disabled={unreadCount === 0 || Boolean(deleting)}><CheckCheck size={15}/> Okundu</button><button type="button" className="notification-clear-button" onClick={() => void clearAll()} disabled={items.length === 0 || Boolean(deleting)}>{deleting === "all" ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>} Temizle</button><button type="button" className="command-notification-close" onClick={() => setOpen(false)} aria-label="Bildirim merkezini kapat"><X size={16}/></button></nav></header>
+    <div className="command-notification-list">
+      {error ? <div className="command-notification-empty"><CircleAlert size={22}/><p>{error}</p></div> : items.length === 0 ? <div className="command-notification-empty"><Bell size={22}/><p>Henüz yeni bildiriminiz yok.</p></div> : items.map((item) => {
+        const Icon = ICONS[item.type] ?? Info;
+        const appointmentId = item.relatedAppointmentId ?? item.appointmentId;
+        const content = <><span className="command-notification-icon"><Icon size={16}/></span><span><b>{item.title}</b><p>{item.body}</p><time>{formatNotificationDate(item.createdAt)}</time></span>{!item.isRead && <i/>}</>;
+        return <article key={item.id} className={`command-notification-item ${item.isRead ? "" : "unread"}`}>{appointmentId ? <Link href={`/dashboard/randevular?appointment=${encodeURIComponent(appointmentId)}`} className="command-notification-main" onClick={() => { void markOne(item); setOpen(false); }}>{content}</Link> : <button type="button" className="command-notification-main" onClick={() => void markOne(item)}>{content}</button>}<button type="button" className="command-notification-delete" onClick={() => void removeOne(item)} disabled={Boolean(deleting)} aria-label={`${item.title} bildirimini sil`}>{deleting === item.id ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>}</button></article>;
+      })}
+    </div>
+    <footer><Link href="/dashboard/randevular" onClick={() => setOpen(false)}>Tüm randevuları aç</Link></footer>
+  </section>;
+
   return <div className="command-notification-root" ref={rootRef}>
-    <button type="button" className="command-icon command-notification-button" aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+    <button ref={buttonRef} type="button" className="command-icon command-notification-button" aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
       <Bell size={17}/>{unreadCount > 0 && <b>{unreadCount > 9 ? "9+" : unreadCount}</b>}
     </button>
-    {open && <section className="command-notification-panel" role="dialog" aria-label="Bildirim merkezi">
-      <header><div><small>CANLI AKIŞ</small><h2>Bildirimler</h2></div><nav><button type="button" onClick={() => void markAll()} disabled={unreadCount === 0 || Boolean(deleting)}><CheckCheck size={15}/> Okundu</button><button type="button" className="notification-clear-button" onClick={() => void clearAll()} disabled={items.length === 0 || Boolean(deleting)}>{deleting === "all" ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>} Temizle</button><button type="button" className="command-notification-close" onClick={() => setOpen(false)} aria-label="Bildirim merkezini kapat"><X size={16}/></button></nav></header>
-      <div className="command-notification-list">
-        {error ? <div className="command-notification-empty"><CircleAlert size={22}/><p>{error}</p></div> : items.length === 0 ? <div className="command-notification-empty"><Bell size={22}/><p>Henüz yeni bildiriminiz yok.</p></div> : items.map((item) => {
-          const Icon = ICONS[item.type] ?? Info;
-          const appointmentId = item.relatedAppointmentId ?? item.appointmentId;
-          const content = <><span className="command-notification-icon"><Icon size={16}/></span><span><b>{item.title}</b><p>{item.body}</p><time>{formatNotificationDate(item.createdAt)}</time></span>{!item.isRead && <i/>}</>;
-          return <article key={item.id} className={`command-notification-item ${item.isRead ? "" : "unread"}`}>{appointmentId ? <Link href={`/dashboard/randevular?appointment=${encodeURIComponent(appointmentId)}`} className="command-notification-main" onClick={() => { void markOne(item); setOpen(false); }}>{content}</Link> : <button type="button" className="command-notification-main" onClick={() => void markOne(item)}>{content}</button>}<button type="button" className="command-notification-delete" onClick={() => void removeOne(item)} disabled={Boolean(deleting)} aria-label={`${item.title} bildirimini sil`}>{deleting === item.id ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>}</button></article>;
-        })}
-      </div>
-      <footer><Link href="/dashboard/randevular" onClick={() => setOpen(false)}>Tüm randevuları aç</Link></footer>
-    </section>}
+    {open && typeof document !== "undefined" ? createPortal(panel, document.body) : null}
   </div>;
 }
 
