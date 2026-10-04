@@ -1862,19 +1862,15 @@ exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async
             ? [{ ref: document.ref, token, platform }]
             : [];
     });
+    const uniqueCandidates = [...new Map(candidateTokens.map((item) => [item.token, item])).values()];
     const platformTokens = platform === "all"
-        ? candidateTokens
-        : candidateTokens.filter((item) => item.platform === platform);
+        ? uniqueCandidates
+        : uniqueCandidates.filter((item) => item.platform === platform);
     let tokens = platformTokens;
     if (category === "campaign") {
-        const userRefMap = new Map();
-        platformTokens.forEach((item) => {
-            const ref = item.ref.parent.parent;
-            if (ref)
-                userRefMap.set(ref.path, db.doc(ref.path));
-        });
-        const users = await Promise.all([...userRefMap.values()].map((ref) => ref.get()));
-        const allowedUsers = new Set(users.filter((snapshot) => snapshot.data()?.notificationPreferences?.campaigns === true).map((snapshot) => snapshot.ref.path));
+        const users = await db.collection("users")
+            .where("notificationPreferences.campaigns", "==", true).get();
+        const allowedUsers = new Set(users.docs.map((snapshot) => snapshot.ref.path));
         tokens = platformTokens.filter((item) => {
             const userPath = item.ref.parent.parent?.path;
             return !!userPath && allowedUsers.has(userPath);
@@ -1886,7 +1882,7 @@ exports.sendPlatformPush = (0, https_1.onCall)({ region: "europe-west1" }, async
     });
     await db.collection("notificationLogs").add({
         audience: "platform", category, platform, destination, templateId, title, body, senderUid: uid,
-        candidateDevices: candidateTokens.length, targetPlatformDevices: platformTokens.length,
+        candidateDevices: uniqueCandidates.length, targetPlatformDevices: platformTokens.length,
         recipientDevices: tokens.length, ...result,
         status: tokens.length === 0 ? "no_recipients" : result.failureCount === 0 ? "sent" : "partial",
         createdAt: firestore_1.FieldValue.serverTimestamp(),
@@ -1898,20 +1894,36 @@ exports.getPlatformPushOperations = (0, https_1.onCall)({ region: "europe-west1"
     if (!uid)
         throw new https_1.HttpsError("unauthenticated", "Oturum bulunamadı.");
     await requirePlatformAdmin(uid, request.auth?.token.email);
-    const [devices, logs] = await Promise.all([
+    const [devices, logs, campaignUsers] = await Promise.all([
         db.collectionGroup("devices").get(),
         db.collection("notificationLogs").orderBy("createdAt", "desc").limit(100).get(),
+        db.collection("users").where("notificationPreferences.campaigns", "==", true).get(),
     ]);
-    const summary = devices.docs.reduce((counts, document) => {
-        const data = document.data();
-        if (data.enabled === false || String(data.fcmToken ?? "").length <= 20)
-            return counts;
-        if (data.platform === "android")
+    const allowedCampaignUsers = new Set(campaignUsers.docs.map((document) => document.ref.path));
+    const validDevices = [...new Map(devices.docs.flatMap((document) => {
+            const data = document.data();
+            const platform = data.platform === "android" || data.platform === "ios" ? data.platform : null;
+            const token = String(data.fcmToken ?? "");
+            const userPath = document.ref.parent.parent?.path;
+            return data.enabled !== false && platform && token.length > 20
+                ? [[token, { platform, userPath }]]
+                : [];
+        })).values()];
+    const summary = validDevices.reduce((counts, device) => {
+        if (device.platform === "android")
             counts.android += 1;
-        else if (data.platform === "ios")
-            counts.ios += 1;
         else
+            counts.ios += 1;
+        counts.total += 1;
+        return counts;
+    }, { total: 0, ios: 0, android: 0 });
+    const campaignEligible = validDevices.reduce((counts, device) => {
+        if (!device.userPath || !allowedCampaignUsers.has(device.userPath))
             return counts;
+        if (device.platform === "android")
+            counts.android += 1;
+        else
+            counts.ios += 1;
         counts.total += 1;
         return counts;
     }, { total: 0, ios: 0, android: 0 });
@@ -1935,7 +1947,7 @@ exports.getPlatformPushOperations = (0, https_1.onCall)({ region: "europe-west1"
             createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? null,
         };
     });
-    return { summary, rows };
+    return { summary, campaignEligible, rows };
 });
 exports.sendBusinessPush = (0, https_1.onCall)({ region: "europe-west1" }, async (request) => {
     const uid = request.auth?.uid;

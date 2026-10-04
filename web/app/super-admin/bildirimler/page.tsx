@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import {
   Activity, AlertTriangle, BellRing, CalendarClock, CheckCircle2, ChevronRight,
-  LayoutTemplate, LoaderCircle, Megaphone, RefreshCw, Rocket, Send,
+  CircleAlert, LayoutTemplate, LoaderCircle, Megaphone, RefreshCw, Rocket, Search, Send,
   ShieldCheck, Smartphone, Sparkles, TicketCheck, UsersRound, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +81,8 @@ export default function NotificationCenterPage() {
   const [destination, setDestination] = useState<PushDestination>("appointments");
   const [title, setTitle] = useState(templates[0].title);
   const [body, setBody] = useState(templates[0].body);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "sent" | "issues">("all");
 
   async function refresh(silent = false) {
     if (!silent) setRefreshing(true);
@@ -96,10 +98,42 @@ export default function NotificationCenterPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!confirming) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !sending) setConfirming(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [confirming, sending]);
+
   const targetCount = useMemo(() => {
     if (!operations) return 0;
-    return platform === "ios" ? operations.summary.ios : platform === "android" ? operations.summary.android : operations.summary.total;
-  }, [operations, platform]);
+    const source = category === "campaign" ? (operations.campaignEligible ?? operations.summary) : operations.summary;
+    return platform === "ios" ? source.ios : platform === "android" ? source.android : source.total;
+  }, [category, operations, platform]);
+
+  const history = useMemo(() => {
+    const query = historyQuery.trim().toLocaleLowerCase("tr-TR");
+    return (operations?.rows ?? []).filter((row) => {
+      const statusMatches = historyFilter === "all" || (historyFilter === "sent" ? row.status === "sent" : row.status !== "sent");
+      const queryMatches = !query || `${row.title} ${row.body}`.toLocaleLowerCase("tr-TR").includes(query);
+      return statusMatches && queryMatches;
+    });
+  }, [historyFilter, historyQuery, operations]);
+
+  const delivery = useMemo(() => {
+    const rows = operations?.rows ?? [];
+    const recipients = rows.reduce((sum, row) => sum + row.recipients, 0);
+    const success = rows.reduce((sum, row) => sum + row.successCount, 0);
+    const failures = rows.reduce((sum, row) => sum + row.failureCount, 0);
+    return { success, failures, rate: recipients ? Math.round((success / recipients) * 100) : 0 };
+  }, [operations]);
 
   const valid = title.trim().length > 0 && body.trim().length > 0 && title.length <= 80 && body.length <= 500;
 
@@ -166,7 +200,7 @@ export default function NotificationCenterPage() {
                 <label className="block"><span className="mb-2 block text-sm font-medium text-[var(--text-1)]">Bildirim türü</span><select value={category} onChange={(event) => setCategory(event.target.value as PushCategory)} className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3.5 text-sm text-[var(--text-1)] outline-none focus:border-emerald-500"><option value="service">Hizmet bildirimi</option><option value="campaign">Kampanya bildirimi</option></select></label>
                 <label className="block"><span className="mb-2 block text-sm font-medium text-[var(--text-1)]">Dokununca açılacak alan</span><select value={destination} onChange={(event) => setDestination(event.target.value as PushDestination)} className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3.5 text-sm text-[var(--text-1)] outline-none focus:border-emerald-500">{Object.entries(destinationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               </div>
-              {category === "campaign" && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><ShieldCheck className="mt-0.5 shrink-0" size={18} /><p className="text-xs leading-5"><b className="block text-sm">İzinli pazarlama gönderimi</b>Yalnızca kampanya bildirimlerine açıkça izin veren kullanıcılar alıcı listesine eklenir.</p></div>}
+              {category === "campaign" && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><ShieldCheck className="mt-0.5 shrink-0" size={18} /><p className="text-xs leading-5"><b className="block text-sm">İzinli pazarlama gönderimi</b>Yalnızca kampanya bildirimlerine açıkça izin veren kullanıcılar alıcı listesine eklenir. Sayaç gerçek izinli cihazları gösterir.</p></div>}
             </div>
           </article>
         </div>
@@ -175,7 +209,7 @@ export default function NotificationCenterPage() {
           <article className="rounded-[26px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
             <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-100 text-violet-700"><Smartphone size={21} /></span><div><h2 className="font-semibold text-[var(--text-1)]">Hedef platform</h2><p className="text-xs text-[var(--text-3)]">Cihaz kaydındaki gerçek işletim sistemine göre seçilir.</p></div></div>
             <div className="mt-5 grid grid-cols-3 gap-2">
-              {(["all", "ios", "android"] as PushPlatform[]).map((item) => <button key={item} type="button" aria-pressed={platform === item} onClick={() => setPlatform(item)} className={`rounded-2xl border px-2 py-3 text-sm font-semibold transition ${platform === item ? "border-emerald-500 bg-emerald-600 text-white shadow-md shadow-emerald-900/15" : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:border-emerald-300"}`}>{item === "all" ? "Tümü" : item === "ios" ? "iOS" : "Android"}<small className={`mt-1 block font-normal ${platform === item ? "text-white/70" : "text-[var(--text-3)]"}`}>{item === "all" ? operations?.summary.total : item === "ios" ? operations?.summary.ios : operations?.summary.android} cihaz</small></button>)}
+              {(["all", "ios", "android"] as PushPlatform[]).map((item) => { const counts = category === "campaign" ? (operations?.campaignEligible ?? operations?.summary) : operations?.summary; return <button key={item} type="button" aria-pressed={platform === item} onClick={() => setPlatform(item)} className={`rounded-2xl border px-2 py-3 text-sm font-semibold transition ${platform === item ? "border-emerald-500 bg-emerald-600 text-white shadow-md shadow-emerald-900/15" : "border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:border-emerald-300"}`}>{item === "all" ? "Tümü" : item === "ios" ? "iOS" : "Android"}<small className={`mt-1 block font-normal ${platform === item ? "text-white/70" : "text-[var(--text-3)]"}`}>{item === "all" ? counts?.total : item === "ios" ? counts?.ios : counts?.android} cihaz</small></button>; })}
             </div>
 
             <div className="mx-auto mt-6 max-w-[330px] rounded-[34px] border-[7px] border-slate-900 bg-slate-900 p-1 shadow-2xl">
@@ -190,18 +224,25 @@ export default function NotificationCenterPage() {
           </article>
 
           <article className="rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
-            <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><UsersRound size={19} /></span><div><p className="text-sm font-semibold text-emerald-950">Hedeflenen cihazlar</p><p className="mt-1 text-2xl font-semibold text-emerald-950">{targetCount}</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">{category === "campaign" ? "Bu üst sınırdır; kampanya izni olmayanlar sunucuda çıkarılır." : "Etkin ve geçerli cihaz kayıtlarının güncel toplamıdır."}</p></div></div>
+            <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><UsersRound size={19} /></span><div><p className="text-sm font-semibold text-emerald-950">Hedeflenen cihazlar</p><p className="mt-1 text-2xl font-semibold text-emerald-950">{targetCount}</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">{category === "campaign" ? "Kampanya izni açık, etkin ve benzersiz cihazların güncel toplamıdır." : "Etkin, geçerli ve benzersiz cihaz kayıtlarının güncel toplamıdır."}</p></div></div>
             <Button className="mt-5 w-full" disabled={!valid || targetCount === 0} onClick={() => setConfirming(true)}><Send size={17} /> Gönderimi kontrol et</Button>
           </article>
         </div>
       </section>
 
-      <section className="rounded-[26px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-700"><Activity size={21} /></span><div><h2 className="font-semibold text-[var(--text-1)]">Son gönderimler</h2><p className="text-xs text-[var(--text-3)]">Kişisel veri içermeyen teslim özeti.</p></div></div><button type="button" onClick={() => refresh()} disabled={refreshing} className="inline-flex items-center gap-2 self-start rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-2)] hover:bg-[var(--surface-2)] disabled:opacity-50"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Yenile</button></div>
-        <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--text-3)]"><tr><th className="py-3">Bildirim</th><th>Platform</th><th>Tür</th><th>Alıcı</th><th>Teslim</th><th>Durum</th><th>Tarih</th></tr></thead><tbody>{operations?.rows.map((row) => <tr key={row.id} className="border-b border-[var(--border)]/70"><td className="max-w-[260px] py-3 pr-4"><b className="block truncate text-[var(--text-1)]">{row.title}</b><small className="mt-0.5 block truncate text-[var(--text-3)]">{row.body}</small></td><td className="font-medium text-[var(--text-2)]">{platformLabels[row.platform]}</td><td className="text-[var(--text-2)]">{row.category === "campaign" ? "Kampanya" : "Hizmet"}</td><td>{row.recipients}</td><td className="text-emerald-700">{row.successCount}</td><td><StatusPill status={row.status} /></td><td className="text-xs text-[var(--text-3)]">{row.createdAt ? new Date(row.createdAt).toLocaleString("tr-TR") : "—"}</td></tr>)}</tbody></table>{!operations?.rows.length && <p className="py-10 text-center text-sm text-[var(--text-3)]">İlk platform bildirimin gönderildiğinde teslim özeti burada görünecek.</p>}</div>
+      <section className="grid gap-3 sm:grid-cols-3">
+        {[{ label: "Teslim oranı", value: `%${delivery.rate}`, note: "Son 30 gönderim", tone: "bg-emerald-50 text-emerald-800" }, { label: "Başarılı teslim", value: delivery.success.toLocaleString("tr-TR"), note: "FCM tarafından kabul", tone: "bg-sky-50 text-sky-800" }, { label: "Kontrol gerekli", value: delivery.failures.toLocaleString("tr-TR"), note: "Başarısız cihaz", tone: delivery.failures ? "bg-amber-50 text-amber-900" : "bg-slate-50 text-slate-700" }].map((item) => <article key={item.label} className={`rounded-[22px] border border-[var(--border)] p-4 ${item.tone}`}><small className="font-semibold uppercase tracking-wider opacity-70">{item.label}</small><strong className="mt-2 block text-2xl">{item.value}</strong><span className="mt-1 block text-xs opacity-65">{item.note}</span></article>)}
       </section>
 
-      {confirming && <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !sending) setConfirming(false); }}><section role="dialog" aria-modal="true" aria-labelledby="push-confirm-title" className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-700"><AlertTriangle /></span><button type="button" onClick={() => setConfirming(false)} disabled={sending} aria-label="Pencereyi kapat" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X size={20} /></button></div><h2 id="push-confirm-title" className="mt-5 text-2xl font-semibold text-slate-950">Gönderimi onayla</h2><p className="mt-2 text-sm leading-6 text-slate-600">Bildirim <b>{platformLabels[platform]}</b> hedefindeki uygun cihazlara hemen gönderilecek. Bu işlem geri alınamaz.</p><div className="mt-5 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm"><div className="flex justify-between gap-4"><span className="text-slate-500">Başlık</span><b className="max-w-[280px] text-right text-slate-900">{title}</b></div><div className="flex justify-between"><span className="text-slate-500">Tahmini üst sınır</span><b className="text-slate-900">{targetCount} cihaz</b></div><div className="flex justify-between"><span className="text-slate-500">Açılacak alan</span><b className="text-slate-900">{destinationLabels[destination]}</b></div></div><div className="mt-6 flex gap-3"><Button className="flex-1" variant="secondary" onClick={() => setConfirming(false)} disabled={sending}>Vazgeç</Button><Button className="flex-1" onClick={submit} disabled={sending}>{sending ? <LoaderCircle className="animate-spin" size={17} /> : <Send size={17} />}{sending ? "Gönderiliyor" : "Şimdi gönder"}</Button></div></section></div>}
+      <section className="rounded-[26px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-700"><Activity size={21} /></span><div><h2 className="font-semibold text-[var(--text-1)]">Son gönderimler</h2><p className="text-xs text-[var(--text-3)]">Kişisel veri içermeyen teslim özeti.</p></div></div><button type="button" onClick={() => refresh()} disabled={refreshing} className="inline-flex items-center gap-2 self-start rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--text-2)] hover:bg-[var(--surface-2)] disabled:opacity-50"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Yenile</button></div>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row"><label className="relative flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" /><input value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="Başlık veya mesaj ara" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] py-2.5 pl-9 pr-3 text-sm text-[var(--text-1)] outline-none focus:border-emerald-500" /></label><div className="grid grid-cols-3 rounded-xl bg-[var(--surface-2)] p-1">{([['all','Tümü'],['sent','Başarılı'],['issues','Sorunlu']] as const).map(([value,label]) => <button key={value} type="button" onClick={() => setHistoryFilter(value)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${historyFilter === value ? "bg-white text-emerald-800 shadow-sm" : "text-[var(--text-3)]"}`}>{label}</button>)}</div></div>
+        <div className="mt-5 hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--text-3)]"><tr><th className="py-3">Bildirim</th><th>Platform</th><th>Tür</th><th>Alıcı</th><th>Teslim</th><th>Durum</th><th>Tarih</th></tr></thead><tbody>{history.map((row) => <tr key={row.id} className="border-b border-[var(--border)]/70"><td className="max-w-[260px] py-3 pr-4"><b className="block truncate text-[var(--text-1)]">{row.title}</b><small className="mt-0.5 block truncate text-[var(--text-3)]">{row.body}</small></td><td className="font-medium text-[var(--text-2)]">{platformLabels[row.platform]}</td><td className="text-[var(--text-2)]">{row.category === "campaign" ? "Kampanya" : "Hizmet"}</td><td>{row.recipients}</td><td className="text-emerald-700">{row.successCount}</td><td><StatusPill status={row.status} /></td><td className="text-xs text-[var(--text-3)]">{row.createdAt ? new Date(row.createdAt).toLocaleString("tr-TR") : "—"}</td></tr>)}</tbody></table></div>
+        <div className="mt-4 space-y-3 md:hidden">{history.map((row) => <article key={row.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm text-[var(--text-1)]">{row.title}</b><p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--text-3)]">{row.body}</p></div><StatusPill status={row.status} /></div><div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-3)]"><span>{platformLabels[row.platform]}</span><span>•</span><span>{row.category === "campaign" ? "Kampanya" : "Hizmet"}</span><span>•</span><b className="text-emerald-700">{row.successCount}/{row.recipients} teslim</b></div></article>)}</div>
+        {!history.length && <div className="flex flex-col items-center py-10 text-center"><CircleAlert className="text-[var(--text-3)]" /><p className="mt-3 text-sm font-medium text-[var(--text-2)]">Bu filtrede gönderim bulunamadı.</p><button type="button" onClick={() => { setHistoryQuery(""); setHistoryFilter("all"); }} className="mt-2 text-xs font-semibold text-emerald-700">Filtreleri temizle</button></div>}
+      </section>
+
+      {confirming && <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !sending) setConfirming(false); }}><section role="dialog" aria-modal="true" aria-labelledby="push-confirm-title" className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-700"><AlertTriangle /></span><button type="button" onClick={() => setConfirming(false)} disabled={sending} aria-label="Pencereyi kapat" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X size={20} /></button></div><h2 id="push-confirm-title" className="mt-5 text-2xl font-semibold text-slate-950">Gönderimi onayla</h2><p className="mt-2 text-sm leading-6 text-slate-600">Bildirim <b>{platformLabels[platform]}</b> hedefindeki uygun cihazlara hemen gönderilecek. Bu işlem geri alınamaz.</p><div className="mt-5 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm"><div className="flex justify-between gap-4"><span className="text-slate-500">Başlık</span><b className="max-w-[280px] text-right text-slate-900">{title}</b></div><div className="flex justify-between"><span className="text-slate-500">Kesin hedef</span><b className="text-slate-900">{targetCount} cihaz</b></div><div className="flex justify-between"><span className="text-slate-500">Açılacak alan</span><b className="text-slate-900">{destinationLabels[destination]}</b></div></div><div className="mt-6 flex gap-3"><Button className="flex-1" variant="secondary" onClick={() => setConfirming(false)} disabled={sending}>Vazgeç</Button><Button className="flex-1" onClick={submit} disabled={sending}>{sending ? <LoaderCircle className="animate-spin" size={17} /> : <Send size={17} />}{sending ? "Gönderiliyor" : "Şimdi gönder"}</Button></div></section></div>}
     </div>
   );
 }

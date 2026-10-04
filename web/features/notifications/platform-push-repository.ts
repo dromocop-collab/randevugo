@@ -24,6 +24,7 @@ export type PlatformPushResult = {
 
 export type PlatformPushOperations = {
   summary: { total: number; ios: number; android: number };
+  campaignEligible: { total: number; ios: number; android: number };
   rows: Array<{
     id: string;
     title: string;
