@@ -1,3 +1,4 @@
+import { buildCodeEmail, buildStaffInviteEmail } from "./email-templates";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
@@ -2819,10 +2820,9 @@ export const linkStaffAccount = onCall(
       const resetUrl = `https://seninrandevun.com/sifremi-unuttum?email=${encodeURIComponent(email)}&source=staff-invite`;
       batch.set(db.collection("mail").doc(), {
         to: email,
-        message: {
-          subject: `${String(business.name ?? "SeninRandevun")} çalışan paneli daveti`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;color:#10241b"><h1 style="color:#08734b">Çalışan paneliniz hazır</h1><p>Merhaba <strong>${htmlSafe(staff.fullName)}</strong>,</p><p><strong>${htmlSafe(business.name)}</strong> sizi çalışan çalışma alanına davet etti. Panelde yalnızca size atanan randevuları ve izin verilen alanları görebilirsiniz.</p><p style="margin:28px 0"><a href="${resetUrl}" style="background:#08734b;color:white;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:700">Şifremi belirle ve panele gir</a></p><p style="font-size:12px;color:#64748b">Bu daveti beklemiyorsanız işletmeyle iletişime geçebilirsiniz.</p></div>`,
-        },
+        message: (({ subject, html, text }) => ({ subject, html, text }))(
+          buildStaffInviteEmail(String(staff.fullName ?? ""), String(business.name ?? "SeninRandevun"), resetUrl)
+        ),
       });
     }
     batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
@@ -4780,76 +4780,7 @@ export const verifyPhoneCode = onCall(
    Uses Firebase Trigger Email extension via "mail" collection
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-function buildEmailTemplate(code: string, type: "verify" | "reset"): string {
-  const isVerify = type === "verify";
-  const title = isVerify ? "E-posta Doğrulama" : "Şifre Sıfırlama";
-  const heading = isVerify
-    ? "E-posta adresinizi doğrulayın"
-    : "Şifrenizi sıfırlayın";
-  const description = isVerify
-    ? "Hesabınızı aktif etmek için aşağıdaki 6 haneli kodu kullanın."
-    : "Şifrenizi sıfırlamak için aşağıdaki 6 haneli kodu kullanın.";
-  const digits = code.split("");
-
-  return `<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${title} — SeninRandevun</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:40px 20px;">
-<tr><td align="center">
-<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.08);">
-
-  <!-- Header gradient -->
-  <tr><td style="background:linear-gradient(135deg,#0284c7,#06b6d4,#8b5cf6);padding:40px 40px 30px;text-align:center;">
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-    <tr><td style="background:rgba(255,255,255,0.2);border-radius:16px;padding:10px 20px;">
-      <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Senin<span style="opacity:0.9;">Randevun</span></span>
-    </td></tr></table>
-    <p style="margin:20px 0 0;color:rgba(255,255,255,0.9);font-size:14px;font-weight:500;">${title}</p>
-  </td></tr>
-
-  <!-- Body -->
-  <tr><td style="padding:40px;">
-    <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;color:#0f172a;text-align:center;">${heading}</h1>
-    <p style="margin:0 0 32px;font-size:15px;color:#64748b;text-align:center;line-height:1.6;">${description}</p>
-
-    <!-- Code digits -->
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-    <tr>
-      ${digits.map((d) => `<td style="padding:0 4px;"><div style="width:48px;height:56px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:2px solid #0284c7;border-radius:14px;text-align:center;line-height:56px;font-size:28px;font-weight:800;color:#0284c7;letter-spacing:2px;">${d}</div></td>`).join("")}
-    </tr>
-    </table>
-
-    <!-- Timer warning -->
-    <div style="margin:28px auto 0;max-width:340px;background:#fffbeb;border:1px solid #fbbf24;border-radius:12px;padding:14px 18px;text-align:center;">
-      <span style="font-size:13px;color:#92400e;">⏱️ Bu kod <strong>5 dakika</strong> içinde geçerliliğini yitirecektir.</span>
-    </div>
-
-    <!-- Security note -->
-    <div style="margin:24px 0 0;padding:16px;background:#f8fafc;border-radius:12px;">
-      <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
-        🔒 Bu kodu kimseyle paylaşmayın. SeninRandevun ekibi sizden asla doğrulama kodu istemez.
-      </p>
-    </div>
-  </td></tr>
-
-  <!-- Footer -->
-  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center;">
-    <p style="margin:0 0 4px;font-size:12px;color:#94a3b8;">Bu e-postayı siz talep ettiyseniz herhangi bir işlem yapmanıza gerek yok.</p>
-    <p style="margin:0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} SeninRandevun — Zamanın değerli, randevun bizde.</p>
-    <p style="margin:8px 0 0;font-size:11px;color:#cbd5e1;">seninrandevun.com</p>
-  </td></tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
-}
+// Şablon: src/email-templates.ts (marka logosu, tablo tabanlı, düz metin sürümü dahil).
 
 // ── Send Email Verification Code ──
 export const sendEmailVerificationCode = onCall(
@@ -4902,10 +4833,7 @@ export const sendEmailVerificationCode = onCall(
     // Write to "mail" collection — Trigger Email extension picks this up
     await db.collection("mail").add({
       to: email,
-      message: {
-        subject: "SeninRandevun — E-posta Doğrulama Kodu: " + code,
-        html: buildEmailTemplate(code, "verify"),
-      },
+      message: (({ subject, html, text }) => ({ subject, html, text }))(buildCodeEmail(code, "verify")),
     });
 
     return { success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." };
@@ -5030,10 +4958,7 @@ export const sendPasswordResetCode = onCall(
       if (accountExists) {
         tx.set(mailDocRef, {
           to: email,
-          message: {
-            subject: "SeninRandevun — Şifre Sıfırlama Kodu: " + code,
-            html: buildEmailTemplate(code, "reset"),
-          },
+          message: (({ subject, html, text }) => ({ subject, html, text }))(buildCodeEmail(code, "reset")),
         });
       }
     });
