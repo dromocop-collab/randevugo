@@ -3392,6 +3392,54 @@ async function runBusinessAutomations(businessId: string, trigger: BusinessAutom
   });
 }
 
+/**
+ * Misafir olarak alınmış randevuları giriş yapan kullanıcının hesabına aktarır.
+ * Mobil uygulama, oturum yokken aldığı randevuların gizli publicToken değerlerini cihazda saklar;
+ * kullanıcı giriş yapınca bu tokenları gönderir. Token, randevu belgesindeki publicToken ile
+ * birebir eşleşmeli ve randevu hâlâ misafire (guest_) ait olmalıdır; başka bir hesaba bağlı
+ * randevuya asla dokunulmaz. Token UUID v4'tür (tahmin edilemez).
+ */
+export const claimGuestAppointments = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Randevuları aktarmak için giriş yapmalısınız.");
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const raw: unknown[] = Array.isArray(request.data?.publicTokens) ? request.data.publicTokens : [];
+    const tokens = Array.from(new Set(raw.filter((item): item is string => typeof item === "string" && uuid.test(item)))).slice(0, 25);
+    const claimed: string[] = [];
+    const alreadyOwned: string[] = [];
+    for (const token of tokens) {
+      const tokenSnap = await db.doc(`appointmentTokens/${token}`).get();
+      if (!tokenSnap.exists) continue;
+      const businessId = String(tokenSnap.data()?.businessId ?? "");
+      const appointmentId = String(tokenSnap.data()?.appointmentId ?? "");
+      if (!businessId || !appointmentId) continue;
+      const ref = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+      const result = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return "missing";
+        const data = snap.data() ?? {};
+        if (data.publicToken !== token) return "mismatch";
+        const customerId = String(data.customerId ?? "");
+        if (customerId === uid) return "owned";
+        if (!customerId.startsWith("guest_")) return "foreign";
+        tx.update(ref, {
+          customerId: uid,
+          claimedFromGuestId: customerId,
+          claimedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return "claimed";
+      });
+      if (result === "claimed") claimed.push(token);
+      else if (result === "owned") alreadyOwned.push(token);
+    }
+    logger.info("Misafir randevuları hesaba aktarıldı.", { uid, requested: tokens.length, claimed: claimed.length });
+    return { claimed, alreadyOwned, count: claimed.length };
+  }
+);
+
 export const getAppointmentByPublicToken = onCall(
   publicCallableOptions,
   async (request) => {
