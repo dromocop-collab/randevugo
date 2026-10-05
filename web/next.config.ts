@@ -32,6 +32,20 @@ const nextConfig: NextConfig = {
     ],
   },
   allowedDevOrigins: ["192.168.1.168"],
+  // Sık yazılan kısa adresler gerçek 308 ile doğru sayfaya gider (arama motorları için de net).
+  async redirects() {
+    const aliases: Record<string, string> = {
+      "/yardim": "/yardim-merkezi",
+      "/destek": "/yardim-merkezi",
+      "/ios": "/mobil-uygulama",
+      "/android": "/mobil-uygulama",
+      "/uygulama": "/mobil-uygulama",
+      "/kategoriler": "/kesfet",
+      "/magazalar": "/kesfet",
+      "/randevularim": "/hesabim",
+    };
+    return Object.entries(aliases).map(([source, destination]) => ({ source, destination, permanent: true }));
+  },
   async headers() {
     return [
       {
