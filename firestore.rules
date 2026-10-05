@@ -79,7 +79,9 @@ service cloud.firestore {
           "organizationId", "organizationName", "headquartersBusinessId", "branchNumber",
           "branchCode", "isHeadquarters",
           // Sahiplik, yayın durumu ve mağaza adresi yalnızca sunucu/platform yöneticisi tarafından değişir.
-          "ownerUid", "isPublished", "slug"]));
+          "ownerUid", "isPublished", "slug",
+          // Askıdan çıkarılınca geri yüklenecek durum; işletme kendini "active"e döndüremesin.
+          "statusBeforeSuspension"]));
     }
 
     // Public storefront identity is published only after platform moderation.
@@ -159,7 +161,13 @@ service cloud.firestore {
 
     match /platformAlerts/{alertId} {
       allow read: if isPlatformAdmin();
-      allow write: if false;
+      // Uyarılar yalnızca backend tarafından oluşturulur; yönetici sadece "okundu" işaretleyebilir.
+      allow update: if isPlatformAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead", "readAt", "readBy"]) &&
+        request.resource.data.isRead == true &&
+        request.resource.data.readBy == uid() &&
+        request.resource.data.readAt == request.time;
+      allow create, delete: if false;
     }
 
     // Anonymous, privacy-safe traffic events. The client may only create a

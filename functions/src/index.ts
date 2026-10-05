@@ -2797,7 +2797,7 @@ export const createStaffMember = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
-    await requireBusinessManager(uid, businessId);
+    const business = await requireBusinessManager(uid, businessId);
     await requirePlanEntitlement(businessId, "staff");
     const subscription = await db.doc(`subscriptions/${businessId}`).get();
     const planId = String(subscription.data()?.plan ?? "RANDEVUGO");
@@ -2825,7 +2825,14 @@ export const createStaffMember = onCall(
       appointmentCapacity: Math.max(1, Math.min(20, Number(input.appointmentCapacity ?? 1))),
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
-    return { staffId: ref.id };
+    // Yönetici çalışan eklediğinde e-postadaki hesaba otomatik bağlanır ve davet gider.
+    try {
+      const link = await linkStaffToUserAccount(businessId, ref.id, business, uid, true);
+      return { staffId: ref.id, linked: true, email: link.email, accountCreated: link.accountCreated };
+    } catch (error) {
+      console.warn("Staff auto-link failed", { businessId, staffId: ref.id, error: error instanceof Error ? error.message : String(error) });
+      return { staffId: ref.id, linked: false, linkError: error instanceof HttpsError ? error.message : "Hesap bağlanamadı; çalışan listesinden tekrar deneyin." };
+    }
   }
 );
 
@@ -2921,6 +2928,90 @@ export const archiveStaff = onCall(
   }
 );
 
+/**
+ * Çalışan kaydını e-postasındaki hesaba bağlar (hesap yoksa oluşturur) ve members/{uid} yetkisini yazar.
+ * Yeni hesaba şifre belirleme, mevcut hesaba "ekibe eklendin" daveti gönderilir.
+ */
+async function linkStaffToUserAccount(
+  businessId: string,
+  staffId: string,
+  business: FirebaseFirestore.DocumentData,
+  actorUid: string,
+  sendInvite: boolean
+) {
+  const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
+  const staffSnapshot = await staffRef.get();
+  if (!staffSnapshot.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
+  const staff = staffSnapshot.data()!;
+  const email = requireString(staff.email, "Çalışan e-postası").toLowerCase();
+  let userRecord;
+  let created = false;
+  try {
+    userRecord = await auth.getUserByEmail(email);
+  } catch {
+    userRecord = await auth.createUser({
+      email,
+      displayName: String(staff.fullName ?? "Çalışan").slice(0, 80),
+      password: `${randomUUID()}Aa1!`,
+    });
+    created = true;
+  }
+  const memberRef = db.doc(`businesses/${businessId}/members/${userRecord.uid}`);
+  const currentMember = await memberRef.get();
+  if (currentMember.exists && ["owner", "admin", "manager"].includes(String(currentMember.data()?.role ?? ""))) {
+    throw new HttpsError("failed-precondition", "Bu hesap işletmede yönetici yetkisine sahip; çalışan rolüne dönüştürülemez.");
+  }
+  const previousLinkedUid = typeof staff.linkedUid === "string" ? staff.linkedUid : "";
+  const batch = db.batch();
+  // E-posta değiştiyse eski hesabın çalışan erişimi kaldırılır.
+  if (previousLinkedUid && previousLinkedUid !== userRecord.uid) {
+    const previousMember = await db.doc(`businesses/${businessId}/members/${previousLinkedUid}`).get();
+    if (previousMember.exists && previousMember.data()?.role === "staff" && previousMember.data()?.staffId === staffId) {
+      batch.delete(previousMember.ref);
+    }
+  }
+  batch.set(memberRef, {
+    uid: userRecord.uid,
+    role: "staff",
+    staffId,
+    permissions: {
+      manageOwnCalendar: true, viewCustomers: false, manageAppointments: false,
+      manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false,
+      ...(staff.permissions ?? {}),
+    },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const shouldInvite = created || sendInvite;
+  batch.update(staffRef, {
+    linkedUid: userRecord.uid,
+    ...(shouldInvite ? { invitationSentAt: FieldValue.serverTimestamp() } : {}),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  if (shouldInvite) {
+    const ctaUrl = created
+      ? `https://seninrandevun.com/sifremi-unuttum?email=${encodeURIComponent(email)}&source=staff-invite`
+      : `https://seninrandevun.com/giris?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/dashboard")}`;
+    batch.set(db.collection("mail").doc(), {
+      to: email,
+      message: (({ subject, html, text }) => ({ subject, html, text }))(
+        buildStaffInviteEmail(String(staff.fullName ?? ""), String(business.name ?? "SeninRandevun"), ctaUrl, !created)
+      ),
+    });
+  }
+  const audit = {
+    action: shouldInvite ? "staff.invited" : "staff.access_synced",
+    entityId: staffId,
+    linkedUid: userRecord.uid,
+    actorUid,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), audit);
+  batch.set(db.collection("platformAuditLogs").doc(), { ...audit, businessId });
+  await batch.commit();
+  return { email, invited: shouldInvite, accountCreated: created, linkedUid: userRecord.uid };
+}
+
 export const linkStaffAccount = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -2931,73 +3022,8 @@ export const linkStaffAccount = onCall(
     const staffId = requireString(data.staffId, "staffId");
     const business = await requireBusinessManager(uid, businessId);
     await requirePlanEntitlement(businessId, "staff");
-    const staffRef = db.doc(`businesses/${businessId}/staff/${staffId}`);
-    const staffSnapshot = await staffRef.get();
-    if (!staffSnapshot.exists) throw new HttpsError("not-found", "Çalışan bulunamadı.");
-    const staff = staffSnapshot.data()!;
-    const email = requireString(staff.email, "Çalışan e-postası").toLowerCase();
-    let userRecord;
-    let created = false;
-    try {
-      userRecord = await auth.getUserByEmail(email);
-    } catch {
-      userRecord = await auth.createUser({
-        email,
-        displayName: String(staff.fullName ?? "Çalışan").slice(0, 80),
-        password: `${randomUUID()}Aa1!`,
-      });
-      created = true;
-    }
-    const memberRef = db.doc(`businesses/${businessId}/members/${userRecord.uid}`);
-    const currentMember = await memberRef.get();
-    if (currentMember.exists && ["owner", "admin", "manager"].includes(String(currentMember.data()?.role ?? ""))) {
-      throw new HttpsError("failed-precondition", "Bu hesap işletmede yönetici yetkisine sahip; çalışan rolüne dönüştürülemez.");
-    }
-    const batch = db.batch();
-    batch.set(memberRef, {
-      uid: userRecord.uid,
-      role: "staff",
-      staffId,
-      permissions: {
-        manageOwnCalendar: true, viewCustomers: false, manageAppointments: false,
-        manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false,
-        ...(staff.permissions ?? {}),
-      },
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    const shouldInvite = created || data.sendInvite === true;
-    batch.update(staffRef, {
-      linkedUid: userRecord.uid,
-      ...(shouldInvite ? { invitationSentAt: FieldValue.serverTimestamp() } : {}),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (shouldInvite) {
-      const resetUrl = `https://seninrandevun.com/sifremi-unuttum?email=${encodeURIComponent(email)}&source=staff-invite`;
-      batch.set(db.collection("mail").doc(), {
-        to: email,
-        message: (({ subject, html, text }) => ({ subject, html, text }))(
-          buildStaffInviteEmail(String(staff.fullName ?? ""), String(business.name ?? "SeninRandevun"), resetUrl)
-        ),
-      });
-    }
-    batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
-      action: shouldInvite ? "staff.invited" : "staff.access_synced",
-      entityId: staffId,
-      linkedUid: userRecord.uid,
-      actorUid: uid,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    batch.set(db.collection("platformAuditLogs").doc(), {
-      action: shouldInvite ? "staff.invited" : "staff.access_synced",
-      businessId,
-      entityId: staffId,
-      linkedUid: userRecord.uid,
-      actorUid: uid,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
-    return { success: true, email, invited: shouldInvite };
+    const result = await linkStaffToUserAccount(businessId, staffId, business, uid, data.sendInvite === true);
+    return { success: true, email: result.email, invited: result.invited };
   }
 );
 
@@ -4112,12 +4138,15 @@ export const moderateReview = onCall(
     if (!["approved", "rejected"].includes(status)) {
       throw new HttpsError("invalid-argument", "Geçersiz moderasyon kararı.");
     }
+    const reasonInput = typeof data.reason === "string" ? data.reason : typeof data.moderationNote === "string" ? data.moderationNote : "";
+    const reason = reasonInput.trim().slice(0, 500) || null;
     const platformAdmin = request.auth?.token.email?.toString().toLowerCase() === "cihatwin@gmail.com"
       || (await db.doc(`platformAdmins/${uid}`).get()).exists;
     if (!platformAdmin) await requireBusinessManager(uid, businessId);
 
     const reviewRef = db.doc(`businesses/${businessId}/reviews/${reviewId}`);
     const businessRef = db.doc(`businesses/${businessId}`);
+    let hideRequested = false;
     await db.runTransaction(async (tx) => {
       const [reviewSnapshot, businessSnapshot] = await Promise.all([tx.get(reviewRef), tx.get(businessRef)]);
       if (!reviewSnapshot.exists || !businessSnapshot.exists) {
@@ -4125,6 +4154,34 @@ export const moderateReview = onCall(
       }
       const review = reviewSnapshot.data()!;
       const business = businessSnapshot.data()!;
+
+      // İşletme yorumu gizleyemez: gizleme isteği süper admin onayına gider, yorum o zamana kadar olduğu gibi kalır.
+      if (!platformAdmin) {
+        if (review.lockedByAdmin === true) {
+          throw new HttpsError("failed-precondition", "Bu yorum hakkında süper admin karar verdi; işletme tarafından değiştirilemez.");
+        }
+        if (status === "rejected") {
+          if ((review.hideRequest as { status?: string } | undefined)?.status === "pending") {
+            throw new HttpsError("already-exists", "Bu yorum için gizleme talebi zaten incelemede.");
+          }
+          hideRequested = true;
+          tx.update(reviewRef, {
+            hideRequest: { status: "pending", reason, requestedBy: uid, requestedAt: FieldValue.serverTimestamp() },
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          tx.set(db.collection("platformAlerts").doc(), {
+            severity: "warning", category: "review",
+            title: "Yorum gizleme talebi",
+            message: `${String(business.name ?? "İşletme")} ${Number(review.rating ?? 0)} yıldızlı bir yorumu gizlemek istiyor.${reason ? ` Gerekçe: ${reason}` : ""}`,
+            businessId, reviewId, isRead: false, createdAt: FieldValue.serverTimestamp(),
+          });
+          tx.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+            action: "review.hide_requested", entityId: reviewId, actorUid: uid, reason, createdAt: FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+      }
+
       const previousStatus = String(review.status ?? "pending");
       const oldCount = Math.max(0, Number(business.reviewCount ?? 0));
       const oldRating = Math.max(0, Number(business.rating ?? 0));
@@ -4138,12 +4195,20 @@ export const moderateReview = onCall(
         newCount = Math.max(0, oldCount - 1);
         newRating = newCount === 0 ? 0 : Math.max(0, (oldRating * oldCount - reviewRating) / newCount);
       }
+      const pendingHide = (review.hideRequest as { status?: string } | undefined)?.status === "pending";
       tx.update(reviewRef, {
         status,
         isVisible: status === "approved",
         isModerated: true,
-        moderationNote: typeof data.moderationNote === "string" ? data.moderationNote.slice(0, 500) : null,
+        moderationNote: reason,
         moderatedBy: uid,
+        moderatedByRole: platformAdmin ? "admin" : "business",
+        ...(platformAdmin ? { lockedByAdmin: true } : {}),
+        ...(platformAdmin && pendingHide ? {
+          "hideRequest.status": status === "rejected" ? "accepted" : "declined",
+          "hideRequest.resolvedAt": FieldValue.serverTimestamp(),
+          "hideRequest.resolvedBy": uid,
+        } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       });
       if (newCount !== oldCount || newRating !== oldRating) {
@@ -4151,6 +4216,16 @@ export const moderateReview = onCall(
           rating: Math.round(newRating * 100) / 100,
           reviewCount: newCount,
           updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      if (platformAdmin && pendingHide) {
+        tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+          type: "review_hide_resolved",
+          title: status === "rejected" ? "Yorum gizlendi" : "Yorum yayında kalacak",
+          body: status === "rejected"
+            ? "Gizleme talebiniz süper admin tarafından onaylandı."
+            : "Gizleme talebiniz incelendi; yorum platform kurallarına uygun bulundu ve yayında kalacak.",
+          isRead: false, createdAt: FieldValue.serverTimestamp(),
         });
       }
       tx.set(db.collection("platformAuditLogs").doc(), {
@@ -4161,7 +4236,38 @@ export const moderateReview = onCall(
         createdAt: FieldValue.serverTimestamp(),
       });
     });
-    return { success: true };
+    return { success: true, hideRequested };
+  }
+);
+
+// İşletme 48 saat içinde karar vermezse yorum yayınlanır; işletme olumsuz yorumu bekleterek gizleyemez.
+export const autoPublishPendingReviews = onSchedule(
+  { region: "europe-west1", schedule: "every 60 minutes", timeZone: "Europe/Istanbul", maxInstances: 1 },
+  async () => {
+    const cutoff = Timestamp.fromMillis(Date.now() - 48 * 60 * 60_000);
+    const due = await db.collectionGroup("reviews")
+      .where("status", "==", "pending").where("createdAt", "<=", cutoff)
+      .orderBy("createdAt", "desc").limit(300).get();
+    for (const document of due.docs) {
+      const businessRef = document.ref.parent.parent;
+      if (!businessRef) continue;
+      await db.runTransaction(async (tx) => {
+        const [reviewSnapshot, businessSnapshot] = await Promise.all([tx.get(document.ref), tx.get(businessRef)]);
+        const review = reviewSnapshot.data();
+        if (!review || !businessSnapshot.exists || review.status !== "pending") return;
+        if ((review.hideRequest as { status?: string } | undefined)?.status === "pending") return;
+        const business = businessSnapshot.data()!;
+        const oldCount = Math.max(0, Number(business.reviewCount ?? 0));
+        const oldRating = Math.max(0, Number(business.rating ?? 0));
+        const newCount = oldCount + 1;
+        const newRating = (oldRating * oldCount + Number(review.rating ?? 0)) / newCount;
+        tx.update(document.ref, {
+          status: "approved", isVisible: true, isModerated: true, moderatedByRole: "system",
+          autoPublishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+        tx.update(businessRef, { rating: Math.round(newRating * 100) / 100, reviewCount: newCount, updatedAt: FieldValue.serverTimestamp() });
+      });
+    }
   }
 );
 

@@ -143,9 +143,23 @@ export async function updateReviewStatus(
   reviewId: string,
   status: ReviewStatus,
   moderationNote?: string
-): Promise<void> {
-  const moderate = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "moderateReview");
-  await moderate({ businessId, reviewId, status, moderationNote });
+): Promise<{ hideRequested: boolean }> {
+  const moderate = httpsCallable<
+    { businessId: string; reviewId: string; status: ReviewStatus; reason?: string },
+    { success: boolean; hideRequested?: boolean }
+  >(getFunctions(getFirebaseApp(), "europe-west1"), "moderateReview");
+  const result = await moderate({ businessId, reviewId, status, reason: moderationNote });
+  return { hideRequested: result.data.hideRequested === true };
+}
+
+/**
+ * İşletmelerin gizleme talebi gönderdiği yorumlar — süper admin karar kuyruğu.
+ */
+export async function listHideRequestedReviews(maxCount = 100): Promise<Review[]> {
+  const snap = await getDocs(
+    query(collectionGroup(getDb(), "reviews"), where("hideRequest.status", "==", "pending"), limit(maxCount))
+  );
+  return snap.docs.map((d) => ({ ...mapDoc<Review>(d), businessId: d.ref.parent.parent?.id ?? mapDoc<Review>(d).businessId }));
 }
 
 /**

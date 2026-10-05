@@ -234,14 +234,18 @@ export function buildCodeEmail(code: string, type: "verify" | "reset", requested
 }
 
 /** Çalışan paneli daveti. */
-export function buildStaffInviteEmail(staffName: string, businessName: string, resetUrl: string) {
+export function buildStaffInviteEmail(staffName: string, businessName: string, ctaUrl: string, existingAccount = false) {
   const rendered = renderBrandEmail({
     preheader: `${businessName} seni çalışan paneline davet etti`,
     eyebrow: "Çalışan daveti",
     title: "Çalışan panelin hazır",
     greeting: `Merhaba ${staffName || ""},`.replace(" ,", ","),
-    intro: `${businessName} seni SeninRandevun çalışan paneline davet etti. Panelde sana atanan randevuları ve izin verilen alanları görebilirsin. Başlamak için şifreni belirle.`,
-    cta: { label: "Şifremi belirle ve panele gir", url: resetUrl },
+    intro: existingAccount
+      ? `${businessName} seni SeninRandevun ekibine ekledi. Mevcut hesabınla giriş yaptığında çalışan paneline erişebilir, sana atanan randevuları görebilirsin.`
+      : `${businessName} seni SeninRandevun çalışan paneline davet etti. Panelde sana atanan randevuları ve izin verilen alanları görebilirsin. Başlamak için şifreni belirle.`,
+    cta: existingAccount
+      ? { label: "Giriş yap ve panele geç", url: ctaUrl }
+      : { label: "Şifremi belirle ve panele gir", url: ctaUrl },
     details: [["İşletme", businessName], ["Davet zamanı", `${istanbulTime()} (TSİ)`]],
     securityNote: "Bu daveti beklemiyorsan bağlantıya tıklama ve işletmeyle iletişime geç.",
     footerNote: "Bu e-postayı bir işletme seni ekibine eklediği için aldın.",

@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   collection,
+  deleteField,
   doc,
+  getDoc,
   getDocs,
   serverTimestamp,
   updateDoc,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
@@ -19,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/states";
 import { listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { statusAfterUnsuspend, statusBeforeSuspending } from "@/features/platform/admin-ops";
 
 interface BusinessItem {
   id: string;
@@ -29,6 +35,7 @@ interface BusinessItem {
   name: string;
   ownerUid: string;
   status: string;
+  statusBeforeSuspension?: string;
   isSuspended: boolean;
   plan: string;
   city: string;
@@ -39,109 +46,103 @@ interface BusinessItem {
   createdAt?: string;
 }
 
+function toBusinessItem(snapshot: QueryDocumentSnapshot | DocumentSnapshot): BusinessItem {
+  const d = snapshot.data() ?? {};
+  return {
+    id: snapshot.id,
+    organizationId: typeof d.organizationId === "string" ? d.organizationId : undefined,
+    organizationName: typeof d.organizationName === "string" ? d.organizationName : undefined,
+    branchNumber: Number(d.branchNumber ?? d.storePosition ?? 1),
+    isHeadquarters: d.isHeadquarters === true,
+    name: String(d.name ?? "İsimsiz"),
+    ownerUid: String(d.ownerUid ?? ""),
+    status: String(d.status ?? "active"),
+    statusBeforeSuspension: typeof d.statusBeforeSuspension === "string" ? d.statusBeforeSuspension : undefined,
+    isSuspended: d.isSuspended === true,
+    plan: String(d.plan ?? "RANDEVUGO"),
+    city: String(d.city ?? ""),
+    category: String(d.category ?? ""),
+    slug: typeof d.slug === "string" ? d.slug : undefined,
+    approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
+    storePosition: Number(d.storePosition ?? 1),
+    createdAt: d.createdAt?.toDate?.()
+      ? d.createdAt.toDate().toLocaleDateString("tr-TR")
+      : undefined,
+  };
+}
+
 export default function SuperAdminBusinessesPage() {
+  // useSearchParams statik ön render sırasında Suspense sınırı ister.
+  return <Suspense fallback={null}><BusinessesView /></Suspense>;
+}
+
+function BusinessesView() {
+  const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
   const [plans, setPlans] = useState<PlatformPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [searchText, setSearchText] = useState("");
+  // Moderasyon gibi sayfalar /super-admin/isletmeler?q=<businessId> ile doğrudan bir işletmeye bağlanır.
+  const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
   const [filter, setFilter] = useState<"all" | "active" | "suspended" | "pending">("all");
   const [confirmAction, setConfirmAction] = useState<{ id: string; action: string } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const db = getDb();
-    (async () => {
-      setLoading(true);
-      try {
-        const snap = await getDocs(collection(db, "businesses"));
-        if (cancelled) return;
-        const rows: BusinessItem[] = snap.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            organizationId: typeof d.organizationId === "string" ? d.organizationId : undefined,
-            organizationName: typeof d.organizationName === "string" ? d.organizationName : undefined,
-            branchNumber: Number(d.branchNumber ?? d.storePosition ?? 1),
-            isHeadquarters: d.isHeadquarters === true,
-            name: String(d.name ?? "İsimsiz"),
-            ownerUid: String(d.ownerUid ?? ""),
-            status: String(d.status ?? "active"),
-            isSuspended: d.isSuspended === true,
-            plan: String(d.plan ?? "RANDEVUGO"),
-            city: String(d.city ?? ""),
-            category: String(d.category ?? ""),
-            slug: typeof d.slug === "string" ? d.slug : undefined,
-            approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
-            storePosition: Number(d.storePosition ?? 1),
-            createdAt: d.createdAt?.toDate?.()
-              ? d.createdAt.toDate().toLocaleDateString("tr-TR")
-              : undefined,
-          };
-        });
-        setBusinesses(rows);
-      } catch (e) {
-        if (!cancelled) toast.error((e as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    listPlatformPlans().then(setPlans).catch(() => setPlans([]));
-  }, []);
-
-  async function loadBusinesses() {
-    const db = getDb();
+  const loadBusinesses = useCallback(async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, "businesses"));
-      const rows: BusinessItem[] = snap.docs.map((doc) => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          organizationId: typeof d.organizationId === "string" ? d.organizationId : undefined,
-          organizationName: typeof d.organizationName === "string" ? d.organizationName : undefined,
-          branchNumber: Number(d.branchNumber ?? d.storePosition ?? 1),
-          isHeadquarters: d.isHeadquarters === true,
-          name: String(d.name ?? "İsimsiz"),
-          ownerUid: String(d.ownerUid ?? ""),
-          status: String(d.status ?? "active"),
-          isSuspended: d.isSuspended === true,
-          plan: String(d.plan ?? "FREE"),
-          city: String(d.city ?? ""),
-          category: String(d.category ?? ""),
-          slug: typeof d.slug === "string" ? d.slug : undefined,
-          approvalStatus: String(d.approvalStatus ?? (d.status === "active" ? "approved" : "pending")),
-          storePosition: Number(d.storePosition ?? 1),
-          createdAt: d.createdAt?.toDate?.()
-            ? d.createdAt.toDate().toLocaleDateString("tr-TR")
-            : undefined,
-        };
-      });
-      setBusinesses(rows);
+      const snap = await getDocs(collection(getDb(), "businesses"));
+      setBusinesses(snap.docs.map(toBusinessItem));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => { void loadBusinesses(); });
+  }, [loadBusinesses]);
+
+  useEffect(() => {
+    listPlatformPlans().then(setPlans).catch(() => setPlans([]));
+  }, []);
+
+  function patchBusiness(id: string, patch: Partial<BusinessItem>) {
+    setBusinesses((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  // Tek işletmeyi yeniden okur (callable'ın yazdığı alanları kaçırmamak için); tüm koleksiyon okunmaz.
+  async function refreshBusiness(id: string) {
+    const snapshot = await getDoc(doc(getDb(), "businesses", id));
+    if (snapshot.exists()) patchBusiness(id, toBusinessItem(snapshot));
   }
 
   async function toggleSuspension(biz: BusinessItem) {
     const db = getDb();
     setBusyId(biz.id);
     try {
-      await updateDoc(doc(db, "businesses", biz.id), {
-        isSuspended: !biz.isSuspended,
-        status: biz.isSuspended ? "active" : "suspended",
-        updatedAt: serverTimestamp(),
-      });
-      toast.success(
-        biz.isSuspended ? "İşletme aktif edildi." : "İşletme askıya alındı."
-      );
-      await loadBusinesses();
+      if (biz.isSuspended) {
+        // Askı öncesi durum geri yüklenir; bilinmiyorsa yeniden onaya düşer (asla zorla "active" yapılmaz).
+        const restoredStatus = statusAfterUnsuspend(biz.statusBeforeSuspension);
+        await updateDoc(doc(db, "businesses", biz.id), {
+          isSuspended: false,
+          status: restoredStatus,
+          statusBeforeSuspension: deleteField(),
+          updatedAt: serverTimestamp(),
+        });
+        patchBusiness(biz.id, { isSuspended: false, status: restoredStatus, statusBeforeSuspension: undefined });
+        toast.success(restoredStatus === "active" ? "İşletme yeniden aktif edildi." : "Askı kaldırıldı; işletme önceki durumuna döndü.");
+      } else {
+        const previousStatus = statusBeforeSuspending(biz.status);
+        await updateDoc(doc(db, "businesses", biz.id), {
+          isSuspended: true,
+          status: "suspended",
+          statusBeforeSuspension: previousStatus,
+          updatedAt: serverTimestamp(),
+        });
+        patchBusiness(biz.id, { isSuspended: true, status: "suspended", statusBeforeSuspension: previousStatus });
+        toast.success("İşletme askıya alındı.");
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -156,7 +157,7 @@ export default function SuperAdminBusinessesPage() {
       const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "assignBusinessPlan");
       await callable({ businessId: bizId, plan: newPlan });
       toast.success(`Plan ${newPlan} olarak güncellendi.`);
-      await loadBusinesses();
+      patchBusiness(bizId, { plan: newPlan });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -170,7 +171,7 @@ export default function SuperAdminBusinessesPage() {
       const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "reviewBusiness");
       await callable({ businessId: bizId, decision });
       toast.success(decision === "approved" ? "Mağaza onaylandı ve yayına açıldı." : "Mağaza başvurusu reddedildi.");
-      await loadBusinesses();
+      await refreshBusiness(bizId).catch(() => undefined);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -184,7 +185,7 @@ export default function SuperAdminBusinessesPage() {
     if (filter === "pending" && b.status !== "pending_review") return false;
 
     if (searchText.trim()) {
-      const q = searchText.toLowerCase();
+      const q = searchText.trim().toLowerCase();
       return (
         b.name.toLowerCase().includes(q) ||
         (b.organizationName ?? "").toLowerCase().includes(q) ||
@@ -322,7 +323,7 @@ export default function SuperAdminBusinessesPage() {
                           setConfirmAction({ id: biz.id, action: "toggle" })
                         }
                       >
-                        {biz.isSuspended ? "Aktif Et" : "Askıya Al"}
+                        {biz.isSuspended ? "Askıyı Kaldır" : "Askıya Al"}
                       </Button>
                     )}
                   </div>

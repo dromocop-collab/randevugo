@@ -12,6 +12,7 @@ import {
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { PLAN_PRICE } from "@/constants/plans";
+import { isStaleSupportTicket, SUPPORT_ACTIVE_STATUSES } from "@/features/platform/admin-ops";
 import { askSmartAssistant, clearSmartAssistantHistory, getSmartAssistantHistory } from "@/features/assistant/assistant-repository";
 
 /** Denetim kaydını yazan kullanıcı (kural actorUid == auth.uid şartı arar). */
@@ -46,7 +47,7 @@ type AssistantStats = {
 type ManagedBusiness = { id: string; name: string; status: string; isSuspended: boolean };
 type BusinessOperation = { businessId: string; businessName: string; operation: "suspend" | "activate" | "approve" | "plan"; plan?: string };
 type SupportRow = { id: string; title: string; requesterName: string; status: string };
-type SupportOperation = { ticketId: string; title: string; status: "in_progress" | "resolved" };
+type SupportOperation = { ticketId: string; title: string; status: "resolved" };
 type AssistantAction = { label: string; href?: string; report?: boolean; businessOperation?: BusinessOperation; supportOperation?: SupportOperation };
 type Message = { id: string; role: "assistant" | "user"; body: string; actions?: AssistantAction[]; createdAt: Date };
 
@@ -104,7 +105,7 @@ export function AdminAssistant() {
       getDocs(collection(db, "users")),
       getDocs(query(collectionGroup(db, "appointments"), limit(1500))),
       getDocs(collection(db, "subscriptions")),
-      getDocs(query(collection(db, "supportTickets"), where("status", "in", ["open", "in_progress", "waiting_user", "waiting_admin"]))),
+      getDocs(query(collection(db, "supportTickets"), where("status", "in", SUPPORT_ACTIVE_STATUSES))),
       getDocs(query(collectionGroup(db, "reviews"), where("status", "==", "pending"), limit(250))),
       getDocs(query(collection(db, "categoryRequests"), where("status", "==", "pending"))),
     ]);
@@ -139,7 +140,7 @@ export function AdminAssistant() {
       trialSubscriptions: subscriptionStatus("trialing"),
       pastDueSubscriptions: subscriptionStatus("past_due"),
       openSupport: support.length,
-      criticalSupport: support.filter((item) => ["critical", "high"].includes(String(item.data().priority))).length,
+      criticalSupport: support.filter((item) => { const data = item.data(); const stamp = data.updatedAt ?? data.createdAt; return isStaleSupportTicket(String(data.status ?? ""), typeof stamp?.toMillis === "function" ? stamp.toMillis() : null, Date.now()); }).length,
       pendingReviews: rows(5).length,
       pendingCategories: rows(6).length,
       healthySources: sources.filter((item) => item.status === "fulfilled").length,
@@ -205,15 +206,13 @@ export function AdminAssistant() {
     const directSupport = supportRows.find((item) => text.includes(item.requesterName.toLocaleLowerCase("tr-TR")) || text.includes(item.title.toLocaleLowerCase("tr-TR")));
     if (directSupport) lastSupportId.current = directSupport.id;
     const mentionedSupport = directSupport ?? (/onu|bu destek|aynı kayıt|az önceki/.test(text) ? supportRows.find((item) => item.id === lastSupportId.current) : undefined);
-    if (mentionedSupport && /(işleme al|çöz|çözüldü|kapat|tamamla)/.test(text)) {
-      const status: SupportOperation["status"] = /işleme al/.test(text) ? "in_progress" : "resolved";
-      const summary = status === "in_progress" ? "işleme alınacak" : "çözüldü olarak kapatılacak";
-      return { body: `“${mentionedSupport.title}” destek kaydını buldum (${mentionedSupport.requesterName}). Kayıt ${summary}. Onaylıyor musunuz?`, actions: [{ label: status === "in_progress" ? "İşleme almayı onayla" : "Çözümü onayla", supportOperation: { ticketId: mentionedSupport.id, title: mentionedSupport.title, status } }, { label: "Destek kaydını incele", href: "/super-admin/destek" }] };
+    if (mentionedSupport && /(çöz|çözüldü|kapat|tamamla)/.test(text)) {
+      return { body: `“${mentionedSupport.title}” destek kaydını buldum (${mentionedSupport.requesterName}). Kayıt çözüldü olarak kapatılacak. Onaylıyor musunuz?`, actions: [{ label: "Çözümü onayla", supportOperation: { ticketId: mentionedSupport.id, title: mentionedSupport.title, status: "resolved" } }, { label: "Destek kaydını incele", href: "/super-admin/destek" }] };
     }
     if (/öncelik|ne yap|aksiyon|bugün/.test(text)) {
       const items = [
         { count: stats.pendingBusinesses, label: "işletme başvurusu onay bekliyor", href: "/super-admin/isletmeler" },
-        { count: stats.criticalSupport, label: "kritik destek kaydı var", href: "/super-admin/destek" },
+        { count: stats.criticalSupport, label: "destek kaydı 24 saattir yanıt bekliyor", href: "/super-admin/destek" },
         { count: moderation, label: "moderasyon kaydı bekliyor", href: "/super-admin/moderasyon" },
         { count: stats.pastDueSubscriptions, label: "abonelik ödeme riski taşıyor", href: "/super-admin/abonelikler" },
       ].filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
@@ -227,7 +226,7 @@ export function AdminAssistant() {
       actions: [{ label: "İşletmeleri yönet", href: "/super-admin/isletmeler" }],
     };
     if (/destek|mesaj|talep/.test(text)) return {
-      body: `${stats.openSupport} açık destek kaydı bulunuyor. Bunların ${stats.criticalSupport} tanesi yüksek veya kritik öncelikli. Kritik kayıtları önce ele almak müşteri kaybı riskini azaltır.`,
+      body: `${stats.openSupport} açık destek kaydı bulunuyor. Bunların ${stats.criticalSupport} tanesi 24 saatten uzun süredir ekip yanıtı bekliyor. Geciken kayıtları önce ele almak müşteri kaybı riskini azaltır.`,
       actions: [{ label: "Destek merkezini aç", href: "/super-admin/destek" }],
     };
     if (/randevu|iptal|gelmedi|kalite/.test(text)) return {
@@ -248,7 +247,7 @@ export function AdminAssistant() {
     }
     if (/risk|aksiyon planı|plan çıkar/.test(text)) {
       const riskTotal = stats.criticalSupport + stats.pastDueSubscriptions + stats.pendingBusinesses + moderation;
-      return { body: riskTotal ? `Önerilen aksiyon planı: 1) ${stats.criticalSupport} kritik destek kaydını sonuçlandırın. 2) ${stats.pendingBusinesses} işletme başvurusunu inceleyin. 3) ${moderation} moderasyon kaydını temizleyin. 4) ${stats.pastDueSubscriptions} ödeme riskini takip edin. Toplam ${riskTotal} kayıt operasyon takibi istiyor.` : "Kritik risk kuyruğu temiz. Sonraki plan: deneme dönüşümü, randevu hacmi ve işletme aktiflik oranını büyütmek.", actions: [{ label: "Komuta merkezini aç", href: "/super-admin" }, { label: "Audit kontrolü", href: "/super-admin/audit-logs" }] };
+      return { body: riskTotal ? `Önerilen aksiyon planı: 1) 24 saati aşan ${stats.criticalSupport} destek kaydını yanıtlayın. 2) ${stats.pendingBusinesses} işletme başvurusunu inceleyin. 3) ${moderation} moderasyon kaydını temizleyin. 4) ${stats.pastDueSubscriptions} ödeme riskini takip edin. Toplam ${riskTotal} kayıt operasyon takibi istiyor.` : "Kritik risk kuyruğu temiz. Sonraki plan: deneme dönüşümü, randevu hacmi ve işletme aktiflik oranını büyütmek.", actions: [{ label: "Komuta merkezini aç", href: "/super-admin" }, { label: "Audit kontrolü", href: "/super-admin/audit-logs" }] };
     }
     return { body: "Bunu canlı platform verisiyle güvenli bir komuta çevirebilirim. İşletmeler, destek, randevu kalitesi, kullanıcılar, abonelik, moderasyon, sistem sağlığı veya yönetim raporu hakkında sorabilirsiniz.", actions: [{ label: "Platform özeti", href: "/super-admin" }] };
   }
@@ -306,7 +305,7 @@ export function AdminAssistant() {
 
   function exportReport() {
     if (!stats) return;
-    const report = `# SeninRandevun Platform Yönetim Raporu\n\nTarih: ${stats.updatedAt.toLocaleString("tr-TR")}\nSağlık puanı: ${healthScore}/100\n\n## İşletmeler\n- Toplam: ${stats.businesses}\n- Aktif: ${stats.activeBusinesses}\n- Onay bekleyen: ${stats.pendingBusinesses}\n- Askıda: ${stats.suspendedBusinesses}\n\n## Operasyon\n- Kullanıcı: ${stats.users}\n- Randevu: ${stats.appointments}\n- Son 30 gün randevu: ${stats.appointments30d}\n- Açık destek: ${stats.openSupport}\n- Kritik destek: ${stats.criticalSupport}\n- Moderasyon: ${stats.pendingReviews + stats.pendingCategories}\n\n## Abonelik\n- Aktif: ${stats.activeSubscriptions}\n- Deneme: ${stats.trialSubscriptions}\n- Ödeme bekleyen: ${stats.pastDueSubscriptions}\n`;
+    const report = `# SeninRandevun Platform Yönetim Raporu\n\nTarih: ${stats.updatedAt.toLocaleString("tr-TR")}\nSağlık puanı: ${healthScore}/100\n\n## İşletmeler\n- Toplam: ${stats.businesses}\n- Aktif: ${stats.activeBusinesses}\n- Onay bekleyen: ${stats.pendingBusinesses}\n- Askıda: ${stats.suspendedBusinesses}\n\n## Operasyon\n- Kullanıcı: ${stats.users}\n- Randevu: ${stats.appointments}\n- Son 30 gün randevu: ${stats.appointments30d}\n- Açık destek: ${stats.openSupport}\n- 24 saati aşan destek: ${stats.criticalSupport}\n- Moderasyon: ${stats.pendingReviews + stats.pendingCategories}\n\n## Abonelik\n- Aktif: ${stats.activeSubscriptions}\n- Deneme: ${stats.trialSubscriptions}\n- Ödeme bekleyen: ${stats.pastDueSubscriptions}\n`;
     const url = URL.createObjectURL(new Blob([report], { type: "text/markdown;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = `seninrandevun-yonetim-raporu-${new Date().toISOString().slice(0, 10)}.md`; anchor.click();
@@ -351,7 +350,7 @@ export function AdminAssistant() {
     try {
       await updateDoc(doc(getDb(), "supportTickets", action.ticketId), { status: action.status, updatedAt: serverTimestamp(), assistantManaged: true });
       addDoc(collection(getDb(), "platformAuditLogs"), { action: `assistant.support_${action.status}`, entityId: action.ticketId, actorSource: "platform_assistant", actorUid: currentActorUid(), createdAt: serverTimestamp() }).catch(() => undefined);
-      const summary = action.status === "in_progress" ? "işleme alındı" : "çözüldü olarak kapatıldı";
+      const summary = "çözüldü olarak kapatıldı";
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Tamamlandı ✅ “${action.title}” destek kaydı ${summary}.`, createdAt: new Date(), actions: [{ label: "Destek merkezini aç", href: "/super-admin/destek" }] }]);
       await loadData();
     } catch (error) { setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", body: `Destek kaydı güncellenemedi: ${(error as Error).message}`, createdAt: new Date() }]); }
@@ -396,7 +395,7 @@ export function AdminAssistant() {
           <ContextMetric icon={CalendarDays} label="30 gün" value={stats?.appointments30d}/>
           <ContextMetric icon={Headphones} label="Açık destek" value={stats?.openSupport}/>
         </div>
-        <div className="assistant-attention"><b><ShieldAlert size={15}/> Aksiyon radarı</b><Attention label="İşletme onayı" value={stats?.pendingBusinesses ?? 0} href="/super-admin/isletmeler"/><Attention label="Kritik destek" value={stats?.criticalSupport ?? 0} href="/super-admin/destek"/><Attention label="Moderasyon" value={(stats?.pendingReviews ?? 0) + (stats?.pendingCategories ?? 0)} href="/super-admin/moderasyon"/><Attention label="Ödeme riski" value={stats?.pastDueSubscriptions ?? 0} href="/super-admin/abonelikler"/></div>
+        <div className="assistant-attention"><b><ShieldAlert size={15}/> Aksiyon radarı</b><Attention label="İşletme onayı" value={stats?.pendingBusinesses ?? 0} href="/super-admin/isletmeler"/><Attention label="Geciken destek" value={stats?.criticalSupport ?? 0} href="/super-admin/destek"/><Attention label="Moderasyon" value={(stats?.pendingReviews ?? 0) + (stats?.pendingCategories ?? 0)} href="/super-admin/moderasyon"/><Attention label="Ödeme riski" value={stats?.pastDueSubscriptions ?? 0} href="/super-admin/abonelikler"/></div>
         <button className="assistant-report-button" type="button" onClick={exportReport} disabled={!stats}><Download size={16}/> Yönetim raporunu indir</button>
       </aside>
     </section>

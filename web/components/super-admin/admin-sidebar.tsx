@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { collection, getCountFromServer, query, where } from "firebase/firestore";
+import { getDb } from "@/lib/firebase/firestore";
 import { cn } from "@/lib/utils/cn";
 import {
-  Activity, ArrowLeftToLine, BarChart3, BellRing, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones, Settings2,
+  Activity, ArrowLeftToLine, BarChart3, BellRing, Siren, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones, Settings2,
   Bot, MessageSquareText, ShieldCheck, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
@@ -15,6 +18,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin/isletmeler", label: "İşletmeler", icon: Building2 },
   { href: "/super-admin/kullanicilar", label: "Kullanıcılar", icon: UsersRound },
   { href: "/super-admin/abonelikler", label: "Abonelikler", icon: WalletCards },
+  { href: "/super-admin/uyarilar", label: "Uyarılar", icon: Siren },
   { href: "/super-admin/destek", label: "Destek", icon: Headphones },
   { href: "/super-admin/moderasyon", label: "Moderasyon", icon: ShieldCheck },
   { href: "/super-admin/audit-logs", label: "Audit Kayıtları", icon: ClipboardList },
@@ -24,8 +28,29 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2 },
 ];
 
+/** Uyarı okundu işaretlendiğinde menü rozetinin yenilenmesi için yayınlanan olay. */
+export const PLATFORM_ALERTS_CHANGED_EVENT = "platform-alerts-changed";
+
+// Okunmamış uyarı sayısı: tek bir sayım sorgusu (belge indirmez); sayfa değişince ve uyarı okununca yenilenir.
+function useUnreadAlertCount(pathname: string) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      getCountFromServer(query(collection(getDb(), "platformAlerts"), where("isRead", "==", false)))
+        .then((snapshot) => { if (!cancelled) setCount(snapshot.data().count); })
+        .catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener(PLATFORM_ALERTS_CHANGED_EVENT, refresh);
+    return () => { cancelled = true; window.removeEventListener(PLATFORM_ALERTS_CHANGED_EVENT, refresh); };
+  }, [pathname]);
+  return count;
+}
+
 function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
+  const unreadAlerts = useUnreadAlertCount(pathname);
 
   return (
     <nav className={mobile ? "admin-mobile-nav-track" : "space-y-1"}>
@@ -37,6 +62,7 @@ function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
           <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(mobile ? "admin-mobile-nav-link" : "admin-side-link", active ? "active" : "")}>
             <span className="admin-nav-icon"><Icon aria-hidden="true" size={17} strokeWidth={1.9} /></span>
             <span>{item.label}</span>
+            {item.href === "/super-admin/uyarilar" && unreadAlerts > 0 && <b aria-label={`${unreadAlerts} okunmamış uyarı`} className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{unreadAlerts > 99 ? "99+" : unreadAlerts}</b>}
             {!mobile && active && <i aria-hidden="true" />}
           </Link>
         );

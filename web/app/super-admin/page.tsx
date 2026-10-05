@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, collectionGroup, doc, getCountFromServer, getDoc, getDocs, limit, query, Timestamp, where, type DocumentData, type Firestore, type Query } from "firebase/firestore";
 import {
-  Activity, AlertTriangle, ArrowRight, Building2, CalendarDays, CheckCircle2,
-  Clock3, Download, Headphones, RefreshCw, ShieldAlert, Sparkles, TrendingUp,
+  Activity, AlertTriangle, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2,
+  Clock3, Download, EyeOff, Headphones, RefreshCw, ShieldAlert, Sparkles, TrendingUp,
   UsersRound, WalletCards, WifiOff, type LucideIcon,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { PLAN_PRICE } from "@/constants/plans";
+import { isStaleSupportTicket, SUPPORT_NEEDS_ADMIN_STATUSES } from "@/features/platform/admin-ops";
 
 type SourceKey = "businesses" | "users" | "appointments" | "subscriptions" | "support" | "categories" | "reviews";
 type SourceHealth = Record<SourceKey, boolean>;
@@ -23,7 +24,8 @@ interface PlatformStats {
   totalUsers: number; totalAppointments: number; appointmentsLast7Days: number; appointmentsLast30Days: number;
   completedAppointments: number; cancelledAppointments: number; noShowAppointments: number;
   trialingBusinesses: number; subscribedBusinesses: number; pastDueSubscriptions: number;
-  openSupportTickets: number; criticalSupportTickets: number; pendingCategoryRequests: number; pendingReviews: number;
+  openSupportTickets: number; staleSupportTickets: number; pendingCategoryRequests: number; pendingReviews: number;
+  pendingHideRequests: number; unreadAlerts: number; criticalUnreadAlerts: number;
   estimatedMRR: number; estimatedARR: number; sourceHealth: SourceHealth; updatedAt: Date;
 }
 
@@ -125,6 +127,13 @@ export default function SuperAdminDashboard() {
     const now = Date.now(); const sevenDaysAgo = now - 7 * 86_400_000; const thirtyDaysAgo = now - 30 * 86_400_000;
     const appointmentCountsRequest = loadAppointmentCounts(db, businessIds, sevenDaysAgo, thirtyDaysAgo);
     const userCountRequest = getCountFromServer(collection(db, "users")).then((snapshot) => snapshot.data().count);
+    const hideRequestCountRequest = getCountFromServer(query(collectionGroup(db, "reviews"), where("hideRequest.status", "==", "pending")))
+      .then((snapshot) => snapshot.data().count).catch(() => 0);
+    const alerts = collection(db, "platformAlerts");
+    const alertCountsRequest = Promise.all([
+      getCountFromServer(query(alerts, where("isRead", "==", false))),
+      getCountFromServer(query(alerts, where("isRead", "==", false), where("severity", "==", "critical"))),
+    ]).then(([unread, critical]) => ({ unread: unread.data().count, critical: critical.data().count })).catch(() => ({ unread: 0, critical: 0 }));
     const requests = {
       users: userCountRequest.then((): DataDoc[] => []),
       businesses: Promise.resolve(businessDocs),
@@ -133,7 +142,7 @@ export default function SuperAdminDashboard() {
         getDocs(collection(db, "subscriptions")),
         () => readBusinessSubscriptions(db, businessIds),
       ),
-      support: getDocs(query(collection(db, "supportTickets"), where("status", "in", ["open", "in_progress", "waiting_user"]))).then((snapshot) => snapshot.docs),
+      support: getDocs(query(collection(db, "supportTickets"), where("status", "in", SUPPORT_NEEDS_ADMIN_STATUSES))).then((snapshot) => snapshot.docs),
       categories: getDocs(query(collection(db, "categoryRequests"), where("status", "==", "pending"))).then((snapshot) => snapshot.docs),
       reviews: withFallback(
         getDocs(query(collectionGroup(db, "reviews"), where("status", "==", "pending"), limit(250))),
@@ -166,13 +175,21 @@ export default function SuperAdminDashboard() {
         if (status === "active") subscribedBusinesses++;
         if (status === "past_due") pastDueSubscriptions++;
       });
+      const alertCounts = await alertCountsRequest;
       setStats({
         totalBusinesses: businesses.length, activeBusinesses, suspendedBusinesses, pendingBusinesses,
         totalUsers: await userCountRequest.catch(() => 0), totalAppointments: appointmentCounts.total, appointmentsLast7Days, appointmentsLast30Days,
         completedAppointments, cancelledAppointments, noShowAppointments, trialingBusinesses, subscribedBusinesses, pastDueSubscriptions,
         openSupportTickets: supportTickets.length,
-        criticalSupportTickets: supportTickets.filter((item) => ["critical", "high"].includes(String(item.data().priority))).length,
+        // Backend öncelik yazmadığı için "kritik" yerine 24 saati aşan, ekip yanıtı bekleyen talepler sayılır.
+        staleSupportTickets: supportTickets.filter((item) => {
+          const data = item.data();
+          const lastActivity = dateFrom(data.updatedAt) ?? dateFrom(data.createdAt);
+          return isStaleSupportTicket(String(data.status ?? ""), lastActivity ? lastActivity.getTime() : null, now);
+        }).length,
         pendingCategoryRequests: docs("categories").length, pendingReviews: docs("reviews").length,
+        pendingHideRequests: await hideRequestCountRequest,
+        unreadAlerts: alertCounts.unread, criticalUnreadAlerts: alertCounts.critical,
         estimatedMRR: Math.round(subscribedBusinesses * PLAN_PRICE.monthly),
         estimatedARR: subscribedBusinesses * PLAN_PRICE.yearly, sourceHealth, updatedAt: new Date(),
       });
@@ -201,7 +218,7 @@ export default function SuperAdminDashboard() {
       ["Toplam işletme", stats.totalBusinesses], ["Aktif işletme", stats.activeBusinesses], ["Onay bekleyen işletme", stats.pendingBusinesses],
       ["Toplam kullanıcı", stats.totalUsers], ["Toplam randevu", stats.totalAppointments], ["Son 7 gün randevu", stats.appointmentsLast7Days],
       ["Son 30 gün randevu", stats.appointmentsLast30Days], ["Aktif abonelik", stats.subscribedBusinesses], ["Ödeme bekleyen", stats.pastDueSubscriptions],
-      ["Tahmini MRR", stats.estimatedMRR], ["Tahmini ARR", stats.estimatedARR], ["Açık destek kaydı", stats.openSupportTickets],
+      ["Tahmini MRR", stats.estimatedMRR], ["Tahmini ARR", stats.estimatedARR], ["Yanıt bekleyen destek kaydı", stats.openSupportTickets], ["24 saati aşan destek", stats.staleSupportTickets], ["Gizleme talebi", stats.pendingHideRequests], ["Okunmamış uyarı", stats.unreadAlerts],
     ];
     const blob = new Blob(["\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
@@ -215,9 +232,11 @@ export default function SuperAdminDashboard() {
   const degradedSources = (Object.keys(stats.sourceHealth) as SourceKey[]).filter((key) => !stats.sourceHealth[key]);
   const attention = [
     { label: "İşletme onayı", count: stats.pendingBusinesses, href: "/super-admin/isletmeler", icon: Building2, tone: "amber" },
-    { label: "Kritik destek", count: stats.criticalSupportTickets, href: "/super-admin/destek", icon: Headphones, tone: "rose" },
+    { label: "24 saati aşan destek", count: stats.staleSupportTickets, href: "/super-admin/destek", icon: Headphones, tone: "rose" },
+    { label: "Okunmamış uyarı", count: stats.unreadAlerts, href: "/super-admin/uyarilar", icon: BellRing, tone: "rose" },
     { label: "Ödeme bekleyen", count: stats.pastDueSubscriptions, href: "/super-admin/abonelikler", icon: WalletCards, tone: "rose" },
     { label: "Yorum moderasyonu", count: stats.pendingReviews, href: "/super-admin/moderasyon", icon: ShieldAlert, tone: "violet" },
+    { label: "Gizleme talebi", count: stats.pendingHideRequests, href: "/super-admin/moderasyon", icon: EyeOff, tone: "violet" },
     { label: "Kategori isteği", count: stats.pendingCategoryRequests, href: "/super-admin/moderasyon", icon: Sparkles, tone: "sky" },
   ];
   const metrics: Array<{ label: string; value: string; detail: string; icon: LucideIcon; tone: string }> = [
@@ -235,6 +254,7 @@ export default function SuperAdminDashboard() {
 
     <section className={`admin-health-strip ${degradedSources.length ? "!bg-amber-950" : ""}`}><div><span className={`admin-live-dot ${degradedSources.length ? "!bg-amber-400" : ""}`} /> Sistem durumu <strong>{degradedSources.length ? `${degradedSources.length} veri kaynağı kontrol edilmeli` : "Tüm veri kaynakları erişilebilir"}</strong></div><p>Son güncelleme {stats.updatedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p></section>
     {degradedSources.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-950"><WifiOff size={18} /><b>Kısmi veri:</b>{degradedSources.map((key) => <span key={key} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold">{SOURCE_LABELS[key]}</span>)}</div>}
+    {stats.unreadAlerts > 0 && <Link href="/super-admin/uyarilar" className={`group flex items-center gap-3 rounded-2xl border p-4 text-sm transition hover:-translate-y-0.5 hover:shadow-md ${stats.criticalUnreadAlerts ? "border-rose-300/60 bg-rose-50 text-rose-950" : "border-amber-300/50 bg-amber-50 text-amber-950"}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${stats.criticalUnreadAlerts ? "bg-rose-500/15 text-rose-700" : "bg-amber-500/15 text-amber-700"}`}><BellRing size={18} /></span><div className="min-w-0 flex-1"><b>{stats.unreadAlerts.toLocaleString("tr-TR")} okunmamış platform uyarısı</b><p className="text-xs opacity-75">{stats.criticalUnreadAlerts ? `${stats.criticalUnreadAlerts} tanesi kritik (ör. kalıcı SMS hatası).` : "SMS, yorum ve operasyon uyarılarını inceleyin."}</p></div><span className="inline-flex items-center gap-1 text-xs font-bold">Uyarıları aç <ArrowRight size={14} className="transition group-hover:translate-x-1" /></span></Link>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}</div>
 
     <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
@@ -249,8 +269,8 @@ export default function SuperAdminDashboard() {
 
     <Card title="Hızlı yönetim" description="Sık kullanılan platform operasyonları"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
       { title: "İşletmeleri yönet", detail: "Onay, askıya alma ve plan", href: "/super-admin/isletmeler", icon: Building2 },
-      { title: "Destek merkezini aç", detail: `${stats.openSupportTickets} açık kayıt`, href: "/super-admin/destek", icon: Headphones },
-      { title: "Moderasyon kuyruğu", detail: `${stats.pendingReviews + stats.pendingCategoryRequests} bekleyen`, href: "/super-admin/moderasyon", icon: ShieldAlert },
+      { title: "Destek merkezini aç", detail: `${stats.openSupportTickets} yanıt bekleyen kayıt`, href: "/super-admin/destek", icon: Headphones },
+      { title: "Moderasyon kuyruğu", detail: `${stats.pendingReviews + stats.pendingHideRequests + stats.pendingCategoryRequests} bekleyen`, href: "/super-admin/moderasyon", icon: ShieldAlert },
       { title: "Abonelikleri incele", detail: `${stats.pastDueSubscriptions} ödeme riski`, href: "/super-admin/abonelikler", icon: WalletCards },
     ].map((item) => <Link key={item.href} href={item.href} className="group rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 transition hover:-translate-y-1 hover:border-cyan-500/30 hover:shadow-lg"><item.icon size={20} className="text-cyan-600" /><p className="mt-3 text-sm font-semibold text-[var(--text-1)]">{item.title}</p><p className="mt-1 text-xs text-[var(--text-3)]">{item.detail}</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-cyan-700">Aç <ArrowRight size={13} className="transition group-hover:translate-x-1" /></span></Link>)}</div></Card>
   </div>;

@@ -111,3 +111,34 @@ test("destek talebi istemciden oluşturulamaz (callable kullanılır)", async ()
   const { addDoc } = await import("firebase/firestore");
   await assertFails(addDoc(collection(as("owner"), "supportTickets"), { title: "x", businessId: BIZ, userId: "owner" }));
 });
+
+// ── Platform uyarıları: yalnızca "okundu" işaretlenebilir ──────────────────
+test("platform yöneticisi uyarıyı yalnızca okundu olarak işaretleyebilir", async () => {
+  const { serverTimestamp, addDoc } = await import("firebase/firestore");
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), "platformAlerts/al1"), {
+    severity: "critical", category: "sms", title: "SMS hatası", message: "x", businessId: BIZ, isRead: false, createdAt: new Date(),
+  }));
+  const admin = as("admin1", { email: "cihatwin@gmail.com", email_verified: true });
+  const alertRef = doc(admin, "platformAlerts/al1");
+  // Okundu dışında alan değiştirilemez, başkası adına okundu yazılamaz, geri "okunmadı" yapılamaz.
+  await assertFails(updateDoc(alertRef, { isRead: true, readAt: serverTimestamp(), readBy: "admin1", severity: "warning" }));
+  await assertFails(updateDoc(alertRef, { isRead: true, readAt: serverTimestamp(), readBy: "someone-else" }));
+  await assertFails(updateDoc(alertRef, { isRead: false, readAt: serverTimestamp(), readBy: "admin1" }));
+  await assertSucceeds(updateDoc(alertRef, { isRead: true, readAt: serverTimestamp(), readBy: "admin1" }));
+  // Yönetici olmayan kullanıcı okuyamaz/işaretleyemez; kimse istemciden uyarı oluşturamaz/silemez.
+  await assertFails(getDoc(doc(as("owner"), "platformAlerts/al1")));
+  await assertFails(updateDoc(doc(as("owner"), "platformAlerts/al1"), { isRead: true, readAt: serverTimestamp(), readBy: "owner" }));
+  await assertFails(addDoc(collection(admin, "platformAlerts"), { severity: "warning", category: "sms", title: "x", isRead: false }));
+  await assertFails(deleteDoc(alertRef));
+});
+
+// ── Askıya alma: önceki durum yalnızca platform yöneticisi tarafından yazılır ──
+test("askı öncesi durum (statusBeforeSuspension) yalnızca yönetici tarafından yazılır", async () => {
+  const admin = as("admin1", { email: "cihatwin@gmail.com", email_verified: true });
+  await assertSucceeds(updateDoc(doc(admin, `businesses/${BIZ}`), { isSuspended: true, status: "suspended", statusBeforeSuspension: "pending_review" }));
+  // Askıdaki işletmenin sahibi/yöneticisi, geri dönülecek durumu kendisi belirleyemez.
+  await assertFails(updateDoc(doc(as("owner"), `businesses/${BIZ}`), { statusBeforeSuspension: "active" }));
+  await assertFails(updateDoc(doc(as("manager"), `businesses/${BIZ}`), { statusBeforeSuspension: "active" }));
+  const { deleteField } = await import("firebase/firestore");
+  await assertSucceeds(updateDoc(doc(admin, `businesses/${BIZ}`), { isSuspended: false, status: "active", statusBeforeSuspension: deleteField() }));
+});

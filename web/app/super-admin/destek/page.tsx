@@ -1,45 +1,122 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, type Timestamp } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  addDoc, collection, doc, getCountFromServer, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, updateDoc, where,
+  type FirestoreError, type Query, type QueryConstraint, type QueryDocumentSnapshot, type Timestamp,
+} from "firebase/firestore";
 import { toast } from "sonner";
-import { Building2, CheckCircle2, Clock3, Headphones, LoaderCircle, MessageCircleMore, Phone, Search, Send, UserRound } from "lucide-react";
+import { Building2, CheckCircle2, Headphones, LoaderCircle, MessageCircleMore, Phone, RotateCcw, Search, Send, UserRound } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { EmptyState } from "@/components/ui/states";
+import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/features/auth/auth-context";
+import { SUPPORT_ACTIVE_STATUSES, SUPPORT_NEEDS_ADMIN_STATUSES } from "@/features/platform/admin-ops";
 
-type SupportRow = { id:string; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string };
+type SupportRow = { id:string; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string; sortMillis:number };
+type Filter = "needs_admin"|"active"|"business"|"all";
+type Counts = { needsAdmin:number; business:number; resolved:number };
 
-const statusLabel: Record<string,string> = { open:"Yeni", in_progress:"İşleniyor", waiting_user:"İşletme yanıtı bekleniyor", waiting_admin:"Ekip yanıtı bekleniyor", resolved:"Çözüldü", closed:"Kapalı" };
+const PAGE_SIZE = 100;
+const statusLabel: Record<string,string> = { open:"Yeni", waiting_user:"İşletme yanıtı bekleniyor", waiting_admin:"Ekip yanıtı bekleniyor", resolved:"Çözüldü" };
+const FILTERS: ReadonlyArray<readonly [Filter,string]> = [["needs_admin","Yanıt bekleyen"],["active","Aktif"],["business","Mağaza mesajları"],["all","Tümü"]];
+
+function filterConstraints(filter:Filter): QueryConstraint[] {
+  if (filter === "needs_admin") return [where("status","in",SUPPORT_NEEDS_ADMIN_STATUSES)];
+  if (filter === "active") return [where("status","in",SUPPORT_ACTIVE_STATUSES)];
+  if (filter === "business") return [where("target","==","business")];
+  return [];
+}
+
+function ticketQuery(filter:Filter, ordered:boolean, after?:QueryDocumentSnapshot): Query {
+  const constraints = [...filterConstraints(filter), ...(ordered ? [orderBy("updatedAt","desc")] : []), ...(after ? [startAfter(after)] : []), limit(PAGE_SIZE)];
+  return query(collection(getDb(),"supportTickets"), ...constraints);
+}
+
+function toRow(item:QueryDocumentSnapshot): SupportRow {
+  const data = item.data();
+  const created = data.createdAt as Timestamp | undefined;
+  const updated = data.updatedAt as Timestamp | undefined;
+  return { id:item.id, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:created?.toDate ? created.toDate().toLocaleString("tr-TR") : "Şimdi", sortMillis:(updated?.toMillis?.() ?? created?.toMillis?.() ?? Date.now()) };
+}
 
 export default function SuperAdminSupportPage() {
   const { user } = useAuthContext();
-  const [rows, setRows] = useState<SupportRow[]>([]);
+  const [filter, setFilter] = useState<Filter>("needs_admin");
+  const [liveRows, setLiveRows] = useState<SupportRow[]>([]);
+  const [extraRows, setExtraRows] = useState<SupportRow[]>([]);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all"|"open"|"business">("all");
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Bileşik index henüz yayınlanmamışsa sıralamasız sorguya düşülür (istemcide sıralanır).
+  const [ordered, setOrdered] = useState(true);
+  const [counts, setCounts] = useState<Counts | null>(null);
   const [search, setSearch] = useState("");
 
-  useEffect(() => onSnapshot(query(collection(getDb(), "supportTickets"), orderBy("createdAt", "desc")), (snapshot) => {
-    setRows(snapshot.docs.map((item) => {
-      const data = item.data();
-      const stamp = data.createdAt as Timestamp | undefined;
-      return { id:item.id, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:stamp?.toDate ? stamp.toDate().toLocaleString("tr-TR") : "Şimdi" };
-    })); setLoading(false);
-  }, (error) => { toast.error(error.message); setLoading(false); }), []);
+  const refreshCounts = useCallback(() => {
+    const tickets = collection(getDb(),"supportTickets");
+    const count = (target:Query) => getCountFromServer(target).then((snapshot) => snapshot.data().count);
+    Promise.all([
+      count(query(tickets, where("status","in",SUPPORT_NEEDS_ADMIN_STATUSES))),
+      count(query(tickets, where("target","==","business"))),
+      count(query(tickets, where("status","==","resolved"))),
+    ]).then(([needsAdmin,business,resolved]) => setCounts({ needsAdmin, business, resolved })).catch(() => setCounts(null));
+  }, []);
 
-  const visible = useMemo(() => rows.filter((row) => {
-    if (filter === "open" && !["open","in_progress","waiting_user","waiting_admin"].includes(row.status)) return false;
-    if (filter === "business" && row.target !== "business") return false;
+  // İlk sayfa canlı dinlenir; "Daha fazla yükle" ile gelen eski sayfalar tek seferlik okunur.
+  useEffect(() => {
+    queueMicrotask(() => { setLoading(true); setExtraRows([]); setCursor(null); setHasMore(false); });
+    return onSnapshot(ticketQuery(filter, ordered), (snapshot) => {
+      const rows = snapshot.docs.map(toRow);
+      setLiveRows(ordered ? rows : rows.sort((a,b) => b.sortMillis - a.sortMillis));
+      setCursor((current) => current ?? snapshot.docs.at(-1) ?? null);
+      setHasMore((current) => current || snapshot.size === PAGE_SIZE);
+      setLoading(false);
+      refreshCounts();
+    }, (error:FirestoreError) => {
+      if (ordered && error.code === "failed-precondition") { setOrdered(false); return; }
+      toast.error(error.message); setLoading(false);
+    });
+  }, [filter, ordered, refreshCounts]);
+
+  async function loadMore() {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const snapshot = await getDocs(ticketQuery(filter, ordered, cursor));
+      setExtraRows((current) => [...current, ...snapshot.docs.map(toRow)]);
+      setCursor(snapshot.docs.at(-1) ?? cursor);
+      setHasMore(snapshot.size === PAGE_SIZE);
+    } catch (error) { toast.error((error as Error).message); }
+    finally { setLoadingMore(false); }
+  }
+
+  const rows = useMemo(() => {
+    const liveIds = new Set(liveRows.map((row) => row.id));
+    return [...liveRows, ...extraRows.filter((row) => !liveIds.has(row.id))];
+  }, [liveRows, extraRows]);
+
+  const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("tr-TR");
-    return !needle || `${row.title} ${row.requesterName} ${row.requesterPhone} ${row.message} ${row.businessName??""}`.toLocaleLowerCase("tr-TR").includes(needle);
-  }), [rows, filter, search]);
+    return rows.filter((row) => !needle || `${row.title} ${row.requesterName} ${row.requesterPhone} ${row.message} ${row.businessName??""}`.toLocaleLowerCase("tr-TR").includes(needle));
+  }, [rows, search]);
 
-  async function setStatus(id:string,status:string) { try { await updateDoc(doc(getDb(),"supportTickets",id),{status,updatedAt:serverTimestamp()}); toast.success("Talep durumu güncellendi."); } catch (error) { toast.error((error as Error).message); } }
+  async function setStatus(id:string,status:string) {
+    try {
+      await updateDoc(doc(getDb(),"supportTickets",id),{status,updatedAt:serverTimestamp()});
+      setExtraRows((current) => current.map((row) => row.id === id ? { ...row, status } : row));
+      toast.success("Talep durumu güncellendi.");
+    } catch (error) { toast.error((error as Error).message); }
+  }
+
+  const stat = (value:number|undefined) => value === undefined ? "—" : value.toLocaleString("tr-TR");
 
   return <div className="admin-support-page">
-    <section className="admin-support-hero"><div><span><Headphones size={16}/> CANLI DESTEK MERKEZİ</span><h1>Tüm mesajlar,<br/>tek güvenli akışta.</h1><p>Müşteri, işletme ve mağaza profili mesajlarını takip edin; durumu kaybetmeden sonuçlandırın.</p></div><div className="admin-support-stats"><span><b>{rows.filter(x=>x.status==="open").length}</b><small>yeni mesaj</small></span><span><b>{rows.filter(x=>x.target==="business").length}</b><small>mağaza mesajı</small></span><span><b>{rows.filter(x=>x.status==="resolved").length}</b><small>çözülen</small></span></div></section>
-    <section className="admin-support-toolbar"><label><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="İsim, telefon, mağaza veya mesaj ara…"/></label><div>{([['all','Tümü'],['open','Aktif'],['business','Mağaza mesajları']] as const).map(([key,label])=><button className={filter===key?"active":""} key={key} onClick={()=>setFilter(key)}>{label}</button>)}</div></section>
-    <section className="admin-support-list">{loading ? [1,2,3].map(x=><div key={x} className="admin-support-skeleton"/>) : visible.length===0 ? <EmptyState title="Mesaj bulunamadı" description="Seçtiğiniz filtrelerle eşleşen destek mesajı yok."/> : visible.map(row=><details key={row.id} className={`admin-support-ticket status-${row.status}`}><summary><div className="admin-support-ticket-icon">{row.target==="business"?<Building2/>:<MessageCircleMore/>}</div><div><span>{row.target==="business"?"MAĞAZA MESAJI":row.source==="dashboard"?"İŞLETME DESTEĞİ":"MÜŞTERİ DESTEĞİ"}</span><b>{row.title}</b><small>{row.requesterName} · {row.createdAt}</small></div><i>{statusLabel[row.status]??row.status}</i></summary><div className="admin-support-detail"><div className="admin-support-contact"><span><UserRound size={15}/>{row.requesterName}</span>{row.requesterPhone&&<a href={`tel:${row.requesterPhone}`}><Phone size={15}/>{row.requesterPhone}</a>}{row.businessName&&<span><Building2 size={15}/>{row.businessName}</span>}</div><p>{row.message}</p>{row.target!=="business"&&<AdminThread ticketId={row.id} userId={user?.uid??""}/>}<div className="admin-support-actions"><button onClick={()=>setStatus(row.id,"in_progress")} disabled={row.status==="in_progress"}><Clock3 size={14}/> İşleme al</button><button onClick={()=>setStatus(row.id,"resolved")} disabled={row.status==="resolved"}><CheckCircle2 size={14}/> Çözüldü</button></div></div></details>)}</section>
+    <section className="admin-support-hero"><div><span><Headphones size={16}/> CANLI DESTEK MERKEZİ</span><h1>Tüm mesajlar,<br/>tek güvenli akışta.</h1><p>Müşteri, işletme ve mağaza profili mesajlarını takip edin; durumu kaybetmeden sonuçlandırın.</p></div><div className="admin-support-stats"><span><b>{stat(counts?.needsAdmin)}</b><small>yeni mesaj</small></span><span><b>{stat(counts?.business)}</b><small>mağaza mesajı</small></span><span><b>{stat(counts?.resolved)}</b><small>çözülen</small></span></div></section>
+    <section className="admin-support-toolbar"><label><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Yüklenen mesajlarda isim, telefon, mağaza veya mesaj ara…"/></label><div>{FILTERS.map(([key,label])=><button className={filter===key?"active":""} key={key} onClick={()=>setFilter(key)}>{label}</button>)}</div></section>
+    <section className="admin-support-list">{loading ? [1,2,3].map(x=><div key={x} className="admin-support-skeleton"/>) : visible.length===0 ? <EmptyState title="Mesaj bulunamadı" description={filter==="needs_admin"?"Ekip yanıtı bekleyen destek mesajı yok.":"Seçtiğiniz filtrelerle eşleşen destek mesajı yok."}/> : visible.map(row=><details key={row.id} className={`admin-support-ticket status-${row.status}`}><summary><div className="admin-support-ticket-icon">{row.target==="business"?<Building2/>:<MessageCircleMore/>}</div><div><span>{row.target==="business"?"MAĞAZA MESAJI":row.source==="dashboard"?"İŞLETME DESTEĞİ":"MÜŞTERİ DESTEĞİ"}</span><b>{row.title}</b><small>{row.requesterName} · {row.createdAt}</small></div><i>{statusLabel[row.status]??row.status}</i></summary><div className="admin-support-detail"><div className="admin-support-contact"><span><UserRound size={15}/>{row.requesterName}</span>{row.requesterPhone&&<a href={`tel:${row.requesterPhone}`}><Phone size={15}/>{row.requesterPhone}</a>}{row.businessName&&<span><Building2 size={15}/>{row.businessName}</span>}</div><p>{row.message}</p>{row.target!=="business"&&<AdminThread ticketId={row.id} userId={user?.uid??""}/>}<div className="admin-support-actions">{row.status==="resolved"?<button onClick={()=>setStatus(row.id,"waiting_admin")}><RotateCcw size={14}/> Yeniden aç</button>:<button onClick={()=>setStatus(row.id,"resolved")}><CheckCircle2 size={14}/> Çözüldü</button>}</div></div></details>)}</section>
+    {!loading && hasMore && <div className="mt-4 flex justify-center"><Button variant="secondary" loading={loadingMore} disabled={loadingMore} onClick={()=>void loadMore()}>Daha fazla yükle</Button></div>}
   </div>;
 }
 

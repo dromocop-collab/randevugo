@@ -15,6 +15,7 @@ import {
   type CategoryRequest,
 } from "@/features/categories/category-request-repository";
 import {
+  listHideRequestedReviews,
   listPendingReviewsAcrossPlatform,
   updateReviewStatus,
 } from "@/features/reviews/review-repository";
@@ -384,15 +385,22 @@ function ProfileChangeModerationCard() {
 
 /* ─────────────── GLOBAL REVIEW MODERATION ─────────────── */
 function ReviewModerationCard() {
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [pendingReviews, setPendingReviews] = useState<Review[]>([]);
+  const [hideRequests, setHideRequests] = useState<Review[]>([]);
+  const [tab, setTab] = useState<"hide" | "pending">("hide");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    listPendingReviewsAcrossPlatform()
-      .then((rows) => { if (active) setReviews(rows); })
-      .catch(() => { if (active) toast.error("Yorumlar yüklenemedi."); })
+    Promise.allSettled([listHideRequestedReviews(), listPendingReviewsAcrossPlatform()])
+      .then(([hide, pending]) => {
+        if (!active) return;
+        if (hide.status === "fulfilled") setHideRequests(hide.value);
+        if (pending.status === "fulfilled") setPendingReviews(pending.value);
+        if (hide.status === "fulfilled" && hide.value.length === 0) setTab("pending");
+        if (hide.status === "rejected" || pending.status === "rejected") toast.error("Yorumların bir kısmı yüklenemedi.");
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -401,8 +409,9 @@ function ReviewModerationCard() {
     setProcessing(review.id);
     try {
       await updateReviewStatus(review.businessId, review.id, status);
-      setReviews((prev) => prev.filter((r) => r.id !== review.id));
-      toast.success(status === "approved" ? "Yorum onaylandı." : "Yorum reddedildi.");
+      setHideRequests((prev) => prev.filter((r) => r.id !== review.id));
+      setPendingReviews((prev) => prev.filter((r) => r.id !== review.id));
+      toast.success(status === "approved" ? "Yorum yayında." : "Yorum gizlendi.");
     } catch {
       toast.error("İşlem başarısız oldu.");
     } finally {
@@ -410,46 +419,71 @@ function ReviewModerationCard() {
     }
   }
 
+  const rows = tab === "hide" ? hideRequests : pendingReviews;
+
   return (
     <Card
       title="Yorum Moderasyon"
-      description="Tüm işletmelerdeki onay bekleyen müşteri yorumları (girişsiz, isim ile bırakılan yorumlar dahil)"
+      description="İşletmelerin gizleme talepleri ve onay bekleyen yorumlar. 48 saat içinde işlem yapılmayan yorumlar otomatik yayınlanır."
     >
+      <div className="mb-4 flex flex-wrap gap-2">
+        {([["hide", `Gizleme talepleri (${hideRequests.length})`], ["pending", `Onay bekleyen (${pendingReviews.length})`]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === key ? "bg-[var(--accent)] text-white" : "bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text-1)]"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {loading ? (
         <LoadingState title="Yükleniyor" description="Yorumlar çekiliyor..." />
-      ) : reviews.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
-          title="Moderasyon gerektiren yorum yok"
-          description="Onay bekleyen yorumlar burada görünecek."
+          title={tab === "hide" ? "Bekleyen gizleme talebi yok" : "Onay bekleyen yorum yok"}
+          description={tab === "hide" ? "İşletmeler bir yorumu gizlemek istediğinde burada görünür." : "Yeni yorumlar burada görünecek."}
         />
       ) : (
         <div className="space-y-3">
-          {reviews.map((review) => (
+          {rows.map((review) => (
             <div
               key={`${review.businessId}-${review.id}`}
               className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[var(--text-1)]">{review.customerName}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-[var(--text-1)]">{review.customerName}</p>
+                    <span className="text-xs text-amber-500">{"★".repeat(Math.max(0, Math.min(5, review.rating)))}<span className="text-[var(--text-3)]">{"★".repeat(Math.max(0, 5 - review.rating))}</span></span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${review.isVisible ? "bg-emerald-500/10 text-emerald-600" : "bg-[var(--surface-2)] text-[var(--text-3)]"}`}>
+                      {review.isVisible ? "Şu an yayında" : "Yayında değil"}
+                    </span>
+                  </div>
                   <p className="text-[10px] text-[var(--text-3)]">
-                    İşletme ID: <span className="font-mono">{review.businessId}</span> ·{" "}
+                    <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(review.businessId)}`} className="font-mono hover:underline">{review.businessId}</Link> ·{" "}
                     {new Date(review.createdAt).toLocaleDateString("tr-TR")}
+                    {review.serviceName ? ` · ${review.serviceName}` : ""}
                   </p>
                   {review.comment && (
                     <p className="mt-2 text-sm text-[var(--text-2)]">{review.comment}</p>
                   )}
+                  {tab === "hide" && (
+                    <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                      İşletme gerekçesi: {review.hideRequest?.reason || "Belirtilmedi"}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button onClick={() => handleDecision(review, "approved")} disabled={processing === review.id}>
-                    ✅ Onayla
+                    {tab === "hide" ? "✅ Yayında tut" : "✅ Onayla"}
                   </Button>
                   <Button
                     variant="danger"
                     onClick={() => handleDecision(review, "rejected")}
                     disabled={processing === review.id}
                   >
-                    ❌ Reddet
+                    {tab === "hide" ? "🙈 Gizle" : "❌ Reddet"}
                   </Button>
                 </div>
               </div>

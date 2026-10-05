@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { collection, doc, getDoc, getDocs, type DocumentData } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import { BadgeCheck, CalendarClock, CircleAlert, Copy, Crown, PencilLine, Plus, ReceiptText, RefreshCw, Save, Search, Store, Trash2, UsersRound, WalletCards, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,37 +46,43 @@ function mapSubscription(id: string, data: DocumentData, businesses: Map<string,
   return { id, businessId, businessName: business?.name ?? "İşletme kaydı bulunamadı", ownerUid: business?.ownerUid ?? "", plan: String(data.plan ?? "RANDEVUGO"), status: String(data.status ?? "trialing") as SubscriptionStatus, paymentProvider: String(data.paymentProvider ?? "manual") as PaymentProviderKey, renewalEnabled: data.renewalEnabled === true, trialEndsAt: readDate(data.trialEndsAt), subscriptionEndsAt: readDate(data.subscriptionEndsAt), accessMode: isLifetime ? "lifetime" : "timed", isLifetime };
 }
 
-async function fetchSubscriptions(): Promise<SubscriptionRow[]> {
+type BusinessDocs = QuerySnapshot<DocumentData>["docs"];
+
+// Abonelikler tek koleksiyon okumasıyla alınır; işletme başına getDoc yalnızca liste okuması hata verirse kullanılır.
+async function fetchSubscriptions(businessDocs: BusinessDocs): Promise<SubscriptionRow[]> {
   const db = getDb();
-  const businessSnapshot = await getDocs(collection(db, "businesses"));
-  const businesses = new Map(businessSnapshot.docs.map((item) => [item.id, { name: String(item.data().name ?? "İsimsiz işletme"), ownerUid: String(item.data().ownerUid ?? "") }]));
+  const businesses = new Map(businessDocs.map((item) => [item.id, { name: String(item.data().name ?? "İsimsiz işletme"), ownerUid: String(item.data().ownerUid ?? "") }]));
+  const placeholder = (business: BusinessDocs[number]) => mapSubscription(business.id, { businessId: business.id, status: "expired", plan: business.data().plan ?? "RANDEVUGO", paymentProvider: "manual" }, businesses);
   try {
     const subscriptionSnapshot = await getDocs(collection(db, "subscriptions"));
     const subscriptionsByBusiness = new Map(subscriptionSnapshot.docs.map((item) => [String(item.data().businessId ?? item.id), item]));
-    const rows = businessSnapshot.docs.map((business) => {
+    const rows = businessDocs.map((business) => {
       const subscription = subscriptionsByBusiness.get(business.id);
-      return subscription
-        ? mapSubscription(subscription.id, subscription.data(), businesses)
-        : mapSubscription(business.id, { businessId: business.id, status: "expired", plan: business.data().plan ?? "RANDEVUGO", paymentProvider: "manual" }, businesses);
+      return subscription ? mapSubscription(subscription.id, subscription.data(), businesses) : placeholder(business);
     });
-    const knownBusinessIds = new Set(businessSnapshot.docs.map((business) => business.id));
     const orphaned = subscriptionSnapshot.docs
-      .filter((item) => !knownBusinessIds.has(String(item.data().businessId ?? item.id)))
+      .filter((item) => !businesses.has(String(item.data().businessId ?? item.id)))
       .map((item) => mapSubscription(item.id, item.data(), businesses));
     return [...rows, ...orphaned];
   } catch {
-    const snapshots = await Promise.all(businessSnapshot.docs.map((business) => getDoc(doc(db, "subscriptions", business.id))));
-    return snapshots.map((item, index) => item.exists()
-      ? mapSubscription(item.id, item.data(), businesses)
-      : mapSubscription(businessSnapshot.docs[index].id, { businessId: businessSnapshot.docs[index].id, status: "expired", plan: businessSnapshot.docs[index].data().plan ?? "RANDEVUGO", paymentProvider: "manual" }, businesses));
+    const snapshots = await Promise.all(businessDocs.map((business) => getDoc(doc(db, "subscriptions", business.id))));
+    return snapshots.map((item, index) => item.exists() ? mapSubscription(item.id, item.data(), businesses) : placeholder(businessDocs[index]));
   }
 }
 
-async function fetchPurchaseRequests(): Promise<PurchaseRequestRow[]> {
-  const db = getDb();
-  const [requests, businesses] = await Promise.all([getDocs(collection(db, "subscriptionPurchaseRequests")), getDocs(collection(db, "businesses"))]);
-  const names = new Map(businesses.docs.map((item) => [item.id, String(item.data().name ?? "İsimsiz işletme")]));
+async function fetchPurchaseRequests(businessDocs: BusinessDocs): Promise<PurchaseRequestRow[]> {
+  const requests = await getDocs(collection(getDb(), "subscriptionPurchaseRequests"));
+  const names = new Map(businessDocs.map((item) => [item.id, String(item.data().name ?? "İsimsiz işletme")]));
   return requests.docs.map((item) => { const data = item.data(); const businessId = String(data.businessId ?? item.id); return { businessId, businessName: names.get(businessId) ?? "İşletme", planId: String(data.planId ?? ""), planLabel: String(data.planLabel ?? data.planId ?? "Paket"), billingCycle: data.billingCycle === "yearly" ? "yearly" : "monthly", amount: Number(data.amount ?? 0), currency: String(data.currency ?? "TRY"), status: String(data.status ?? "pending_payment"), updatedAt: readDate(data.updatedAt) }; });
+}
+
+// Eski kayıt göçü ve yönetici süresiz erişim eşitlemesi her ziyarette değil, tarayıcı oturumu başına bir kez çalışır.
+const SUBSCRIPTION_SYNC_SESSION_KEY = "superAdmin.subscriptionSync.v1";
+function subscriptionSyncDoneThisSession(): boolean {
+  try { return window.sessionStorage.getItem(SUBSCRIPTION_SYNC_SESSION_KEY) === "done"; } catch { return false; }
+}
+function markSubscriptionSyncDone() {
+  try { window.sessionStorage.setItem(SUBSCRIPTION_SYNC_SESSION_KEY, "done"); } catch { /* depolama kapalıysa bellek içi bayrak yeterli */ }
 }
 
 function subscriptionEnd(item: SubscriptionRow) {
@@ -136,16 +142,25 @@ export default function SuperAdminSubscriptionsPage() {
   const reload = useCallback(async (syncAdminLifetime = false) => {
     setLoading(true);
     setLoadWarning("");
-    if (syncAdminLifetime && !adminLifetimeSynced.current) {
+    if (syncAdminLifetime && !adminLifetimeSynced.current && !subscriptionSyncDoneThisSession()) {
       try {
+        // Sıralı kalmalı: göç, abonelik belgesi olmayan işletmeye (merge'süz) deneme kaydı yazar;
+        // eşitleme ile paralel koşarsa yöneticinin yeni yazılan süresiz erişimini ezebilir.
         await ensureAdminOwnedBusinessesLifetime();
         await backfillLegacyBusinessSubscriptions();
         adminLifetimeSynced.current = true;
+        markSubscriptionSyncDone();
       } catch {
         setLoadWarning("Yönetici hesabına ait işletmelerin süresiz erişimi eşitlenemedi. Yeniden deneyin.");
       }
     }
-    const [planResult, subscriptionResult, purchaseResult] = await Promise.allSettled([listPlatformPlans(), fetchSubscriptions(), fetchPurchaseRequests()]);
+    // İşletmeler tek seferde okunur; abonelik ve satın alma talepleri aynı listeyi paylaşır.
+    const businessRequest = getDocs(collection(getDb(), "businesses")).then((snapshot) => snapshot.docs);
+    const [planResult, subscriptionResult, purchaseResult] = await Promise.allSettled([
+      listPlatformPlans(),
+      businessRequest.then(fetchSubscriptions),
+      businessRequest.then(fetchPurchaseRequests),
+    ]);
     if (planResult.status === "fulfilled" && planResult.value.length) setPlans(planResult.value);
     else setPlans([{ ...DEFAULT_PLAN, features: [...DEFAULT_PLAN.features] }]);
     if (subscriptionResult.status === "fulfilled") setSubscriptions(subscriptionResult.value);

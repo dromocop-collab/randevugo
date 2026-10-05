@@ -65,15 +65,25 @@ export default function ReviewsManagementPage() {
     return () => { active = false; };
   }, [businessId]);
 
-  async function handleStatus(review: Review, status: ReviewStatus) {
+  const [hideDraft, setHideDraft] = useState<{ id: string; reason: string } | null>(null);
+
+  async function handleStatus(review: Review, status: ReviewStatus, reason?: string) {
     if (!businessId) return;
     setProcessingId(review.id);
     try {
-      await updateReviewStatus(businessId, review.id, status);
-      setReviews((prev) => prev.map((r) => (r.id === review.id ? { ...r, status, isVisible: status === "approved" } : r)));
-      toast.success(status === "approved" ? "Yorum onaylandı ve yayınlandı." : "Yorum reddedildi.");
-    } catch {
-      toast.error("İşlem başarısız oldu.");
+      const result = await updateReviewStatus(businessId, review.id, status, reason);
+      if (result.hideRequested) {
+        setReviews((prev) => prev.map((r) => (r.id === review.id ? { ...r, hideRequest: { status: "pending", reason: reason ?? null } } : r)));
+        setHideDraft(null);
+        toast.success("Gizleme talebiniz süper admine iletildi. Karar verilene kadar yorum olduğu gibi kalır.");
+      } else {
+        setReviews((prev) => prev.map((r) => (r.id === review.id ? { ...r, status, isVisible: status === "approved" } : r)));
+        toast.success("Yorum onaylandı ve yayınlandı.");
+      }
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : "";
+      toast.error(message || "İşlem başarısız oldu.");
+      return;
     } finally {
       setProcessingId(null);
     }
@@ -179,24 +189,56 @@ export default function ReviewsManagementPage() {
                       )}
                     </div>
 
-                    <div className="flex shrink-0 gap-2">
-                      {review.status !== "approved" && (
-                        <button
-                          onClick={() => handleStatus(review, "approved")}
-                          disabled={processingId === review.id}
-                          className="rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                        >
-                          ✅ Onayla
-                        </button>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      {review.hideRequest?.status === "pending" ? (
+                        <span className="rounded-full bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-600">⏳ Gizleme talebi incelemede</span>
+                      ) : review.lockedByAdmin ? (
+                        <span className="rounded-full bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold text-[var(--text-3)]">
+                          {review.hideRequest?.status === "declined" ? "Süper admin yayında tuttu" : "Süper admin karar verdi"}
+                        </span>
+                      ) : (
+                        <div className="flex gap-2">
+                          {review.status !== "approved" && (
+                            <button
+                              onClick={() => handleStatus(review, "approved")}
+                              disabled={processingId === review.id}
+                              className="rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                            >
+                              ✅ Yayınla
+                            </button>
+                          )}
+                          {review.status !== "rejected" && hideDraft?.id !== review.id && (
+                            <button
+                              onClick={() => setHideDraft({ id: review.id, reason: "" })}
+                              disabled={processingId === review.id}
+                              className="rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/20 disabled:opacity-50"
+                            >
+                              🙈 Gizleme talebi
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {review.status !== "rejected" && (
-                        <button
-                          onClick={() => handleStatus(review, "rejected")}
-                          disabled={processingId === review.id}
-                          className="rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/20 disabled:opacity-50"
-                        >
-                          ❌ Reddet
-                        </button>
+                      {hideDraft?.id === review.id && (
+                        <div className="w-full max-w-xs rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 sm:w-72">
+                          <p className="text-[11px] text-[var(--text-3)]">Yorumlar işletme tarafından doğrudan gizlenemez. Talebiniz süper admin tarafından incelenir; 48 saat içinde işlem yapılmayan yorumlar otomatik yayınlanır.</p>
+                          <textarea
+                            value={hideDraft.reason}
+                            onChange={(event) => setHideDraft({ id: review.id, reason: event.target.value.slice(0, 500) })}
+                            placeholder="Gerekçe (ör. hakaret, sahte yorum, kişisel bilgi)"
+                            rows={3}
+                            className="mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-2 text-xs text-[var(--text-1)] outline-none focus:border-[var(--accent)]"
+                          />
+                          <div className="mt-2 flex justify-end gap-2">
+                            <button onClick={() => setHideDraft(null)} className="rounded-lg px-3 py-1.5 text-xs text-[var(--text-3)] hover:text-[var(--text-1)]">Vazgeç</button>
+                            <button
+                              onClick={() => handleStatus(review, "rejected", hideDraft.reason.trim())}
+                              disabled={processingId === review.id || hideDraft.reason.trim().length < 5}
+                              className="rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              Süper admine gönder
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

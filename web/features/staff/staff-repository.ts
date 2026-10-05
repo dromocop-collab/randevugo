@@ -24,12 +24,13 @@ export async function listStaff(businessId: string, activeOnly = false): Promise
 export async function createStaff(
   businessId: string,
   input: Omit<Staff, "id" | "createdAt" | "updatedAt">
-): Promise<void> {
-  const callable = httpsCallable<{ businessId: string; staff: typeof input }, { staffId: string }>(
-    getFunctions(getFirebaseApp(), "europe-west1"),
-    "createStaffMember",
-  );
-  await callable({ businessId, staff: input });
+): Promise<{ staffId: string; linked?: boolean; email?: string; accountCreated?: boolean; linkError?: string }> {
+  const callable = httpsCallable<
+    { businessId: string; staff: typeof input },
+    { staffId: string; linked?: boolean; email?: string; accountCreated?: boolean; linkError?: string }
+  >(getFunctions(getFirebaseApp(), "europe-west1"), "createStaffMember");
+  const result = await callable({ businessId, staff: input });
+  return result.data;
 }
 
 export async function updateStaff(

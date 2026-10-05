@@ -105,7 +105,7 @@ export default function StaffPage() {
       .filter((service) => safeCategoryIds.includes(service.category))
       .map((service) => service.id);
 
-    await createStaff(businessId, {
+    const created = await createStaff(businessId, {
       fullName: safeName,
       photoUrl: "",
       phone: safePhone,
@@ -123,7 +123,13 @@ export default function StaffPage() {
       appointmentCapacity: 1,
     });
 
-    toast.success("Çalışan eklendi");
+    if (created.linked) {
+      toast.success(created.accountCreated
+        ? `Çalışan eklendi; ${created.email} adresine şifre belirleme daveti gönderildi.`
+        : `Çalışan eklendi ve ${created.email} hesabına bağlandı; bilgilendirme e-postası gönderildi.`);
+    } else {
+      toast.warning(`Çalışan eklendi ancak hesaba bağlanamadı: ${created.linkError ?? "listeden daveti yeniden gönderin."}`);
+    }
     setName("");
     setPhone("");
     setEmail("");

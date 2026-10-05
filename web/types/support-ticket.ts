@@ -2,10 +2,9 @@ import type { EntityBase } from "@/types/common";
 
 export type TicketStatus =
   | "open"
-  | "in_progress"
   | "waiting_user"
-  | "resolved"
-  | "closed";
+  | "waiting_admin"
+  | "resolved";
 
 export type TicketPriority = "low" | "medium" | "high" | "critical";
 
