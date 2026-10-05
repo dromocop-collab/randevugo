@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,32 +11,35 @@ import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-opera
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 import { DASHBOARD_ROUTE_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 import {
-  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, ChevronDown, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones, Menu, ReceiptText, X,
-  LayoutDashboard, MessageSquareText, Scissors, Settings2,
-  ShieldCheck, Star, UsersRound, WandSparkles, type LucideIcon,
+  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones,
+  House, LayoutGrid, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, Star,
+  UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
+import { Sheet } from "@/components/dashboard/ui";
+import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
+import styles from "./shell.module.css";
 
 const ADMIN_EMAIL = "cihatwin@gmail.com";
 
 type NavGroup = "merkez" | "operasyon" | "buyume" | "yonetim" | "sistem";
-interface NavItem { href: string; label: string; icon: LucideIcon; group: NavGroup; entitlement?: SubscriptionEntitlement }
-const GROUP_LABELS: Record<NavGroup, string> = { merkez: "Çalışma alanı", operasyon: "Canlı operasyon", buyume: "Analiz ve otomasyon", yonetim: "İşletme yönetimi", sistem: "Hesap ve sistem" };
+export interface NavItem { href: string; label: string; short?: string; icon: LucideIcon; group: NavGroup; entitlement?: SubscriptionEntitlement }
+const GROUP_LABELS: Record<NavGroup, string> = { merkez: "Çalışma alanı", operasyon: "Günlük operasyon", buyume: "Analiz ve otomasyon", yonetim: "İşletme yönetimi", sistem: "Hesap ve sistem" };
 
 const navItems: NavItem[] = ([
-  { href: "/dashboard", label: "Genel Bakış", icon: LayoutDashboard, group: "merkez" },
-  { href: "/dashboard/subeler", label: "Şubeler", icon: GitBranch, group: "merkez" },
-  { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot, group: "merkez" },
-  { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays, group: "operasyon" },
-  { href: "/dashboard/randevular", label: "Randevular", icon: MessageSquareText, group: "operasyon" },
-  { href: "/dashboard/operasyon", label: "Kasa & Operasyon", icon: ReceiptText, group: "operasyon" },
-  { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing, group: "operasyon" },
+  { href: "/dashboard", label: "Bugün", short: "Bugün", icon: House, group: "merkez" },
+  { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays, group: "merkez" },
+  { href: "/dashboard/randevular", label: "Randevular", icon: ListChecks, group: "merkez" },
+  { href: "/dashboard/musteriler", label: "Müşteriler", icon: UsersRound, group: "merkez" },
+  { href: "/dashboard/operasyon", label: "Kasa & Operasyon", short: "Kasa", icon: ReceiptText, group: "merkez" },
   { href: "/dashboard/canli-operasyon", label: "Canlı Sıra", icon: Activity, group: "operasyon" },
+  { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing, group: "operasyon" },
+  { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot, group: "operasyon" },
   { href: "/dashboard/analitik", label: "Analiz & Büyüme", icon: ChartNoAxesCombined, group: "buyume" },
   { href: "/dashboard/otomasyonlar", label: "Otomasyonlar", icon: WandSparkles, group: "buyume" },
   { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors, group: "yonetim" },
   { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: UsersRound, group: "yonetim" },
   { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: Clock3, group: "yonetim" },
-  { href: "/dashboard/musteriler", label: "Müşteriler", icon: UsersRound, group: "yonetim" },
+  { href: "/dashboard/subeler", label: "Şubeler", icon: GitBranch, group: "yonetim" },
   { href: "/dashboard/yorumlar", label: "Yorumlar", icon: Star, group: "yonetim" },
   { href: "/dashboard/destek", label: "Destek", icon: Headphones, group: "sistem" },
   { href: "/dashboard/abonelik", label: "Abonelik", icon: CreditCard, group: "sistem" },
@@ -44,192 +47,205 @@ const navItems: NavItem[] = ([
   { href: "/hesabim", label: "Müşteri Modu", icon: CircleUserRound, group: "sistem" },
 ] satisfies Omit<NavItem, "entitlement">[]).map((item) => ({ ...item, entitlement: DASHBOARD_ROUTE_ENTITLEMENTS[item.href] }));
 
-function visibleItems(showLiveOperations: boolean, canOpenOperations: boolean, access: ReturnType<typeof useBusinessContext>["access"], canUse: (entitlement: SubscriptionEntitlement) => boolean) {
+type Access = ReturnType<typeof useBusinessContext>["access"];
+
+function canOpenOperationsFor(access: Access) {
+  return access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
+}
+
+function visibleItems(showLiveOperations: boolean, canOpenOperations: boolean, access: Access, canUse: (entitlement: SubscriptionEntitlement) => boolean) {
   return navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
     (item.href !== "/dashboard/operasyon" || canOpenOperations) &&
     (!item.entitlement || canUse(item.entitlement)) &&
     (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access?.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href)));
 }
 
-export function DashboardSidebar() {
-  const pathname = usePathname();
-  const { user } = useAuth();
-  const { businesses, businessId, access } = useBusinessContext();
-  const showLiveOperations = useLiveOperationsAvailable();
-  const { can } = useSubscriptionPlan();
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
-  const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
-  const items = visibleItems(showLiveOperations, canOpenOperations, access, can);
-  const primaryHrefs = ["/dashboard", "/dashboard/takvim", "/dashboard/randevular", "/dashboard/operasyon", "/dashboard/musteriler"];
-  const primaryItems = items.filter((item) => primaryHrefs.includes(item.href));
-  const secondaryItems = items.filter((item) => !primaryHrefs.includes(item.href));
-  const secondaryActive = secondaryItems.some((item) => pathname.startsWith(item.href));
-  
-  const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
-
-  return (
-    <aside className="dashboard-sidebar hidden w-64 shrink-0 rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-xl shadow-[var(--shadow-hard)] backdrop-blur-xl lg:block">
-      <div className="mb-5 px-2 pt-2">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="SeninRandevun" width={32} height={32} className="rounded-lg shadow-md" />
-          <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--accent)]">
-              İşletme çalışma alanı
-            </p>
-            <p className="text-sm font-extrabold text-[var(--text-1)] truncate max-w-[150px]">
-              {activeBusiness?.name ?? "SeninRandevun"}
-            </p>
-          </div>
-        </Link>
-      </div>
-      <nav className="dashboard-nav-groups dashboard-nav-simple">
-        <section><p>Ana menü</p>{primaryItems.map((item) => {
-            const Icon = item.icon;
-            const active =
-              item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              data-dashboard-tour={item.href === "/dashboard" ? "overview" : item.href.replace("/dashboard/", "")}
-              className={cn(
-                "nav-chip flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
-                active ? "active" : "",
-                active
-                  ? "bg-[var(--text-1)] pl-4 text-[var(--bg-1)] shadow-lg"
-                  : "text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]"
-              )}
-            >
-              <span className="nav-icon grid h-8 w-8 place-items-center rounded-xl bg-[var(--surface-3)]"><Icon aria-hidden="true" size={16} strokeWidth={1.8} /></span>
-              {item.label}
-              </Link>
-            );
-          })}</section>
-        {secondaryItems.length > 0 && <details className="dashboard-sidebar-more" open={secondaryActive || undefined}>
-          <summary><span><Menu size={16}/> Diğer araçlar</span><ChevronDown size={16}/></summary>
-          <div>{(Object.keys(GROUP_LABELS) as NavGroup[]).map((group) => {
-            const groupItems = secondaryItems.filter((item) => item.group === group);
-            if (!groupItems.length) return null;
-            return <section key={group}><p>{GROUP_LABELS[group]}</p>{groupItems.map((item) => {
-              const Icon = item.icon;
-              const active = pathname.startsWith(item.href);
-              return <Link
-                key={item.href}
-                href={item.href}
-                data-dashboard-tour={item.href.replace("/dashboard/", "")}
-                className={cn(
-                  "nav-chip nav-chip-secondary flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                  active ? "active" : "",
-                  active
-                    ? "bg-[var(--text-1)] pl-4 text-[var(--bg-1)] shadow-lg"
-                    : "text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text-1)]",
-                )}
-              ><span className="nav-icon grid h-7 w-7 place-items-center rounded-lg bg-[var(--surface-3)]"><Icon aria-hidden="true" size={15} strokeWidth={1.8}/></span>{item.label}</Link>;
-            })}</section>;
-          })}</div>
-        </details>}
-      </nav>
-      {isAdmin && (
-        <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <Link
-            href="/super-admin"
-            className="platform-admin-entry flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-rose-600 transition"
-          >
-            <span><ShieldCheck size={16} strokeWidth={1.9} /></span> Platform Admin <b>↗</b>
-          </Link>
-        </div>
-      )}
-    </aside>
-  );
-}
-
-export function DashboardBottomNav() {
+/** Sidebar, alt menü ve "Daha fazla" sayfasının ortak, yetki/paket filtreli menüsü. */
+function useDashboardNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { access } = useBusinessContext();
   const showLiveOperations = useLiveOperationsAvailable();
   const { can } = useSubscriptionPlan();
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
-  const canOpenOperations = access?.role !== "staff" || !!(access.permissions.manageCheckout || access.permissions.manageCatalog || access.permissions.managePackages || access.permissions.manageFinance);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const canOpenOperations = canOpenOperationsFor(access);
   const items = visibleItems(showLiveOperations, canOpenOperations, access, can);
-  const primaryHrefs = ["/dashboard", "/dashboard/takvim", "/dashboard/randevular", canOpenOperations ? "/dashboard/operasyon" : "/dashboard/musteriler"];
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
+  return { items, isAdmin, isActive, access, pathname };
+}
+
+const tourId = (href: string) => href === "/dashboard" ? "overview" : href.replace("/dashboard/", "");
+
+export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const { businesses, businessId } = useBusinessContext();
+  const { items, isAdmin, isActive } = useDashboardNav();
+  const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
+  const groups = (Object.keys(GROUP_LABELS) as NavGroup[])
+    .map((group) => ({ group, items: items.filter((item) => item.group === group) }))
+    .filter((entry) => entry.items.length > 0);
+
+  return (
+    <aside className={styles.sidebar} aria-label="İşletme menüsü">
+      <Link href="/dashboard" className={styles.brand} title={activeBusiness?.name ?? "SeninRandevun"}>
+        <Image src="/logo.png" alt="" width={36} height={36} className={styles.brandLogo} />
+        <span className={styles.brandText}>
+          <small>İşletme paneli</small>
+          <b>{activeBusiness?.name ?? "SeninRandevun"}</b>
+        </span>
+      </Link>
+      <nav className={styles.sideNav}>
+        {groups.map(({ group, items: groupItems }) => (
+          <section key={group} className={styles.sideGroup}>
+            <p className={styles.sideGroupLabel}>{GROUP_LABELS[group]}</p>
+            {groupItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-dashboard-tour={tourId(item.href)}
+                  aria-current={active ? "page" : undefined}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(styles.sideLink, active && styles.sideLinkActive)}
+                >
+                  <span className={styles.sideIcon}><Icon size={18} strokeWidth={active ? 2.2 : 1.9} aria-hidden /></span>
+                  <span className={styles.sideLabel}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </section>
+        ))}
+        {isAdmin && (
+          <section className={styles.sideGroup}>
+            <p className={styles.sideGroupLabel}>Platform</p>
+            <Link href="/super-admin" className={cn(styles.sideLink, styles.sideLinkAdmin)} title={collapsed ? "Süper Admin" : undefined}>
+              <span className={styles.sideIcon}><ShieldCheck size={18} aria-hidden /></span>
+              <span className={styles.sideLabel}>Süper Admin</span>
+            </Link>
+          </section>
+        )}
+      </nav>
+      <button type="button" className={styles.collapseBtn} onClick={onToggle} aria-label={collapsed ? "Menüyü genişlet" : "Menüyü daralt"} aria-pressed={collapsed}>
+        {collapsed ? <PanelLeftOpen size={18} aria-hidden /> : <PanelLeftClose size={18} aria-hidden />}
+        <span className={styles.sideLabel}>Menüyü daralt</span>
+      </button>
+    </aside>
+  );
+}
+
+export function DashboardBottomNav() {
+  const { items, isAdmin, isActive, access } = useDashboardNav();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const isStaff = access?.role === "staff";
+  const primaryHrefs = useMemo(() => isStaff
+    ? ["/dashboard/takvim", "/dashboard/randevular"]
+    : ["/dashboard", "/dashboard/takvim", "/dashboard/randevular"], [isStaff]);
   const primaryItems = primaryHrefs.map((href) => items.find((item) => item.href === href)).filter(Boolean) as NavItem[];
-  const moreItems = items.filter((item) => !primaryHrefs.includes(item.href));
+  // Staff: 2 sekme + Yeni + müşteriler/destek + Daha fazla
+  const fourth = isStaff ? (items.find((item) => item.href === "/dashboard/musteriler") ?? items.find((item) => item.href === "/dashboard/destek")) : items.find((item) => item.href === "/dashboard/musteriler");
+  const slots = [...primaryItems.slice(0, 2), "new" as const, ...(isStaff ? [] : primaryItems.slice(2)), ...(isStaff && fourth ? [fourth] : [])].slice(0, 4);
+  const inBar = new Set(slots.filter((slot): slot is NavItem => slot !== "new").map((item) => item.href));
+  const moreItems = items.filter((item) => !inBar.has(item.href));
+  const moreActive = moreItems.some((item) => isActive(item.href));
 
   useEffect(() => {
     const revealTourTarget = (event: Event) => {
       const target = (event as CustomEvent<{ target?: string }>).detail?.target;
-      if (!target) return;
-      const belongsToMoreMenu = moreItems.some((item) => item.href.replace("/dashboard/", "") === target);
-      setMoreOpen(belongsToMoreMenu);
+      if (!target || window.matchMedia("(min-width: 1024px)").matches) return;
+      setMoreOpen(moreItems.some((item) => tourId(item.href) === target));
     };
     window.addEventListener("dashboard:tour-reveal", revealTourTarget);
     return () => window.removeEventListener("dashboard:tour-reveal", revealTourTarget);
   }, [moreItems]);
 
-  useEffect(() => {
-    if (!moreOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreOpen(false);
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [moreOpen]);
+  const groups = (Object.keys(GROUP_LABELS) as NavGroup[])
+    .map((group) => ({ group, items: moreItems.filter((item) => item.group === group) }))
+    .filter((entry) => entry.items.length > 0);
 
   return (
     <>
-      {moreOpen && <>
-        <button type="button" className="dashboard-more-backdrop lg:hidden" aria-label="Menüyü kapat" onClick={() => setMoreOpen(false)}/>
-        <aside id="dashboard-more-menu" className="dashboard-more-sheet lg:hidden" role="dialog" aria-modal="true" aria-label="İşletme menüsü">
-          <header><div><small>İŞLETME MENÜSÜ</small><b>Diğer araçlar</b></div><button type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat"><X size={18}/></button></header>
-          <div>{(Object.keys(GROUP_LABELS) as NavGroup[]).map((group) => {
-            const grouped = moreItems.filter((item) => item.group === group);
-            if (!grouped.length) return null;
-            return <section key={group}><p>{GROUP_LABELS[group]}</p><nav>{grouped.map((item) => {
-              const Icon=item.icon;
-              return <Link key={item.href} href={item.href} data-dashboard-tour={item.href.replace("/dashboard/", "")} onClick={() => setMoreOpen(false)} className={pathname.startsWith(item.href) ? "active" : ""}><span><Icon size={17}/></span>{item.label}<i>›</i></Link>;
-            })}</nav></section>;
-          })}{isAdmin && <section><p>Platform</p><nav><Link href="/super-admin" onClick={() => setMoreOpen(false)}><span><ShieldCheck size={17}/></span>Süper Admin<i>↗</i></Link></nav></section>}</div>
-        </aside>
-      </>}
-      <nav className="dashboard-bottom-nav fixed inset-x-3 bottom-3 z-40 overflow-hidden lg:hidden" aria-label="İşletme paneli menüsü">
-        <span className="dashboard-bottom-nav-shine" aria-hidden="true" />
-        <ul className="dashboard-bottom-primary">
-          {primaryItems.map((item) => {
-            const Icon = item.icon;
-            const active =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
+      <nav className={styles.bottomNav} aria-label="İşletme paneli menüsü">
+        <ul>
+          {slots.map((slot) => {
+            if (slot === "new") {
+              return (
+                <li key="new">
+                  <button type="button" className={styles.fab} onClick={() => openQuickAppointment()} aria-label="Yeni randevu">
+                    <span><Plus size={24} strokeWidth={2.4} aria-hidden /></span>
+                  </button>
+                </li>
+              );
+            }
+            const Icon = slot.icon;
+            const active = isActive(slot.href);
             return (
-              <li key={item.href}>
+              <li key={slot.href}>
                 <Link
-                  href={item.href}
-                  data-dashboard-tour={item.href === "/dashboard" ? "overview" : item.href.replace("/dashboard/", "")}
+                  href={slot.href}
+                  data-dashboard-tour={tourId(slot.href)}
                   aria-current={active ? "page" : undefined}
-                  onClick={() => setMoreOpen(false)}
-                  className={cn(
-                    "dashboard-bottom-nav-link",
-                    active ? "active" : ""
-                  )}
+                  className={cn(styles.bottomLink, active && styles.bottomLinkActive)}
                 >
-                  <span className="dashboard-bottom-nav-icon"><Icon aria-hidden="true" size={20} strokeWidth={2} /></span>
-                  <span>{item.label}</span>
+                  <span className={styles.bottomIcon}><Icon size={21} strokeWidth={active ? 2.3 : 1.9} aria-hidden /></span>
+                  <span className={styles.bottomLabel}>{slot.short ?? slot.label}</span>
                 </Link>
               </li>
             );
           })}
-          <li><button type="button" className={cn("dashboard-bottom-nav-link", moreOpen ? "menu-open" : "")} onClick={() => setMoreOpen((current) => !current)} aria-expanded={moreOpen} aria-controls="dashboard-more-menu"><span className="dashboard-bottom-nav-icon">{moreOpen ? <X size={20}/> : <Menu size={20}/>}</span><span>Diğer</span></button></li>
+          <li>
+            <button
+              type="button"
+              className={cn(styles.bottomLink, (moreActive || moreOpen) && styles.bottomLinkActive)}
+              onClick={() => setMoreOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={moreOpen}
+            >
+              <span className={styles.bottomIcon}><LayoutGrid size={21} strokeWidth={moreActive ? 2.3 : 1.9} aria-hidden /></span>
+              <span className={styles.bottomLabel}>Daha fazla</span>
+            </button>
+          </li>
         </ul>
       </nav>
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Tüm araçlar" description="İşletmenizi yönetmek için ihtiyacınız olan her şey.">
+        <div className={styles.moreGroups}>
+          {groups.map(({ group, items: groupItems }) => (
+            <section key={group}>
+              <p className={styles.moreLabel}>{GROUP_LABELS[group]}</p>
+              <div className={styles.moreGrid}>
+                {groupItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-dashboard-tour={tourId(item.href)}
+                      onClick={() => setMoreOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(styles.moreTile, active && styles.moreTileActive)}
+                    >
+                      <span className={styles.moreTileIcon}><Icon size={20} aria-hidden /></span>
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          {isAdmin && (
+            <section>
+              <p className={styles.moreLabel}>Platform</p>
+              <div className={styles.moreGrid}>
+                <Link href="/super-admin" onClick={() => setMoreOpen(false)} className={styles.moreTile}>
+                  <span className={styles.moreTileIcon}><ShieldCheck size={20} aria-hidden /></span>
+                  <span>Süper Admin</span>
+                </Link>
+              </div>
+            </section>
+          )}
+        </div>
+      </Sheet>
     </>
   );
 }

@@ -1,9 +1,12 @@
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { createProfessionMetadata } from "@/lib/profession-seo";
 
+// Kategori işletme listesi saatte bir yenilenir.
+export const revalidate = 3600;
+
 export const metadata = createProfessionMetadata({
-  title: "Güzellik Merkezi Randevusu Al | Online Güzellik Randevu",
-  description: "Güzellik merkezlerini keşfedin; cilt bakımı, epilasyon, manikür ve diğer hizmetler için uygun günü ve saati seçerek online randevu alın.",
+  title: "Online Güzellik Merkezi Randevusu Al",
+  description: "Güzellik merkezlerini keşfet; cilt bakımı, epilasyon, kaş ve kirpik hizmetlerinin fiyatlarını ve müsait saatlerini karşılaştırıp online randevu al.",
   pathname: "/guzellik-merkezi-randevu",
   category: "guzellik",
 });

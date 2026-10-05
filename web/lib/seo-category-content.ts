@@ -1,7 +1,9 @@
 export const seoCategoryContent = {
   spa: {
     pathname: "/spa-randevu",
-    title: "Spa Randevusu Al | Online Spa ve Masaj Randevu",
+    metaTitle: "Spa ve Masaj Randevusu Al – Online",
+    title: "Spa ve masaj randevunuzu online alın",
+    metaDescription: "Spa ve masaj salonlarını keşfet; masaj, hamam, sauna ve bakım hizmetleri için fiyatları ve müsait saatleri karşılaştırıp online spa randevusu al.",
     description: "Spa merkezlerini keşfedin; masaj, hamam, sauna ve bakım hizmetleri için uygun günü ve saati seçerek online spa randevunuzu alın.",
     eyebrow: "Rahatlama ve yenilenme",
     category: "spa",
@@ -12,7 +14,9 @@ export const seoCategoryContent = {
   },
   saglik: {
     pathname: "/saglik-randevu",
-    title: "Sağlık Randevusu Al | Online Sağlık Randevu Sistemi",
+    metaTitle: "Online Sağlık Randevusu Al",
+    title: "Sağlık randevunuzu online oluşturun",
+    metaDescription: "Sağlık hizmeti sunan klinik, fizyoterapist ve diyetisyenleri keşfet; hizmetleri ve çalışma saatlerini inceleyip online sağlık randevusu oluştur.",
     description: "Sağlık hizmeti sunan işletmeleri keşfedin, uygun hizmet ve çalışma saatlerini inceleyerek online sağlık randevunuzu oluşturun.",
     eyebrow: "Sağlığınız için kolay erişim",
     category: "saglik",
@@ -23,7 +27,9 @@ export const seoCategoryContent = {
   },
   spor: {
     pathname: "/spor-randevu",
-    title: "Spor ve Fitness Randevusu Al | Online Spor Randevu",
+    metaTitle: "Spor Salonu ve PT Randevusu Al",
+    title: "Spor ve antrenman randevunuzu online alın",
+    metaDescription: "Spor salonu, pilates stüdyosu ve kişisel antrenörleri keşfet; antrenman türünü, eğitmeni ve sana uygun saati seçerek online spor randevusu al.",
     description: "Spor salonu, fitness stüdyosu ve kişisel antrenörleri keşfedin. Size uygun antrenman ve saat için online randevu alın.",
     eyebrow: "Harekete geçin",
     category: "spor",
@@ -34,7 +40,9 @@ export const seoCategoryContent = {
   },
   veteriner: {
     pathname: "/veteriner-randevu",
-    title: "Veteriner Randevusu Al | Online Veteriner Randevu",
+    metaTitle: "Veteriner Randevusu Al – Online ve Ücretsiz",
+    title: "Veteriner randevunuzu online alın",
+    metaDescription: "Evcil dostun için veteriner kliniklerini keşfet; muayene, aşı ve bakım hizmetlerini, fiyatları ve çalışma saatlerini inceleyip online randevu al.",
     description: "Evcil hayvanınız için veteriner kliniklerini keşfedin, sunulan hizmetleri inceleyin ve uygun zamanda online veteriner randevusu alın.",
     eyebrow: "Dostlarınız için özenli bakım",
     category: "veteriner",
@@ -45,7 +53,9 @@ export const seoCategoryContent = {
   },
   nail: {
     pathname: "/nail-studio-randevu",
-    title: "Nail Studio Randevusu Al | Online Manikür ve Nail Art Randevu",
+    metaTitle: "Nail Studio ve Manikür Randevusu Al",
+    title: "Nail studio randevunuzu online alın",
+    metaDescription: "Nail studio ve tırnak bakım işletmelerini keşfet; manikür, pedikür, kalıcı oje ve nail art için fiyatları karşılaştır, uygun saati online seç.",
     description: "Nail studio ve tırnak bakım işletmelerini keşfedin. Manikür, pedikür ve nail art hizmetleri için uygun saati online seçin.",
     eyebrow: "Detaylarda güzellik",
     category: "nail",
@@ -56,7 +66,9 @@ export const seoCategoryContent = {
   },
   danismanlik: {
     pathname: "/danismanlik-randevu",
-    title: "Danışmanlık Randevusu Al | Online Danışmanlık Randevu",
+    metaTitle: "Online Danışmanlık Randevusu Al",
+    title: "Danışmanlık randevunuzu online alın",
+    metaDescription: "Terapi, koçluk ve uzman danışmanlık hizmeti veren profesyonelleri keşfet; hizmet detaylarını inceleyip sana uygun saatte online randevu oluştur.",
     description: "Danışmanlık hizmeti sunan uzmanları keşfedin, hizmet detaylarını inceleyin ve size uygun zaman için online randevu oluşturun.",
     eyebrow: "Uzman desteğine kolay erişim",
     category: "danismanlik",

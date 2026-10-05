@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://127.0.0.1:3000";
+// PLAYWRIGHT_BASE_URL lets the suite run against an already running server
+// (e.g. `next start` of a production build) instead of booting `next dev`.
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/+$/, "");
+const baseURL = externalBaseURL || "http://127.0.0.1:3000";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -19,11 +22,14 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
   ],
-  webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1",
+  webServer: externalBaseURL ? undefined : {
+    // CI'da derlenmiş sürüm test edilir: geliştirme sunucusunun ilk derlemesi 130+ testte zaman aşımına düşüyordu.
+    command: process.env.CI
+      ? "npm run build && npm run start -- --hostname 127.0.0.1 --port 3000"
+      : "npm run dev -- --hostname 127.0.0.1",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: process.env.CI ? 600_000 : 120_000,
     env: {
       NEXT_PUBLIC_FIREBASE_API_KEY: "e2e-test-key",
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-randevugo-e2e.firebaseapp.com",

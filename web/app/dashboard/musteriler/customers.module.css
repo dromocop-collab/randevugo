@@ -1,0 +1,29 @@
+.tableCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dui-line);
+  border-radius: var(--dui-radius);
+  background: var(--dui-card);
+  box-shadow: var(--dui-shadow);
+}
+@media (max-width: 899px) {
+  /* Mobilde kartlar kendi yüzeyini taşır; kapsayıcı şeffaf kalsın. */
+  .tableCard { overflow: visible; border: 0; background: transparent; box-shadow: none; }
+  .tableCard > div[role="list"] { padding: 0; }
+}
+
+.identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.identityText { display: grid; min-width: 0; }
+.identityText b { overflow: hidden; color: var(--dui-ink); font-size: 14.5px; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
+.identityText small { display: inline-flex; align-items: center; gap: 4px; color: var(--dui-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+
+.mobileCard { display: grid; gap: 10px; min-width: 0; text-align: left; }
+.mobileStats { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--dui-muted); font-size: 12.5px; font-weight: 600; }
+.mobileStats > span { display: inline-flex; align-items: center; gap: 4px; }
+
+.sort { display: flex; flex: 1 1 200px; gap: 8px; min-width: 0; }
+@media (min-width: 768px) { .sort { flex: 0 0 auto; } }
+.sort > select { flex: 1 1 auto; min-width: 0; }
+@media (min-width: 768px) { .sort > select { width: 180px; flex: none; } }
+.invalid, .invalid:focus { border-color: var(--dui-red-fg); box-shadow: 0 0 0 3px var(--dui-red-bg); }

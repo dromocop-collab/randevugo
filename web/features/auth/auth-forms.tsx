@@ -22,6 +22,8 @@ import { getFirebaseApp } from "@/lib/firebase/client";
 import {
   loginWithEmailPassword,
   registerWithEmailPassword,
+  signInWithSocial,
+  type SocialProvider,
 } from "@/features/auth/auth-service";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,6 +64,9 @@ import s from "./auth.module.css";
 const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
 
 type AccountType = "business" | "customer";
+
+// Apple web girişi için Firebase'de Services ID / Key gerekir; tanımlanınca NEXT_PUBLIC_APPLE_SIGNIN_ENABLED=1 yapılır.
+const APPLE_WEB_SIGNIN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGNIN_ENABLED === "1";
 type ScreenMode = "login" | "register" | "forgot";
 
 function getCloudFunctions() {
@@ -81,6 +86,12 @@ function mapAuthError(error: unknown): string {
     "auth/invalid-email": "E-posta formatı geçersiz.",
     "auth/network-request-failed": "Ağ hatası oluştu. İnternet bağlantınızı kontrol edin.",
     "auth/too-many-requests": "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.",
+    "auth/account-exists-with-different-credential": "Bu e-posta başka bir giriş yöntemiyle kayıtlı. Önce o yöntemle (örn. e-posta ve şifre) giriş yapın.",
+    "auth/unauthorized-domain": "Bu alan adı Firebase'de yetkili değil. Firebase Console > Authentication > Settings > Authorized domains listesine ekleyin.",
+    "auth/operation-not-allowed": "Bu giriş yöntemi şu anda kapalı.",
+    "auth/invalid-oauth-client-id": "Apple ile giriş web için henüz yapılandırılmamış.",
+    "auth/invalid-credential-or-provider-id": "Giriş sağlayıcısı yapılandırması hatalı.",
+    "auth/user-disabled": "Bu hesap devre dışı bırakılmış.",
   };
 
   if (code && mapper[code]) return mapper[code];
@@ -455,6 +466,8 @@ export function AuthScreen({ variant = "customer", mode, children }: { variant?:
 
   return (
     <main className={cx(s.screen, !customer && s.business)}>
+      {/* Görsel başlıklar ekran boyutuna göre gizlenir; sayfanın tek h1'i budur. */}
+      <h1 className={s.srOnly}>{copy.title}</h1>
       <aside className={s.visual} aria-label="SeninRandevun">
         <div className={s.grid} aria-hidden="true" />
         <div className={s.vTop}>
@@ -468,7 +481,7 @@ export function AuthScreen({ variant = "customer", mode, children }: { variant?:
         </div>
         <div className={s.vCopy}>
           <span className={s.eyebrow}>{copy.eyebrow}</span>
-          <h1 className={s.vTitle}>{copy.title}</h1>
+          <p className={s.vTitle} aria-hidden="true">{copy.title}</p>
           <p className={s.vText}>{copy.text}</p>
           <div className={s.vStats}>
             {customer
@@ -488,7 +501,7 @@ export function AuthScreen({ variant = "customer", mode, children }: { variant?:
           <div className={s.mHeroBody}>
             <div className={s.mHeroCopy}>
               <span className={s.eyebrow}>{copy.eyebrow}</span>
-              <h1 className={s.mHeroTitle}>{copy.title}</h1>
+              <p className={s.mHeroTitle} aria-hidden="true">{copy.title}</p>
               <p className={s.mHeroText}>{copy.text}</p>
             </div>
             <div className={cx(s.roviWrap, s.mHeroRovi)} aria-hidden="true">
@@ -571,8 +584,10 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
       <CardHead
         icon={customer ? UserRound : Building2}
         title={customer ? "Hesabına giriş yap" : "İşletme paneline giriş"}
-        subtitle={customer ? "E-posta adresin ve şifrenle devam et." : "Bugünün akışına kaldığın yerden devam et."}
+        subtitle={customer ? (APPLE_WEB_SIGNIN_ENABLED ? "Google, Apple veya e-postanla devam et." : "Google hesabın veya e-postanla devam et.") : "Bugünün akışına kaldığın yerden devam et."}
       />
+
+      <SocialSignIn accountType={accountType} mode="login" />
 
       <form className={s.form} onSubmit={onSubmit} noValidate>
         <FormAlert message={formError} />
@@ -796,6 +811,8 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
             title={customer ? "Ücretsiz hesap oluştur" : "Çalışma alanını oluştur"}
             subtitle={customer ? "Bir dakikadan kısa sürer, üyelik tamamen ücretsiz." : "Lansmana özel: tüm özellikler ilk 3 ay ücretsiz."}
           />}
+
+      {!embedded && <SocialSignIn accountType={accountType} mode="register" />}
 
       <form className={s.form} onSubmit={onSubmit} noValidate>
         <FormAlert message={formError} />
@@ -1121,6 +1138,58 @@ export function ForgotPasswordForm() {
         <ShieldCheck size={17} aria-hidden="true" />
         <span>Kod 5 dakika geçerlidir. Gelen kutunda göremezsen spam / gereksiz klasörünü kontrol et.</span>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Google / Apple ile giriş ─────────────────── */
+function GoogleMark() {
+  return <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>;
+}
+
+function AppleMark() {
+  return <svg width="18" height="20" viewBox="0 0 17 20" aria-hidden="true"><path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9C3.6 4.8 2 5.8 1.1 7.3c-1.8 3.2-.5 7.9 1.3 10.5.9 1.3 1.9 2.7 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8 2.3-1.3 3.1-2.6c1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.3zM11.6 3c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>;
+}
+
+function SocialSignIn({ accountType, mode }: { accountType: AccountType; mode: "login" | "register" }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<SocialProvider | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const customer = accountType === "customer";
+
+  async function start(provider: SocialProvider) {
+    setError(null);
+    setBusy(provider);
+    try {
+      const result = await signInWithSocial(provider);
+      if (result.redirected) return;
+      toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
+      // Yeni işletme hesabı kurulum sihirbazına, diğerleri panele / hesaba gider.
+      const fallback = customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";
+      router.push(getSafeNextPath(fallback));
+    } catch (err) {
+      const code = (err as FirebaseError | undefined)?.code;
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
+      const message = mapAuthError(err);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className={s.social}>
+      <FormAlert message={error} />
+      {APPLE_WEB_SIGNIN_ENABLED && <button type="button" className={cx(s.socialBtn, s.socialApple)} onClick={() => void start("apple")} disabled={busy !== null} aria-busy={busy === "apple"}>
+        {busy === "apple" ? <span className={cx(s.spinner, s.spinnerDark)} aria-hidden="true" /> : <AppleMark />}
+        <span>Apple ile {mode === "register" ? "kaydol" : "devam et"}</span>
+      </button>}
+      <button type="button" className={cx(s.socialBtn, s.socialGoogle)} onClick={() => void start("google")} disabled={busy !== null} aria-busy={busy === "google"}>
+        {busy === "google" ? <span className={cx(s.spinner, s.spinnerDark)} aria-hidden="true" /> : <GoogleMark />}
+        <span>Google ile {mode === "register" ? "kaydol" : "devam et"}</span>
+      </button>
+      <div className={s.socialDivider} role="separator"><span>veya e-posta ile</span></div>
     </div>
   );
 }

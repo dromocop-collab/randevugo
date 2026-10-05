@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import type { Business } from "@/types/business";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
+import { categoryImageFor } from "@/components/marketing/category-catalog";
 import styles from "./discover.module.css";
 
 interface DiscoveryCategory {
@@ -51,6 +52,9 @@ const CATEGORY_VISUALS: Record<string, string> = {
   danismanlik: "/images/categories/danismanlik.png",
   veteriner: "/images/categories/veteriner.png",
   yazilim: "/images/categories/yazilim.png",
+  egitim: "/images/categories/egitim-v2.png",
+  servis: "/images/categories/servis-v2.png",
+  diger: "/images/categories/diger-v2.png",
 };
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -186,7 +190,7 @@ export function DiscoverInteractive() {
       const merged = [...DEFAULT_CATEGORIES.filter((item) => item.value !== "diger")];
       dynamic.forEach((item) => {
         const slug = canonicalBusinessCategory(item.slug);
-        if (!existing.has(slug)) { existing.add(slug); merged.push({ value: slug, label: item.label, icon: item.emoji || "•", imageUrl: item.imageUrl }); }
+        if (!existing.has(slug)) { existing.add(slug); merged.push({ value: slug, label: item.label, icon: item.emoji || "•", imageUrl: item.imageUrl || categoryImageFor(slug, item.label) }); }
       });
       merged.push(DEFAULT_CATEGORIES[DEFAULT_CATEGORIES.length - 1]);
       setCategories(merged);

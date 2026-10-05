@@ -1,27 +1,68 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, BellRing, CalendarCheck2, Check, Clock3, Gauge, LineChart, MessageSquareText, PackageCheck, PlayCircle, ShieldCheck, Sparkles, Store, UserCheck, UsersRound, WalletCards, WandSparkles } from "lucide-react";
+import type { CSSProperties } from "react";
+import { ArrowRight, ArrowUpRight, BarChart3, BellRing, CalendarCheck2, CalendarDays, Check, ClipboardList, Gift, Globe2, LogIn, MessageSquareText, PackageCheck, ShieldCheck, Smartphone, Sparkles, Ticket, UserCheck, UsersRound, WalletCards, WandSparkles } from "lucide-react";
 import { BusinessPage } from "@/components/marketing/business-shell";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
+import { BusinessFaq, CategoryMarquee, ProductMockup } from "@/components/home/business-sections";
+import { ScrollReveal } from "@/components/home/scroll-reveal";
+import { currencySymbol, featuredPlan, formatPrice, loadPublicPlans, yearlySavingPercent } from "@/components/home/public-plans";
+import { getDiscoveryFacets } from "@/features/discovery/search-repository";
 import { createPublicMetadata, safeJsonLd, SEO_SITE_URL } from "@/lib/seo/metadata";
+import styles from "@/components/home/business.module.css";
 
-const capabilities = [
-  { icon: CalendarCheck2, title: "Akıllı randevu motoru", text: "Çalışan, hizmet, mola ve izinleri aynı anda hesaplayan kusursuz müsaitlik." },
-  { icon: UsersRound, title: "Müşteri hafızası", text: "Ziyaret geçmişi, tercihler, notlar ve harcama özeti tek müşteri profilinde." },
-  { icon: LineChart, title: "Canlı işletme analitiği", text: "Gelir, doluluk, iptal ve ekip performansını anlaşılır raporlarla izleyin." },
-  { icon: Store, title: "Dijital mağazanız", text: "Hizmetlerinizi, ekibinizi, yorumlarınızı ve müsaitliğinizi 7/24 sergileyin." },
-  { icon: MessageSquareText, title: "Otomatik iletişim", text: "Teyit, değişiklik ve hatırlatma akışlarını tek yerden yönetin." },
-  { icon: ShieldCheck, title: "Güvenli operasyon", text: "Rol bazlı erişim, işletme izolasyonu ve KVKK odaklı veri süreçleri." },
+const FEATURES = [
+  { icon: CalendarDays, title: "Akıllı takvim", text: "Çalışan, hizmet süresi, mola ve izinleri birlikte hesaplayan çakışmasız takvim. Günün tamamı tek bakışta.", wide: true },
+  { icon: Globe2, title: "7/24 online randevu", text: "Size özel randevu sayfası ve QR bağlantısı. Müşteriniz siz uyurken bile uygun saati seçsin.", wide: true },
+  { icon: MessageSquareText, title: "SMS hatırlatma", text: "Onay, değişiklik ve hatırlatma mesajları otomatik gitsin; gelmeyen müşteri azalsın." },
+  { icon: Ticket, title: "Canlı sıra", text: "Randevusuz gelenleri dijital sıraya alın; müşteri sırasını telefonundan izlesin." },
+  { icon: UsersRound, title: "Ekip yönetimi", text: "Çalışan hesapları, rol bazlı yetkiler, çalışma planları ve kişisel takvimler." },
+  { icon: UserCheck, title: "Müşteri CRM", text: "Ziyaret geçmişi, notlar, tercihler ve harcama özeti tek müşteri profilinde." },
+  { icon: WalletCards, title: "Kasa ve paketler", text: "Tahsilat, adisyon, seans paketleri, gelir–gider ve stok tek akışta." },
+  { icon: BarChart3, title: "Analitik", text: "Doluluk, gelir, iptal ve ekip performansını anlaşılır raporlarla izleyin." },
+  { icon: ClipboardList, title: "Ek randevu alanları", text: "Randevu sırasında ihtiyacınız olan bilgiyi sorun: notlar, tercihler, özel sorular." },
+  { icon: Smartphone, title: "Web, iPhone ve Android", text: "Panel tarayıcıda; işletmeniz cebinizde. Bildirimler anında elinizde." },
 ];
 
-const operationFlow = [
-  { icon: CalendarCheck2, step: "01", title: "Randevu oluşur", text: "Müşteri uygun hizmeti, çalışanı ve saati seçer; kayıt takvime düşer." },
-  { icon: UserCheck, step: "02", title: "Ekip anında görür", text: "İlgili çalışan bilgilendirilir, günlük akış herkes için güncel kalır." },
-  { icon: WalletCards, step: "03", title: "Ödeme kaydedilir", text: "Tahsilat, paket veya seans bilgisi aynı müşteri hesabına işlenir." },
-  { icon: WandSparkles, step: "04", title: "Rovi takip eder", text: "Bekleyen işleri ve dikkat edilmesi gereken noktaları anlaşılır biçimde gösterir." },
+const FLOW = [
+  { icon: CalendarCheck2, title: "Randevu oluşur", text: "Müşteri hizmeti, çalışanı ve saati seçer; kayıt anında takvime düşer." },
+  { icon: BellRing, title: "Herkes haberdar", text: "Çalışana bildirim, müşteriye onay ve hatırlatma otomatik gider." },
+  { icon: PackageCheck, title: "Ödeme işlenir", text: "Tahsilat, paket veya seans bilgisi aynı müşteri hesabına yazılır." },
+  { icon: WandSparkles, title: "Rovi takip eder", text: "Boşlukları, bekleyen işleri ve önerileri günlük özetle gösterir." },
 ];
+
+const BUSINESS_FAQ = [
+  ["İlk 3 ay gerçekten ücretsiz mi?", "Evet. Lansman döneminde açılan işletme hesapları ilk 3 ay tüm özellikleri ücretsiz kullanır. Başlamak için kredi kartı gerekmez."],
+  ["Kurulum ne kadar sürer?", "Hizmetlerinizi, çalışanlarınızı ve çalışma saatlerinizi ekledikten sonra randevu sayfanız yayına hazırdır; aynı gün randevu almaya başlayabilirsiniz. Kurulum rehberi ve destek ekibi yanınızda."],
+  ["Müşterilerim uygulama indirmek zorunda mı?", "Hayır. Müşterileriniz randevu sayfanızdan tarayıcıyla randevu alabilir. Dilerlerse iPhone ve Android uygulamasını da kullanabilirler."],
+  ["Birden fazla şubem ve çalışanım var, uygun mu?", "Evet. Çoklu şube, rol bazlı ekip erişimi ve çalışan bazlı takvimler pakete dahildir. Güncel limitler fiyatlar sayfasında yazar."],
+  ["Mevcut müşteri listemi taşıyabilir miyim?", "Evet. Müşteri kayıtlarınızı sisteme aktarabilir, kurulum desteğimizden yararlanabilirsiniz."],
+  ["İstediğim zaman bırakabilir miyim?", "Evet. Taahhüt yoktur; aboneliğinizi dilediğiniz zaman sonlandırabilirsiniz."],
+] as const;
+
+const businessFaqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": `${SEO_SITE_URL}/isletmeler#faq`,
+  mainEntity: BUSINESS_FAQ.map(([question, answer]) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })),
+};
+
+// Paket fiyatı ve canlı işletme sayıları sunucuda hazırlanır, 5 dakikada bir yenilenir.
+export const revalidate = 300;
+const PROOF_MIN_BUSINESSES = 12;
+
+async function loadBusinessCount(): Promise<{ businesses: number; cities: number } | null> {
+  try {
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4_000));
+    const facets = await Promise.race([getDiscoveryFacets(), timeout]);
+    return { businesses: facets.totalBusinesses, cities: facets.cities.length };
+  } catch {
+    return null;
+  }
+}
 
 export const metadata = createPublicMetadata({
   title: "İşletme ve Randevu Yönetim Programı",
-  description: "Randevu, çalışan, müşteri, paket, kasa ve şube süreçlerinizi tek panelden yönetin. SeninRandevun lansmana özel ilk 3 ay ücretsiz.",
+  description: "Online randevu, takvim, çalışan, müşteri, paket, kasa ve şube süreçlerinizi tek panelden yönetin. SeninRandevun işletme paneli lansmana özel ilk 3 ay ücretsiz.",
   pathname: "/isletmeler",
   keywords: ["randevu programı", "işletme yönetim programı", "online randevu sistemi", "müşteri takip programı", "kuaför randevu programı", "salon yönetim sistemi"],
   imageAlt: "SeninRandevun işletme ve online randevu yönetim programı",
@@ -36,22 +77,136 @@ const businessJsonLd = {
   ],
 };
 
-export default function BusinessesPage() {
-  return <BusinessPage className="business-landing"><main>
+export default async function BusinessesPage() {
+  const [plans, counts] = await Promise.all([loadPublicPlans(), loadBusinessCount()]);
+  const plan = featuredPlan(plans);
+  const symbol = currencySymbol(plan.currency);
+  const saving = yearlySavingPercent(plan);
+  const showCounts = Boolean(counts && counts.businesses >= PROOF_MIN_BUSINESSES);
+
+  return <BusinessPage className={styles.page}><main className={styles.main}>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(businessJsonLd) }}/>
-      <section className="business-hero"><div className="business-hero-art" /><div className="business-hero-overlay" /><div className="business-hero-content"><div className="business-eyebrow"><Sparkles size={14} /> Türkiye&apos;nin yeni nesil işletme çalışma alanı</div><h1>Takviminizi değil,<br /><em>işletmenizi yönetin.</em></h1><p>Randevu, ekip, müşteri, kasa ve gelir operasyonunuzu tek akıllı sistemde birleştirin. Siz hizmetinize odaklanın; SeninRandevun günlük işleyişinizi düzenlesin.</p><div className="business-hero-actions"><Link href="/isletmeler/kayit">İlk 3 ay ücretsiz başla <ArrowRight size={16} /></Link><Link href="#isletme-akisi"><PlayCircle size={16}/> Nasıl çalışır?</Link></div><div className="business-hero-proof"><span><Check size={13} /> Kredi kartı gerekmez</span><span><Check size={13} /> Kurulum desteği dahil</span><span><Check size={13} /> İstediğin zaman ayrıl</span></div></div><div className="business-floating-stat stat-one"><Gauge size={18} /><div><b>Canlı</b><small>takvim görünümü</small></div></div><div className="business-floating-stat stat-two"><BarChart3 size={18} /><div><b>Tek merkez</b><small>bağlı operasyon</small></div></div></section>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(businessFaqJsonLd) }}/>
 
-      <section className="business-proof-strip"><div><strong>Tek panel</strong><span>randevu, müşteri ve kasa</span></div><div><strong>7/24</strong><span>online randevu sayfası</span></div><div><strong>Rol bazlı</strong><span>ekip erişimi</span></div><div><strong>90 gün</strong><span>lansmana özel ücretsiz</span></div></section>
+    {/* ─── Hero ─── */}
+    <section className={styles.hero} aria-labelledby="biz-title">
+      <div className={styles.heroBackdrop} aria-hidden="true"><span className={styles.heroGrid} /><span className={`${styles.heroGlow} ${styles.glowA}`} /><span className={`${styles.heroGlow} ${styles.glowB}`} /></div>
+      <div className={`${styles.wrap} ${styles.heroInner}`}>
+        <div className={styles.heroCopy}>
+          <span className={styles.eyebrow}><Gift size={13} aria-hidden="true" /> İŞLETMELER İÇİN · İLK 3 AY ÜCRETSİZ</span>
+          <h1 id="biz-title" className={styles.title}>Takviminizi değil,<br /><em>işletmenizi yönetin.</em></h1>
+          <p className={styles.lead}>Online randevu, ekip, müşteri, kasa ve hatırlatmalar tek akıllı panelde. Siz hizmetinize odaklanın; SeninRandevun gününüzü düzenlesin.</p>
+          <div className={styles.heroActions}>
+            <Link href="/isletmeler/kayit" className={styles.btnLime}>İlk 3 ay ücretsiz başla <ArrowUpRight size={17} aria-hidden="true" /></Link>
+            <Link href="/isletmeler/giris" className={styles.btnGhost}><LogIn size={16} aria-hidden="true" /> İşletme girişi</Link>
+          </div>
+          <ul className={styles.heroProof}>
+            <li><Check size={14} aria-hidden="true" /> Kredi kartı gerekmez</li>
+            <li><Check size={14} aria-hidden="true" /> Kurulum desteği dahil</li>
+            <li><Check size={14} aria-hidden="true" /> Taahhüt yok</li>
+          </ul>
+        </div>
+        <ProductMockup />
+      </div>
+    </section>
 
-      <section id="isletme-akisi" className="business-workflow">
-        <div className="business-workflow-copy"><span><Sparkles size={14}/> BİRBİRİNE BAĞLI OPERASYON</span><h2>Bir randevu geldiğinde<br/><em>her şey birlikte ilerler.</em></h2><p>Ayrı defterlere, mesajlara ve hesaplara bölünmeden; müşteri gelişinden tahsilata kadar bütün işleyiş tek akışta güncel kalır.</p><div className="business-workflow-list">{operationFlow.map(({icon:Icon,step,title,text})=><article key={title}><i><Icon size={20}/></i><div><small>{step} · ADIM</small><b>{title}</b><p>{text}</p></div></article>)}</div><div className="business-workflow-actions"><Link href="/isletmeler/kayit">Çalışma alanını ücretsiz aç <ArrowRight size={16}/></Link><Link href="/ozellikler">Tüm özellikleri incele</Link></div></div>
-        <div className="business-workflow-visual" aria-label="SeninRandevun işletme akışı örneği"><header><span><i/> İŞLETME AKIŞI</span><b>Bugün · Canlı</b></header><div className="business-flow-summary"><div><small>BUGÜNÜN PLANI</small><strong>Günün kontrol altında.</strong></div><span><BellRing size={18}/><i/></span></div><div className="business-flow-events"><article style={{"--flow-delay":"0s"} as React.CSSProperties}><time>10:30</time><i><CalendarCheck2/></i><div><b>Yeni randevu</b><span>Saç bakımı · Elif</span></div><em>Onaylandı</em></article><article style={{"--flow-delay":"1.3s"} as React.CSSProperties}><time>12:00</time><i><PackageCheck/></i><div><b>Paket seansı</b><span>Müşteri hesabına işlendi</span></div><em>4/5 kaldı</em></article><article style={{"--flow-delay":"2.6s"} as React.CSSProperties}><time>14:15</time><i><WalletCards/></i><div><b>Ödeme alındı</b><span>Kasa otomatik güncellendi</span></div><em>₺1.250</em></article></div><div className="business-flow-rovi"><span><WandSparkles size={19}/></span><div><small>ROVİ’DEN KISA NOT</small><b>Yarın 14:00 için uygun bir boşluk var.</b><p>Takvim ve ekip müsaitliği birlikte kontrol edildi.</p></div><ArrowRight size={18}/></div><div className="business-flow-orbit orbit-one"><UsersRound size={17}/><span><b>128</b><small>müşteri</small></span></div><div className="business-flow-orbit orbit-two"><BarChart3 size={17}/><span><b>%82</b><small>doluluk</small></span></div></div>
-      </section>
+    <CategoryMarquee />
 
-    <section className="business-capabilities"><div className="business-section-head"><div><span>TEK PLATFORM · TAM KONTROL</span><h2>Günün karmaşasını<br />sade bir akışa dönüştürün.</h2></div><p>İşletmenizin ön yüzünden arka ofisine kadar tüm deneyimi birbirine bağlı, hızlı ve ölçülebilir hâle getiriyoruz.</p></div><div className="business-capability-grid">{capabilities.map(({icon:Icon,title,text},index)=><article key={title} style={{"--i":index} as React.CSSProperties}><div><Icon size={21}/></div><span>0{index+1}</span><h3>{title}</h3><p>{text}</p><Link href="/ozellikler">Detayları gör <ArrowRight size={13}/></Link></article>)}</div></section>
+    {/* ─── Kanıt şeridi ─── */}
+    <section className={styles.wrap} aria-label="SeninRandevun bir bakışta">
+      <dl className={styles.proof} data-reveal="">
+        {showCounts && counts ? <>
+          <div><dt>Yayında işletme</dt><dd>{counts.businesses.toLocaleString("tr-TR")}</dd></div>
+          <div><dt>Şehir</dt><dd>{counts.cities.toLocaleString("tr-TR")}</dd></div>
+        </> : <>
+          <div><dt>randevu, ekip, müşteri ve kasa</dt><dd>Tek panel</dd></div>
+          <div><dt>online randevu sayfası</dt><dd>7/24</dd></div>
+        </>}
+        <div><dt>web, iPhone ve Android</dt><dd>Her cihazda</dd></div>
+        <div><dt>lansmana özel ücretsiz</dt><dd>3 ay</dd></div>
+      </dl>
+    </section>
 
-    <section className="business-product-scene"><div className="business-product-copy"><span>HER EKRANDA HAZIR</span><h2>İşletmeniz sizinle hareket eder.</h2><p>Masada, resepsiyonda veya hareket hâlindeyken aynı güncel operasyon görünümüne ulaşın.</p><ul><li><Clock3 size={16}/> Canlı günlük akış</li><li><UsersRound size={16}/> Ekip ve müşteri görünümü</li><li><WandSparkles size={16}/> Akıllı iş önerileri</li></ul><Link href="/isletmeler/kayit">Çalışma alanını aç <ArrowRight size={15}/></Link></div><div className="business-product-ui"><div className="product-ui-bar"><i/><i/><i/><span>seninrandevun.com/dashboard</span></div><div className="product-ui-body"><aside><b>S</b>{[1,2,3,4,5].map(i=><i key={i}/>)}</aside><div className="product-ui-main"><div className="product-ui-head"><div><small>Bugünün akışı</small><strong>Günaydın, Elif</strong></div><button>+ Randevu</button></div><div className="product-ui-stats"><span><small>Randevu</small><b>12</b></span><span><small>Doluluk</small><b>%84</b></span><span><small>Gelir</small><b>₺8.450</b></span></div><div className="product-ui-grid"><div>{["09:30  Selin · Saç kesimi","11:00  Merve · Manikür","13:30  Deniz · Cilt bakımı","15:00  Aylin · Fön"].map(x=><p key={x}>{x}<i/></p>)}</div><div className="product-ui-chart">{[40,68,53,84,92,76,55].map((h,i)=><i key={i} style={{height:`${h}%`}}/>)}</div></div></div></div></div></section>
+    {/* ─── Özellikler ─── */}
+    <section className={styles.section} id="ozellikler" aria-labelledby="biz-features-title">
+      <div className={styles.wrap}>
+        <div className={styles.sectionHead} data-reveal="">
+          <div><span className={styles.kicker}>TEK PLATFORM · TAM KONTROL</span><h2 id="biz-features-title">İhtiyacınız olan her şey,<br /><em>tek pakette.</em></h2><p>Ayrı uygulamalar, defterler ve mesaj grupları yerine birbirine bağlı tek bir sistem.</p></div>
+          <Link href="/ozellikler" className={styles.textLink}>Tüm özellikler <ArrowRight size={15} aria-hidden="true" /></Link>
+        </div>
+        <ul className={styles.features}>
+          {FEATURES.map(({ icon: Icon, title, text, wide }, index) => <li key={title} className={`${styles.feature} ${wide ? styles.featureWide : ""}`} data-reveal="" style={{ "--i": index % 4 } as CSSProperties}>
+            <span className={styles.featureIcon}><Icon size={21} aria-hidden="true" /></span>
+            <h3>{title}</h3>
+            <p>{text}</p>
+            {wide && index === 0 && <span className={styles.featureDemo} aria-hidden="true"><i style={{ "--w": "62%" } as CSSProperties} /><i style={{ "--w": "38%" } as CSSProperties} /><i style={{ "--w": "80%" } as CSSProperties} /></span>}
+            {wide && index === 1 && <span className={styles.featureLink} aria-hidden="true">seninrandevun.com/isletme/<b>salonunuz</b></span>}
+          </li>)}
+        </ul>
+      </div>
+    </section>
 
-    <section className="business-final-cta"><span>İLK 3 AY BOYUNCA TÜM ÖZELLİKLER AÇIK</span><h2>Yarının işleyişini<br />bugün kurun.</h2><p>Kredi kartı yok. Kurulum ücreti yok. Sadece daha akıcı bir işletme deneyimi.</p><Link href="/isletmeler/kayit">Ücretsiz hesabını aç <ArrowRight size={17}/></Link></section>
+    {/* ─── Akış ─── */}
+    <section className={styles.section} aria-labelledby="biz-flow-title">
+      <div className={styles.wrap}>
+        <div className={styles.flowPanel} data-reveal="">
+          <div className={styles.flowCopy}>
+            <span className={styles.kickerLight}><Sparkles size={13} aria-hidden="true" /> BİRBİRİNE BAĞLI OPERASYON</span>
+            <h2 id="biz-flow-title">Bir randevu geldiğinde<br /><em>her şey birlikte ilerler.</em></h2>
+            <p>Müşteri gelişinden tahsilata kadar bütün işleyiş tek akışta güncel kalır. Kimse kimseyi aramak zorunda kalmaz.</p>
+            <div className={styles.flowRovi}><RoviMascot size={84} mood="thinking" alt="" /><p><b>Rovi, işletme asistanınız</b>Günü özetler, boşlukları ve bekleyen işleri hatırlatır.</p></div>
+          </div>
+          <ol className={styles.flowSteps}>
+            {FLOW.map(({ icon: Icon, title, text }, index) => <li key={title}>
+              <span className={styles.flowIcon}><Icon size={19} aria-hidden="true" /></span>
+              <div><small>ADIM 0{index + 1}</small><strong>{title}</strong><p>{text}</p></div>
+            </li>)}
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    {/* ─── Fiyat ─── */}
+    <section className={styles.section} aria-labelledby="biz-price-title">
+      <div className={`${styles.wrap} ${styles.teaser}`}>
+        <div className={styles.teaserCopy} data-reveal="">
+          <span className={styles.kicker}>ŞEFFAF FİYAT</span>
+          <h2 id="biz-price-title">Tek paket.<br /><em>Her şey dahil.</em></h2>
+          <p>Özellik kilidi, gizli ücret ve kurulum bedeli yok. İlk 3 ay ücretsiz; sonra işletmenize uygun dönemle devam edin.</p>
+          <ul className={styles.checkList}>
+            <li><ShieldCheck size={16} aria-hidden="true" /> Siz onaylamadan ücretli dönem başlamaz</li>
+            <li><UsersRound size={16} aria-hidden="true" /> {plan.maxStaff} çalışana, {plan.maxStores} şubeye kadar</li>
+            <li><Sparkles size={16} aria-hidden="true" /> Yeni özellikler pakete otomatik eklenir</li>
+          </ul>
+        </div>
+        <div className={styles.teaserCard} data-reveal="">
+          <span className={styles.teaserBadge}><Gift size={13} aria-hidden="true" /> {plan.trialDays > 0 ? `İlk ${plan.trialDays} gün ücretsiz` : "Lansmana özel"}</span>
+          <strong>{plan.label}</strong>
+          <div className={styles.teaserPrice}><b>{formatPrice(plan.monthlyPrice)} {symbol}</b><span>/ ay</span></div>
+          <small>veya yıllık {formatPrice(plan.yearlyPrice)} {symbol}{saving > 0 ? ` · %${saving} tasarruf` : ""}</small>
+          <Link href="/isletmeler/kayit" className={styles.btnLime}>Ücretsiz başla <ArrowUpRight size={17} aria-hidden="true" /></Link>
+          <Link href="/fiyatlar" className={styles.teaserLink}>Paket detayları ve karşılaştırma <ArrowRight size={14} aria-hidden="true" /></Link>
+        </div>
+      </div>
+    </section>
+
+    <BusinessFaq id="biz-faq-title" title="Aklınızdaki sorular." intro="Bulamadığınız bir şey mi var? Yardım merkezimiz ve destek ekibimiz yanınızda." items={BUSINESS_FAQ} />
+
+    {/* ─── Son çağrı ─── */}
+    <section className={styles.section} aria-labelledby="biz-final-title">
+      <div className={styles.wrap}>
+        <div className={styles.final} data-reveal="">
+          <RoviMascot size={110} mood="wave" alt="" className={styles.finalRovi} />
+          <span className={styles.kickerLight}>İLK 3 AY BOYUNCA TÜM ÖZELLİKLER AÇIK</span>
+          <h2 id="biz-final-title">Yarının işleyişini<br /><em>bugün kurun.</em></h2>
+          <p>Kredi kartı yok. Kurulum ücreti yok. Sadece daha akıcı bir işletme günü.</p>
+          <div className={styles.finalActions}>
+            <Link href="/isletmeler/kayit" className={styles.btnLime}>Ücretsiz hesabını aç <ArrowUpRight size={17} aria-hidden="true" /></Link>
+            <Link href="/isletmeler/giris" className={styles.btnGhost}><LogIn size={16} aria-hidden="true" /> Zaten hesabım var</Link>
+          </div>
+        </div>
+      </div>
+    </section>
+    <ScrollReveal />
   </main></BusinessPage>;
 }

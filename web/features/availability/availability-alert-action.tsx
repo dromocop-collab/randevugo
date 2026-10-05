@@ -44,7 +44,7 @@ export function AvailabilityAlertAction({ businessId, serviceId, staffId, dateKe
   return <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4" aria-label="Müsaitlik bildirimi">
     <div className="flex items-start gap-3"><BellRing size={20} aria-hidden="true" className="text-[var(--accent)]" />
       <div><h3 className="font-semibold text-[var(--text-1)]">Müsait Olunca Haber Ver</h3>
-        <p className="text-xs text-[var(--text-3)]">{dateKey} için istediğin saat aralığı açılırsa haber verelim. Bildirim rezervasyon yapmaz. iOS uygulamasında izin verdiysen telefonuna iletilir; durumunu Hesabım’da da görebilirsin.</p></div></div>
+        <p className="text-xs text-[var(--text-3)]">{dateKey} için istediğin saat aralığı açılırsa haber verelim. Bildirim rezervasyon yapmaz. Mobil uygulamada veya tarayıcıda bildirimlere izin verdiysen sana iletilir; durumunu Hesabım’da da görebilirsin.</p></div></div>
     <div className="mt-3 flex flex-wrap items-end gap-3 text-sm text-[var(--text-2)]">
       <label>Başlangıç<input type="time" value={start} onChange={(event) => setStart(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>
       <label>Bitiş<input type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>

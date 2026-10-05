@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
-import { CalendarDays, Clock3, Plus, UserRound, X } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { addDays } from "date-fns";
+import { CalendarDays, Clock3, Plus, Save, Scissors, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
-import { Select } from "@/components/ui/select";
 import { createDashboardAppointment, updateDashboardAppointment } from "@/features/appointments/appointment-repository";
 import { listServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
@@ -13,6 +12,9 @@ import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import type { Appointment } from "@/types/appointments";
 import { millisToZonedDateTime, zonedDateTimeToMillis } from "@/lib/time/zoned";
+import { Button, Field, FormGrid, Input, NativeSelect, Sheet } from "@/components/dashboard/ui";
+import { cn } from "@/lib/utils/cn";
+import styles from "./quick-appointment-modal.module.css";
 
 interface Props {
   businessId: string;
@@ -23,7 +25,6 @@ interface Props {
   onCreated?: () => void | Promise<void>;
 }
 
-
 function defaultStart() {
   const date = new Date();
   date.setSeconds(0, 0);
@@ -31,10 +32,9 @@ function defaultStart() {
   return date;
 }
 
+/** Hızlı randevu ekleme/düzenleme. Tarih+saat zorunlu; müşteri, işlem ve kişi isteğe bağlı. */
 export function QuickAppointmentModal({ businessId, open, initialStartAt, appointment, onClose, onCreated }: Props) {
-  const dialogRef = useRef<HTMLElement>(null);
-  const onCloseRef = useRef(onClose);
-  const savingRef = useRef(false);
+  const formId = useId();
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -43,9 +43,6 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => { savingRef.current = saving; }, [saving]);
 
   useEffect(() => {
     if (!open) return;
@@ -67,90 +64,17 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       .catch(() => toast.error("Hizmet ve çalışan listesi alınamadı."));
   }, [appointment, businessId, initialStartAt, open]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const body = document.body;
-    const root = document.documentElement;
-    const scrollY = window.scrollY;
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousBodyStyles = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-    };
-    const previousRootStyles = {
-      overflow: root.style.overflow,
-      overscrollBehavior: root.style.overscrollBehavior,
-    };
-
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    root.style.overflow = "hidden";
-    root.style.overscrollBehavior = "none";
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !savingRef.current) {
-        if (dialogRef.current?.querySelector(".sr-select__trigger[aria-expanded='true']")) return;
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
-      )).filter((element) => !element.hidden && element.getClientRects().length > 0);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    const focusFrame = window.requestAnimationFrame(() => {
-      dialogRef.current?.querySelector<HTMLInputElement>("input[type='date']")?.focus({ preventScroll: true });
+  const quickDays = useMemo(() => {
+    const today = new Date();
+    return [0, 1, 2].map((offset) => {
+      const day = addDays(today, offset);
+      return { value: millisToZonedDateTime(day.getTime()).date, label: offset === 0 ? "Bugün" : offset === 1 ? "Yarın" : new Intl.DateTimeFormat("tr-TR", { weekday: "short", day: "numeric" }).format(day) };
     });
-
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", handleKeyDown);
-      Object.assign(body.style, previousBodyStyles);
-      Object.assign(root.style, previousRootStyles);
-      window.scrollTo(0, scrollY);
-      previouslyFocused?.focus({ preventScroll: true });
-    };
-  }, [open]);
-
-  const serviceOptions = useMemo(() => [
-    { value: "", label: "İşlem seçmeden devam et", description: "İsterseniz daha sonra ekleyebilirsiniz" },
-    ...services.map((service) => ({
-      value: service.id,
-      label: service.name,
-      description: `${service.durationMinutes} dk · ${service.price.toLocaleString("tr-TR")} ₺`,
-    })),
-  ], [services]);
-  const staffOptions = useMemo(() => [
-    { value: "", label: "Kişi atamadan devam et", description: "Randevu genel takvimde görünür" },
-    ...staff.map((item) => ({ value: item.id, label: item.fullName, description: item.position || "Çalışan" })),
-  ], [staff]);
-
-  if (!open) return null;
+  }, []);
+  const selectedService = services.find((service) => service.id === serviceId);
 
   function requestClose() {
-    if (!savingRef.current) onCloseRef.current();
+    if (!saving) onClose();
   }
 
   async function submit(event: FormEvent) {
@@ -186,59 +110,52 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
     }
   }
 
-  return createPortal((
-    <div className="quick-appointment-backdrop" role="presentation" onMouseDown={requestClose}>
-      <section
-        ref={dialogRef}
-        className="quick-appointment-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="quick-appointment-title"
-        aria-describedby="quick-appointment-description"
-        aria-busy={saving}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header>
-          <span className="quick-appointment-icon"><CalendarDays size={23} /></span>
-          <div className="quick-appointment-heading">
-            <span>{appointment ? "HIZLI DÜZENLEME" : "HIZLI KAYIT"}</span>
-            <h2 id="quick-appointment-title">{appointment ? "Randevuyu düzenle" : "Takvime randevu ekle"}</h2>
-            <p id="quick-appointment-description">Tarih ve saati seçin. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz.</p>
-            <div className="quick-appointment-hints" aria-label="Kayıt bilgisi">
-              <span><Clock3 size={12} /> 1 dakikada hazır</span>
-              <span>Tarih + saat yeterli</span>
-            </div>
-          </div>
-          <button type="button" onClick={requestClose} disabled={saving} aria-label="Pencereyi kapat"><X size={20} /></button>
-        </header>
-
-        <form onSubmit={submit}>
-          <div className="quick-appointment-time-grid">
-            <label>
-              <span><CalendarDays size={15} /> Tarih <b>*</b></span>
-              <input type="date" required value={date} onChange={(event) => setDate(event.target.value)} />
-            </label>
-            <label>
-              <span><Clock3 size={15} /> Saat <b>*</b></span>
-              <input type="time" required step="900" value={time} onChange={(event) => setTime(event.target.value)} />
-            </label>
-          </div>
-          <label className="quick-appointment-name">
-            <span><UserRound size={15} /> Müşteri adı <small>İsteğe bağlı</small></span>
-            <input value={customerName} maxLength={80} placeholder="Örn. Ayşe Yılmaz" onChange={(event) => setCustomerName(event.target.value)} />
-          </label>
-          <div className="quick-appointment-selects">
-            <Select inlineMenu label="İşlem (isteğe bağlı)" options={serviceOptions} value={serviceId} onChange={(event) => setServiceId(event.target.value)} />
-            <Select inlineMenu label="Kişi (isteğe bağlı)" options={staffOptions} value={staffId} onChange={(event) => setStaffId(event.target.value)} />
-          </div>
-          <footer>
-            <button type="button" className="quick-appointment-cancel" onClick={requestClose} disabled={saving}>Vazgeç</button>
-            <button type="submit" className="quick-appointment-save" disabled={saving || !date || !time}>
-              <Plus size={17} /> {saving ? "Kaydediliyor…" : appointment ? "Değişiklikleri kaydet" : "Randevuyu kaydet"}
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
-  ), document.body);
+  return (
+    <Sheet
+      open={open}
+      onClose={requestClose}
+      dismissible={!saving}
+      title={appointment ? "Randevuyu düzenle" : "Yeni randevu"}
+      description="Tarih ve saat yeterli. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz."
+      footer={<>
+        <Button variant="secondary" onClick={requestClose} disabled={saving}>Vazgeç</Button>
+        <Button type="submit" form={formId} variant="primary" icon={appointment ? Save : Plus} loading={saving} disabled={!date || !time}>
+          {saving ? "Kaydediliyor…" : appointment ? "Değişiklikleri kaydet" : "Randevuyu kaydet"}
+        </Button>
+      </>}
+    >
+      <form id={formId} onSubmit={submit} className={styles.form} aria-busy={saving}>
+        <div className={styles.quickDays} role="group" aria-label="Hızlı tarih seçimi">
+          {quickDays.map((day) => (
+            <button key={day.value} type="button" className={cn(styles.dayChip, date === day.value && styles.dayChipActive)} aria-pressed={date === day.value} onClick={() => setDate(day.value)}>{day.label}</button>
+          ))}
+        </div>
+        <FormGrid>
+          <Field label={<span className={styles.label}><CalendarDays size={14} aria-hidden /> Tarih <b>*</b></span>}>
+            <Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} />
+          </Field>
+          <Field label={<span className={styles.label}><Clock3 size={14} aria-hidden /> Saat <b>*</b></span>}>
+            <Input type="time" required step={900} value={time} onChange={(event) => setTime(event.target.value)} />
+          </Field>
+        </FormGrid>
+        <Field label={<span className={styles.label}><UserRound size={14} aria-hidden /> Müşteri adı <small>İsteğe bağlı</small></span>}>
+          <Input value={customerName} maxLength={80} placeholder="Örn. Ayşe Yılmaz" autoComplete="off" onChange={(event) => setCustomerName(event.target.value)} />
+        </Field>
+        <FormGrid>
+          <Field label={<span className={styles.label}><Scissors size={14} aria-hidden /> İşlem <small>İsteğe bağlı</small></span>} hint={selectedService ? `${selectedService.durationMinutes} dk · ${selectedService.price.toLocaleString("tr-TR")} ₺` : undefined}>
+            <NativeSelect value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
+              <option value="">İşlem seçmeden devam et</option>
+              {services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} dk</option>)}
+            </NativeSelect>
+          </Field>
+          <Field label={<span className={styles.label}><UsersRound size={14} aria-hidden /> Kişi <small>İsteğe bağlı</small></span>}>
+            <NativeSelect value={staffId} onChange={(event) => setStaffId(event.target.value)}>
+              <option value="">Kişi atamadan devam et</option>
+              {staff.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.position ? ` · ${item.position}` : ""}</option>)}
+            </NativeSelect>
+          </Field>
+        </FormGrid>
+      </form>
+    </Sheet>
+  );
 }

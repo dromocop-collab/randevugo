@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,9 +49,11 @@ interface BusinessProfileClientProps {
   initialStaff: Staff[];
   initialReviews: Review[];
   initialServiceCategories: ServiceCategory[];
+  /** Sunucuda çizilen sayfa yolu ve iç bağlantılar (benzer işletmeler, bölgedeki kategoriler). */
+  seoFooter?: ReactNode;
 }
 
-export default function BusinessProfileClient({ initialBusiness, initialWorkingHours, initialServices, initialStaff, initialReviews, initialServiceCategories }: BusinessProfileClientProps) {
+export default function BusinessProfileClient({ initialBusiness, initialWorkingHours, initialServices, initialStaff, initialReviews, initialServiceCategories, seoFooter }: BusinessProfileClientProps) {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -475,6 +477,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
             </div>
           </aside>
         </div>
+        {seoFooter}
       </main>
 
       {/* Mobilde sabit randevu çubuğu footer'ın altını kapatmasın. */}

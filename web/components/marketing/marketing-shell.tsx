@@ -29,12 +29,13 @@ import {
   X,
   Zap,
   type LucideIcon,
+  Play,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { LaunchCampaign } from "@/components/marketing/launch-campaign";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
-import { APP_STORE_URL } from "@/lib/app-store";
+import { APP_STORE_URL, PLAY_STORE_AVAILABLE, PLAY_STORE_URL } from "@/lib/app-store";
 import { CATEGORY_CATALOG, FEATURED_CATEGORIES, categoryHref } from "@/components/marketing/category-catalog";
 import styles from "./marketing-shell.module.css";
 
@@ -45,7 +46,7 @@ const productLinks: NavItem[] = [
   { href: "/kesfet", label: "Mağazaları keşfet", description: "Yakınındaki işletmeleri bul", icon: Compass },
   { href: "/kategoriler", label: "Kategoriler", description: "Kuaförden veterinere tüm alanlar", icon: LayoutGrid },
   { href: "/simdi-musait", label: "Şimdi müsait", description: "Bugün boş saati olan işletmeler", icon: Zap, live: true, wide: true },
-  { href: "/mobil-uygulama", label: "iOS Uygulaması", description: "Randevun her an cebinde", icon: Smartphone },
+  { href: "/mobil-uygulama", label: "Mobil Uygulama", description: "iPhone ve Android için", icon: Smartphone },
   { href: "/hesabim", label: "Randevularım", description: "Yaklaşan ve geçmiş randevuların", icon: CalendarCheck2 },
   { href: "/yardim-merkezi", label: "Yardım", description: "Sık sorulanlar ve destek", icon: LifeBuoy },
 ];
@@ -57,7 +58,7 @@ const menuLinks: NavItem[] = [
   { href: "/simdi-musait", label: "Şimdi müsait", description: "Bugün boş saati olan işletmeler", icon: Zap, live: true },
   { href: "/siram", label: "Canlı sıra", description: "Sıradaki yerini anlık takip et", icon: Ticket },
   { href: "/hesabim", label: "Randevularım", description: "Yaklaşan ve geçmiş randevuların", icon: CalendarCheck2 },
-  { href: "/mobil-uygulama", label: "iOS uygulaması", description: "Randevun her an cebinde", icon: Smartphone },
+  { href: "/mobil-uygulama", label: "Mobil uygulama", description: "iPhone ve Android için", icon: Smartphone },
   { href: "/yardim-merkezi", label: "Yardım", description: "Sık sorulanlar ve destek", icon: LifeBuoy },
 ];
 
@@ -355,6 +356,7 @@ export function MarketingHeader() {
                   <Apple size={24} fill="currentColor" aria-hidden="true" />
                   <span><small>App Store&apos;dan</small><b>İndir</b></span>
                 </a>
+                <PlayBadge />
                 <Link href="/isletmeler" className={styles.businessCard} onClick={closeMenu}>
                   <span className={styles.businessIcon} aria-hidden="true"><BriefcaseBusiness size={18} /></span>
                   <span><b>İşletmeler için</b><small>İlk 3 ay ücretsiz</small></span>
@@ -378,7 +380,7 @@ export function MarketingHeader() {
 }
 
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
-  { title: "Keşfet", links: [["Tüm mağazalar", "/kesfet"], ["Kategoriler", "/kategoriler"], ["Şimdi müsait", "/simdi-musait"], ["Canlı sıra", "/siram"], ["Online randevu", "/online-randevu"], ["iOS uygulaması", "/mobil-uygulama"]] },
+  { title: "Keşfet", links: [["Tüm mağazalar", "/kesfet"], ["Kategoriler", "/kategoriler"], ["Şimdi müsait", "/simdi-musait"], ["Canlı sıra", "/siram"], ["Online randevu", "/online-randevu"], ["Mobil uygulama", "/mobil-uygulama"]] },
   { title: "İşletmeler", links: [["İşletmeler için", "/isletmeler"], ["Özellikler", "/ozellikler"], ["Fiyatlar", "/fiyatlar"], ["Ücretsiz kayıt", "/isletmeler/kayit"], ["İşletme girişi", "/isletmeler/giris"], ["İşletme yardımı", "/isletmeler/yardim"]] },
   { title: "SeninRandevun", links: [["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Randevularım", "/hesabim"], ["Güvenlik", "/guvenlik"]] },
   { title: "Yasal", links: [["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Çerez politikası", "/cerez-politikasi"]] },
@@ -404,6 +406,7 @@ export function MarketingFooter() {
               <Apple size={24} fill="currentColor" aria-hidden="true" />
               <span><small>App Store&apos;dan</small><b>İndir</b></span>
             </a>
+            <PlayBadge />
           </div>
         </section>
 
@@ -466,4 +469,15 @@ function FooterColumn({ title, links }: { title: string; links: [string, string]
 
 export function MarketingPage({ children }: { children: ReactNode }) {
   return <div className="marketing-page"><LaunchCampaign /><MarketingHeader />{children}<MarketingFooter /></div>;
+}
+
+/** Google Play rozeti: mağaza linki tanımlanana kadar "Çok yakında". */
+function PlayBadge() {
+  const inner = <>
+    <Play size={22} fill="currentColor" aria-hidden="true" />
+    <span><small>{PLAY_STORE_AVAILABLE ? "Google Play'den" : "Çok yakında"}</small><b>{PLAY_STORE_AVAILABLE ? "İndir" : "Google Play"}</b></span>
+  </>;
+  return PLAY_STORE_AVAILABLE
+    ? <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className={styles.appBadge} aria-label="SeninRandevun uygulamasını Google Play'den indir (yeni sekmede açılır)">{inner}</a>
+    : <span className={styles.appBadge} style={{ opacity: 0.7, cursor: "default" }} aria-label="Android uygulaması Google Play'de çok yakında">{inner}</span>;
 }

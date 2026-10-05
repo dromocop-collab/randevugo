@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { createPublicMetadata } from "@/lib/seo/metadata";
 
+// Kategori işletme listesi saatte bir yenilenir.
+export const revalidate = 3600;
+
 export const metadata: Metadata = createPublicMetadata({
-  title: "Online Randevu Al",
-  description: "Kuaför, berber, güzellik, sağlık, spor ve daha fazlası için online randevu alın. Uygun işletmeyi ve saati seçin, randevunuzu saniyeler içinde oluşturun.",
+  title: "Online Randevu Al – Kuaför, Berber, Güzellik",
+  description: "Kuaför, berber, güzellik, sağlık, spor ve daha fazlası için online randevu al. İşletmeleri karşılaştır, uygun saati seç, randevunu saniyeler içinde oluştur.",
   pathname: "/online-randevu",
   keywords: ["online randevu al", "internetten randevu", "randevu uygulaması", "yakındaki işletmeler", "ücretsiz randevu al"],
-  imageAlt: "Online randevu alma rehberi",
+  image: null,
 });
 
 export default function OnlineRandevuPage() {

@@ -1,0 +1,79 @@
+.filters { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 12px; min-width: 0; }
+.tabs { align-self: stretch; }
+.range { max-width: 520px; }
+.resultCount { margin: 0; font-size: 12px; font-weight: 650; color: var(--dui-muted); }
+.more { display: flex; justify-content: center; padding: 4px 12px 16px; }
+
+/* Tablo hücreleri */
+.when { display: flex; flex-direction: column; line-height: 1.2; }
+.when b { font-size: 14px; font-weight: 800; color: var(--dui-ink); font-variant-numeric: tabular-nums; }
+.when small { font-size: 11.5px; color: var(--dui-muted); text-transform: capitalize; }
+.customer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.customer b { display: block; font-size: 13.5px; font-weight: 720; color: var(--dui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.customer small { display: block; font-size: 11.5px; color: var(--dui-muted); }
+.avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; background: var(--dui-accent-bg); color: var(--dui-accent-ink); font-size: 13px; font-weight: 800; }
+.service { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.price { color: var(--dui-ink); font-variant-numeric: tabular-nums; }
+.muted { color: var(--dui-faint); }
+
+/* Mobil kart */
+.card { display: flex; gap: 12px; min-width: 0; }
+.cardTime { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; width: 58px; padding: 8px 0; border-radius: 14px; background: var(--dui-card); box-shadow: inset 0 0 0 1px var(--dui-line); }
+.cardTime b { font-size: 16px; font-weight: 800; color: var(--dui-ink); font-variant-numeric: tabular-nums; }
+.cardTime small { font-size: 10.5px; font-weight: 650; color: var(--dui-muted); text-align: center; text-transform: capitalize; line-height: 1.2; }
+.st-pending .cardTime { box-shadow: inset 0 0 0 1px var(--dui-line), inset 0 -3px 0 #f59e0b; }
+.st-confirmed .cardTime { box-shadow: inset 0 0 0 1px var(--dui-line), inset 0 -3px 0 var(--dui-core); }
+.st-completed .cardTime { box-shadow: inset 0 0 0 1px var(--dui-line), inset 0 -3px 0 #16a34a; }
+.cardMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cardMain > b { font-size: 15px; font-weight: 750; color: var(--dui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cardMain > small { font-size: 12.5px; color: var(--dui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.cardFoot em { font-style: normal; font-size: 13px; font-weight: 800; color: var(--dui-ink); font-variant-numeric: tabular-nums; }
+
+/* Detay */
+.sheetMeta { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.detail { display: flex; flex-direction: column; gap: 12px; }
+.hero { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: var(--dui-hero); color: #fff; }
+.hero > span { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 13px; background: rgb(255 255 255 / 0.12); color: var(--dui-bright); }
+.hero b { display: block; font-size: 15px; font-weight: 760; text-transform: capitalize; }
+.hero small { display: block; font-size: 13px; opacity: 0.78; font-variant-numeric: tabular-nums; }
+.link { color: var(--dui-accent-ink); font-weight: 700; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.extras { padding: 12px; border-radius: 16px; background: var(--dui-green-bg); }
+.extras > p { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dui-green-fg); }
+.extras > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.extras > div > * { background: var(--dui-card); white-space: normal; }
+.note { padding: 12px; border-radius: 14px; background: var(--dui-soft); }
+.note small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dui-faint); }
+.note p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--dui-ink); overflow-wrap: anywhere; }
+.actionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.actionGrid > * { min-width: 0; white-space: normal !important; text-align: center; line-height: 1.2; }
+.hint { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--dui-muted); }
+
+/* Ek hizmetler */
+.serviceSearch { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--dui-line); }
+.serviceSearch > :first-child { flex: 1; }
+.serviceGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+@media (min-width: 640px) { .serviceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.serviceOption {
+  display: flex; align-items: center; gap: 12px;
+  min-width: 0; min-height: 60px; padding: 10px 12px;
+  border: 1px solid var(--dui-line); border-radius: 16px;
+  background: var(--dui-card-2); color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.serviceOption:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.serviceOption b { display: block; font-size: 13.5px; font-weight: 720; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.serviceOption small { display: block; font-size: 12px; color: var(--dui-muted); }
+.serviceCheck { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; background: var(--dui-neutral-bg); color: var(--dui-muted); }
+.serviceOn { border-color: var(--dui-core); background: var(--dui-accent-bg); }
+.serviceOn .serviceCheck { background: var(--dui-core); color: var(--dui-on-core); }
+.serviceFoot { display: flex; flex-direction: column; gap: 10px; width: 100%; flex: 1 1 100% !important; }
+.totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.totals span { min-width: 0; padding: 8px 10px; border-radius: 12px; background: var(--dui-soft); }
+.totals small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dui-faint); }
+.totals b { display: block; margin-top: 2px; font-size: 14px; font-weight: 800; color: var(--dui-ink); font-variant-numeric: tabular-nums; }
+.serviceButtons { display: flex; justify-content: flex-end; gap: 8px; }
+.serviceButtons > * { flex: 1 1 auto; }
+@media (min-width: 768px) { .serviceButtons > * { flex: 0 0 auto; } }

@@ -1,0 +1,76 @@
+/* /iletisim */
+.heroInner { display: grid; gap: 20px; align-items: end; }
+@media (min-width: 900px) { .heroInner { grid-template-columns: minmax(0, 1fr) auto; } }
+.heroCopy { min-width: 0; }
+.heroMascot { display: none; }
+@media (min-width: 900px) { .heroMascot { display: block; } }
+
+.channels { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: -30px 0 0; padding: 0; list-style: none; }
+@media (min-width: 760px) { .channels { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; } }
+.channel {
+  display: grid;
+  gap: 2px;
+  height: 100%;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--card);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-lift);
+  transition: transform 0.2s var(--ease), border-color 0.2s ease;
+}
+@media (hover: hover) { .channel:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--green-2) 40%, transparent); } }
+.channel:focus-visible { outline: 3px solid var(--green-2); outline-offset: 3px; }
+.channelIcon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 12px; border-radius: 16px; background: linear-gradient(135deg, #1f7a4a, #14532d); color: var(--lime); }
+.channelWa .channelIcon { background: linear-gradient(135deg, #25d366, #128c4a); color: #fff; }
+.channel small { color: var(--green-ink); font-size: 11px; font-weight: 850; letter-spacing: 0.09em; text-transform: uppercase; }
+.channel b { font-size: 20px; letter-spacing: -0.02em; }
+.value { overflow-wrap: anywhere; font-size: 15px; font-weight: 700; }
+.note { color: var(--muted); font-size: 13.5px; }
+.channelCta { display: inline-flex; align-items: center; gap: 5px; justify-self: start; margin-top: 14px; padding: 9px 14px; border-radius: 999px; background: var(--soft); color: var(--green-ink); font-size: 13.5px; font-weight: 800; }
+
+.forms { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 860px) { .forms { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; } }
+.formCard { display: grid; align-content: start; gap: 8px; padding: 22px; }
+.formCard h3 { margin: 6px 0 0; font-size: 18px; letter-spacing: -0.02em; }
+.formCard p { margin: 0 0 6px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.formCardAlt { background: var(--card-2); }
+.formIcon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--green-2) 12%, transparent); color: var(--green-ink); }
+.formBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: end;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--green);
+  color: #fff;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease);
+}
+:global(:root[data-theme="dark"]) .formBtn { background: var(--lime); color: #0c2a1b; }
+@media (hover: hover) { .formBtn:hover { transform: translateY(-2px); } }
+.formBtn:focus-visible { outline: 3px solid var(--green-2); outline-offset: 3px; }
+.formLink { display: inline-flex; align-items: center; gap: 6px; justify-self: start; margin-top: auto; color: var(--green-ink); font-weight: 800; text-decoration: none; }
+.formLink:hover { text-decoration: underline; }
+
+.selfCard { display: grid; gap: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 32px; background: radial-gradient(70% 90% at 100% 0%, color-mix(in srgb, var(--lime) 35%, transparent), transparent 60%), var(--card); box-shadow: var(--shadow); }
+@media (min-width: 860px) { .selfCard { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; padding: 40px; } }
+.selfCard > div:first-child { display: grid; gap: 10px; }
+.selfLinks { display: grid; gap: 8px; }
+.selfLinks a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); text-decoration: none; transition: border-color 0.2s ease; }
+.selfLinks a:hover { border-color: var(--green-2); }
+.selfLinks a:focus-visible { outline: 3px solid var(--green-2); outline-offset: 2px; }
+.selfLinks a > svg { color: var(--green-ink); }
+.selfLinks span { display: grid; min-width: 0; }
+.selfLinks small { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .channel, .formBtn { transition: none; } }

@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowDownUp, CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, CircleX, Clock3, ContactRound, Phone, RefreshCw, Search, Sparkles, TrendingUp, UsersRound } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, CalendarDays, CalendarX2, CircleDollarSign, ContactRound, Phone, RefreshCw, TrendingUp, UserPlus, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerProfileStudio } from "@/components/dashboard/customer-profile-studio";
+import {
+  Badge, Button, DashPage, DataTable, EmptyState, Field, FormGrid, Input, NativeSelect, PageHeader, SearchField, SegmentedControl, Sheet, Skeleton, SkeletonList,
+  StatCard, StatGrid, Toolbar, type DataColumn,
+} from "@/components/dashboard/ui";
 import { listAppointments } from "@/features/appointments/appointment-repository";
 import { createOrUpdateCustomer, listCustomers, normalizeCustomerPhone, renameCustomer } from "@/features/customers/customer-repository";
 import { listCheckoutReceipts, listCustomerPackages, listFinanceTransactions, listServicePackages } from "@/features/operations/operations-repository";
@@ -15,13 +19,27 @@ import type { Appointment } from "@/types/appointments";
 import type { Customer } from "@/types/customer";
 import type { CheckoutReceipt, CustomerPackage, FinanceTransaction, ServicePackage } from "@/types/operations";
 import type { Service } from "@/types/service";
+import { Avatar, cx, matchesSearch, ws } from "../_workspace/kit";
+import styles from "./customers.module.css";
 
 type SortKey = "name" | "appointments" | "spent" | "lastVisit";
 type SortDir = "asc" | "desc";
+type Segment = "all" | "loyal" | "new" | "away" | "debt";
+const AWAY_DAYS = 60;
 const numberOrZero = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+function relativeVisit(value: string | undefined, now: number) {
+  if (!value) return "Henüz gelmedi";
+  const days = Math.floor((now - new Date(value).getTime()) / 86_400_000);
+  if (days <= 0) return "Bugün";
+  if (days === 1) return "Dün";
+  if (days < 30) return `${days} gün önce`;
+  if (days < 365) return `${Math.floor(days / 30)} ay önce`;
+  return `${Math.floor(days / 365)} yıl önce`;
+}
 
 export default function CustomersPage() {
   const { businessId } = useBusiness();
@@ -34,27 +52,45 @@ export default function CustomersPage() {
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [segment, setSegment] = useState<Segment>("all");
   const [sortKey, setSortKey] = useState<SortKey>("lastVisit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [isMobileDetail, setIsMobileDetail] = useState(false);
-  const detailRef = useRef<HTMLDivElement>(null);
+  const [loadedAt] = useState(() => Date.now());
+  const router = useRouter();
+  const [showAdd, setShowAdd] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addSubmitted, setAddSubmitted] = useState(false);
+  const [addForm, setAddForm] = useState({ fullName: "", phone: "", email: "" });
+
+  // Panel ana sayfası ve ⌘K "Müşteri ekle" → /dashboard/musteriler?new=1
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") !== "1") return;
+    queueMicrotask(() => openAdd());
+    router.replace("/dashboard/musteriler", { scroll: false });
+  }, [router]);
+
+  function openAdd() {
+    setAddForm({ fullName: "", phone: "", email: "" });
+    setAddSubmitted(false);
+    setShowAdd(true);
+  }
 
   const loadData = useCallback(async (showLoader = false) => {
     if (!businessId) return;
     if (showLoader) setLoading(true);
-      const results = await Promise.allSettled([
-        listCustomers(businessId), listAppointments(businessId), listServices(businessId, true), listServicePackages(businessId),
-        listCustomerPackages(businessId), listCheckoutReceipts(businessId), listFinanceTransactions(businessId),
-      ]);
-      if (results[0].status === "fulfilled") setCustomers(results[0].value);
-      if (results[1].status === "fulfilled") setAppointments(results[1].value);
-      if (results[2].status === "fulfilled") setServices(results[2].value);
-      if (results[3].status === "fulfilled") setServicePackages(results[3].value);
-      if (results[4].status === "fulfilled") setCustomerPackages(results[4].value);
-      if (results[5].status === "fulfilled") setReceipts(results[5].value);
-      if (results[6].status === "fulfilled") setTransactions(results[6].value);
+    const results = await Promise.allSettled([
+      listCustomers(businessId), listAppointments(businessId), listServices(businessId, true), listServicePackages(businessId),
+      listCustomerPackages(businessId), listCheckoutReceipts(businessId), listFinanceTransactions(businessId),
+    ]);
+    if (results[0].status === "fulfilled") setCustomers(results[0].value);
+    if (results[1].status === "fulfilled") setAppointments(results[1].value);
+    if (results[2].status === "fulfilled") setServices(results[2].value);
+    if (results[3].status === "fulfilled") setServicePackages(results[3].value);
+    if (results[4].status === "fulfilled") setCustomerPackages(results[4].value);
+    if (results[5].status === "fulfilled") setReceipts(results[5].value);
+    if (results[6].status === "fulfilled") setTransactions(results[6].value);
     if (results[0].status === "rejected" || results[1].status === "rejected") toast.error("Müşteri verileri yüklenemedi.");
     setLoading(false);
   }, [businessId]);
@@ -62,34 +98,6 @@ export default function CustomersPage() {
   useEffect(() => {
     queueMicrotask(() => void loadData(true));
   }, [loadData]);
-
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 1023px)");
-    const syncViewport = () => setIsMobileDetail(query.matches);
-    syncViewport();
-    query.addEventListener("change", syncViewport);
-    return () => query.removeEventListener("change", syncViewport);
-  }, []);
-
-  useEffect(() => {
-    if (!isMobileDetail || !selectedId) return;
-    const previousOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedId(null);
-    };
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "none";
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overscrollBehavior = previousOverscrollBehavior;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [isMobileDetail, selectedId]);
 
   const customerApptsMap = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
@@ -102,12 +110,32 @@ export default function CustomersPage() {
     return map;
   }, [appointments]);
 
+  const debtPhones = useMemo(() => {
+    const set = new Set<string>();
+    receipts.forEach((receipt) => { if (Number(receipt.remainingAmount) > 0 && receipt.customerPhone) set.add(normalizeCustomerPhone(receipt.customerPhone)); });
+    return set;
+  }, [receipts]);
+
+  const segmentOf = useCallback((customer: Customer): Exclude<Segment, "all">[] => {
+    const result: Exclude<Segment, "all">[] = [];
+    if (numberOrZero(customer.completedAppointments) >= 3) result.push("loyal");
+    if (numberOrZero(customer.totalAppointments) <= 1) result.push("new");
+    if (customer.lastVisitAt && loadedAt - new Date(customer.lastVisitAt).getTime() > AWAY_DAYS * 86_400_000) result.push("away");
+    if (debtPhones.has(normalizeCustomerPhone(customer.phone))) result.push("debt");
+    return result;
+  }, [debtPhones, loadedAt]);
+
+  const segmentCounts = useMemo(() => {
+    const counts: Record<Segment, number> = { all: customers.length, loyal: 0, new: 0, away: 0, debt: 0 };
+    customers.forEach((customer) => segmentOf(customer).forEach((key) => { counts[key] += 1; }));
+    return counts;
+  }, [customers, segmentOf]);
+
   const filtered = useMemo(() => {
-    let list = [...customers];
-    if (search.trim()) {
-      const query = search.toLocaleLowerCase("tr-TR");
-      list = list.filter((customer) => customer.fullName.toLocaleLowerCase("tr-TR").includes(query) || customer.phone.includes(query) || customer.email?.toLocaleLowerCase("tr-TR").includes(query));
-    }
+    const list = customers.filter((customer) =>
+      (segment === "all" || segmentOf(customer).includes(segment)) &&
+      matchesSearch(search, customer.fullName, customer.phone, customer.email, ...(customer.tags ?? [])),
+    );
     list.sort((a, b) => {
       let comparison = 0;
       if (sortKey === "name") comparison = a.fullName.localeCompare(b.fullName, "tr");
@@ -117,38 +145,15 @@ export default function CustomersPage() {
       return sortDir === "desc" ? -comparison : comparison;
     });
     return list;
-  }, [customers, search, sortDir, sortKey]);
+  }, [customers, search, segment, segmentOf, sortDir, sortKey]);
 
   const selectedCustomer = selectedId ? customers.find((customer) => customer.id === selectedId) : null;
   const selectedAppts = selectedCustomer ? [...(customerApptsMap[normalizeCustomerPhone(selectedCustomer.phone)] || [])].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()) : [];
   const totalCustomers = customers.length;
   const totalRevenue = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalSpent), 0);
   const totalAppointmentCount = customers.reduce((sum, customer) => sum + numberOrZero(customer.totalAppointments), 0);
+  const totalNoShows = customers.reduce((sum, customer) => sum + numberOrZero(customer.noShowAppointments), 0);
   const avgAppointments = totalCustomers > 0 ? Math.round((totalAppointmentCount / totalCustomers) * 10) / 10 : 0;
-
-  const customerDetail = selectedCustomer && businessId ? (
-    <CustomerProfileStudio
-      key={selectedCustomer.id}
-      businessId={businessId}
-      customer={selectedCustomer}
-      appointments={selectedAppts}
-      services={services}
-      servicePackages={servicePackages}
-      customerPackages={customerPackages}
-      receipts={receipts}
-      transactions={transactions}
-      onClose={() => setSelectedId(null)}
-      onRename={saveCustomerName}
-      onRefresh={() => loadData()}
-    />
-  ) : (
-    <div className="crm-select-hint"><i><ContactRound size={29} /></i><h3>Bir müşteri seçin</h3><p>Bilgiler, randevular, hizmetler, paketler, borçlar ve ödemeler burada yönetilecek.</p></div>
-  );
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("desc"); }
-  }
 
   async function syncCustomers() {
     if (!businessId) return;
@@ -164,6 +169,38 @@ export default function CustomersPage() {
       toast.success(`${phones.size} müşteri senkronize edildi.`);
     } catch { toast.error("Senkronizasyon başarısız"); }
     finally { setSyncing(false); }
+  }
+
+  const addErrors: Partial<Record<"fullName" | "phone" | "email", string>> = {};
+  if (addForm.fullName.trim().length < 2) addErrors.fullName = "Ad soyad en az 2 karakter olmalı.";
+  if (addForm.phone.replace(/\D/g, "").length < 10) addErrors.phone = "Geçerli bir telefon numarası girin.";
+  if (addForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(addForm.email.trim())) addErrors.email = "Geçerli bir e-posta girin.";
+  const addError = (key: keyof typeof addErrors) => (addSubmitted ? addErrors[key] : undefined);
+
+  async function addCustomer(event: FormEvent) {
+    event.preventDefault();
+    setAddSubmitted(true);
+    if (!businessId || Object.keys(addErrors).length) return;
+    const phone = normalizeCustomerPhone(addForm.phone);
+    const existing = customers.find((customer) => normalizeCustomerPhone(customer.phone) === phone);
+    if (existing) {
+      setShowAdd(false);
+      setSelectedId(existing.id);
+      toast.info(`${existing.fullName} zaten kayıtlı; profili açıldı.`);
+      return;
+    }
+    setAddBusy(true);
+    try {
+      const customerId = await createOrUpdateCustomer(businessId, { fullName: addForm.fullName.trim(), phone, email: addForm.email.trim() || undefined });
+      setCustomers(await listCustomers(businessId));
+      setShowAdd(false);
+      if (customerId) setSelectedId(customerId);
+      toast.success("Müşteri eklendi.");
+    } catch {
+      toast.error("Müşteri eklenemedi.");
+    } finally {
+      setAddBusy(false);
+    }
   }
 
   async function saveCustomerName(fullName: string) {
@@ -191,57 +228,193 @@ export default function CustomersPage() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" /></div>;
-
-  const metrics = [
-    { label: "Toplam müşteri", value: totalCustomers.toString(), note: "Kayıtlı müşteri portföyü", icon: UsersRound, tone: "ocean" },
-    { label: "Toplam gelir", value: formatMoney(totalRevenue), note: "Müşteri bazlı toplam hacim", icon: CircleDollarSign, tone: "emerald" },
-    { label: "Ort. randevu", value: avgAppointments.toString(), note: "Müşteri başına ziyaret", icon: TrendingUp, tone: "violet" },
+  const columns: DataColumn<Customer>[] = [
+    {
+      key: "name",
+      header: "Müşteri",
+      primary: true,
+      cell: (customer) => (
+        <span className={styles.identity}>
+          <Avatar name={customer.fullName} />
+          <span className={styles.identityText}><b>{customer.fullName}</b><small><Phone size={12} aria-hidden="true" /> {customer.phone}</small></span>
+        </span>
+      ),
+    },
+    { key: "visits", header: "Ziyaret", align: "right", cell: (customer) => <span className={ws.mono}>{numberOrZero(customer.totalAppointments)}</span> },
+    { key: "spent", header: "Harcama", align: "right", cell: (customer) => <span className={ws.mono}>{numberOrZero(customer.totalSpent) > 0 ? formatMoney(numberOrZero(customer.totalSpent)) : "—"}</span> },
+    { key: "noshow", header: "Gelmedi", align: "right", cell: (customer) => numberOrZero(customer.noShowAppointments) > 0 ? <Badge size="sm" tone="red">{numberOrZero(customer.noShowAppointments)}</Badge> : <span className={ws.muted}>0</span> },
+    { key: "last", header: "Son ziyaret", cell: (customer) => <span title={customer.lastVisitAt ? new Date(customer.lastVisitAt).toLocaleDateString("tr-TR") : undefined}>{relativeVisit(customer.lastVisitAt, loadedAt)}</span> },
+    { key: "tags", header: "Etiketler", cell: (customer) => <CustomerTags customer={customer} segments={segmentOf(customer)} /> },
   ];
 
+  if (loading) {
+    return (
+      <DashPage>
+        <Skeleton height={150} radius={24} />
+        <StatGrid columns={4}>{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} height={104} radius={18} />)}</StatGrid>
+        <SkeletonList rows={6} height={72} label="Müşteriler yükleniyor" />
+      </DashPage>
+    );
+  }
+
+  const syncButton = appointments.length > 0
+    ? <Button variant={customers.length ? "glass" : "bright"} icon={RefreshCw} loading={syncing} onClick={() => void syncCustomers()}>{syncing ? "Aktarılıyor" : "Randevulardan aktar"}</Button>
+    : null;
+
   return (
-    <div className="crm-page">
-      <section className="crm-hero">
-        <div><p><Sparkles size={15} /> MÜŞTERİ İLİŞKİLERİ</p><h1>Müşterilerinizi yakından tanıyın.</h1><span>Randevu geçmişini, bağlılığı ve müşteri değerini tek ekrandan yönetin.</span></div>
-        <i aria-hidden="true"><ContactRound size={34} /></i>
-        {customers.length === 0 && appointments.length > 0 && <button className="crm-sync" onClick={syncCustomers} disabled={syncing}><RefreshCw size={17} className={syncing ? "animate-spin" : ""} />{syncing ? "Senkronize ediliyor" : "Randevulardan aktar"}</button>}
-      </section>
+    <DashPage>
+      <PageHeader
+        eyebrow="Müşteri ilişkileri"
+        icon={ContactRound}
+        title="Müşterileriniz"
+        description="Randevu geçmişini, harcamayı, paketleri ve notları tek yerden yönetin."
+        actions={<>
+          <Button variant="bright" icon={UserPlus} onClick={openAdd}>Müşteri ekle</Button>
+          {customers.length === 0 ? syncButton : null}
+        </>}
+        meta={customers.length ? <>
+          <Badge tone="accent" icon={UsersRound}>{totalCustomers} müşteri</Badge>
+          {segmentCounts.debt ? <Badge tone="amber" icon={CircleDollarSign}>{segmentCounts.debt} ödeme bekliyor</Badge> : null}
+        </> : undefined}
+      />
 
-      <section className="crm-metrics" aria-label="Müşteri özetleri">
-        {metrics.map(({ label, value, note, icon: Icon, tone }) => <article className={`crm-metric crm-metric--${tone}`} key={label}><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div><i aria-hidden="true"><Icon size={23} /></i></article>)}
-      </section>
+      {customers.length === 0 ? (
+        <EmptyState
+          mascot="wave"
+          title="Henüz müşteri kaydı yok"
+          description={appointments.length ? "Mevcut randevularınızdaki müşterileri tek dokunuşla buraya aktarabilirsiniz." : "Randevular geldikçe müşteri portföyünüz burada kendiliğinden oluşur."}
+          action={<>
+            <Button variant="primary" icon={UserPlus} onClick={openAdd}>Müşteri ekle</Button>
+            {syncButton}
+          </>}
+        />
+      ) : (
+        <>
+          <StatGrid columns={4}>
+            <StatCard label="Toplam müşteri" value={totalCustomers} hint={`${segmentCounts.loyal} sadık müşteri`} icon={UsersRound} tone="blue" onClick={() => setSegment("all")} />
+            <StatCard label="Toplam gelir" value={formatMoney(totalRevenue)} hint="Müşteri bazlı toplam" icon={CircleDollarSign} tone="green" />
+            <StatCard label="Ort. ziyaret" value={avgAppointments} hint="Müşteri başına" icon={TrendingUp} tone="violet" />
+            <StatCard label="Gelmedi" value={totalNoShows} hint={`${segmentCounts.away} müşteri ${AWAY_DAYS}+ gündür gelmedi`} icon={CalendarX2} tone={totalNoShows ? "red" : "neutral"} onClick={segmentCounts.away ? () => setSegment("away") : undefined} />
+          </StatGrid>
 
-      <section className="crm-toolbar">
-        <label><Search size={20} aria-hidden="true" /><input type="search" placeholder="İsim, telefon veya e-posta ile ara..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-        <div className="crm-sort" aria-label="Sıralama seçenekleri"><ArrowDownUp size={17} aria-hidden="true" />
-          {([{ key: "name" as SortKey, label: "İsim" }, { key: "appointments" as SortKey, label: "Randevu" }, { key: "spent" as SortKey, label: "Harcama" }, { key: "lastVisit" as SortKey, label: "Son ziyaret" }]).map((sort) => <button key={sort.key} onClick={() => toggleSort(sort.key)} className={sortKey === sort.key ? "active" : ""} aria-pressed={sortKey === sort.key}>{sort.label}{sortKey === sort.key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}</button>)}
-        </div>
-      </section>
-
-      {filtered.length === 0 ? <section className="crm-empty"><i><UsersRound size={32} /></i><h2>{search ? "Aramanızla eşleşen müşteri yok" : "Henüz müşteri kaydı yok"}</h2><p>{search ? "Farklı bir isim, telefon veya e-posta deneyin." : "Randevular geldikçe müşteri portföyünüz burada oluşacak."}</p></section> : (
-        <section className={`crm-workspace${selectedCustomer ? " has-selection" : ""}`}>
-          <div className="crm-customer-list">
-            {filtered.map((customer) => {
-              const isActive = selectedId === customer.id;
-              return <button key={customer.id} onClick={() => setSelectedId(customer.id)} className={`crm-customer-card${isActive ? " active" : ""}`} aria-pressed={isActive}>
-                  <span className="crm-customer-main"><span className="crm-avatar">{customer.fullName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="crm-customer-name"><strong>{customer.fullName}</strong><small><Phone size={13} /> {customer.phone}</small></span><span className="crm-customer-value"><b><CalendarDays size={14} /> {numberOrZero(customer.totalAppointments)}</b>{numberOrZero(customer.totalSpent) > 0 && <small>{formatMoney(numberOrZero(customer.totalSpent))}</small>}</span><ChevronRight className="crm-card-arrow" size={19} /></span>
-                  <span className="crm-tags"><small className="is-complete"><CheckCircle2 size={13} /> {numberOrZero(customer.completedAppointments)} tamamlanan</small>{numberOrZero(customer.cancelledAppointments) > 0 && <small className="is-cancelled"><CircleX size={13} /> {numberOrZero(customer.cancelledAppointments)} iptal</small>}{customer.lastVisitAt && <small className="is-visit"><Clock3 size={13} /> {new Date(customer.lastVisitAt).toLocaleDateString("tr-TR")}</small>}</span>
-              </button>;
-            })}
+          <div className={ws.stackSm}>
+            <Toolbar>
+              <SearchField value={search} onChange={setSearch} placeholder="İsim, telefon, e-posta veya etiket" />
+              <div className={styles.sort}>
+                <NativeSelect value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} aria-label="Sıralama">
+                  <option value="lastVisit">Son ziyaret</option>
+                  <option value="name">İsim</option>
+                  <option value="appointments">Randevu sayısı</option>
+                  <option value="spent">Harcama</option>
+                </NativeSelect>
+                <Button variant="secondary" iconOnly icon={sortDir === "desc" ? ArrowDownWideNarrow : ArrowUpNarrowWide} onClick={() => setSortDir(sortDir === "desc" ? "asc" : "desc")} aria-label={sortDir === "desc" ? "Azalan sıralama, artana çevir" : "Artan sıralama, azalana çevir"} />
+              </div>
+            </Toolbar>
+            <SegmentedControl
+              ariaLabel="Müşteri grubu"
+              value={segment}
+              onChange={setSegment}
+              options={[
+                { value: "all", label: "Tümü", count: segmentCounts.all },
+                { value: "loyal", label: "Sadık", count: segmentCounts.loyal },
+                { value: "new", label: "Yeni", count: segmentCounts.new },
+                { value: "away", label: "Uzun süredir yok", count: segmentCounts.away },
+                ...(segmentCounts.debt ? [{ value: "debt" as const, label: "Borçlu", count: segmentCounts.debt }] : []),
+              ]}
+            />
           </div>
 
-            <div className="crm-detail-column" ref={detailRef}>{!isMobileDetail && customerDetail}</div>
+          <section className={styles.tableCard} aria-label="Müşteri listesi">
+            <DataTable
+              rows={filtered}
+              columns={columns}
+              rowKey={(customer) => customer.id}
+              onRowClick={(customer) => setSelectedId(customer.id)}
+              rowLabel={(customer) => `${customer.fullName} profilini aç`}
+              ariaLabel="Müşteriler"
+              renderMobileCard={(customer) => (
+                <span className={styles.mobileCard}>
+                  <span className={styles.identity}>
+                    <Avatar name={customer.fullName} />
+                    <span className={styles.identityText}><b>{customer.fullName}</b><small><Phone size={12} aria-hidden="true" /> {customer.phone}</small></span>
+                  </span>
+                  <span className={styles.mobileStats}>
+                    <span><CalendarDays size={13} aria-hidden="true" /> {numberOrZero(customer.totalAppointments)} ziyaret</span>
+                    {numberOrZero(customer.totalSpent) > 0 ? <span><CircleDollarSign size={13} aria-hidden="true" /> {formatMoney(numberOrZero(customer.totalSpent))}</span> : null}
+                    <span>{relativeVisit(customer.lastVisitAt, loadedAt)}</span>
+                  </span>
+                  <CustomerTags customer={customer} segments={segmentOf(customer)} />
+                </span>
+              )}
+              empty={<EmptyState compact mascot="thinking" title="Eşleşen müşteri yok" description="Farklı bir isim, telefon veya etiket deneyin." action={<Button variant="soft" onClick={() => { setSearch(""); setSegment("all"); }}>Filtreleri temizle</Button>} />}
+            />
           </section>
-        )}
+        </>
+      )}
 
-        {isMobileDetail && selectedCustomer && businessId && typeof document !== "undefined" && createPortal(
-          <div className="crm-mobile-detail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}>
-            <div className="crm-mobile-detail-shell" role="dialog" aria-modal="true" aria-label={`${selectedCustomer.fullName} müşteri profili`}>
-              {customerDetail}
-            </div>
-          </div>,
-          document.body,
-        )}
-      </div>
+      <Sheet
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        dismissible={!addBusy}
+        size="sm"
+        title="Yeni müşteri"
+        description="Telefon numarası müşterinin kimliğidir; aynı numara ikinci kez eklenmez."
+        footer={<>
+          <Button variant="ghost" onClick={() => setShowAdd(false)} disabled={addBusy}>Vazgeç</Button>
+          <Button type="submit" form="customer-add-form" variant="primary" icon={UserPlus} loading={addBusy}>Ekle</Button>
+        </>}
+      >
+        <form id="customer-add-form" className={ws.stack} onSubmit={addCustomer} noValidate>
+          <FormGrid columns={2}>
+            <Field label="Ad soyad" wide error={addError("fullName")}>
+              <Input data-autofocus autoComplete="name" value={addForm.fullName} onChange={(e) => setAddForm((f) => ({ ...f, fullName: e.target.value }))} aria-invalid={Boolean(addError("fullName"))} className={cx(addError("fullName") && styles.invalid)} />
+            </Field>
+            <Field label="Telefon" error={addError("phone")}>
+              <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="05xx xxx xx xx" value={addForm.phone} onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))} aria-invalid={Boolean(addError("phone"))} className={cx(addError("phone") && styles.invalid)} />
+            </Field>
+            <Field label="E-posta (isteğe bağlı)" error={addError("email")}>
+              <Input type="email" inputMode="email" autoComplete="email" value={addForm.email} onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))} aria-invalid={Boolean(addError("email"))} className={cx(addError("email") && styles.invalid)} />
+            </Field>
+          </FormGrid>
+        </form>
+      </Sheet>
+
+      {selectedCustomer && businessId ? (
+        <CustomerProfileStudio
+          key={selectedCustomer.id}
+          open
+          businessId={businessId}
+          customer={selectedCustomer}
+          appointments={selectedAppts}
+          services={services}
+          servicePackages={servicePackages}
+          customerPackages={customerPackages}
+          receipts={receipts}
+          transactions={transactions}
+          referenceTime={loadedAt}
+          onClose={() => setSelectedId(null)}
+          onRename={saveCustomerName}
+          onRefresh={() => loadData()}
+          onNotesSaved={(customerId, notes, tags) => setCustomers((current) => current.map((customer) => customer.id === customerId ? { ...customer, notes, tags } : customer))}
+        />
+      ) : null}
+    </DashPage>
+  );
+}
+
+function CustomerTags({ customer, segments }: { customer: Customer; segments: string[] }) {
+  const tags = customer.tags ?? [];
+  const auto = [
+    segments.includes("debt") ? <Badge key="debt" size="sm" tone="amber">Borç</Badge> : null,
+    segments.includes("loyal") ? <Badge key="loyal" size="sm" tone="green">Sadık</Badge> : null,
+    segments.includes("away") ? <Badge key="away" size="sm" tone="neutral">Uzun süredir yok</Badge> : null,
+  ].filter(Boolean);
+  if (!tags.length && !auto.length) return <span className={ws.muted}>—</span>;
+  return (
+    <span className={styles.tags}>
+      {auto}
+      {tags.slice(0, 2).map((tag) => <Badge key={tag} size="sm" tone="accent">{tag}</Badge>)}
+      {tags.length > 2 ? <Badge size="sm">+{tags.length - 2}</Badge> : null}
+    </span>
   );
 }

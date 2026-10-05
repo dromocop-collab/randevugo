@@ -1,0 +1,181 @@
+/* Analiz & Büyüme — sayfaya özel yerleşim ve kütüphanesiz grafikler.
+   Tüm renkler _studio kitinin --k-* token'larından (kullanıcı paneli renginden) gelir. */
+
+.stackY { display: grid; gap: 16px; min-width: 0; }
+
+/* ── Görünüm anahtarı ── */
+.hubSwitch { min-width: 0; }
+.hubSeg {
+  background: color-mix(in srgb, var(--k-soft) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: var(--k-shadow);
+}
+.hubSeg > button { flex: 1 1 0; min-height: 46px; }
+
+/* ── Aralık çubuğu ── */
+.rangeBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.rangeTitle { display: grid; gap: 4px; min-width: 0; }
+.rangeTitle > span { margin: 0; }
+.rangeHeading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.rangeHeading h2 { margin: 0; color: var(--k-ink); font-size: clamp(20px, 5vw, 24px); font-weight: 780; letter-spacing: -0.025em; line-height: 1.15; }
+.rangeSeg { flex: 0 1 auto; }
+@media (max-width: 520px) {
+  .rangeSeg { flex: 1 1 100%; }
+  .rangeSeg > button { flex: 1 1 0; }
+}
+
+.delta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* ── Izgaralar ── */
+.gridMain, .gridSplit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+@media (min-width: 1100px) { .gridMain { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+@media (min-width: 900px) { .gridSplit { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── Sütun grafiği ── */
+.chart { margin: 0; min-width: 0; }
+.chartReadout { display: flex; align-items: baseline; gap: 8px; min-height: 30px; margin-bottom: 10px; min-width: 0; }
+.chartReadout b { color: var(--k-ink); font-size: 24px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.chartReadout span { min-width: 0; overflow: hidden; color: var(--k-faint); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.columns {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(2px, 0.8vw, 8px);
+  min-width: 0;
+  padding-top: 4px;
+  background-image: linear-gradient(to top, var(--k-line) 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+.column {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: flex-end;
+  min-width: 0;
+  height: 100%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.column i {
+  display: block;
+  width: 100%;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k-core) 78%, var(--k-bright)), var(--k-core));
+  opacity: 0.78;
+  transform-origin: bottom;
+  animation: growY 0.7s var(--k-ease) both;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.column:hover i, .columnActive i { opacity: 1; filter: saturate(1.15); }
+.columnPeak i { opacity: 1; background: linear-gradient(180deg, var(--k-bright), color-mix(in srgb, var(--k-bright) 55%, var(--k-core))); box-shadow: 0 8px 22px color-mix(in srgb, var(--k-bright) 35%, transparent); }
+.columnActive i { outline: 2px solid rgb(var(--k-rgb) / 0.35); outline-offset: 2px; }
+.columnLabels { display: flex; overflow: hidden; gap: clamp(2px, 0.8vw, 8px); margin-top: 8px; min-width: 0; }
+.columnLabels span { flex: 1 1 0; min-width: 0; overflow: visible; color: var(--k-faint); font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; }
+@keyframes growY { from { transform: scaleY(0); } }
+
+/* ── Alan grafiği ── */
+.revenueHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; margin-bottom: 10px; }
+.revenueHead strong { color: var(--k-ink); font-size: clamp(24px, 6vw, 30px); font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.revenueHead span { color: var(--k-faint); font-size: 13px; font-weight: 650; }
+.area { margin: 0; min-width: 0; }
+.area svg { display: block; width: 100%; overflow: visible; }
+.areaStopTop { stop-color: var(--k-core); stop-opacity: 0.32; }
+.areaStopBottom { stop-color: var(--k-core); stop-opacity: 0; }
+.areaLine { fill: none; stroke: var(--k-core); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.areaDot { fill: var(--k-bright); stroke: var(--k-core); stroke-width: 2; vector-effect: non-scaling-stroke; }
+:global(:root[data-theme="dark"]) .areaStopTop { stop-color: var(--k-bright); stop-opacity: 0.28; }
+:global(:root[data-theme="dark"]) .areaStopBottom { stop-color: var(--k-bright); }
+:global(:root[data-theme="dark"]) .areaLine { stroke: var(--k-bright); }
+.areaAxis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--k-faint); font-size: 11px; font-weight: 700; }
+
+/* ── Sıralı çubuklar ── */
+.rank { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rankRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-md);
+  background: var(--k-soft);
+}
+.rankIndex { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: 12px; background: var(--k-tint); color: var(--k-core); font-size: 13px; font-weight: 850; }
+:global(:root[data-theme="dark"]) .rankIndex { color: var(--k-bright); }
+.rankRow:first-child .rankIndex { background: linear-gradient(150deg, var(--k-deep), var(--k-core)); color: var(--k-bright); }
+.rankBody { display: grid; gap: 6px; min-width: 0; flex: 1; }
+.rankTop { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.rankTop b { min-width: 0; overflow: hidden; color: var(--k-ink); font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.rankTop strong { flex: none; color: var(--k-ink); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rankTrack { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--k-faint) 16%, transparent); }
+.rankTrack i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--k-core), color-mix(in srgb, var(--k-bright) 70%, var(--k-core))); transform-origin: left; animation: growX 0.7s var(--k-ease) both; }
+.rankBody small { color: var(--k-faint); font-size: 12px; }
+@keyframes growX { from { transform: scaleX(0); } }
+
+/* ── Yığılmış dağılım ── */
+.stack { display: grid; gap: 16px; }
+.stackTrack { display: flex; gap: 3px; height: 16px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--k-faint) 16%, transparent); }
+.stackTrack i { display: block; min-width: 6px; height: 100%; border-radius: 99px; }
+.tone[data-tone="ok"] { --tone: var(--k-ok); --tone-bg: var(--k-ok-bg); }
+.tone[data-tone="info"] { --tone: var(--k-info); --tone-bg: var(--k-info-bg); }
+.tone[data-tone="warn"] { --tone: var(--k-warn); --tone-bg: var(--k-warn-bg); }
+.tone[data-tone="bad"] { --tone: var(--k-bad); --tone-bg: var(--k-bad-bg); }
+.tone[data-tone="violet"] { --tone: #7c3aed; --tone-bg: rgb(124 58 237 / 0.1); }
+:global(:root[data-theme="dark"]) .tone[data-tone="violet"] { --tone: #c4b5fd; --tone-bg: rgb(167 139 250 / 0.16); }
+.stackTrack i[data-tone] { background: var(--tone); }
+.legend { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 0; padding: 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px; min-width: 0; }
+.legend li + li { border-top: 1px solid var(--k-line); }
+.legendDot { width: 10px; height: 10px; flex: none; border-radius: 4px; background: var(--tone); }
+.legendLabel { flex: 1; min-width: 0; color: var(--k-muted); font-size: 14px; font-weight: 650; }
+.legend b { color: var(--k-ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+.legend small { width: 44px; color: var(--k-faint); font-size: 12px; font-weight: 700; text-align: right; }
+
+.emptyLine {
+  padding: 26px 16px;
+  border: 1px dashed color-mix(in srgb, var(--k-core) 22%, var(--k-line));
+  border-radius: var(--k-r-md);
+  color: var(--k-faint);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* ── Akıllı öneriler ── */
+.insights { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 900px) { .insights { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.insight {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone-bg) 70%, var(--k-card)), var(--k-card) 60%);
+  transition: transform 0.2s var(--k-ease), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.insight::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--tone); }
+.insight:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--tone) 35%, var(--k-line)); box-shadow: var(--k-shadow-lift); }
+.insightHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.insightIcon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; background: var(--tone-bg); color: var(--tone); }
+.insightBadge { padding: 4px 9px; border-radius: 99px; background: var(--tone-bg); color: var(--tone); font-size: 11px; font-weight: 850; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.insight h3 { margin: 4px 0 0; color: var(--k-ink); font-size: 16px; font-weight: 780; letter-spacing: -0.015em; line-height: 1.3; }
+.insight p { margin: 0; color: var(--k-muted); font-size: 14px; line-height: 1.55; }
+.insight .insightBenefit { flex: 1; padding-top: 8px; border-top: 1px solid var(--k-line); color: var(--k-faint); font-size: 13px; }
+.insightBenefit b { color: var(--k-muted); }
+.insight > a { margin-top: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .column i, .rankTrack i { animation: none; }
+  .insight, .insight:hover { transition: none; transform: none; }
+}

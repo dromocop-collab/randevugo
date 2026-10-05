@@ -1,0 +1,13 @@
+.form { display: flex; flex-direction: column; gap: 14px; }
+.label { display: inline-flex; align-items: center; gap: 6px; }
+.label b { color: var(--dui-red-fg); }
+.label small { margin-left: 2px; font-size: 11px; font-weight: 600; color: var(--dui-faint); }
+.quickDays { display: flex; gap: 6px; flex-wrap: wrap; }
+.dayChip {
+  min-height: 36px; padding: 0 14px;
+  border: 1px solid var(--dui-line-strong); border-radius: 999px;
+  background: var(--dui-card); color: var(--dui-ink-2);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.dayChip:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.dayChipActive { border-color: var(--dui-core); background: var(--dui-core); color: var(--dui-on-core); }

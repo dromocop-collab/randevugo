@@ -1,0 +1,83 @@
+.invalid, .invalid:focus { border-color: var(--dui-red-fg); box-shadow: 0 0 0 3px var(--dui-red-bg); }
+.error { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--dui-red-fg); font-size: 12.5px; font-weight: 650; line-height: 1.45; }
+.error svg { flex: none; margin-top: 2px; }
+
+.day {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--dui-line);
+  border-radius: var(--dui-radius);
+  background: var(--dui-card);
+  box-shadow: var(--dui-shadow);
+  scroll-margin-top: 90px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.dayCompact { gap: 12px; padding: 12px; border-radius: 18px; box-shadow: none; }
+.dayClosed { border-style: dashed; border-color: var(--dui-line-strong); background: var(--dui-card-2); box-shadow: none; }
+.dayInvalid { border-color: color-mix(in srgb, var(--dui-red-fg) 50%, transparent); }
+.dayHead { display: flex; align-items: center; gap: 12px; }
+.dayBadge { display: grid; flex: none; place-items: center; width: 46px; height: 46px; border-radius: 15px; background: var(--dui-soft); color: var(--dui-muted); font-size: 13px; font-weight: 850; }
+.dayCompact .dayBadge { width: 40px; height: 40px; border-radius: 13px; font-size: 12px; }
+.dayBadgeOpen { background: var(--dui-core); color: var(--dui-on-core); box-shadow: 0 8px 18px rgb(var(--dui-rgb) / 0.25); }
+.dayTitle { flex: 1; min-width: 0; }
+.dayTitle h3 { margin: 0; color: var(--dui-ink); font-size: 15.5px; font-weight: 780; }
+.dayTitle p { margin: 2px 0 0; overflow: hidden; color: var(--dui-muted); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.dayBody { display: grid; gap: 12px; min-width: 0; }
+
+.breakChip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgb(var(--dui-rgb) / 0.2);
+  border-radius: 18px;
+  background: var(--dui-accent-bg);
+}
+.breakIcon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--dui-card); color: var(--dui-accent-ink); }
+.breakInput { min-height: 44px; padding: 0 6px; text-align: center; }
+.breakDash { color: var(--dui-muted); font-weight: 800; }
+@media (max-width: 380px) {
+  .breakChip { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; }
+  .breakIcon { display: none; }
+}
+.addBreak {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px dashed var(--dui-line-strong);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dui-ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.addBreak:hover { border-color: rgb(var(--dui-rgb) / 0.45); color: var(--dui-accent-ink); }
+.addBreak:focus-visible, .closedHint:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.dayActions { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px -6px -6px; }
+.closedHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dui-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.closedHint:hover { background: var(--dui-card); color: var(--dui-accent-ink); }
+
+@media (prefers-reduced-motion: reduce) { .day { transition: none; } }

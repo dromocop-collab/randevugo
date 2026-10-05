@@ -3,7 +3,7 @@ import { createPublicMetadata, safeJsonLd, SEO_SITE_URL } from "@/lib/seo/metada
 
 export const metadata: Metadata = createPublicMetadata({
   title: "Şimdi Müsait İşletmeler | Canlı Sıraya Katıl",
-  description: "Şu anda yeni müşteri kabul eden işletmeleri keşfet, güncel bekleme süresini gör ve sana uygun hizmet için canlı sıraya katıl.",
+  description: "Şu anda yeni müşteri kabul eden kuaför, berber ve bakım işletmelerini keşfet; güncel bekleme süresini gör ve sana uygun hizmet için canlı sıraya katıl.",
   pathname: "/simdi-musait",
   keywords: ["şimdi müsait işletmeler", "canlı sıra", "beklemeden hizmet al", "yakındaki açık işletmeler", "anlık randevu"],
   imageAlt: "Canlı sıraya açık ve şimdi müsait işletmeler",

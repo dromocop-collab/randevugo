@@ -1,0 +1,224 @@
+.invalid, .invalid:focus { border-color: var(--dui-red-fg); box-shadow: 0 0 0 3px var(--dui-red-bg); }
+.inlineError { grid-column: 1 / -1; margin: 0; color: var(--dui-red-fg); font-size: 12px; font-weight: 650; }
+.deleteBtn:hover { background: var(--dui-red-bg); color: var(--dui-red-fg); }
+
+.draftHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--dui-amber-bg);
+  color: var(--dui-amber-fg);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+.draftHint svg { flex: none; }
+
+/* ── Kategori grupları ── */
+.groups { display: grid; gap: 16px; }
+.group {
+  min-width: 0;
+  border: 1px solid var(--dui-line);
+  border-radius: var(--dui-radius);
+  background: var(--dui-card);
+  box-shadow: var(--dui-shadow);
+  overflow: hidden;
+}
+.groupHead { display: flex; align-items: center; gap: 12px; padding: 14px 14px 12px; border-bottom: 1px solid var(--dui-line); }
+.groupTitle { flex: 1; min-width: 0; }
+.groupTitle h2 { margin: 0; overflow: hidden; color: var(--dui-ink); font-size: 15.5px; font-weight: 790; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.groupTitle p { margin: 1px 0 0; color: var(--dui-muted); font-size: 12px; }
+.groupList { display: grid; }
+.catIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--cat-color, var(--dui-core)) 14%, var(--dui-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-color, var(--dui-core)) 26%, transparent);
+}
+
+/* ── Hizmet satırı: mobilde kart, masaüstünde tablo satırı ── */
+.row {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-top: 1px solid var(--dui-line);
+  transition: background-color 0.18s ease;
+}
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--dui-hover); }
+.rowInactive .rowIcon, .rowInactive .rowName { opacity: 0.6; }
+.rowMain { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.rowIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--cat-color) 12%, var(--dui-card));
+  color: var(--dui-muted);
+}
+.rowText { display: grid; flex: 1; gap: 6px; min-width: 0; }
+.rowName {
+  justify-self: start;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--dui-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rowName:hover { color: var(--dui-accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.rowName:focus-visible { outline: none; border-radius: 6px; box-shadow: var(--dui-focus); }
+.rowBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.rowFact { display: inline-flex; align-items: center; gap: 4px; color: var(--dui-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.rowFactWarn { color: var(--dui-amber-fg); }
+.rowDesc { display: -webkit-box; margin: 0; overflow: hidden; color: var(--dui-muted); font-size: 12.5px; line-height: 1.5; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rowSide { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.rowActions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.rowActions > button[role="switch"] { margin-right: 6px; }
+
+.price {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--dui-line-strong);
+  border-radius: 13px;
+  background: var(--dui-card);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.price:focus-within { border-color: var(--dui-core); box-shadow: var(--dui-focus); }
+.priceDraft { border-style: dashed; border-color: color-mix(in srgb, var(--dui-amber-fg) 55%, transparent); }
+.priceInvalid { border-color: var(--dui-red-fg); }
+.price input {
+  width: 92px;
+  height: 100%;
+  padding: 0 4px 0 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dui-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 760;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.price input::placeholder { color: var(--dui-faint); font-weight: 600; }
+.price > span { padding: 0 10px 0 4px; color: var(--dui-accent-ink); font-weight: 800; }
+.price button {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--dui-line);
+  background: var(--dui-core);
+  color: var(--dui-on-core);
+  cursor: pointer;
+}
+.price button:disabled { background: var(--dui-soft); color: var(--dui-faint); cursor: not-allowed; }
+.miniSpin { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: svcSpin 0.8s linear infinite; }
+@keyframes svcSpin { to { transform: rotate(360deg); } }
+
+@media (min-width: 900px) {
+  .row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 16px; }
+  .rowSide { flex-wrap: nowrap; justify-content: flex-end; gap: 12px; }
+  .price input { font-size: 14px; }
+}
+
+/* ── Hizmet düzenleyici ── */
+.settingsBox { display: grid; gap: 2px; padding: 4px 14px 10px; border: 1px solid var(--dui-line); border-radius: 18px; background: var(--dui-card-2); }
+.settingsBox > div + div { border-top: 1px solid var(--dui-line); }
+.staffList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.staffItem { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--dui-line-strong); border-radius: 18px; background: var(--dui-card); transition: border-color 0.18s ease, background-color 0.18s ease; }
+.staffItemOn { border-color: rgb(var(--dui-rgb) / 0.45); background: var(--dui-accent-bg); }
+.staffHead { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
+.staffHead > input { flex: none; width: 20px; height: 20px; accent-color: var(--dui-core); }
+.staffHead > span:nth-child(3) { flex: 1; }
+
+/* ── Kategori yönetimi ── */
+.catList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.catItem { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 6px 8px 8px; border: 1px solid var(--dui-line); border-radius: 16px; background: var(--dui-card); }
+.catText { display: grid; flex: 1; min-width: 0; }
+.catText b { overflow: hidden; color: var(--dui-ink); font-size: 14px; font-weight: 740; text-overflow: ellipsis; white-space: nowrap; }
+.catText small { color: var(--dui-muted); font-size: 12px; }
+.catPreview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--cat-color) 12%, var(--dui-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-color) 28%, transparent);
+}
+.catPreview > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--dui-card); }
+.catPreview > b { min-width: 0; overflow: hidden; color: var(--dui-ink); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.fieldset { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.fieldset legend { margin-bottom: 8px; padding: 0; color: var(--dui-ink-2); font-size: 12px; font-weight: 700; }
+.iconGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.iconOption { display: grid; place-items: center; height: 44px; border: 1px solid var(--dui-line); border-radius: 12px; background: var(--dui-card); cursor: pointer; transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.15s var(--dui-ease); }
+.iconOption:hover { border-color: rgb(var(--dui-rgb) / 0.35); }
+.iconOption:active { transform: scale(0.94); }
+.iconOptionActive { border-color: var(--dui-core); background: var(--dui-accent-bg); box-shadow: 0 0 0 2px rgb(var(--dui-rgb) / 0.2); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { display: grid; place-items: center; width: 44px; height: 44px; border: 3px solid transparent; border-radius: 50%; color: #fff; cursor: pointer; transition: transform 0.15s var(--dui-ease); }
+.swatch:hover { transform: scale(1.06); }
+.swatchActive { border-color: var(--dui-card); box-shadow: 0 0 0 2px var(--dui-ink); }
+.iconOption:focus-visible, .swatch:focus-visible, .libraryCard:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.dangerIcon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 16px; background: var(--dui-red-bg); color: var(--dui-red-fg); }
+.dangerText { margin: 0; color: var(--dui-muted); font-size: 14px; line-height: 1.55; }
+
+/* ── Hazır kütüphane ── */
+.libraryBar { display: grid; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--dui-line); }
+.libraryGrid { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .libraryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.libraryCard {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--dui-line-strong);
+  border-radius: 18px;
+  background: var(--dui-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s var(--dui-ease), box-shadow 0.18s ease;
+}
+.libraryCard:hover { transform: translateY(-2px); box-shadow: var(--dui-shadow-lift); }
+.libraryCardOn { border-color: color-mix(in srgb, var(--cat-color) 70%, transparent); background: color-mix(in srgb, var(--cat-color) 8%, var(--dui-card)); }
+.libraryHead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.libraryTitle { display: grid; flex: 1; min-width: 0; }
+.libraryTitle b { color: var(--dui-ink); font-size: 14px; font-weight: 760; }
+.libraryTitle small { color: var(--cat-color); font-size: 11.5px; font-weight: 800; }
+.libraryCheck { display: grid; flex: none; place-items: center; width: 24px; height: 24px; border: 1px solid var(--dui-line-strong); border-radius: 50%; background: var(--dui-card-2); color: #fff; }
+.libraryCardOn .libraryCheck { border-color: transparent; background: var(--cat-color); }
+.libraryDesc { color: var(--dui-muted); font-size: 12px; line-height: 1.45; }
+.libraryTags { display: flex; flex-wrap: wrap; gap: 5px; }
+.libraryTags span { padding: 3px 8px; border-radius: 999px; background: var(--dui-soft); color: var(--dui-muted); font-size: 11px; font-weight: 650; }
+.libraryTags .libraryMore { background: color-mix(in srgb, var(--cat-color) 14%, transparent); color: var(--cat-color); font-weight: 800; }
+
+@media (prefers-reduced-motion: reduce) {
+  .row, .price, .staffItem, .iconOption, .swatch, .libraryCard { transition: none; }
+  .libraryCard:hover, .swatch:hover { transform: none; }
+  .miniSpin { animation-duration: 2s; }
+}

@@ -3,26 +3,26 @@ import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import { AppProviders } from "@/components/layout/app-providers";
 import { APP_STORE_ID } from "@/lib/app-store";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo/site";
+import { graph, organizationJsonLd, serializeJsonLd, websiteJsonLd } from "@/lib/seo/schema";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   display: "swap",
   preload: false,
 });
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   display: "swap",
   preload: false,
 });
 
-const SITE_URL = "https://seninrandevun.com";
-const SITE_NAME = "SeninRandevun";
-const SITE_DESCRIPTION =
-  "Yakınınızdaki kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; müsait saatleri karşılaştırıp saniyeler içinde online randevu alın.";
+const verificationOther: Record<string, string> = {};
+if (process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION) verificationOther["msvalidate.01"] = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -42,36 +42,10 @@ export const metadata: Metadata = {
     template: "%s | SeninRandevun",
   },
   description: SITE_DESCRIPTION,
-  keywords: [
-    "online randevu sistemi",
-    "randevu yazılımı",
-    "kuaför randevu",
-    "berber randevu",
-    "güzellik merkezi randevu",
-    "online booking Türkiye",
-    "online randevu al",
-    "işletme paneli",
-    "randevu yönetimi",
-    "çalışan yönetimi",
-    "müşteri takip",
-    "CRM yazılımı",
-    "appointment booking system",
-    "salon randevu",
-    "sağlık randevu",
-    "spor salonu randevu",
-    "veteriner randevu",
-    "danışmanlık randevu",
-    "7/24 online randevu",
-    "ücretsiz randevu sistemi",
-    "randevu hatırlatma",
-    "SMS randevu hatırlatma",
-    "işletme yönetim yazılımı",
-  ],
   authors: [{ name: SITE_NAME, url: SITE_URL }],
   creator: SITE_NAME,
   publisher: SITE_NAME,
   applicationName: SITE_NAME,
-  generator: "Next.js",
   referrer: "origin-when-cross-origin",
   formatDetection: {
     email: false,
@@ -91,7 +65,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "SeninRandevun — Yakınındaki İşletmeyi Keşfet",
     description:
-      "Binlerce işletme arasından aradığınızı bulun, müsait saatleri görün ve anında online randevu oluşturun.",
+      "Yakınındaki kuaför, berber, güzellik, sağlık ve bakım işletmelerini keşfet; müsait saatleri gör ve online randevunu anında oluştur.",
     type: "website",
     locale: "tr_TR",
     url: SITE_URL,
@@ -129,9 +103,11 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  // Arama Konsolu doğrulama kodları ortam değişkeninden gelir; kodda token tutulmaz.
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
-    yandex: process.env.NEXT_PUBLIC_YANDEX_SITE_VERIFICATION,
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    yandex: process.env.NEXT_PUBLIC_YANDEX_SITE_VERIFICATION || undefined,
+    ...(Object.keys(verificationOther).length ? { other: verificationOther } : {}),
   },
   other: {
     "msapplication-TileColor": "#0b6b45",
@@ -143,56 +119,8 @@ export const metadata: Metadata = {
   },
 };
 
-/* ─── JSON-LD Structured Data ─── */
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebSite",
-      "@id": `${SITE_URL}/#website`,
-      url: SITE_URL,
-      name: SITE_NAME,
-      description: SITE_DESCRIPTION,
-      inLanguage: "tr-TR",
-      publisher: { "@id": `${SITE_URL}/#organization` },
-      potentialAction: {
-        "@type": "SearchAction",
-        target: {
-          "@type": "EntryPoint",
-          urlTemplate: `${SITE_URL}/kesfet?q={search_term_string}`,
-        },
-        "query-input": "required name=search_term_string",
-      },
-    },
-    {
-      "@type": "Organization",
-      "@id": `${SITE_URL}/#organization`,
-      name: SITE_NAME,
-      url: SITE_URL,
-      logo: {
-        "@type": "ImageObject",
-        url: `${SITE_URL}/logo.png`,
-        width: 1024,
-        height: 1024,
-      },
-      contactPoint: [
-        {
-          "@type": "ContactPoint",
-          telephone: "+90-530-478-8298",
-          contactType: "customer service",
-          email: "info@seninrandevun.com",
-          areaServed: "TR",
-          availableLanguage: "Turkish",
-        },
-      ],
-      sameAs: [
-        "https://instagram.com/seninrandevun",
-        "https://twitter.com/seninrandevun",
-        "https://linkedin.com/company/seninrandevun",
-      ],
-    },
-  ],
-};
+/* ─── JSON-LD: Organization + WebSite (site bağlantıları arama kutusu) ─── */
+const jsonLd = graph(organizationJsonLd(), websiteJsonLd());
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -205,7 +133,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>

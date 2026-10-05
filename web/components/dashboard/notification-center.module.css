@@ -1,0 +1,31 @@
+.trigger { position: relative; }
+.count {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 19px; height: 19px; padding: 0 5px;
+  border: 2px solid var(--dui-bg); border-radius: 99px;
+  background: #e11d48; color: #fff;
+  font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+}
+.tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--dui-line); flex-wrap: wrap; }
+.toolActions { display: flex; gap: 4px; }
+.list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.item { position: relative; display: flex; align-items: stretch; border: 1px solid var(--dui-line); border-radius: 16px; background: var(--dui-card); overflow: hidden; }
+.unread { border-color: color-mix(in srgb, var(--dui-core) 30%, transparent); background: color-mix(in srgb, var(--dui-accent-bg) 55%, var(--dui-card)); }
+.main {
+  flex: 1; min-width: 0;
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 12px;
+  border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+}
+.main:focus-visible { outline: none; box-shadow: inset var(--dui-focus); }
+.icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; }
+.text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.text b { font-size: 13.5px; font-weight: 730; color: var(--dui-ink); }
+.text > span { font-size: 12.5px; line-height: 1.45; color: var(--dui-ink-2); overflow-wrap: anywhere; }
+.text time { margin-top: 2px; font-size: 11px; font-weight: 650; color: var(--dui-faint); }
+.dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--dui-core); }
+.delete { display: grid; place-items: center; width: 40px; flex: none; border: 0; border-left: 1px solid var(--dui-line); background: transparent; color: var(--dui-faint); cursor: pointer; }
+.delete:hover:not(:disabled) { color: var(--dui-red-fg); background: var(--dui-red-bg); }
+.delete:focus-visible { outline: none; box-shadow: inset var(--dui-focus); }
+.delete:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -38,7 +38,7 @@ export function BrandPageLoader({
           </span>
         </div>
         <strong className="brand-loader-wordmark">Senin<span>Randevun</span></strong>
-        <div className="brand-loader-copy"><h1>{title}</h1><p>{label}</p></div>
+        <div className="brand-loader-copy"><div className="brand-loader-title">{title}</div><p>{label}</p></div>
         <div className="brand-loader-track" aria-hidden="true"><i/></div>
         {securityMode ? (
           <div className="brand-loader-checks" aria-hidden="true">

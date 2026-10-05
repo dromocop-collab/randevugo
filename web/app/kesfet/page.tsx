@@ -3,9 +3,32 @@ import { ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ShieldChec
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { DiscoverInteractive } from "./kesfet-client";
+import { JsonLd } from "@/components/seo/json-ld";
+import { LinkCloud } from "@/components/seo/link-cloud";
+import { breadcrumbJsonLd, graph, itemListJsonLd, webPageJsonLd } from "@/lib/seo/schema";
+import { categoryCounts, getSeoIndex, groupByCity, sortForListing } from "@/lib/seo/seo-data";
+import { absoluteUrl, businessPath } from "@/lib/seo/site";
+import { locative } from "@/lib/seo/text";
 import styles from "./discover.module.css";
 
-export default function DiscoverPage() {
+// Taranabilir dizin (şehir, kategori, işletme bağlantıları) sunucuda hazırlanır; saatte bir yenilenir.
+export const revalidate = 3600;
+
+export default async function DiscoverPage() {
+  const index = await getSeoIndex();
+  const cities = groupByCity(index);
+  const combos = cities
+    .flatMap((city) => categoryCounts(city.businesses).map((item) => ({ city, item })))
+    .sort((a, b) => b.item.count - a.item.count)
+    .slice(0, 30);
+  const featured = sortForListing(index).slice(0, 30);
+  const pageUrl = absoluteUrl("/kesfet");
+  const jsonLd = graph(
+    webPageJsonLd({ path: "/kesfet", type: "CollectionPage", name: "Yakındaki işletmeleri keşfet", description: "Şehir ve kategoriye göre online randevu alınabilen işletmeler.", breadcrumbId: `${pageUrl}#breadcrumb`, mainEntityId: featured.length ? `${pageUrl}#businesses` : undefined }),
+    breadcrumbJsonLd([{ name: "Ana Sayfa", path: "/" }, { name: "Keşfet", path: "/kesfet" }], `${pageUrl}#breadcrumb`),
+    featured.length ? itemListJsonLd(featured.map((row) => ({ name: row.name, path: businessPath(row.slug) })), { id: `${pageUrl}#businesses`, name: "Öne çıkan işletmeler" }) : null,
+  );
+
   return (
     <div className="marketing-page min-h-screen">
       <MarketingHeader />
@@ -29,7 +52,17 @@ export default function DiscoverPage() {
           </div>
         </section>
 
+        <JsonLd data={jsonLd} />
         <DiscoverInteractive />
+
+        {/* Sunucuda çizilen dizin: JavaScript çalışmadan da tüm şehir/kategori/işletme sayfalarına bağlantı verir. */}
+        {index.length > 0 && (
+          <div className={styles.page} style={{ marginTop: 36 }}>
+            <LinkCloud id="kesfet-cities" kicker="ŞEHİRLER" title="Şehrine göre işletmeler" links={cities.map((city) => ({ href: `/sehir/${city.slug}`, label: `${locative(city.city)} online randevu`, meta: `${city.businesses.length} işletme` }))} />
+            <LinkCloud id="kesfet-combos" kicker="ŞEHİR VE KATEGORİ" title="Popüler aramalar" links={combos.map(({ city, item }) => ({ href: `/sehir/${city.slug}/${item.slug}`, label: `${city.city} ${item.label.toLocaleLowerCase("tr-TR")}`, meta: `${item.count}` }))} />
+            <LinkCloud id="kesfet-businesses" kicker="ÖNE ÇIKANLAR" title="Öne çıkan işletmeler" links={featured.map((row) => ({ href: businessPath(row.slug), label: row.name, meta: [row.district, row.city].filter(Boolean).join(", ") }))} />
+          </div>
+        )}
 
         {/* İşletme sahipleri için sade çağrı */}
         <section className={`${styles.page} ${styles.empty}`} style={{ marginTop: 36, borderStyle: "solid", justifyItems: "start", textAlign: "left" }}>

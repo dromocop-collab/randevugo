@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LockKeyhole, Sparkles } from "lucide-react";
+import { ArrowRight, LockKeyhole, Sparkles } from "lucide-react";
 import { DASHBOARD_ROUTE_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
+import { Badge, Button, Panel, Skeleton } from "@/components/dashboard/ui";
+import styles from "./subscription.module.css";
 
 export function SubscriptionFeatureGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,16 +15,24 @@ export function SubscriptionFeatureGate({ children }: { children: React.ReactNod
     .find((route) => pathname === route || pathname.startsWith(`${route}/`));
   const entitlement = matchedRoute ? DASHBOARD_ROUTE_ENTITLEMENTS[matchedRoute] : undefined;
 
-  if (loading) return <div className="min-h-72 animate-pulse rounded-[28px] bg-[var(--surface-2)]" />;
+  if (loading) return (
+    <div className={styles.gateLoading} role="status" aria-label="Paket bilgisi yükleniyor">
+      <Skeleton height={120} radius={26} />
+      <div className={styles.gateLoadingRow}><Skeleton height={92} radius={20} /><Skeleton height={92} radius={20} /></div>
+      <Skeleton height={260} radius={22} />
+    </div>
+  );
   if (!entitlement || can(entitlement)) return children;
 
-  return <section className="grid min-h-[58vh] place-items-center rounded-[30px] border border-[var(--border)] bg-[var(--surface-1)] p-6 text-center shadow-sm">
-    <div className="max-w-lg">
-      <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-amber-100 text-amber-700"><LockKeyhole size={27}/></span>
-      <span className="mt-5 inline-flex items-center gap-1 rounded-full bg-[var(--surface-2)] px-3 py-1 text-[10px] font-black tracking-[.16em] text-[var(--accent)]"><Sparkles size={12}/> PAKET ÖZELLİĞİ</span>
-      <h1 className="mt-3 text-3xl font-bold text-[var(--text-1)]">{entitlementLabel(entitlement)} paketinizde yer almıyor.</h1>
-      <p className="mt-3 text-sm leading-6 text-[var(--text-3)]">Şu an <b className="text-[var(--text-2)]">{plan?.label ?? "mevcut"}</b> paketini kullanıyorsunuz. Bu alanı açmak için özelliği içeren pakete geçebilirsiniz.</p>
-      <Link href="/dashboard/abonelik" className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[var(--accent)] px-6 text-sm font-bold text-white shadow-lg">Paketleri incele</Link>
-    </div>
-  </section>;
+  return (
+    <Panel className={styles.gate}>
+      <div className={styles.gateInner}>
+        <span className={styles.gateIcon}><LockKeyhole size={26} aria-hidden /></span>
+        <Badge tone="accent" icon={Sparkles}>Paket özelliği</Badge>
+        <h1 className={styles.gateTitle}>{entitlementLabel(entitlement)} paketinizde yer almıyor.</h1>
+        <p className={styles.gateText}>Şu an <b>{plan?.label ?? "mevcut"}</b> paketini kullanıyorsunuz. Bu alanı açmak için özelliği içeren pakete geçebilirsiniz.</p>
+        <Button href="/dashboard/abonelik" variant="primary" size="lg" trailingIcon={ArrowRight}>Paketleri incele</Button>
+      </div>
+    </Panel>
+  );
 }

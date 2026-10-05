@@ -3,7 +3,7 @@ import { ProtectedRoute } from "@/lib/auth/protected-route";
 import { OnboardingWizard } from "@/features/businesses/onboarding-wizard";
 
 export const metadata: Metadata = {
-  title: "İşletme Kurulumu | SeninRandevun",
+  title: "İşletme Kurulumu",
   description: "Birkaç adımda işletmenizi oluşturun ve online randevuya başlayın.",
   robots: { index: false, follow: false },
 };

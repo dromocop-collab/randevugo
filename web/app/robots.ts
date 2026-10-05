@@ -1,39 +1,36 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo/site";
 
+/**
+ * Özel alanlar (paneller, hesap, ödeme/randevu belirteçleri, API) taranmaz.
+ * Bu sayfalar ayrıca noindex metası taşır. Statik dosyalar ve görseller (/_next/) açık kalır
+ * ki Google sayfaları doğru işleyebilsin.
+ */
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://seninrandevun.com").replace(/\/+$/, "");
-
   return {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        allow: ["/", "/_next/static/", "/_next/image"],
         disallow: [
-          "/dashboard/",
           "/dashboard",
-          "/super-admin/",
           "/super-admin",
-          "/admin/",
           "/admin",
-          "/onboarding/",
           "/onboarding",
-          "/hesabim/",
           "/hesabim",
           "/randevu/",
           "/musteri/",
+          "/siram",
           "/giris",
           "/kayit",
           "/sifremi-unuttum",
-          "/isletmeler/giris/",
           "/isletmeler/giris",
-          "/isletmeler/kayit/",
           "/isletmeler/kayit",
           "/api/",
-          "/api",
         ],
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

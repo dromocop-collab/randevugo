@@ -1,0 +1,106 @@
+/* Bekleme listesi — mobil öncelikli talep kartları. */
+
+/* Canlı sıra kısayolu */
+.liveLink {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid rgb(var(--k-rgb) / 0.18);
+  border-radius: var(--k-r-md);
+  background: linear-gradient(120deg, var(--k-tint), var(--k-card) 70%);
+  box-shadow: var(--k-shadow);
+  color: var(--k-ink);
+  text-decoration: none;
+  transition: box-shadow 0.2s ease, transform 0.2s var(--k-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.liveLink:hover { box-shadow: var(--k-shadow-lift); }
+.liveLink:active { transform: scale(0.99); }
+.liveLink:focus-visible { outline: 3px solid rgb(var(--k-rgb) / 0.35); outline-offset: 2px; }
+.liveIcon { display: grid; width: 44px; height: 44px; flex: none; place-items: center; border-radius: 14px; background: linear-gradient(150deg, var(--k-deep), var(--k-core)); color: var(--k-bright); }
+.liveText { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.liveText b { font-size: 15px; font-weight: 720; }
+.liveText small { color: var(--k-faint); font-size: 13px; line-height: 1.4; }
+.liveGo { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 13px; background: var(--k-core); color: var(--k-on-core); font-size: 14px; font-weight: 750; white-space: nowrap; }
+@media (max-width: 479px) { .liveGo { width: 100%; justify-content: center; } }
+
+/* Araç çubuğu */
+.toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.toolbar > * { min-width: 0; }
+@media (min-width: 1000px) { .toolbar { grid-template-columns: minmax(0, 1fr) auto; align-items: center; } }
+
+/* Kart ızgarası */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+@media (min-width: 720px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--k-line);
+  border-radius: 22px;
+  background: var(--k-card);
+  box-shadow: var(--k-shadow);
+  transition: box-shadow 0.2s ease, transform 0.2s var(--k-ease);
+}
+.card:hover { box-shadow: var(--k-shadow-lift); }
+.cardClosed { background: var(--k-soft); box-shadow: none; }
+.cardClosed .avatar { opacity: 0.6; }
+.cardHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.created { color: var(--k-faint); font-size: 12px; font-weight: 650; white-space: nowrap; }
+
+.person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.avatar { display: grid; width: 48px; height: 48px; flex: none; place-items: center; border-radius: 16px; background: var(--k-tint); color: var(--k-core); }
+:global(:root[data-theme="dark"]) .avatar { color: var(--k-bright); }
+.personText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.personText b { color: var(--k-ink); font-size: 17px; font-weight: 760; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+.personText small { color: var(--k-muted); font-size: 14px; overflow-wrap: anywhere; }
+
+.date { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding: 10px 12px; border-radius: var(--k-r-sm); background: var(--k-soft); color: var(--k-muted); font-size: 13px; }
+.date > svg { flex: none; color: var(--k-core); }
+:global(:root[data-theme="dark"]) .date > svg { color: var(--k-bright); }
+.date b { margin-left: auto; color: var(--k-ink); font-size: 14px; font-weight: 720; }
+
+.contact { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.contactLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 2px 12px 2px 2px;
+  border: 1px solid var(--k-line);
+  border-radius: 15px;
+  background: var(--k-card);
+  color: var(--k-ink);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.contactLink:hover { border-color: rgb(var(--k-rgb) / 0.35); background: var(--k-soft); }
+.contactLink:focus-visible { outline: 3px solid rgb(var(--k-rgb) / 0.35); outline-offset: 2px; }
+.contactIcon { display: grid; width: 44px; height: 44px; flex: none; place-items: center; border-radius: 13px; background: var(--k-tint); color: var(--k-core); }
+:global(:root[data-theme="dark"]) .contactIcon { color: var(--k-bright); }
+.contactValue { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: auto; min-width: 0; }
+.actions > button { min-width: 0; white-space: normal; text-align: center; line-height: 1.2; }
+.actions > button:only-child, .actions > .closeBtn:nth-child(odd) { grid-column: 1 / -1; }
+.closeBtn { color: var(--k-bad); }
+.closeBtn:hover:not(:disabled) { background: var(--k-bad-bg); }
+.done { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: 14px; background: var(--k-ok-bg); color: var(--k-ok); font-size: 14px; font-weight: 750; }
+
+.confirmItem { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding: 12px 14px; border-radius: var(--k-r-sm); background: var(--k-soft); }
+.confirmItem b { color: var(--k-ink); font-size: 15px; }
+.confirmItem small { color: var(--k-faint); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .liveLink, .contactLink { transition: none; }
+}

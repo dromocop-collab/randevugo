@@ -4,6 +4,7 @@ import { ArrowRight, ArrowUpRight, BriefcaseBusiness, Compass, LayoutGrid, MapPi
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { CATEGORY_CATALOG, categoryHref } from "@/components/marketing/category-catalog";
+import { categoryImageFor } from "@/components/marketing/category-catalog";
 import { getDiscoveryFacets } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
@@ -13,11 +14,11 @@ import { CategoriesExplorer, type CategoryCardData } from "./categories-explorer
 import styles from "./kategoriler.module.css";
 
 export const metadata = createPublicMetadata({
-  title: "Tüm Kategoriler — Kuaför, Berber, Güzellik, Sağlık ve Daha Fazlası",
-  description: "Kuaför, berber, güzellik merkezi, spa, nail studio, sağlık, spor, veteriner ve danışmanlık kategorilerindeki işletmeleri keşfedin; size uygun saatte online randevu alın.",
+  title: "Tüm Hizmet Kategorileri ve Online Randevu",
+  description: "Kuaför, berber, güzellik merkezi, spa, nail studio, sağlık, spor ve veteriner kategorilerindeki işletmeleri keşfet; uygun saatte online randevu al.",
   pathname: "/kategoriler",
   keywords: ["randevu kategorileri", "kuaför randevu", "berber randevu", "güzellik merkezi randevu", "spa randevu", "veteriner randevu", "online randevu al"],
-  imageAlt: "SeninRandevun kategoriler sayfası",
+  image: null,
 });
 
 // Kategori sayıları sunucuda hazırlanır ve 5 dakikada bir yenilenir.
@@ -98,7 +99,7 @@ function buildCards(data: CategoriesData | null): CategoryCardData[] {
       label: dynamic.label || prettifySlug(slug),
       emoji: dynamic.emoji || "✨",
       description: "Yeni eklenen kategori",
-      image: safeImage(dynamic.imageUrl) ?? safeImage(data?.covers[slug]),
+      image: safeImage(dynamic.imageUrl) ?? safeImage(data?.covers[slug]) ?? categoryImageFor(slug, dynamic.label),
       accent: "#1f7a4a",
       count: data ? data.counts[slug] ?? 0 : null,
     });
@@ -112,7 +113,7 @@ function buildCards(data: CategoriesData | null): CategoryCardData[] {
       label: EXTRA_LABELS[slug]?.label ?? prettifySlug(slug),
       emoji: EXTRA_LABELS[slug]?.emoji ?? "✨",
       description: "İşletmeleri keşfet",
-      image: safeImage(data?.covers[slug]),
+      image: safeImage(data?.covers[slug]) ?? categoryImageFor(slug, EXTRA_LABELS[slug]?.label ?? slug),
       accent: "#475569",
       count,
     });
@@ -160,7 +161,7 @@ export default async function CategoriesPage() {
           "@type": "ListItem",
           position: index + 1,
           name: card.label,
-          url: `${SEO_SITE_URL}${categoryHref(card.slug)}`,
+          url: `${SEO_SITE_URL}${CATEGORY_CATALOG.find((item) => item.slug === card.slug)?.landing ?? categoryHref(card.slug)}`,
         })),
       },
       {

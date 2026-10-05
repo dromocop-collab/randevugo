@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { getDb } from "@/lib/firebase/firestore";
@@ -53,6 +53,20 @@ export async function renameCustomer(
     if (matches.length) return matches[0].id;
     throw error;
   }
+}
+
+/** İşletmenin müşteri kartındaki özel notunu ve etiketlerini günceller. */
+export async function updateCustomerNotes(
+  businessId: string,
+  customerId: string,
+  input: { notes: string; tags: string[] }
+): Promise<void> {
+  const db = getDb();
+  await updateDoc(doc(db, "businesses", businessId, "customers", customerId), {
+    notes: input.notes.trim().slice(0, 2_000),
+    tags: Array.from(new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 12),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export function normalizeCustomerPhone(value: string): string {

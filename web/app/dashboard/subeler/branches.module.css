@@ -1,0 +1,34 @@
+.grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1400px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--dui-line);
+  border-radius: var(--dui-radius);
+  background: var(--dui-card);
+  box-shadow: var(--dui-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover { box-shadow: var(--dui-shadow-lift); }
+.cardSelected { border-color: rgb(var(--dui-rgb) / 0.55); box-shadow: var(--dui-shadow), 0 0 0 3px rgb(var(--dui-rgb) / 0.12); }
+.cardHead { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.cardIcon { display: grid; flex: none; place-items: center; width: 46px; height: 46px; border-radius: 15px; background: var(--dui-accent-bg); color: var(--dui-accent-ink); }
+.cardIconHq { background: linear-gradient(145deg, var(--dui-core), color-mix(in srgb, var(--dui-core) 45%, var(--dui-deep))); color: var(--dui-bright); }
+.cardTitle { flex: 1; min-width: 0; }
+.cardTitle h2 { margin: 0; overflow: hidden; color: var(--dui-ink); font-size: 16.5px; font-weight: 790; letter-spacing: -0.015em; text-overflow: ellipsis; white-space: nowrap; }
+.cardTitle p { display: flex; align-items: center; gap: 5px; margin: 3px 0 0; color: var(--dui-muted); font-size: 12.5px; }
+.meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 12px; border-radius: 16px; background: var(--dui-card-2); }
+.meta div { min-width: 0; }
+.meta dt { display: flex; align-items: center; gap: 4px; color: var(--dui-faint); font-size: 10.5px; font-weight: 760; letter-spacing: 0.06em; text-transform: uppercase; }
+.meta dd { margin: 3px 0 0; overflow: hidden; color: var(--dui-ink); font-size: 13px; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.cardActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cardActions > * { flex: 1 1 auto; }
+.switchBox { padding: 4px 14px; border: 1px solid var(--dui-line); border-radius: 16px; background: var(--dui-card-2); }
+.invalid, .invalid:focus { border-color: var(--dui-red-fg); box-shadow: 0 0 0 3px var(--dui-red-bg); }
+
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }

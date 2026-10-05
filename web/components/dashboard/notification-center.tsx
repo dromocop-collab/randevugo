@@ -1,32 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { createPortal } from "react-dom";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bell, CalendarDays, CheckCheck, CircleAlert, CreditCard, Info, LoaderCircle, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bell, CalendarClock, CalendarDays, CalendarX2, CheckCheck, CircleAlert, CreditCard, Info, LoaderCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteAllNotifications, deleteNotification, markAllNotificationsRead, markNotificationRead, subscribeNotifications } from "@/features/notifications/notification-repository";
 import type { NotificationItem, NotificationType } from "@/types/notification";
+import { Button, ConfirmSheet, EmptyState, SegmentedControl, Sheet, toneClassName, type DashTone } from "@/components/dashboard/ui";
+import { cn } from "@/lib/utils/cn";
+import styles from "./notification-center.module.css";
 
-const ICONS: Record<NotificationType, typeof Bell> = {
-  new_appointment: CalendarDays,
-  appointment_cancelled: X,
-  appointment_rescheduled: CalendarDays,
-  upcoming_appointment: CalendarDays,
-  payment: CreditCard,
-  system: Info,
+const META: Record<NotificationType, { icon: typeof Bell; tone: DashTone }> = {
+  new_appointment: { icon: CalendarDays, tone: "accent" },
+  appointment_cancelled: { icon: CalendarX2, tone: "red" },
+  appointment_rescheduled: { icon: CalendarClock, tone: "blue" },
+  upcoming_appointment: { icon: CalendarClock, tone: "amber" },
+  payment: { icon: CreditCard, tone: "green" },
+  system: { icon: Info, tone: "neutral" },
 };
 
-export function NotificationCenter({ businessId }: { businessId: string | null }) {
+type Filter = "all" | "unread";
+
+export function NotificationCenter({ businessId, triggerClassName }: { businessId: string | null; triggerClassName?: string }) {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState("");
-  const [panelPosition, setPanelPosition] = useState<CSSProperties>({});
-  const rootRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
   const unreadCount = useMemo(() => items.filter((item) => !item.isRead).length, [items]);
+  const visible = filter === "unread" ? items.filter((item) => !item.isRead) : items;
 
   useEffect(() => {
     if (!businessId) return;
@@ -36,49 +39,6 @@ export function NotificationCenter({ businessId }: { businessId: string | null }
       () => setError("Bildirimler şu anda alınamıyor.")
     );
   }, [businessId]);
-
-  useEffect(() => {
-    function closeOnOutsideClick(event: MouseEvent) {
-      const target = event.target as Node;
-      if (
-        rootRef.current &&
-        !rootRef.current.contains(target) &&
-        !panelRef.current?.contains(target)
-      ) setOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function updatePanelPosition() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      if (window.matchMedia("(max-width: 520px)").matches) {
-        setPanelPosition({ top: rect.bottom + 10, right: 12, left: 12 });
-        return;
-      }
-
-      setPanelPosition({
-        top: rect.bottom + 12,
-        right: Math.max(14, window.innerWidth - rect.right),
-        left: "auto",
-      });
-    }
-
-    updatePanelPosition();
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
 
   async function markOne(item: NotificationItem) {
     if (!businessId || item.isRead) return;
@@ -106,38 +66,87 @@ export function NotificationCenter({ businessId }: { businessId: string | null }
   }
 
   async function clearAll() {
-    if (!businessId || items.length === 0 || deleting || !window.confirm("Tüm bildirimler kalıcı olarak silinsin mi?")) return;
+    if (!businessId || items.length === 0 || deleting) return;
     const previous = items;
     setDeleting("all");
     setItems([]);
-    try { await deleteAllNotifications(businessId); toast.success("Bildirim merkezi temizlendi."); }
+    try { await deleteAllNotifications(businessId); toast.success("Bildirim merkezi temizlendi."); setConfirmClear(false); }
     catch { setItems(previous); toast.error("Bildirimler silinemedi."); }
     finally { setDeleting(""); }
   }
 
-  const panel = <section ref={panelRef} className="command-notification-panel command-notification-panel--portal" style={panelPosition} role="dialog" aria-label="Bildirim merkezi">
-    <header><div><small>CANLI AKIŞ</small><h2>Bildirimler</h2></div><nav><button type="button" onClick={() => void markAll()} disabled={unreadCount === 0 || Boolean(deleting)}><CheckCheck size={15}/> Okundu</button><button type="button" className="notification-clear-button" onClick={() => void clearAll()} disabled={items.length === 0 || Boolean(deleting)}>{deleting === "all" ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>} Temizle</button><button type="button" className="command-notification-close" onClick={() => setOpen(false)} aria-label="Bildirim merkezini kapat"><X size={16}/></button></nav></header>
-    <div className="command-notification-list">
-      {error ? <div className="command-notification-empty"><CircleAlert size={22}/><p>{error}</p></div> : items.length === 0 ? <div className="command-notification-empty"><Bell size={22}/><p>Henüz yeni bildiriminiz yok.</p></div> : items.map((item) => {
-        const Icon = ICONS[item.type] ?? Info;
-        const appointmentId = item.relatedAppointmentId ?? item.appointmentId;
-        const content = <><span className="command-notification-icon"><Icon size={16}/></span><span><b>{item.title}</b><p>{item.body}</p><time>{formatNotificationDate(item.createdAt)}</time></span>{!item.isRead && <i/>}</>;
-        return <article key={item.id} className={`command-notification-item ${item.isRead ? "" : "unread"}`}>{appointmentId ? <Link href={`/dashboard/randevular?appointment=${encodeURIComponent(appointmentId)}`} className="command-notification-main" onClick={() => { void markOne(item); setOpen(false); }}>{content}</Link> : <button type="button" className="command-notification-main" onClick={() => void markOne(item)}>{content}</button>}<button type="button" className="command-notification-delete" onClick={() => void removeOne(item)} disabled={Boolean(deleting)} aria-label={`${item.title} bildirimini sil`}>{deleting === item.id ? <LoaderCircle className="animate-spin" size={14}/> : <Trash2 size={14}/>}</button></article>;
-      })}
-    </div>
-    <footer><Link href="/dashboard/randevular" onClick={() => setOpen(false)}>Tüm randevuları aç</Link></footer>
-  </section>;
-
-  return <div className="command-notification-root" ref={rootRef}>
-    <button ref={buttonRef} type="button" className="command-icon command-notification-button" aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-      <Bell size={17}/>{unreadCount > 0 && <b>{unreadCount > 9 ? "9+" : unreadCount}</b>}
+  return <>
+    <button type="button" className={cn(styles.trigger, triggerClassName)} aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+      <Bell size={18} aria-hidden />
+      {unreadCount > 0 && <b className={styles.count} aria-hidden>{unreadCount > 9 ? "9+" : unreadCount}</b>}
     </button>
-    {open && typeof document !== "undefined" ? createPortal(panel, document.body) : null}
-  </div>;
+    <Sheet
+      open={open}
+      onClose={() => setOpen(false)}
+      placement="side"
+      title="Bildirimler"
+      description={unreadCount ? `${unreadCount} okunmamış bildirim` : "Hepsini okudunuz"}
+      headerExtra={<div className={styles.tools}>
+        <SegmentedControl ariaLabel="Bildirim filtresi" value={filter} onChange={setFilter} options={[{ value: "all", label: "Tümü", count: items.length }, { value: "unread", label: "Okunmamış", count: unreadCount }]} />
+        <div className={styles.toolActions}>
+          <Button size="sm" variant="ghost" icon={CheckCheck} onClick={() => void markAll()} disabled={unreadCount === 0 || Boolean(deleting)}>Okundu</Button>
+          <Button size="sm" variant="ghost" icon={Trash2} onClick={() => setConfirmClear(true)} disabled={items.length === 0 || Boolean(deleting)} aria-label="Tüm bildirimleri temizle" iconOnly />
+        </div>
+      </div>}
+      footer={<Button href="/dashboard/randevular" variant="secondary" block onClick={() => setOpen(false)}>Tüm randevuları aç</Button>}
+    >
+      {error ? (
+        <EmptyState icon={CircleAlert} title="Bildirimler alınamadı" description={error} compact />
+      ) : visible.length === 0 ? (
+        <EmptyState mascot="happy" compact title={filter === "unread" ? "Okunmamış bildirim yok" : "Henüz bildirim yok"} description="Yeni randevu, iptal ve değişiklikler burada anında görünür." />
+      ) : (
+        <ul className={styles.list}>
+          {visible.map((item) => {
+            const meta = META[item.type] ?? META.system;
+            const Icon = meta.icon;
+            const appointmentId = item.relatedAppointmentId ?? item.appointmentId;
+            const content = <>
+              <span className={cn(styles.icon, toneClassName(meta.tone))}><Icon size={16} aria-hidden /></span>
+              <span className={styles.text}>
+                <b>{item.title}</b>
+                <span>{item.body}</span>
+                <time dateTime={item.createdAt}>{formatNotificationDate(item.createdAt)}</time>
+              </span>
+              {!item.isRead && <i className={styles.dot} aria-label="Okunmadı" />}
+            </>;
+            return (
+              <li key={item.id} className={cn(styles.item, !item.isRead && styles.unread)}>
+                {appointmentId
+                  ? <Link href={`/dashboard/randevular?appointment=${encodeURIComponent(appointmentId)}`} className={styles.main} onClick={() => { void markOne(item); setOpen(false); }}>{content}</Link>
+                  : <button type="button" className={styles.main} onClick={() => void markOne(item)}>{content}</button>}
+                <button type="button" className={styles.delete} onClick={() => void removeOne(item)} disabled={Boolean(deleting)} aria-label={`${item.title} bildirimini sil`}>
+                  {deleting === item.id ? <LoaderCircle size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Sheet>
+    <ConfirmSheet
+      open={confirmClear}
+      onClose={() => setConfirmClear(false)}
+      onConfirm={() => void clearAll()}
+      busy={deleting === "all"}
+      title="Tüm bildirimler silinsin mi?"
+      description="Bildirim merkezindeki tüm kayıtlar kalıcı olarak silinir. Randevularınız etkilenmez."
+      confirmLabel="Hepsini sil"
+      icon={Trash2}
+    />
+  </>;
 }
 
 function formatNotificationDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Az önce";
+  const diff = Date.now() - date.getTime();
+  if (diff >= 0 && diff < 60_000) return "Az önce";
+  if (diff >= 0 && diff < 3_600_000) return `${Math.floor(diff / 60_000)} dk önce`;
+  if (diff >= 0 && diff < 86_400_000 && new Date().toDateString() === date.toDateString()) return `Bugün ${new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" }).format(date)}`;
   return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }

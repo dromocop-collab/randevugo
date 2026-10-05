@@ -1,15 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { EmptyState } from "@/components/ui/states";
+import { FolderCog, FolderOpen, Layers3, Plus, Rocket, Scissors, Sparkles, Tag } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import {
-  createService,
   listServices,
   removeService,
   updateService,
@@ -24,86 +19,48 @@ import {
 } from "@/features/services/service-category-repository";
 import { getBusinessById } from "@/features/businesses/business-repository";
 import { listStaff, updateStaff } from "@/features/staff/staff-repository";
-import { firstErrorMessage, serviceCreateSchema } from "@/lib/validation/schemas";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
+import type { Staff } from "@/types/staff";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
 import { getCategoryTemplates, SECTOR_TEMPLATES } from "@/constants/service-category-templates";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import {
-  FolderOpen,
-  Plus,
-  Rocket,
-  Pencil,
-  Trash2,
-  Pause,
-  Play,
-  Clock,
-  Sparkles,
-  Scissors,
-  X,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Info,
-  Layers3,
-  PackageCheck,
-  RotateCcw,
-  Search,
-} from "lucide-react";
+  Badge, Button, DashPage, EmptyState, PageHeader, SearchField, SegmentedControl, Skeleton, SkeletonList, Toolbar,
+} from "@/components/dashboard/ui";
+import { cx, matchesSearch, useConfirm, ws } from "../_workspace/kit";
+import { ServiceRow } from "./service-row";
+import { ServiceEditorSheet } from "./service-editor-sheet";
+import { CategoryEditorSheet, CategoryManagerSheet, DeleteCategorySheet } from "./category-sheets";
+import { TemplateLibrarySheet } from "./template-library-sheet";
+import { bySortOrder, reorderPatch, serviceStatus, type ServiceStatusFilter } from "./service-shared";
+import styles from "./services.module.css";
 
-/* ── Colours for category picker ─────────────────── */
-const CATEGORY_COLORS = [
-  "#0ea5e9", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b",
-  "#ef4444", "#06b6d4", "#d946ef", "#6366f1", "#64748b",
-];
-
-const CATEGORY_ICONS = [
-  "✂️", "🎨", "💆", "💅", "🏋️", "🩺", "📋", "🐾",
-  "📚", "🔧", "💄", "🧴", "👁️", "🦷", "💉", "🧘",
-  "🪒", "🧔", "💨", "🌈", "✨", "🔗", "👰", "🥊",
-  "💪", "🧠", "💼", "⚖️", "📊", "🌍", "💻", "📝",
-];
+const UNCATEGORIZED = "__none__";
 
 export default function ServicesPage() {
   const { businessId } = useBusiness();
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<ServiceStatusFilter>("all");
+  const [search, setSearch] = useState("");
   const [businessSector, setBusinessSector] = useState<string>("diger");
   const [businessType, setBusinessType] = useState<"kadin" | "erkek" | "unisex">("unisex");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
-  const [templateSearch, setTemplateSearch] = useState("");
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const { confirm, dialog } = useConfirm();
+  const layerKey = useRef(0);
+  const nextKey = () => ++layerKey.current;
 
-  /* ── New Service Form ─────────────────────────── */
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("0");
-  const [duration, setDuration] = useState("30");
-  const [serviceCategory, setServiceCategory] = useState("");
-
-  /* ── New Category Form ────────────────────────── */
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [catName, setCatName] = useState("");
-  const [catIcon, setCatIcon] = useState("✂️");
-  const [catColor, setCatColor] = useState("#0ea5e9");
-
-  /* ── Edit Category ───────────────────────────── */
-  const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
-  const [editCatName, setEditCatName] = useState("");
-  const [editCatIcon, setEditCatIcon] = useState("✂️");
-  const [editCatColor, setEditCatColor] = useState("#0ea5e9");
-
-  /* ── Edit Service ─────────────────────────────── */
-  const [editingService, setEditingService] = useState<Service | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editPrice, setEditPrice] = useState("");
-  const [editDuration, setEditDuration] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  // Katmanlar
+  const [editor, setEditor] = useState<{ key: number; service: Service | null; categoryId?: string } | null>(null);
+  const [showCategories, setShowCategories] = useState(false);
+  const [categoryEditor, setCategoryEditor] = useState<{ key: number; category: ServiceCategory | null } | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<ServiceCategory | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -113,12 +70,19 @@ export default function ServicesPage() {
       listServices(businessId),
       listServiceCategories(businessId),
       getBusinessById(businessId),
-    ]).then(([svc, cats, biz]) => {
+      listStaff(businessId).catch(() => [] as Staff[]),
+    ]).then(([svc, cats, biz, team]) => {
       if (cancelled) return;
       setServices(svc);
       setCategories(cats);
+      setStaff(team);
       if (biz?.category) setBusinessSector(biz.category);
       if (biz?.businessType) setBusinessType(biz.businessType);
+      setLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setLoading(false);
+      toast.error("Hizmetler yüklenemedi.");
     });
 
     return () => {
@@ -126,44 +90,44 @@ export default function ServicesPage() {
     };
   }, [businessId]);
 
-  useEffect(() => {
-    if (!editingService && !editingCategory && !showTemplatePicker) return;
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setEditingService(null);
-        setEditingCategory(null);
-        setShowTemplatePicker(false);
-      }
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [editingService, editingCategory, showTemplatePicker]);
-
-  async function reload() {
+  const reload = useCallback(async () => {
     if (!businessId) return;
-    const [svc, cats] = await Promise.all([
+    const [svc, cats, team] = await Promise.all([
       listServices(businessId),
       listServiceCategories(businessId),
+      listStaff(businessId).catch(() => null),
     ]);
     setServices(svc);
     setCategories(cats);
-  }
+    if (team) setStaff(team);
+  }, [businessId]);
 
-  /* ── Seed default categories from sector template ── */
-  async function handleSeedCategories() {
+  /* ── Hazır kütüphane ── */
+  const canonicalSector = canonicalBusinessCategory(businessSector);
+  const sectorTemplates = getCategoryTemplates(canonicalSector, businessType);
+  const existingCategoryNames = new Set(categories.map((category) => normalizeCategoryName(category.name)));
+  const missingServiceCountForTemplate = (template: (typeof sectorTemplates)[number]) => {
+    const templateKey = normalizeCategoryName(template.name);
+    if (!existingCategoryNames.has(templateKey)) return template.services.length;
+    const category = categories.find((item) => normalizeCategoryName(item.name) === templateKey);
+    if (!category) return template.services.length;
+    const serviceNames = new Set(
+      services.filter((item) => item.category === category.id).map((item) => normalizeCategoryName(item.name)),
+    );
+    return template.services.filter((item) => !serviceNames.has(normalizeCategoryName(item.name))).length;
+  };
+  const missingTemplates = sectorTemplates.filter((template) => missingServiceCountForTemplate(template) > 0);
+  const seededCategories = categories.filter((category) => category.templateSource === canonicalSector);
+  const sectorLabel = SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel";
+  const businessTypeLabel = businessType === "kadin" ? "Kadın işletmesi" : businessType === "erkek" ? "Erkek işletmesi" : "Unisex işletme";
+
+  async function handleSeedCategories(selectedTemplates: string[]) {
     if (!businessId || selectedTemplates.length === 0) return;
     setTemplateBusy(true);
     try {
       const result = await seedDefaultCategories(businessId, businessSector, selectedTemplates, businessType);
       await reload();
       setShowTemplatePicker(false);
-      setSelectedTemplates([]);
-      setTemplateSearch("");
       const migratedText = result.servicesMigrated > 0 ? ` ${result.servicesMigrated} mevcut hizmet doğru başlığa taşındı.` : "";
       toast.success(
         result.categoriesAdded > 0 || result.servicesAdded > 0 || result.servicesMigrated > 0
@@ -171,6 +135,7 @@ export default function ServicesPage() {
           : "Seçtiğiniz hizmet grupları zaten eksiksiz.",
         { duration: 7000 },
       );
+      if (result.servicesAdded > 0) setStatusFilter("draft");
     } catch {
       toast.error("Şablon yüklenirken hata oluştu.");
     } finally {
@@ -181,8 +146,14 @@ export default function ServicesPage() {
   async function handleRemoveTemplateCategories() {
     if (!businessId || seededCategories.length === 0) return;
     const linkedCount = services.filter((service) => seededCategories.some((category) => category.id === service.category)).length;
-    const detail = linkedCount ? ` Bu kategorilerdeki ${linkedCount} hizmet silinmeyecek, Kategorisiz alanına taşınacak.` : "";
-    if (!window.confirm(`${seededCategories.length} hazır kategori topluca kaldırılsın mı?${detail}`)) return;
+    const ok = await confirm({
+      title: `${seededCategories.length} hazır kategori kaldırılsın mı?`,
+      description: linkedCount
+        ? `Bu kategorilerdeki ${linkedCount} hizmet silinmeyecek, “Kategorisiz” alanına taşınacak. Özel kategorileriniz korunur.`
+        : "Yalnızca hazır paketten gelen kategoriler kaldırılır; özel kategorileriniz korunur.",
+      confirmLabel: "Kaldır",
+    });
+    if (!ok) return;
     setTemplateBusy(true);
     try {
       const categoryIds = new Set(seededCategories.map((category) => category.id));
@@ -200,58 +171,35 @@ export default function ServicesPage() {
     }
   }
 
-  /* ── Create Category ─────────────────────────────── */
-  async function handleCreateCategory(e: FormEvent) {
-    e.preventDefault();
-    if (!businessId || !catName.trim()) return;
+  /* ── Kategori işlemleri ── */
+  async function handleSubmitCategory(category: ServiceCategory | null, input: { name: string; icon: string; color: string }) {
+    if (!businessId) return false;
     try {
-      await createServiceCategory(businessId, {
-        name: catName.trim(),
-        icon: catIcon,
-        color: catColor,
-        sortOrder: categories.length,
-      });
-      setCatName("");
-      setCatIcon("✂️");
-      setCatColor("#0ea5e9");
-      setShowCategoryForm(false);
+      if (category) {
+        await updateServiceCategory(businessId, category.id, input);
+        toast.success("Kategori güncellendi.");
+      } else {
+        await createServiceCategory(businessId, { ...input, sortOrder: categories.length });
+        toast.success("Kategori oluşturuldu.");
+      }
       await reload();
-      toast.success("Kategori oluşturuldu!");
+      return true;
     } catch {
-      toast.error("Kategori oluşturulamadı.");
+      toast.error(category ? "Kategori güncellenemedi." : "Kategori oluşturulamadı.");
+      return false;
     }
   }
 
-  /* ── Delete Category ─────────────────────────────── */
-  async function handleDeleteCategory(catId: string) {
+  async function handleDeleteCategory(catId: string, replacementCategoryId: string) {
     if (!businessId) return;
-    const category = categories.find((item) => item.id === catId);
-    const linkedServices = services.filter((service) => service.category === catId);
-    const allStaff = await listStaff(businessId);
-    const linkedStaff = allStaff.filter((member) => member.specialtyCategoryIds?.includes(catId));
-    let replacementCategoryId = "";
-    if (linkedStaff.length > 0) {
-      const alternatives = categories.filter((item) => item.id !== catId);
-      if (alternatives.length === 0) {
-        toast.error(`Bu branşa bağlı ${linkedStaff.length} çalışan var. Önce yeni bir branş oluşturun.`);
-        return;
-      }
-      const answer = window.prompt(
-        `Bu branşa bağlı ${linkedStaff.length} çalışan var (${linkedStaff.map((member) => member.fullName).join(", ")}). Taşınacak branşın numarasını yazın:\n${alternatives.map((item, index) => `${index + 1}. ${item.name}`).join("\n")}`
-      );
-      if (answer === null) return;
-      const replacement = alternatives[Number(answer) - 1];
-      if (!replacement) {
-        toast.error("Geçerli bir branş numarası seçmelisiniz.");
-        return;
-      }
-      replacementCategoryId = replacement.id;
-    }
-    const warning = linkedServices.length > 0
-      ? `“${category?.name ?? "Kategori"}” silinsin mi? İçindeki ${linkedServices.length} hizmet Kategorisiz alanına, bağlı çalışanlar seçtiğiniz branşa taşınacak.`
-      : `“${category?.name ?? "Kategori"}” kalıcı olarak silinsin mi?`;
-    if (!window.confirm(warning)) return;
     try {
+      const linkedServices = services.filter((service) => service.category === catId);
+      const allStaff = await listStaff(businessId);
+      const linkedStaff = allStaff.filter((member) => member.specialtyCategoryIds?.includes(catId));
+      if (linkedStaff.length > 0 && !replacementCategoryId) {
+        toast.error("Bağlı çalışanlar için taşınacak branşı seçin.");
+        return;
+      }
       const replacementServiceIds = services.filter((service) => service.category === replacementCategoryId).map((service) => service.id);
       await Promise.all(
         [
@@ -267,6 +215,7 @@ export default function ServicesPage() {
       );
       await deleteServiceCategory(businessId, catId);
       if (activeCategory === catId) setActiveCategory("all");
+      setDeletingCategory(null);
       await reload();
       toast.success("Kategori silindi.");
     } catch {
@@ -274,121 +223,24 @@ export default function ServicesPage() {
     }
   }
 
-  function startEditCategory(category: ServiceCategory) {
-    setEditingCategory(category);
-    setEditCatName(category.name);
-    setEditCatIcon(category.icon || "✂️");
-    setEditCatColor(category.color || "#0ea5e9");
-  }
-
-  async function handleUpdateCategory(event: FormEvent) {
-    event.preventDefault();
-    if (!businessId || !editingCategory) return;
-    const normalizedName = editCatName.trim();
-    if (!normalizedName) {
-      toast.error("Kategori adı boş bırakılamaz.");
-      return;
-    }
-    try {
-      await updateServiceCategory(businessId, editingCategory.id, {
-        name: normalizedName,
-        icon: editCatIcon,
-        color: editCatColor,
-      });
-      setEditingCategory(null);
-      await reload();
-      toast.success("Kategori güncellendi.");
-    } catch {
-      toast.error("Kategori güncellenemedi.");
-    }
-  }
-
-  /* ── Create Service ──────────────────────────────── */
-  async function handleCreateService(e: FormEvent) {
-    e.preventDefault();
+  async function moveCategory(index: number, direction: -1 | 1) {
     if (!businessId) return;
-
-    const validated = serviceCreateSchema.safeParse({
-      name,
-      category: serviceCategory,
-      description,
-      price,
-      duration,
-    });
-    if (!validated.success) {
-      toast.error(firstErrorMessage(validated.error));
-      return;
-    }
-
-    const { name: n, category: c, description: d, price: p, duration: dur } = validated.data;
-
-    await createService(businessId, {
-      name: n,
-      description: d ?? "",
-      category: c,
-      price: p,
-      durationMinutes: dur,
-      currency: "TRY",
-      isActive: true,
-      isBookableOnline: true,
-      requiresDeposit: false,
-      depositAmount: 0,
-      assignableStaffIds: [],
-      imageUrl: "",
-      sortOrder: services.length,
-    });
-
-    toast.success("Hizmet başarıyla eklendi! ✨");
-    setName("");
-    setDescription("");
-    setPrice("0");
-    setDuration("30");
-    setServiceCategory("");
-    setShowForm(false);
-    await reload();
-  }
-
-  /* ── Update Service ──────────────────────────────── */
-  async function handleUpdateService() {
-    if (!businessId || !editingService) return;
-    if (!editName.trim()) {
-      toast.error("Hizmet adı boş bırakılamaz.");
-      return;
-    }
-    if (!Number.isFinite(Number(editPrice)) || Number(editPrice) < 0 || (editingService.templateDraft && Number(editPrice) <= 0)) {
-      toast.error(editingService.templateDraft ? "Hazır hizmeti yayınlamak için sıfırdan büyük bir fiyat girin." : "Geçerli bir fiyat girin.");
-      return;
-    }
-    if (!Number.isFinite(Number(editDuration)) || Number(editDuration) <= 0) {
-      toast.error("Geçerli bir hizmet süresi girin.");
-      return;
-    }
+    const patch = reorderPatch(categories, index, direction);
+    if (!patch.length) return;
+    setOrderBusy(true);
+    const byId = new Map(patch.map((item) => [item.id, item.sortOrder]));
+    setCategories((current) => current.map((item) => byId.has(item.id) ? { ...item, sortOrder: byId.get(item.id)! } : item).sort(bySortOrder));
     try {
-      await updateService(businessId, editingService.id, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        category: editCategory,
-        price: Number(editPrice),
-        durationMinutes: Number(editDuration),
-        ...(editingService.templateDraft ? { isActive: true, isBookableOnline: true, templateDraft: false } : {}),
-      });
-      setEditingService(null);
-      await reload();
-      toast.success(editingService.templateDraft ? "Fiyat kaydedildi; hizmet yayına alındı." : "Hizmet güncellendi.");
+      await Promise.all(patch.map((item) => updateServiceCategory(businessId, item.id, { sortOrder: item.sortOrder })));
     } catch {
-      toast.error("Güncelleme başarısız.");
+      toast.error("Sıralama kaydedilemedi.");
+      await reload();
+    } finally {
+      setOrderBusy(false);
     }
   }
 
-  function startEdit(s: Service) {
-    setEditingService(s);
-    setEditName(s.name);
-    setEditDescription(s.description || "");
-    setEditPrice(String(s.price));
-    setEditDuration(String(s.durationMinutes));
-    setEditCategory(s.category || "");
-  }
-
+  /* ── Hizmet işlemleri ── */
   async function handleQuickPrice(item: Service, nextPrice: number) {
     if (!businessId) return;
     if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
@@ -410,800 +262,278 @@ export default function ServicesPage() {
   async function handleToggleService(item: Service) {
     if (!businessId) return;
     if (!item.isActive && item.templateDraft && item.price <= 0) {
-      startEdit(item);
+      setEditor({ key: nextKey(), service: item });
       toast.info("Hizmeti yayınlamak için önce fiyatını girin.");
       return;
     }
-    await updateService(businessId, item.id, {
-      isActive: !item.isActive,
-      isBookableOnline: !item.isActive,
-      ...(!item.isActive ? { templateDraft: false } : {}),
+    try {
+      await updateService(businessId, item.id, {
+        isActive: !item.isActive,
+        isBookableOnline: !item.isActive,
+        ...(!item.isActive ? { templateDraft: false } : {}),
+      });
+      await reload();
+      toast.success(item.isActive ? `${item.name} duraklatıldı.` : `${item.name} yayında.`);
+    } catch {
+      toast.error("Hizmet durumu değiştirilemedi.");
+    }
+  }
+
+  async function handleDeleteService(item: Service) {
+    if (!businessId) return;
+    const ok = await confirm({
+      title: "Hizmet silinsin mi?",
+      description: `“${item.name}” kalıcı olarak silinecek. Geçmiş randevular etkilenmez; geçici olarak kaldırmak isterseniz silmek yerine duraklatabilirsiniz.`,
+      confirmLabel: "Sil",
     });
-    await reload();
+    if (!ok) return;
+    try {
+      await removeService(businessId, item.id);
+      await reload();
+      toast.success("Hizmet silindi.");
+    } catch {
+      toast.error("Hizmet silinemedi.");
+    }
   }
 
-  /* ── Filtered & grouped ──────────────────────────── */
-  const filteredServices = activeCategory === "all"
-    ? services
-    : services.filter((s) => s.category === activeCategory);
+  async function moveService(group: Service[], index: number, direction: -1 | 1) {
+    if (!businessId) return;
+    const patch = reorderPatch(group, index, direction);
+    if (!patch.length) return;
+    setOrderBusy(true);
+    const byId = new Map(patch.map((item) => [item.id, item.sortOrder]));
+    setServices((current) => current.map((item) => byId.has(item.id) ? { ...item, sortOrder: byId.get(item.id)! } : item));
+    try {
+      await Promise.all(patch.map((item) => updateService(businessId, item.id, { sortOrder: item.sortOrder })));
+    } catch {
+      toast.error("Sıralama kaydedilemedi.");
+      await reload();
+    } finally {
+      setOrderBusy(false);
+    }
+  }
 
-  const getCategoryMeta = (catId: string) =>
-    categories.find((c) => c.id === catId);
+  /* ── Görünüm ── */
+  const staffCountByService = useMemo(() => {
+    const counts: Record<string, number> = {};
+    staff.filter((member) => !member.archivedAt && member.isActive).forEach((member) => member.serviceIds.forEach((id) => { counts[id] = (counts[id] ?? 0) + 1; }));
+    return counts;
+  }, [staff]);
+  const statusCounts = useMemo(() => ({
+    all: services.length,
+    live: services.filter((item) => serviceStatus(item) === "live").length,
+    paused: services.filter((item) => serviceStatus(item) === "paused").length,
+    draft: services.filter((item) => serviceStatus(item) === "draft").length,
+  }), [services]);
+  const uncategorized = services.filter((s) => !s.category || !categories.some((c) => c.id === s.category));
+  const filtering = Boolean(search.trim()) || statusFilter !== "all";
+  const groups = useMemo(() => {
+    const matches = (service: Service) =>
+      (statusFilter === "all" || serviceStatus(service) === statusFilter) &&
+      matchesSearch(search, service.name, service.description);
+    const list = [
+      ...categories.map((category) => ({ id: category.id, category, items: services.filter((s) => s.category === category.id) })),
+      { id: UNCATEGORIZED, category: undefined as ServiceCategory | undefined, items: uncategorized },
+    ];
+    return list
+      .filter((group) => activeCategory === "all" || group.id === activeCategory)
+      .map((group) => ({ ...group, all: [...group.items].sort(bySortOrder), items: group.items.filter(matches).sort(bySortOrder) }))
+      .filter((group) => group.items.length > 0);
+  }, [activeCategory, categories, search, services, statusFilter, uncategorized]);
+  const visibleCount = groups.reduce((total, group) => total + group.items.length, 0);
 
-  // Group services by category
-  const grouped = categories.reduce<Record<string, Service[]>>((acc, cat) => {
-    acc[cat.id] = services.filter((s) => s.category === cat.id);
-    return acc;
-  }, {});
-  // Uncategorized
-  const uncategorized = services.filter(
-    (s) => !s.category || !categories.some((c) => c.id === s.category)
-  );
+  const openCreate = (categoryId?: string) => setEditor({
+    key: nextKey(),
+    service: null,
+    categoryId: categoryId && categoryId !== UNCATEGORIZED ? categoryId : activeCategory !== "all" && activeCategory !== UNCATEGORIZED ? activeCategory : undefined,
+  });
 
-  const canonicalSector = canonicalBusinessCategory(businessSector);
-  const sectorTemplates = getCategoryTemplates(canonicalSector, businessType);
-  const existingCategoryNames = new Set(categories.map((category) => normalizeCategoryName(category.name)));
-  const missingServiceCountForTemplate = (template: (typeof sectorTemplates)[number]) => {
-    const templateKey = normalizeCategoryName(template.name);
-    if (!existingCategoryNames.has(templateKey)) return template.services.length;
-    const category = categories.find((item) => normalizeCategoryName(item.name) === templateKey);
-    if (!category) return template.services.length;
-    const serviceNames = new Set(
-      services.filter((item) => item.category === category.id).map((item) => normalizeCategoryName(item.name)),
+  if (loading) {
+    return (
+      <DashPage>
+        <Skeleton height={150} radius={24} />
+        <Skeleton height={48} radius={16} />
+        <SkeletonList rows={5} height={96} label="Hizmetler yükleniyor" />
+      </DashPage>
     );
-    return template.services.filter((item) => !serviceNames.has(normalizeCategoryName(item.name))).length;
-  };
-  const missingTemplates = sectorTemplates.filter((template) => missingServiceCountForTemplate(template) > 0);
-  const visibleTemplates = missingTemplates.filter((template) =>
-    `${template.name} ${template.description} ${template.services.map((item) => item.name).join(" ")}`
-      .toLocaleLowerCase("tr-TR")
-      .includes(templateSearch.trim().toLocaleLowerCase("tr-TR"))
-  );
-  const seededCategories = categories.filter((category) => category.templateSource === canonicalSector);
-  const sectorLabel =
-    SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel";
-  const selectedServiceCount = sectorTemplates
-    .filter((template) => selectedTemplates.includes(template.name))
-    .reduce((total, template) => total + missingServiceCountForTemplate(template), 0);
-  const businessTypeLabel = businessType === "kadin" ? "Kadın işletmesi" : businessType === "erkek" ? "Erkek işletmesi" : "Unisex işletme";
-
-  function openTemplatePicker() {
-    setSelectedTemplates([]);
-    setTemplateSearch("");
-    setShowTemplatePicker(true);
-  }
-
-  function toggleTemplate(name: string) {
-    setSelectedTemplates((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
   }
 
   return (
-    <div className="space-y-6">
-      {/* ━━━ HEADER ━━━ */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-1)]">Hizmet Yönetimi</h1>
-          <p className="mt-1 text-sm text-[var(--text-3)]">
-            Ana hizmet gruplarınızı, hizmetlerinizi, süreleri ve fiyatları buradan yönetebilirsiniz.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={openTemplatePicker}
-            className="gap-2 font-semibold"
-          >
-            <Rocket size={16} className="text-[var(--accent)]" /> Hazır Hizmet Kütüphanesi
-          </Button>
-          {seededCategories.length > 0 && <Button variant="secondary" disabled={templateBusy} onClick={handleRemoveTemplateCategories} className="gap-2 font-semibold text-rose-600"><RotateCcw size={16} /> Hazır Paketi Kaldır</Button>}
+    <DashPage>
+      <PageHeader
+        eyebrow="Hizmet menüsü"
+        icon={Scissors}
+        title="Hizmetleriniz"
+        description="Gruplarınızı, sürelerinizi ve fiyatlarınızı yönetin. Değişiklikler mağaza vitrininize anında yansır."
+        actions={<>
+          <Button variant="bright" icon={Plus} onClick={() => openCreate()}>Hizmet ekle</Button>
+          <Button variant="glass" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>Hazır kütüphane</Button>
+          <Button variant="glass" icon={FolderCog} onClick={() => setShowCategories(true)}>Kategoriler</Button>
+        </>}
+        meta={<>
+          <Badge tone="accent" icon={Scissors}>{statusCounts.live} yayında</Badge>
+          {statusCounts.draft ? <Badge tone="amber" icon={Tag} pulse>{statusCounts.draft} fiyat bekliyor</Badge> : null}
+          <Badge tone="neutral" icon={Layers3}>{categories.length} kategori</Badge>
+        </>}
+      />
 
-          <Button
-            variant="secondary"
-            onClick={() => setShowCategoryForm(!showCategoryForm)}
-            className="gap-2 font-semibold"
-          >
-            {showCategoryForm ? <X size={16} /> : <FolderOpen size={16} />} 
-            {showCategoryForm ? "İptal Et" : "Kategori Ekle"}
-          </Button>
-
-          <Button 
-            onClick={() => setShowForm(!showForm)}
-            className="gap-2 bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white hover:brightness-110 shadow-lg shadow-sky-500/20 font-bold border-0"
-          >
-            {showForm ? <X size={16} /> : <Plus size={16} />}
-            {showForm ? "İptal Et" : "Hizmet Ekle"}
-          </Button>
-        </div>
-      </div>
-
-      {/* ━━━ CATEGORY MANAGEMENT ━━━ */}
-      {categories.length === 0 && !showCategoryForm && (
-        <div className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-8 shadow-xl">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--accent)]/10 blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-[var(--accent-3)]/10 blur-3xl" />
-          
-          <div className="relative z-10 flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] text-white shadow-lg shadow-sky-500/25">
-              <Sparkles size={28} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-extrabold text-[var(--text-1)]">Kategorilerinizi Oluşturun</h3>
-              <p className="mt-1.5 text-sm text-[var(--text-3)] max-w-xl">
-                Sistem <strong>{sectorLabel}</strong> sektörü için hazır şablon kategoriler oluşturabilir, veya kendi özel kategorilerinizi ekleyebilirsiniz.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button onClick={openTemplatePicker} className="gap-2 font-bold bg-[var(--text-1)] text-[var(--bg-1)] hover:bg-[var(--text-2)] border-0">
-                <Rocket size={16} /> Şablonu Yükle
-              </Button>
-              <Button variant="secondary" onClick={() => setShowCategoryForm(true)} className="gap-2 font-semibold">
-                <Pencil size={16} /> Özel Ekle
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Category Create Form ── */}
-      {showCategoryForm && (
-        <Card title="Yeni Kategori Oluştur" description="Hizmetlerinizi gruplamak için yeni bir kategori ekleyin">
-          <form onSubmit={handleCreateCategory} className="space-y-6">
-            <Input
-              label="Kategori Adı"
-              value={catName}
-              onChange={(e) => setCatName(e.target.value)}
-              placeholder="Örn: Saç Kesim, Cilt Bakımı..."
-              required
-            />
-            
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]">İkon Seçin</p>
-                <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto pr-2 scrollbar-thin">
-                  {CATEGORY_ICONS.map((icon, index) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      onClick={() => setCatIcon(icon)}
-                      className={`category-icon-option${catIcon === icon ? " active" : ""}`}
-                      style={{ animationDelay: `${Math.min(index * 18, 280)}ms` }}
-                      aria-label={`${icon} ikonunu seç`}
-                    >
-                      <ServiceCategoryIcon icon={icon} size={21} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]">Renk Seçin</p>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORY_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setCatColor(color)}
-                      className={`relative h-10 w-10 rounded-full border-2 transition-all duration-200 hover:scale-110 ${catColor === color
-                        ? "scale-110 shadow-lg border-[var(--text-1)]"
-                        : "border-transparent"
-                        }`}
-                      style={{ backgroundColor: color }}
-                    >
-                      {catColor === color && <Check size={16} className="absolute inset-0 m-auto text-white" strokeWidth={3} />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4">
-              <div className="flex flex-1 items-center gap-3">
-                <span className="text-xs font-bold text-[var(--text-3)] uppercase tracking-wider">Önizleme:</span>
-                <div
-                  className="flex items-center gap-2 rounded-xl px-4 py-2 shadow-sm"
-                  style={{ backgroundColor: catColor + "15", border: `1px solid ${catColor}30` }}
-                >
-                  <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ backgroundColor: `${catColor}16` }}><ServiceCategoryIcon icon={catIcon} name={catName} size={19} /></span>
-                  <span className="text-sm font-bold tracking-tight" style={{ color: catColor }}>
-                    {catName || "Kategori Adı"}
-                  </span>
-                </div>
-              </div>
-              <Button type="submit" className="gap-2 font-bold px-6 border-0" style={{ background: catColor, color: '#fff' }}>
-                Oluştur
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {/* ── Category Chips ── */}
-      {categories.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 p-1">
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${activeCategory === "all"
-              ? "bg-[var(--text-1)] text-[var(--bg-1)] shadow-lg"
-              : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:shadow-md"
-              }`}
-          >
-            Tümü
-            <span className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] ${activeCategory === "all" ? "bg-[var(--bg-1)] text-[var(--text-1)]" : "bg-[var(--surface-3)] text-[var(--text-3)]"
-              }`}>
-              {services.length}
-            </span>
-          </button>
-          {categories.map((cat) => {
-            const count = services.filter((s) => s.category === cat.id).length;
-            const isActive = activeCategory === cat.id;
-            return (
-              <div key={cat.id} className="group relative inline-flex items-center gap-1.5">
-                <button
-                  onClick={() => setActiveCategory(isActive ? "all" : cat.id)}
-                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 hover:scale-[1.02] ${isActive
-                    ? "text-white shadow-lg"
-                    : "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] hover:shadow-md"
-                    }`}
-                  style={isActive ? { backgroundColor: cat.color, borderColor: cat.color } : undefined}
-                >
-                  <ServiceCategoryIcon icon={cat.icon} name={cat.name} size={17} />
-                  {cat.name}
-                  {count > 0 && (
-                    <span className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] ${isActive ? "bg-black/20 text-white" : "bg-[var(--surface-3)] text-[var(--text-3)]"
-                      }`}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-                <div className="flex items-center gap-1 overflow-hidden opacity-100 transition-all sm:max-w-0 sm:opacity-0 sm:group-hover:max-w-20 sm:group-hover:opacity-100 sm:group-focus-within:max-w-20 sm:group-focus-within:opacity-100">
-                  <button
-                    type="button"
-                    onClick={() => startEditCategory(cat)}
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
-                    title="Kategoriyi Düzenle"
-                    aria-label={`${cat.name} kategorisini düzenle`}
-                  >
-                    <Pencil size={15} strokeWidth={2.5} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCategory(cat.id)}
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-500 hover:text-white"
-                    title="Kategoriyi Sil"
-                    aria-label={`${cat.name} kategorisini sil`}
-                  >
-                    <Trash2 size={15} strokeWidth={2.5} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {!showCategoryForm && (
-            <button
-              onClick={() => setShowCategoryForm(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border-2 border-dashed border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-3)] transition-all hover:border-[var(--text-1)] hover:text-[var(--text-1)] hover:bg-[var(--surface-2)]"
-            >
-              <Plus size={16} /> Yeni
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ━━━ SERVICE CREATE FORM ━━━ */}
-      {showForm && (
-        <Card title="Yeni Hizmet Ekle" description="Hizmet detaylarını ve fiyatlandırmasını belirleyin">
-          <form onSubmit={handleCreateService} className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Input
-                label="Hizmet Adı *"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Örn: Klasik Cilt Bakımı"
-                required
-              />
-              <div className="relative">
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">
-                  Kategori *
-                </label>
-                <div className="relative">
-                  <select
-                    value={serviceCategory}
-                    onChange={(e) => setServiceCategory(e.target.value)}
-                    required
-                    className="w-full appearance-none rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm font-medium text-[var(--text-1)] transition hover:border-[var(--text-3)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                  >
-                    <option value="" disabled>Kategori seçin...</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        <ServiceCategoryIcon icon={cat.icon} name={cat.name} size={18} /> {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-4 top-3.5 text-[var(--text-3)] pointer-events-none" />
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">
-                Açıklama
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                className="w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm font-medium text-[var(--text-1)] placeholder:text-[var(--text-3)]/60 transition hover:bg-[var(--field-bg-hover)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                placeholder="Hizmetin içeriği hakkında müşterilerinize kısa bir bilgi verin..."
-              />
-            </div>
-            
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Input
-                label="Fiyat (₺) *"
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-              />
-              <Input
-                label="Süre (dk) *"
-                type="number"
-                step="5"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 mt-2">
-              <p className="flex items-center gap-2 text-xs font-medium text-[var(--text-3)]">
-                <Info size={14} className="text-[var(--accent)]" /> Zorunlu alanları (*) doldurduğunuzdan emin olun.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="secondary" type="button" onClick={() => setShowForm(false)} className="px-5 font-semibold">
-                  İptal
-                </Button>
-                <Button type="submit" className="gap-2 bg-[var(--text-1)] text-[var(--bg-1)] hover:bg-[var(--text-2)] font-bold px-6 border-0">
-                  <Scissors size={16} /> Hizmet Ekle
-                </Button>
-              </div>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {/* ━━━ SERVICE LIST ━━━ */}
       {services.length === 0 ? (
         <EmptyState
-          title="Müşterilerinize sunacağınız hizmetleri ekleyin"
-          description="Randevu alabilecekleri hizmetler oluşturarak hemen kazanmaya başlayın."
+          mascot="wave"
+          title={categories.length ? "İlk hizmetinizi ekleyin" : "Hizmet menünüzü birlikte kuralım"}
+          description={categories.length
+            ? "Müşterilerin randevu alacağı hizmetleri ekleyin; süre ve fiyatı belirleyin."
+            : `${sectorLabel} sektörüne uygun hazır başlıkları tek dokunuşla yükleyebilir veya kendi hizmetinizi ekleyebilirsiniz.`}
+          action={<>
+            <Button variant="primary" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>Hazır kütüphaneden başla</Button>
+            <Button variant="secondary" icon={categories.length ? Plus : FolderOpen} onClick={() => categories.length ? openCreate() : setCategoryEditor({ key: nextKey(), category: null })}>{categories.length ? "Hizmet ekle" : "Kategori oluştur"}</Button>
+          </>}
         />
-      ) : activeCategory === "all" ? (
-        /* ── Grouped by category ── */
-        <div className="space-y-8 mt-4">
-          {categories.map((cat) => {
-            const catServices = grouped[cat.id] ?? [];
-            if (catServices.length === 0) return null;
-            return (
-              <div key={cat.id} className="animate-[fadeSlideIn_0.4s_ease]">
-                <div className="mb-4 flex items-center gap-3">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-xl shadow-sm"
-                    style={{ backgroundColor: cat.color + "20", border: `1px solid ${cat.color}40` }}
-                  >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--surface-3)]"><ServiceCategoryIcon icon={cat.icon} name={cat.name} size={21} /></span>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-[var(--text-1)]">{cat.name}</h3>
-                    <p className="text-xs font-medium text-[var(--text-3)]">{catServices.length} Aktif Hizmet</p>
-                  </div>
-                </div>
-                <div className="grid gap-3">
-                  {catServices.map((item) => (
-                    <ServiceCard
-                      key={`${item.id}:${item.price}`}
-                      service={item}
-                      categoryMeta={getCategoryMeta(item.category)}
-                      onToggle={async () => {
-                        await handleToggleService(item);
-                      }}
-                      onDelete={async () => {
-                        await removeService(businessId!, item.id);
-                        await reload();
-                        toast.success("Hizmet silindi.");
-                      }}
-                      onEdit={() => startEdit(item)}
-                      onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {/* Uncategorized */}
-          {uncategorized.length > 0 && (
-            <div className="animate-[fadeSlideIn_0.5s_ease]">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-3)]">
-                  <FolderOpen size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-[var(--text-2)]">Kategorisiz Hizmetler</h3>
-                  <p className="text-xs font-medium text-[var(--text-3)]">{uncategorized.length} Hizmet</p>
-                </div>
-              </div>
-              <div className="grid gap-3">
-                {uncategorized.map((item) => (
-                  <ServiceCard
-                    key={`${item.id}:${item.price}`}
-                    service={item}
-                    categoryMeta={undefined}
-                    onToggle={async () => {
-                      await handleToggleService(item);
-                    }}
-                    onDelete={async () => {
-                      await removeService(businessId!, item.id);
-                      await reload();
-                      toast.success("Hizmet silindi.");
-                    }}
-                    onEdit={() => startEdit(item)}
-                    onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       ) : (
-        /* ── Filtered view ── */
-        <div className="grid gap-3 mt-4">
-          {filteredServices.length === 0 ? (
-            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] p-12 text-center shadow-sm">
-              <FolderOpen size={48} className="mx-auto text-[var(--text-3)] opacity-50" strokeWidth={1} />
-              <h3 className="mt-4 text-lg font-bold text-[var(--text-1)]">Bu kategoride hizmet yok</h3>
-              <p className="mt-2 text-sm text-[var(--text-3)] max-w-md mx-auto">
-                Bu kategori için yeni bir hizmet ekleyerek müşterilerinize sunmaya başlayın.
-              </p>
-              <Button onClick={() => setShowForm(true)} className="mt-6 gap-2 bg-[var(--text-1)] text-[var(--bg-1)]">
-                <Plus size={16} /> Yeni Hizmet Ekle
-              </Button>
-            </div>
-          ) : (
-            filteredServices.map((item) => (
-              <ServiceCard
-                key={`${item.id}:${item.price}`}
-                service={item}
-                categoryMeta={getCategoryMeta(item.category)}
-                onToggle={async () => {
-                  await handleToggleService(item);
-                }}
-                onDelete={async () => {
-                  await removeService(businessId!, item.id);
-                  await reload();
-                  toast.success("Hizmet silindi.");
-                }}
-                onEdit={() => startEdit(item)}
-                onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
+        <>
+          <div className={ws.stackSm}>
+            <Toolbar>
+              <SearchField value={search} onChange={setSearch} placeholder="Hizmet ara" />
+              <SegmentedControl
+                ariaLabel="Hizmet durumu"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: "all", label: "Tümü", count: statusCounts.all },
+                  { value: "live", label: "Yayında", count: statusCounts.live },
+                  { value: "paused", label: "Pasif", count: statusCounts.paused },
+                  ...(statusCounts.draft ? [{ value: "draft" as const, label: "Fiyat bekleyen", count: statusCounts.draft }] : []),
+                ]}
               />
-            ))
-          )}
-        </div>
-      )}
-
-      {/* ━━━ SECTOR TEMPLATE PICKER ━━━ */}
-      {showTemplatePicker && createPortal(
-        <div className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#06150e]/80 px-3 py-5 backdrop-blur-xl sm:px-6 sm:py-10" onMouseDown={(event) => { if (event.target === event.currentTarget && !templateBusy) setShowTemplatePicker(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="template-picker-title" className="relative my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/70 bg-[var(--bg-1)] shadow-[0_45px_120px_rgba(2,20,12,.48)]">
-            <header className="services-template-modal-header relative shrink-0 overflow-hidden border-b border-[var(--border)] px-5 py-6 text-white sm:px-8">
-              <div className="pointer-events-none absolute -right-12 -top-24 h-56 w-56 rounded-full bg-[var(--dash-bright)]/25 blur-2xl" />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/12 text-[#dafa83] shadow-xl"><Layers3 size={23} /></span><div><div className="flex flex-wrap items-center gap-2"><p className="text-[9px] font-black tracking-[.18em] text-[#dafa83]">AKILLI HİZMET KÜTÜPHANESİ</p><span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-white/80">{businessTypeLabel}</span></div><h2 id="template-picker-title" className="mt-1 text-xl font-extrabold sm:text-2xl">{sectorLabel} hizmet gruplarını seçin</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/65">{businessTypeLabel} için uygun ana başlıkları seçin; içlerindeki hazır hizmetler otomatik yüklensin. Hizmetler fiyat girilene kadar müşterilere gösterilmez.</p></div></div>
-                <button type="button" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/10 transition hover:rotate-6 hover:bg-white hover:text-[#073d29]" aria-label="Kategori seçiciyi kapat"><X size={18} /></button>
+            </Toolbar>
+            {categories.length > 0 && (
+              <div className={ws.chips} role="toolbar" aria-label="Kategori filtresi">
+                <button type="button" className={cx(ws.chip, activeCategory === "all" && ws.chipActive)} aria-pressed={activeCategory === "all"} onClick={() => setActiveCategory("all")}>Tümü <span className={ws.chipCount}>{services.length}</span></button>
+                {categories.map((cat) => {
+                  const count = services.filter((s) => s.category === cat.id).length;
+                  const active = activeCategory === cat.id;
+                  return (
+                    <button key={cat.id} type="button" className={cx(ws.chip, active && ws.chipActive)} aria-pressed={active} onClick={() => setActiveCategory(active ? "all" : cat.id)}>
+                      <ServiceCategoryIcon icon={cat.icon} name={cat.name} size={16} />{cat.name}<span className={ws.chipCount}>{count}</span>
+                    </button>
+                  );
+                })}
+                {uncategorized.length > 0 && <button type="button" className={cx(ws.chip, activeCategory === UNCATEGORIZED && ws.chipActive)} aria-pressed={activeCategory === UNCATEGORIZED} onClick={() => setActiveCategory(activeCategory === UNCATEGORIZED ? "all" : UNCATEGORIZED)}><FolderOpen size={15} /> Kategorisiz <span className={ws.chipCount}>{uncategorized.length}</span></button>}
               </div>
-              <div className="relative mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur"><Search size={15} className="text-[var(--dash-bright)]"/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Başlık veya hizmet ara…" className="w-full bg-transparent text-xs text-white outline-none placeholder:text-white/45"/></label><div className="services-template-modal-stats flex items-center gap-2 text-[10px] font-bold"><span className="rounded-full bg-white/10 px-3 py-2">{missingTemplates.length} hizmet grubu</span><span className="is-selected rounded-full bg-[var(--dash-bright)] px-3 py-2 text-[var(--dash-deep)]">{selectedServiceCount} hizmet eklenecek</span></div></div>
-            </header>
-
-            <div className="services-template-modal-body min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-7">
-              {missingTemplates.length === 0 ? <div className="grid min-h-64 place-items-center text-center"><div><span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-500/10 text-emerald-600"><PackageCheck size={30}/></span><h3 className="mt-4 text-lg font-extrabold text-[var(--text-1)]">Hizmet kütüphanesi tamamlandı</h3><p className="mt-2 text-sm text-[var(--text-3)]">{businessTypeLabel} için uygun hizmetlerin tamamı işletmenizde.</p></div></div> : visibleTemplates.length === 0 ? <div className="grid min-h-52 place-items-center text-center text-sm text-[var(--text-3)]">Aramanızla eşleşen başlık veya hizmet bulunamadı.</div> : <div className="grid gap-3 sm:grid-cols-2">{visibleTemplates.map((template,index) => { const selected = selectedTemplates.includes(template.name); const missingCount = missingServiceCountForTemplate(template); return <button key={template.name} type="button" onClick={() => toggleTemplate(template.name)} aria-pressed={selected} className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:shadow-xl ${selected ? "border-[var(--accent)] bg-emerald-500/[.08] shadow-lg shadow-emerald-900/10" : "border-[var(--border)] bg-[var(--surface-1)]"}`} style={{ animationDelay: `${index * 35}ms` }}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-xl shadow-sm" style={{ backgroundColor: `${template.color}18`, border: `1px solid ${template.color}28` }}><ServiceCategoryIcon icon={template.icon} name={template.name} size={22}/></span><div className="min-w-0 flex-1"><b className="block text-sm text-[var(--text-1)]">{template.name}</b><p className="mt-1 text-[10px] leading-4 text-[var(--text-3)]">{template.description}</p><small className="mt-2 block text-[9px] font-black uppercase tracking-wider" style={{ color: template.color }}>{missingCount} yeni hizmet eklenecek</small></div><i className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border transition ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] bg-[var(--surface-2)] text-transparent"}`}><Check size={13} strokeWidth={3}/></i></div><div className="mt-3 flex flex-wrap gap-1.5">{template.services.slice(0,4).map((item) => <span key={item.name} className="rounded-full bg-[var(--surface-2)] px-2 py-1 text-[9px] font-semibold text-[var(--text-3)]">{item.name}</span>)}{template.services.length > 4 && <span className="rounded-full px-2 py-1 text-[9px] font-bold" style={{ backgroundColor: `${template.color}14`, color: template.color }}>+{template.services.length - 4} hizmet</span>}</div><span className="absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 transition group-hover:scale-x-100" style={{ backgroundColor: template.color }}/></button>; })}</div>}
-            </div>
-
-            <footer className="services-template-modal-footer flex shrink-0 flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8"><div className="flex gap-2">{missingTemplates.length > 0 && <button type="button" onClick={() => setSelectedTemplates(selectedTemplates.length === missingTemplates.length ? [] : missingTemplates.map((item) => item.name))} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--accent)] transition hover:bg-[var(--surface-3)]">{selectedTemplates.length === missingTemplates.length ? "Seçimi temizle" : "Tümünü seç"}</button>}</div><div className="flex gap-2"><Button type="button" variant="secondary" disabled={templateBusy} onClick={() => setShowTemplatePicker(false)}>Vazgeç</Button><Button type="button" disabled={templateBusy || selectedTemplates.length === 0} onClick={handleSeedCategories} className="gap-2 border-0 bg-[var(--accent)] px-5 font-bold text-white shadow-lg">{templateBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/> : <PackageCheck size={16}/>} {templateBusy ? "Yükleniyor…" : `${selectedTemplates.length} başlık ve ${selectedServiceCount} hizmeti ekle`}</Button></div></footer>
-          </section>
-        </div>,
-        document.body,
-      )}
-
-      {/* ━━━ CATEGORY EDIT MODAL ━━━ */}
-      {editingCategory && createPortal(
-        <div
-          className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#06150e]/75 px-3 py-5 backdrop-blur-xl sm:px-6 sm:py-10"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setEditingCategory(null);
-          }}
-        >
-          <form
-            onSubmit={handleUpdateCategory}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-category-title"
-            className="relative my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-white/70 bg-[var(--bg-1)] shadow-[0_45px_120px_rgba(2,20,12,.42)]"
-          >
-            <header className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[linear-gradient(135deg,var(--surface-1),color-mix(in_srgb,var(--accent)_9%,var(--surface-1)))] px-5 py-5 sm:px-7">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: editCatColor }}><ServiceCategoryIcon icon={editCatIcon} name={editCatName} size={23} /></span>
-                <div className="min-w-0"><p className="text-[9px] font-black tracking-[.15em] text-[var(--accent)]">KATEGORİ STÜDYOSU</p><h3 id="edit-category-title" className="mt-1 truncate text-xl font-extrabold text-[var(--text-1)]">Kategoriyi düzenle</h3></div>
-              </div>
-              <button type="button" onClick={() => setEditingCategory(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)]" aria-label="Kategori düzenlemeyi kapat"><X size={18} /></button>
-            </header>
-
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-7">
-              <Input label="Kategori Adı" value={editCatName} onChange={(event) => setEditCatName(event.target.value)} required />
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]">İkon</p>
-                <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pr-1">
-                  {CATEGORY_ICONS.map((icon, index) => <button key={icon} type="button" onClick={() => setEditCatIcon(icon)} className={`category-icon-option${editCatIcon === icon ? " active" : ""}`} style={{ animationDelay: `${Math.min(index * 18, 280)}ms` }} aria-label={`${icon} ikonunu seç`}><ServiceCategoryIcon icon={icon} size={21} /></button>)}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--text-3)]">Renk</p>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORY_COLORS.map((color) => <button key={color} type="button" onClick={() => setEditCatColor(color)} className={`relative h-10 w-10 rounded-full border-2 transition hover:scale-110 ${editCatColor === color ? "scale-110 border-[var(--text-1)] shadow-lg" : "border-transparent"}`} style={{ backgroundColor: color }} aria-label={`${color} rengini seç`}>{editCatColor === color && <Check size={16} className="absolute inset-0 m-auto text-white" strokeWidth={3} />}</button>)}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><span className="text-xs font-bold text-[var(--text-3)]">ÖNİZLEME</span><div className="flex min-w-0 items-center gap-2 rounded-xl px-4 py-2" style={{ backgroundColor: `${editCatColor}15`, border: `1px solid ${editCatColor}30` }}><ServiceCategoryIcon icon={editCatIcon} name={editCatName} size={20} /><b className="truncate text-sm" style={{ color: editCatColor }}>{editCatName || "Kategori adı"}</b></div></div>
-            </div>
-
-            <footer className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-5 py-4 sm:px-7">
-              <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>İptal</Button>
-              <Button type="submit" className="gap-2 border-0 px-6 font-bold text-white" style={{ backgroundColor: editCatColor }}><Check size={16} /> Kaydet</Button>
-            </footer>
-          </form>
-        </div>,
-        document.body,
-      )}
-
-      {/* ━━━ SERVICE EDIT MODAL ━━━ */}
-      {editingService && createPortal(
-        <div
-          className="fixed inset-0 z-[99999] grid place-items-center overflow-y-auto bg-[#06150e]/75 px-4 py-6 backdrop-blur-xl animate-[fadeIn_0.2s_ease] sm:px-6 sm:py-10"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setEditingService(null);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-service-title"
-            className="relative my-auto flex max-h-[calc(100svh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] border border-white/70 bg-[var(--bg-1)] shadow-[0_45px_120px_rgba(2,20,12,.42)] animate-[scaleIn_0.3s_ease]"
-          >
-            <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#c9f45b]/20 blur-2xl" />
-            <header className="relative shrink-0 border-b border-[var(--border)] bg-[linear-gradient(135deg,var(--surface-1),color-mix(in_srgb,var(--accent)_9%,var(--surface-1)))] px-6 py-5 sm:px-8 sm:py-6">
-              <div className="flex items-center justify-between">
-                <div className="flex min-w-0 items-center gap-4">
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-white shadow-lg shadow-emerald-900/15">
-                    <Pencil size={20} />
-                  </span>
-                  <div className="min-w-0">
-                  <p className="text-[9px] font-black tracking-[.15em] text-[var(--accent)]">HİZMET STÜDYOSU / DÜZENLE</p>
-                  <h3 id="edit-service-title" className="mt-1 truncate text-xl font-extrabold text-[var(--text-1)] sm:text-2xl">Hizmeti güncelle</h3>
-                  <p className="mt-1 truncate text-xs font-medium text-[var(--text-3)]">
-                    {editingService.name} bilgilerini güncelliyorsunuz
-                  </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingService(null)}
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] text-[var(--text-2)] shadow-sm transition hover:rotate-6 hover:bg-[var(--text-1)] hover:text-[var(--bg-1)]"
-                  aria-label="Düzenleme penceresini kapat"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </header>
-            
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 sm:px-8 sm:py-7">
-              <div className="flex items-start gap-3 rounded-2xl border border-emerald-700/10 bg-emerald-50/80 p-4 text-emerald-950">
-                <Info className="mt-0.5 shrink-0 text-emerald-700" size={17} />
-                <div><p className="text-xs font-bold">Mağaza vitrinin anında güncellenir</p><p className="mt-1 text-[10px] leading-5 text-emerald-900/60">Ad, kategori, süre ve fiyat müşterilerin gördüğü hizmet menüsüne yansır.</p></div>
-              </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Input label="Hizmet Adı" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                <div className="relative">
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">Kategori</label>
-                  <div className="relative">
-                    <select
-                      value={editCategory}
-                      onChange={(e) => setEditCategory(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm font-medium text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                    >
-                      <option value="">Kategorisiz</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-4 top-3.5 text-[var(--text-3)] pointer-events-none" />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">Açıklama</label>
-                <textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  rows={4}
-                  placeholder="Hizmet kapsamını müşterileriniz için kısaca anlatın..."
-                  className="w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm font-medium text-[var(--text-1)] outline-none transition hover:bg-[var(--field-bg-hover)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-                />
-              </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Input label="Fiyat (₺)" type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
-                <Input label="Süre (dk)" type="number" value={editDuration} onChange={(e) => setEditDuration(e.target.value)} />
-              </div>
-            </div>
-            
-            <footer className="relative flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--border)] bg-[var(--surface-2)] px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-              <p className="hidden items-center gap-2 text-[10px] text-[var(--text-3)] sm:flex"><CheckCircle2 size={14} className="text-[var(--accent)]" /> Güvenli güncelleme</p>
-              <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setEditingService(null)} className="px-6 font-semibold">
-                İptal Et
-              </Button>
-              <Button onClick={handleUpdateService} className="gap-2 border-0 bg-[var(--accent)] px-6 font-bold text-white shadow-lg shadow-emerald-900/15 hover:brightness-110 sm:px-8">
-                <Check size={16} /> Değişiklikleri Kaydet
-              </Button>
-              </div>
-            </footer>
-          </section>
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
-
-/* ── Service Card Component ─────────────────────── */
-function ServiceCard({
-  service,
-  categoryMeta,
-  onToggle,
-  onDelete,
-  onEdit,
-  onQuickPrice,
-}: {
-  service: Service;
-  categoryMeta?: ServiceCategory;
-  onToggle: () => void;
-  onDelete: () => void;
-  onEdit: () => void;
-  onQuickPrice: (price: number) => Promise<void>;
-}) {
-  const [quickPrice, setQuickPrice] = useState(String(service.price || ""));
-  const [quickSaving, setQuickSaving] = useState(false);
-
-  async function saveQuickPrice() {
-    const value = Number(quickPrice);
-    if (!Number.isFinite(value) || value <= 0) {
-      toast.error("Fiyat sıfırdan büyük olmalı.");
-      return;
-    }
-    setQuickSaving(true);
-    try {
-      await onQuickPrice(value);
-    } catch (error) {
-      if (error instanceof Error && error.message === "invalid-price") return;
-      toast.error("Fiyat güncellenemedi.");
-    } finally {
-      setQuickSaving(false);
-    }
-  }
-
-  return (
-    <div
-      className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-xl sm:p-5 p-4 ${service.isActive
-        ? "border-[var(--border)] bg-[var(--surface-1)] hover:border-[var(--accent)]/40 hover:-translate-y-1"
-        : "border-rose-500/20 bg-rose-500/5 opacity-75 hover:opacity-100"
-        }`}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h4 className="text-lg font-bold tracking-tight text-[var(--text-1)] group-hover:text-[var(--accent)] transition-colors">
-              {service.name}
-            </h4>
-            
-            {!service.isActive && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-rose-500 border border-rose-500/20">
-                <Pause size={10} strokeWidth={3} /> Pasif
-              </span>
-            )}
-            
-            {categoryMeta && (
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border"
-                style={{
-                  backgroundColor: categoryMeta.color + "10",
-                  color: categoryMeta.color,
-                  borderColor: categoryMeta.color + "25"
-                }}
-              >
-                <ServiceCategoryIcon icon={categoryMeta.icon} name={categoryMeta.name} size={14} /> {categoryMeta.name}
-              </span>
             )}
           </div>
-          
-          {service.description ? (
-            <p className="mt-1.5 text-xs font-medium leading-relaxed text-[var(--text-3)] line-clamp-2 max-w-2xl">
-              {service.description}
-            </p>
+
+          {statusFilter === "draft" && statusCounts.draft > 0 ? (
+            <div className={styles.draftHint} role="status"><Sparkles size={16} aria-hidden="true" /> Fiyat bekleyen hizmetlerin fiyatını yazıp ✓ ile kaydedin; hizmet otomatik yayına alınır.</div>
+          ) : null}
+
+          {visibleCount === 0 ? (
+            <EmptyState
+              compact
+              mascot="thinking"
+              title={filtering ? "Eşleşen hizmet yok" : "Bu kategoride hizmet yok"}
+              description={filtering ? "Aramayı veya filtreyi değiştirmeyi deneyin." : "Bu kategoriye ilk hizmeti ekleyerek müşterilerinize sunmaya başlayın."}
+              action={filtering
+                ? <Button variant="soft" onClick={() => { setSearch(""); setStatusFilter("all"); }}>Filtreleri temizle</Button>
+                : <Button variant="primary" icon={Plus} onClick={() => openCreate(activeCategory)}>Hizmet ekle</Button>}
+            />
           ) : (
-            <p className="mt-1 text-xs italic text-[var(--text-3)]/50">
-              Açıklama bulunmuyor
-            </p>
+            <div className={styles.groups}>
+              {groups.map((group) => (
+                <section key={group.id} className={styles.group} aria-labelledby={`group-${group.id}`} style={{ "--cat-color": group.category?.color ?? "var(--dui-faint)" } as React.CSSProperties}>
+                  <header className={styles.groupHead}>
+                    <span className={styles.catIcon} aria-hidden="true">{group.category ? <ServiceCategoryIcon icon={group.category.icon} name={group.category.name} size={19} /> : <FolderOpen size={18} />}</span>
+                    <div className={styles.groupTitle}>
+                      <h2 id={`group-${group.id}`}>{group.category?.name ?? "Kategorisiz hizmetler"}</h2>
+                      <p>{group.items.length} hizmet{filtering ? ` · ${group.all.length} içinden` : ""}</p>
+                    </div>
+                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => openCreate(group.id)} aria-label={`${group.category?.name ?? "Kategorisiz"} grubuna hizmet ekle`}>Ekle</Button>
+                  </header>
+                  <div className={styles.groupList}>
+                    {group.items.map((item, index) => (
+                      <ServiceRow
+                        key={`${item.id}:${item.price}`}
+                        service={item}
+                        category={group.category}
+                        staffCount={staffCountByService[item.id] ?? 0}
+                        order={filtering ? undefined : { canUp: index > 0, canDown: index < group.items.length - 1, onUp: () => void moveService(group.all, index, -1), onDown: () => void moveService(group.all, index, 1), busy: orderBusy }}
+                        onEdit={() => setEditor({ key: nextKey(), service: item })}
+                        onToggle={() => handleToggleService(item)}
+                        onDelete={() => void handleDeleteService(item)}
+                        onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
-          
-          <div className="mt-3.5 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-2)] bg-[var(--surface-3)] px-2.5 py-1 rounded-lg">
-              <Clock size={14} className="text-[var(--text-3)]" /> 
-              {service.durationMinutes} dakika
-            </div>
-            <div className="flex items-center overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)] shadow-sm transition focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--ring)]">
-              <label htmlFor={`quick-price-${service.id}`} className="pl-3 text-[9px] font-black uppercase tracking-wider text-[var(--text-3)]">Fiyat</label>
-              <input
-                id={`quick-price-${service.id}`}
-                type="number"
-                min="1"
-                step="1"
-                inputMode="decimal"
-                value={quickPrice}
-                onChange={(event) => setQuickPrice(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
-                placeholder="0"
-                aria-label={`${service.name} fiyatı`}
-                className="w-24 bg-transparent px-2 py-2 text-right text-sm font-extrabold text-[var(--text-1)] outline-none"
-              />
-              <span className="border-l border-[var(--border)] px-2 text-sm font-black text-[var(--accent)]">₺</span>
-              <button
-                type="button"
-                onClick={() => void saveQuickPrice()}
-                disabled={quickSaving || Number(quickPrice) === service.price}
-                className="grid self-stretch w-10 place-items-center bg-[var(--accent)] text-white transition hover:bg-[var(--accent-2)] disabled:cursor-not-allowed disabled:bg-[var(--surface-3)] disabled:text-[var(--text-3)]"
-                aria-label={`${service.name} fiyatını kaydet`}
-                title="Fiyatı kaydet"
-              >
-                {quickSaving ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"/> : <Check size={15} strokeWidth={3}/>}
-              </button>
-            </div>
-            {service.templateDraft && <span className="text-[10px] font-semibold text-emerald-700">Fiyatı kaydedince otomatik yayınlanır</span>}
-          </div>
-        </div>
-        
-        <div className="flex shrink-0 items-center gap-2 border-t sm:border-t-0 sm:border-l border-[var(--border)] pt-4 sm:pt-0 sm:pl-5">
-          <button
-            onClick={onEdit}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] shadow-sm transition-all hover:scale-105 hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
-            title="Hizmeti Düzenle"
-          >
-            <Pencil size={18} strokeWidth={2.5} />
-          </button>
-          <button
-            onClick={onToggle}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all hover:scale-105 ${service.isActive
-              ? "border-amber-500/20 bg-amber-500/10 text-amber-600 hover:bg-amber-500 hover:text-white"
-              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white"
-              }`}
-            title={service.isActive ? "Hizmeti Duraklat" : "Hizmeti Aktifleştir"}
-          >
-            {service.isActive ? <Pause size={18} strokeWidth={2.5} /> : <Play size={18} strokeWidth={2.5} />}
-          </button>
-          <button
-            onClick={onDelete}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 shadow-sm transition-all hover:scale-105 hover:bg-rose-500 hover:text-white"
-            title="Hizmeti Sil"
-          >
-            <Trash2 size={18} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+
+      {businessId && editor ? (
+        <ServiceEditorSheet
+          key={editor.key}
+          open
+          businessId={businessId}
+          service={editor.service}
+          categories={categories}
+          staff={staff}
+          defaultCategoryId={editor.categoryId}
+          nextSortOrder={services.length}
+          onClose={() => setEditor(null)}
+          onSaved={reload}
+        />
+      ) : null}
+
+      <TemplateLibrarySheet
+        key={showTemplatePicker ? "library-open" : "library-closed"}
+        open={showTemplatePicker}
+        sectorLabel={sectorLabel}
+        businessTypeLabel={businessTypeLabel}
+        templates={missingTemplates}
+        missingCount={missingServiceCountForTemplate}
+        busy={templateBusy}
+        onClose={() => setShowTemplatePicker(false)}
+        onSubmit={handleSeedCategories}
+      />
+
+      <CategoryManagerSheet
+        open={showCategories && !categoryEditor && !deletingCategory}
+        categories={categories}
+        services={services}
+        seededCount={seededCategories.length}
+        busy={orderBusy || templateBusy}
+        onClose={() => setShowCategories(false)}
+        onCreate={() => setCategoryEditor({ key: nextKey(), category: null })}
+        onEdit={(category) => setCategoryEditor({ key: nextKey(), category })}
+        onDelete={(category) => setDeletingCategory(category)}
+        onMove={(index, direction) => void moveCategory(index, direction)}
+        onRemoveTemplates={() => void handleRemoveTemplateCategories()}
+      />
+
+      {categoryEditor ? (
+        <CategoryEditorSheet
+          key={categoryEditor.key}
+          open
+          category={categoryEditor.category}
+          categories={categories}
+          onClose={() => setCategoryEditor(null)}
+          onSubmit={(input) => handleSubmitCategory(categoryEditor.category, input)}
+        />
+      ) : null}
+
+      <DeleteCategorySheet
+        key={deletingCategory?.id ?? "none"}
+        open={Boolean(deletingCategory)}
+        category={deletingCategory}
+        categories={categories}
+        services={services}
+        staff={staff}
+        onClose={() => setDeletingCategory(null)}
+        onConfirm={(replacementId) => handleDeleteCategory(deletingCategory!.id, replacementId)}
+      />
+      {dialog}
+    </DashPage>
   );
 }

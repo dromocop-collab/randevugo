@@ -1,9 +1,12 @@
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { createProfessionMetadata } from "@/lib/profession-seo";
 
+// Kategori işletme listesi saatte bir yenilenir.
+export const revalidate = 3600;
+
 export const metadata = createProfessionMetadata({
   title: "Yazılım ve Web Danışmanlığı Randevusu",
-  description: "Web tasarım, yazılım geliştirme ve dijital danışmanlık hizmeti veren işletmeleri keşfedin; uzmanlarla online görüşme randevusu alın.",
+  description: "Web tasarım, yazılım geliştirme ve dijital danışmanlık hizmeti veren uzmanları keşfet; projen için uygun saatte online görüşme randevusu al.",
   pathname: "/yazilim-web-randevu",
   category: "yazilim",
 });

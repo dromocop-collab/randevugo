@@ -1,0 +1,221 @@
+/* İşletme paneli kabuğu: masaüstünde daraltılabilir yan menü, mobilde alt menü + "Daha fazla" sayfası.
+   Renkler görünüm temasından (--dash-*) türeyen --dui-* token'larından gelir (ui/dash-ui.module.css). */
+
+.shell {
+  --sidebar-w: 264px;
+  --topbar-h: 60px;
+  --bottom-nav-h: 66px;
+  --gutter: 16px;
+  position: relative;
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background:
+    radial-gradient(900px 480px at 0% 0%, rgb(var(--dui-rgb) / 0.09), transparent 70%),
+    radial-gradient(800px 420px at 100% 0%, color-mix(in srgb, var(--dui-bright) 10%, transparent), transparent 70%),
+    var(--dui-bg);
+  color: var(--dui-ink);
+}
+/* Eski sayfaların kullandığı genel değişkenler aynı paletle eşlenir (globals.css .dashboard-v2'yi ezer). */
+.shell:global(.dashboard-v2) {
+  min-height: 100dvh;
+  isolation: auto;
+  color: var(--dui-ink);
+  --bg-0: var(--dui-bg);
+  --bg-1: var(--dui-card);
+  --bg-2: var(--dui-card-2);
+  --bg-3: var(--dui-soft);
+  --text-1: var(--dui-ink);
+  --text-2: var(--dui-ink-2);
+  --text-3: var(--dui-muted);
+  --border: var(--dui-line-strong);
+  --surface-1: var(--dui-card);
+  --surface-2: var(--dui-card-2);
+  --surface-3: var(--dui-soft);
+  --field-bg: var(--dui-card);
+  --field-bg-hover: var(--dui-card-2);
+  --accent: var(--dui-core);
+  --accent-2: color-mix(in srgb, var(--dui-core) 78%, #fff);
+  --accent-3: var(--dui-bright);
+  --ring: rgb(var(--dui-rgb) / 0.26);
+}
+/* globals.css'teki eski çerçeve katmanları yeni kabukta kullanılmaz. */
+.shell:global(.dashboard-v2)::before,
+.shell:global(.dashboard-v2)::after { content: none; display: none; }
+:global(html):has(.shell), :global(body):has(.shell) { background: var(--dash-page, #eef5ef); }
+:global(:root[data-theme="dark"]):has(.shell) :global(body) { background: #070908; }
+
+@media (min-width: 1024px) {
+  .shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); --gutter: 28px; --topbar-h: 68px; }
+  .shell[data-sidebar="collapsed"] { --sidebar-w: 84px; }
+}
+
+.skipLink {
+  position: absolute; left: 12px; top: -60px; z-index: 400;
+  padding: 10px 14px; border-radius: 12px;
+  background: var(--dui-core); color: #fff; font-weight: 700; font-size: 13px;
+}
+.skipLink:focus { top: 12px; }
+
+.main { min-width: 0; display: flex; flex-direction: column; }
+.content {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 14px var(--gutter) calc(var(--bottom-nav-h) + 28px + env(safe-area-inset-bottom));
+  outline: none;
+}
+@media (min-width: 1024px) {
+  .content { padding: 22px var(--gutter) 40px; }
+}
+.content > * + * { margin-top: 14px; }
+
+/* ── Yan menü (≥1024px) ── */
+.sidebar { display: none; }
+@media (min-width: 1024px) {
+  .sidebar {
+    position: sticky; top: 0;
+    align-self: start;
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+    min-width: 0;
+    padding: 18px 12px 12px;
+    border-right: 1px solid var(--dui-line);
+    background: color-mix(in srgb, var(--dui-card) 72%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    z-index: 40;
+  }
+}
+.brand {
+  display: flex; align-items: center; gap: 11px;
+  min-width: 0;
+  padding: 4px 8px 16px;
+  color: inherit; text-decoration: none;
+}
+.brandLogo { flex: none; border-radius: 11px; box-shadow: 0 6px 16px rgb(var(--dui-rgb) / 0.22); }
+.brandText { min-width: 0; display: flex; flex-direction: column; }
+.brandText small { font-size: 9.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dui-accent-ink); }
+.brandText b { font-size: 14.5px; font-weight: 780; letter-spacing: -0.01em; color: var(--dui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sideNav { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 14px; padding: 2px 2px 12px; scrollbar-width: thin; scrollbar-color: var(--dui-line-strong) transparent; }
+.sideGroup { display: flex; flex-direction: column; gap: 2px; }
+.sideGroupLabel { margin: 0 0 4px; padding: 0 12px; font-size: 10px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dui-faint); white-space: nowrap; overflow: hidden; }
+.sideLink {
+  position: relative;
+  display: flex; align-items: center; gap: 11px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 13px;
+  color: var(--dui-ink-2);
+  font-size: 13.5px; font-weight: 640;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s;
+}
+.sideLink:hover { background: var(--dui-hover); color: var(--dui-ink); }
+.sideLink:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.sideIcon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 10px; color: var(--dui-muted); transition: background 0.18s, color 0.18s; }
+.sideLink:hover .sideIcon { color: var(--dui-ink); }
+.sideLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sideLinkActive { background: var(--dui-accent-bg); color: var(--dui-ink); font-weight: 760; }
+.sideLinkActive::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--dui-core); }
+.sideLinkActive .sideIcon { background: var(--dui-core); color: var(--dui-on-core); box-shadow: 0 6px 14px rgb(var(--dui-rgb) / 0.3); }
+.sideLinkAdmin .sideIcon { color: #e11d48; }
+.collapseBtn {
+  display: flex; align-items: center; gap: 11px;
+  min-height: 42px; margin-top: 6px; padding: 0 16px;
+  border: 1px solid var(--dui-line); border-radius: 13px;
+  background: transparent; color: var(--dui-muted);
+  font: inherit; font-size: 12.5px; font-weight: 680;
+  cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.collapseBtn:hover { background: var(--dui-hover); color: var(--dui-ink); }
+.collapseBtn:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.collapseBtn svg { flex: none; }
+
+/* Daraltılmış yan menü: yalnızca ikonlar */
+.shell[data-sidebar="collapsed"] .sidebar { padding-left: 14px; padding-right: 14px; }
+.shell[data-sidebar="collapsed"] .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+.shell[data-sidebar="collapsed"] .brandText,
+.shell[data-sidebar="collapsed"] .sideLabel { display: none; }
+.shell[data-sidebar="collapsed"] .sideGroupLabel { height: 1px; margin: 4px 10px 8px; padding: 0; background: var(--dui-line); color: transparent; }
+.shell[data-sidebar="collapsed"] .sideLink { justify-content: center; padding: 0; }
+.shell[data-sidebar="collapsed"] .collapseBtn { justify-content: center; padding: 0; }
+
+/* ── Alt menü (<1024px) ── */
+.bottomNav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  padding: 0 10px env(safe-area-inset-bottom);
+  border-top: 1px solid var(--dui-line);
+  background: color-mix(in srgb, var(--dui-card) 95%, transparent);
+  backdrop-filter: saturate(1.4) blur(18px);
+  -webkit-backdrop-filter: saturate(1.4) blur(18px);
+  box-shadow: 0 -10px 30px rgb(var(--dui-rgb) / 0.08);
+}
+.bottomNav ul { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; height: var(--bottom-nav-h); margin: 0 auto; padding: 0; max-width: 560px; list-style: none; }
+.bottomNav li { min-width: 0; display: flex; justify-content: center; }
+.bottomLink {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  width: 100%; min-width: 0; height: 56px;
+  border: 0; border-radius: 16px;
+  background: transparent; color: var(--dui-muted);
+  font: inherit; font-size: 10.5px; font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s;
+}
+.bottomLink:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.bottomIcon { display: grid; place-items: center; width: 44px; height: 28px; border-radius: 999px; transition: background 0.2s, transform 0.2s var(--dui-ease); }
+.bottomLabel { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bottomLinkActive { color: var(--dui-ink); }
+.bottomLinkActive .bottomIcon { background: var(--dui-accent-bg); color: var(--dui-accent-ink); }
+.bottomLink:active .bottomIcon { transform: scale(0.92); }
+.fab {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; margin-top: -22px;
+  border: 4px solid var(--dui-bg); border-radius: 20px;
+  background: linear-gradient(145deg, var(--dui-core), color-mix(in srgb, var(--dui-core) 70%, var(--dui-deep)));
+  color: var(--dui-on-core);
+  box-shadow: 0 10px 24px rgb(var(--dui-rgb) / 0.38);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s var(--dui-ease);
+}
+.fab span { display: grid; place-items: center; }
+.fab:active { transform: scale(0.94); }
+.fab:focus-visible { outline: none; box-shadow: var(--dui-focus), 0 10px 24px rgb(var(--dui-rgb) / 0.38); }
+@media (min-width: 1024px) { .bottomNav { display: none; } }
+
+/* Tur sırasında alt menüdeki hedef parlatılır. */
+:global(body.dashboard-tour-active) .bottomNav { z-index: 15001; }
+.bottomNav [data-dashboard-tour-active="true"] .bottomIcon { background: var(--dui-bright); color: var(--dui-deep); }
+
+/* ── "Daha fazla" sayfası ── */
+.moreGroups { display: flex; flex-direction: column; gap: 18px; }
+.moreLabel { margin: 0 0 8px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dui-faint); }
+.moreGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 520px) { .moreGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.moreTile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  min-width: 0; min-height: 88px; padding: 10px 6px;
+  border: 1px solid var(--dui-line); border-radius: 18px;
+  background: var(--dui-card-2); color: var(--dui-ink);
+  font-size: 11.5px; font-weight: 700; line-height: 1.25; text-align: center; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s var(--dui-ease), border-color 0.2s;
+}
+.moreTile > span:last-child { max-width: 100%; overflow-wrap: anywhere; }
+.moreTile:active { transform: scale(0.96); }
+.moreTile:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.moreTileIcon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 14px; background: var(--dui-accent-bg); color: var(--dui-accent-ink); }
+.moreTileActive { border-color: var(--dui-core); }
+.moreTileActive .moreTileIcon { background: var(--dui-core); color: var(--dui-on-core); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sideLink, .sideIcon, .bottomLink, .bottomIcon, .fab, .moreTile { transition: none !important; }
+}

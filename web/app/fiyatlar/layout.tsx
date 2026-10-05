@@ -5,7 +5,7 @@ const SITE_URL = "https://seninrandevun.com";
 
 export const metadata: Metadata = createPublicMetadata({
   title: "Randevu Sistemi Fiyatları",
-  description: "SeninRandevun işletme paketlerini, güncel aylık ve yıllık fiyatları, deneme sürelerini, şube ve çalışan limitlerini karşılaştırın.",
+  description: "SeninRandevun online randevu sistemi paketlerini, güncel aylık ve yıllık fiyatları, deneme sürelerini, şube ve çalışan limitlerini tek sayfada karşılaştırın.",
   keywords: [
     "online randevu sistemi fiyatları",
     "randevu yazılımı fiyat",

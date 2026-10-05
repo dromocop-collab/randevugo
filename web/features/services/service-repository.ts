@@ -30,13 +30,14 @@ export async function listBookableServices(businessId: string): Promise<Service[
 export async function createService(
   businessId: string,
   input: Omit<Service, "id" | "createdAt" | "updatedAt">
-): Promise<void> {
+): Promise<string> {
   const db = getDb();
-  await addDoc(collection(db, "businesses", businessId, "services"), {
+  const created = await addDoc(collection(db, "businesses", businessId, "services"), {
     ...input,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  return created.id;
 }
 
 export async function updateService(

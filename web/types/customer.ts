@@ -12,4 +12,6 @@ export interface Customer extends EntityBase {
   totalSpent: number;
   lastVisitAt?: string;
   notes?: string;
+  /** İşletmenin müşteriye verdiği serbest etiketler (ör. VIP, Hassas cilt). */
+  tags?: string[];
 }

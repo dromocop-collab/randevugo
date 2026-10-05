@@ -1,17 +1,57 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, MapPin, Star, Store } from "lucide-react";
-import type { Business } from "@/types/business";
+import { categoryDisplayName } from "@/lib/seo/categories";
+import { businessPath } from "@/lib/seo/site";
+import styles from "./seo-blocks.module.css";
 
-export function LocalBusinessGrid({ businesses }: { businesses: Business[] }) {
+export type GridBusiness = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  city: string;
+  district?: string;
+  description?: string;
+  coverUrl?: string;
+  logoUrl?: string;
+  rating?: number;
+  reviewCount?: number;
+};
+
+/** Sunucuda çizilen, taranabilir işletme kartları. Kart başlıkları sayfa hiyerarşisine göre h3'tür. */
+export function LocalBusinessGrid({ businesses, headingLevel = "h3" }: { businesses: GridBusiness[]; headingLevel?: "h2" | "h3" }) {
+  const Heading = headingLevel;
   if (businesses.length === 0) {
-    return <div className="rounded-[26px] border border-dashed border-[#0b6b45]/20 bg-white/65 p-10 text-center"><Store className="mx-auto text-[#0b6b45]"/><h2 className="mt-4 text-xl font-bold">Yeni işletmeler hazırlanıyor</h2><p className="mt-2 text-sm text-[#60756a]">Bu alanda doğrulanmış mağaza oluştuğunda liste otomatik güncellenecek.</p></div>;
+    return <div className={styles.empty}><Store aria-hidden="true" /><b>Yeni işletmeler hazırlanıyor</b><p>Bu alanda yayınlanan işletme olduğunda liste otomatik güncellenir.</p></div>;
   }
-  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{businesses.map((business) => {
-    const image = business.coverUrl || business.logoUrl;
-    return <Link key={business.id} href={`/isletme/${business.slug}`} className="group overflow-hidden rounded-[26px] border border-[#153d29]/10 bg-white/85 shadow-[0_18px_50px_rgba(18,55,37,.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(18,55,37,.14)]">
-      <div className="relative h-48 overflow-hidden bg-[#e5f1e8]">{image ? <Image src={image} alt={`${business.name} ${business.district} işletme görseli`} fill sizes="(max-width:768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-105"/> : <Store className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#0b6b45]" size={42}/>}</div>
-      <div className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-[#0b6b45]">{business.category}</p><h2 className="mt-2 text-xl font-bold text-[#10241c]">{business.name}</h2></div><ArrowRight className="text-[#0b6b45] transition group-hover:translate-x-1"/></div><p className="mt-3 line-clamp-2 text-sm leading-6 text-[#60756a]">{business.description || `${business.name} hizmetlerini, fiyatlarını ve uygun randevu saatlerini inceleyin.`}</p><div className="mt-4 flex items-center justify-between border-t border-[#153d29]/8 pt-4 text-xs"><span className="flex items-center gap-1 text-[#60756a]"><MapPin size={14}/>{business.district}, {business.city}</span>{(business.reviewCount ?? 0) > 0 && <span className="flex items-center gap-1 font-bold text-[#10241c]"><Star size={14} className="text-orange-500" fill="currentColor"/>{business.rating.toFixed(1)}</span>}</div></div>
-    </Link>;
-  })}</div>;
+  return (
+    <ul className={styles.grid}>
+      {businesses.map((business) => {
+        const image = business.coverUrl || business.logoUrl;
+        const place = [business.district, business.city].filter(Boolean).join(", ");
+        const rated = (business.reviewCount ?? 0) > 0 && (business.rating ?? 0) > 0;
+        return (
+          <li key={business.id}>
+            <Link href={businessPath(business.slug)} className={styles.card}>
+              <div className={styles.cardMedia}>
+                {image
+                  ? <Image src={image} alt={`${business.name}${place ? ` – ${place}` : ""}`} fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+                  : <Store size={40} aria-hidden="true" />}
+              </div>
+              <div className={styles.cardBody}>
+                <span className={styles.cardCategory}>{categoryDisplayName(business.category)}</span>
+                <Heading className={styles.cardTitle}>{business.name}<ArrowRight size={18} aria-hidden="true" /></Heading>
+                <p className={styles.cardText}>{business.description || `${business.name} hizmetlerini, fiyatlarını ve uygun randevu saatlerini inceleyin.`}</p>
+                <div className={styles.cardMeta}>
+                  <span><MapPin size={14} aria-hidden="true" />{place}</span>
+                  {rated && <span className={styles.cardRating} aria-label={`5 üzerinden ${business.rating!.toFixed(1)} puan`}><Star size={14} fill="currentColor" aria-hidden="true" />{business.rating!.toFixed(1)} <small>({business.reviewCount})</small></span>}
+                </div>
+              </div>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }

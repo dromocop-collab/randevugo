@@ -1,5 +1,10 @@
 import {
+  GoogleAuthProvider,
+  OAuthProvider,
   browserLocalPersistence,
+  getAdditionalUserInfo,
+  signInWithPopup,
+  signInWithRedirect,
   createUserWithEmailAndPassword,
   getAuth,
   sendPasswordResetEmail,
@@ -29,6 +34,36 @@ export async function registerWithEmailPassword(
   await setPersistence(auth, browserLocalPersistence);
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName: fullName });
+}
+
+export type SocialProvider = "google" | "apple";
+
+/**
+ * Google / Apple ile giriş (yoksa hesap otomatik oluşur). Açılır pencere engellenirse yönlendirme akışına düşer.
+ * Dönüş: yeni kullanıcı mı, yoksa yönlendirmeye mi geçildi.
+ */
+export async function signInWithSocial(provider: SocialProvider): Promise<{ isNewUser: boolean; redirected: boolean }> {
+  const auth = getAuthInstance();
+  await setPersistence(auth, browserLocalPersistence);
+  const authProvider = provider === "google" ? new GoogleAuthProvider() : new OAuthProvider("apple.com");
+  if (authProvider instanceof GoogleAuthProvider) {
+    authProvider.setCustomParameters({ prompt: "select_account" });
+  } else {
+    authProvider.addScope("email");
+    authProvider.addScope("name");
+    authProvider.setCustomParameters({ locale: "tr" });
+  }
+  try {
+    const result = await signInWithPopup(auth, authProvider);
+    return { isNewUser: getAdditionalUserInfo(result)?.isNewUser === true, redirected: false };
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+      await signInWithRedirect(auth, authProvider);
+      return { isNewUser: false, redirected: true };
+    }
+    throw error;
+  }
 }
 
 export async function forgotPassword(email: string): Promise<void> {

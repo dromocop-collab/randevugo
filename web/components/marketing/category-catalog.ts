@@ -25,9 +25,36 @@ export const CATEGORY_CATALOG: readonly CatalogCategory[] = [
   { slug: "danismanlik", label: "Danışmanlık", emoji: "📋", description: "Terapi, koçluk ve uzman görüşmesi", image: "/images/categories/danismanlik.png", landing: "/danismanlik-randevu", accent: "#d97706" },
   { slug: "veteriner", label: "Veteriner", emoji: "🐾", description: "Dostların için güvenilir bakım", image: "/images/categories/veteriner.png", landing: "/veteriner-randevu", accent: "#e11d48" },
   { slug: "yazilim", label: "Yazılım & Web", emoji: "💻", description: "Web, mobil ve dijital çözümler", image: "/images/categories/yazilim.png", landing: "/yazilim-web-randevu", accent: "#4f46e5" },
-  { slug: "egitim", label: "Eğitim", emoji: "📚", description: "Kurs, özel ders ve atölyeler", accent: "#0d9488" },
-  { slug: "servis", label: "Servis & Teknik", emoji: "🔧", description: "Tamir, bakım ve teknik servis", accent: "#475569" },
+  { slug: "egitim", label: "Eğitim", emoji: "📚", description: "Kurs, özel ders ve atölyeler", image: "/images/categories/egitim-v2.png", accent: "#0d9488" },
+  { slug: "servis", label: "Servis & Teknik", emoji: "🔧", description: "Tamir, bakım ve teknik servis", image: "/images/categories/servis-v2.png", accent: "#475569" },
 ];
+
+export const FALLBACK_CATEGORY_IMAGE = "/images/categories/diger-v2.png";
+
+// Yönetici veya işletmenin eklediği özel kategoriler için isimden en yakın görsel (ör. "Yazılım – Web – Video" → yazılım).
+const IMAGE_KEYWORDS: Array<[RegExp, string]> = [
+  [/yaz[ıi]l[ıi]m|web|video|dijital|tasar[ıi]m|ajans|foto/, "yazilim"],
+  [/kuaf|sa[çc]/, "kuafor"],
+  [/berber|sakal/, "berber"],
+  [/g[üu]zel|cilt|estetik|lazer|kirpik|ka[şs]/, "guzellik"],
+  [/nail|t[ıi]rnak|man[ıi]k/, "nail"],
+  [/spa|masaj|hamam|sauna/, "spa"],
+  [/spor|fitness|pilates|yoga|pt\b|antrenman/, "spor"],
+  [/sa[ğg]l[ıi]k|klinik|doktor|di[şs]|fizyo|diyet|psikolog/, "saglik"],
+  [/dan[ıi][şs]man|ko[çc]|terapi|hukuk|avukat|muhasebe/, "danismanlik"],
+  [/veteriner|pet|hayvan|kedi|k[öo]pek/, "veteriner"],
+  [/e[ğg]itim|kurs|ders|at[öo]lye|okul|m[üu]zik/, "egitim"],
+  [/servis|tamir|teknik|bak[ıi]m|oto|ara[çc]|klima|temizlik/, "servis"],
+];
+
+/** Kategori için görsel: katalogdaki görsel, yoksa isimden tahmin, yoksa genel görsel. */
+export function categoryImageFor(slug: string, label = ""): string {
+  const known = CATEGORY_CATALOG.find((item) => item.slug === slug)?.image;
+  if (known) return known;
+  const text = `${slug} ${label}`.toLocaleLowerCase("tr-TR");
+  const match = IMAGE_KEYWORDS.find(([pattern]) => pattern.test(text));
+  return match ? CATEGORY_CATALOG.find((item) => item.slug === match[1])?.image ?? FALLBACK_CATEGORY_IMAGE : FALLBACK_CATEGORY_IMAGE;
+}
 
 /** Hızlı erişim çipleri için görselli ilk kategoriler. */
 export const FEATURED_CATEGORIES = CATEGORY_CATALOG.filter((item) => item.image).slice(0, 8);

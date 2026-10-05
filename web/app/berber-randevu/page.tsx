@@ -1,9 +1,12 @@
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { createProfessionMetadata } from "@/lib/profession-seo";
 
+// Kategori işletme listesi saatte bir yenilenir.
+export const revalidate = 3600;
+
 export const metadata = createProfessionMetadata({
-  title: "Berber Randevusu Al | Online Berber Randevu",
-  description: "Yakınınızdaki berberleri keşfedin, saç ve sakal hizmetlerini inceleyin, size uygun saati seçerek online berber randevusu alın.",
+  title: "Berber Randevusu Al – Online ve Ücretsiz",
+  description: "Yakınındaki berberleri keşfet; saç, sakal ve tıraş hizmetlerinin fiyatlarını, yorumlarını ve müsait saatlerini karşılaştırıp online berber randevusu al.",
   pathname: "/berber-randevu",
   category: "berber",
 });

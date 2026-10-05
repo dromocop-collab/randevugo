@@ -1,0 +1,168 @@
+/* Otomasyonlar — kural kartları ve akış kütüphanesi. Renkler _studio --k-* token'larından. */
+
+/* Tetikleyici vurgu tonları */
+.accent { --acc: var(--k-core); --acc-bg: var(--k-tint); }
+.accent[data-accent="rose"] { --acc: #e11d48; --acc-bg: rgb(225 29 72 / 0.1); }
+.accent[data-accent="amber"] { --acc: #b45309; --acc-bg: rgb(245 158 11 / 0.14); }
+.accent[data-accent="violet"] { --acc: #7c3aed; --acc-bg: rgb(124 58 237 / 0.1); }
+.accent[data-accent="ocean"] { --acc: #0369a1; --acc-bg: rgb(14 165 233 / 0.12); }
+:global(:root[data-theme="dark"]) .accent[data-accent="rose"] { --acc: #fb7185; --acc-bg: rgb(251 113 133 / 0.16); }
+:global(:root[data-theme="dark"]) .accent[data-accent="amber"] { --acc: #fbbf24; --acc-bg: rgb(251 191 36 / 0.16); }
+:global(:root[data-theme="dark"]) .accent[data-accent="violet"] { --acc: #c4b5fd; --acc-bg: rgb(167 139 250 / 0.16); }
+:global(:root[data-theme="dark"]) .accent[data-accent="ocean"] { --acc: #7dd3fc; --acc-bg: rgb(56 189 248 / 0.16); }
+
+/* Motor durumu */
+.engine {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-md);
+  background: var(--k-card);
+  box-shadow: var(--k-shadow);
+}
+.engineDot { position: relative; width: 12px; height: 12px; flex: none; border-radius: 50%; background: var(--k-faint); }
+.engineLive { background: var(--k-ok); box-shadow: 0 0 0 5px var(--k-ok-bg); }
+.engineLive::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--k-ok); opacity: 0; animation: ping 2s var(--k-ease) infinite; }
+@keyframes ping { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.8); opacity: 0; } }
+.engineText { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.engineText small { color: var(--k-faint); font-size: 11px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.engineText b { color: var(--k-ink); font-size: 15px; font-weight: 750; }
+.engineText span { color: var(--k-faint); font-size: 13px; line-height: 1.4; }
+
+/* Kural kartları */
+.rules { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+@media (min-width: 760px) { .rules { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .rules { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.rule {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-lg);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acc-bg) 60%, var(--k-card)), var(--k-card) 55%);
+  box-shadow: var(--k-shadow);
+  transition: box-shadow 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
+}
+.rule::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--acc); }
+.rule:hover { box-shadow: var(--k-shadow-lift); }
+.rulePaused { background: var(--k-card); }
+.rulePaused::before { background: var(--k-line); }
+.rulePaused .ruleIcon { filter: grayscale(1); opacity: 0.6; }
+.ruleHead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ruleIcon { display: grid; width: 44px; height: 44px; flex: none; place-items: center; border-radius: 14px; background: var(--acc-bg); color: var(--acc); }
+.ruleTitle { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.ruleTitle small { color: var(--acc); font-size: 11px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.ruleTitle b { overflow: hidden; color: var(--k-ink); font-size: 16px; font-weight: 760; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-md);
+  background: var(--k-soft);
+}
+.flowStep { display: grid; gap: 3px; min-width: 0; }
+.flowStep span { color: var(--k-faint); font-size: 10px; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+.flowStep p { margin: 0; color: var(--k-muted); font-size: 13px; font-weight: 650; line-height: 1.35; }
+.flowArrow { color: var(--acc); }
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.switchText { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.switchText b { color: var(--k-ink); font-size: 15px; font-weight: 700; }
+.switchText small { color: var(--k-faint); font-size: 13px; }
+
+.ruleFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0 -4px -6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--k-line);
+  color: var(--k-faint);
+  font-size: 13px;
+  font-weight: 650;
+}
+.ruleFoot > span, .ruleFoot > time { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
+.deleteBtn { margin-left: auto; color: var(--k-faint); }
+.deleteBtn:hover:not(:disabled) { background: var(--k-bad-bg); color: var(--k-bad); }
+
+.addCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 20px;
+  border: 1.5px dashed color-mix(in srgb, var(--k-core) 28%, var(--k-line));
+  border-radius: var(--k-r-lg);
+  background: transparent;
+  color: var(--k-muted);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s var(--k-ease);
+}
+.addCard:hover { border-color: rgb(var(--k-rgb) / 0.5); background: var(--k-tint); }
+.addCard:active { transform: scale(0.98); }
+.addCard:focus-visible { outline: 3px solid rgb(var(--k-rgb) / 0.35); outline-offset: 2px; }
+.addCard > span { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 16px; background: var(--k-tint); color: var(--k-core); }
+:global(:root[data-theme="dark"]) .addCard > span { color: var(--k-bright); }
+.addCard b { color: var(--k-ink); font-size: 15px; font-weight: 750; }
+.addCard small { color: var(--k-faint); font-size: 13px; }
+
+/* Şablon kütüphanesi (Sheet) */
+.library { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--k-core); font-size: 11px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+:global(:root[data-theme="dark"]) .library { color: var(--k-bright); }
+.templates { display: grid; gap: 8px; }
+.template {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-r-md);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--acc-bg) 55%, var(--k-card)), var(--k-card) 70%);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.18s ease, transform 0.18s var(--k-ease), box-shadow 0.18s ease;
+}
+.template:hover:not(:disabled) { border-color: color-mix(in srgb, var(--acc) 40%, var(--k-line)); box-shadow: var(--k-shadow); }
+.template:active:not(:disabled) { transform: scale(0.98); }
+.template:disabled { opacity: 0.6; cursor: progress; }
+.template:focus-visible { outline: 3px solid rgb(var(--k-rgb) / 0.35); outline-offset: 2px; }
+.templateText { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.templateText b { color: var(--k-ink); font-size: 15px; font-weight: 750; }
+.templateText small { color: var(--k-faint); font-size: 13px; line-height: 1.35; }
+.templateText em { color: var(--acc); font-size: 12px; font-style: normal; font-weight: 750; }
+.templateAdd { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: 12px; background: var(--k-card); border: 1px solid var(--k-line); color: var(--k-ink); }
+.sheetNote { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; color: var(--k-faint); font-size: 13px; line-height: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .engineLive::after { animation: none; }
+  .rule, .addCard, .template { transition: none; }
+}

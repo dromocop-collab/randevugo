@@ -1,0 +1,138 @@
+/* Canlı mağaza önizlemesi — renkler sihirbazın token'larından gelir (yoksa açık tema varsayılanı). */
+.card {
+  --pv-card: var(--wz-card, #fff);
+  --pv-ink: var(--wz-ink, #10281d);
+  --pv-muted: var(--wz-muted, #5d6f64);
+  --pv-line: var(--wz-line, rgb(16 40 29 / 0.09));
+  --pv-soft: var(--wz-soft, #f2f6ee);
+  overflow: hidden;
+  border: 1px solid var(--pv-line);
+  border-radius: 24px;
+  background: var(--pv-card);
+  color: var(--pv-ink);
+  box-shadow: var(--wz-shadow-lift, 0 22px 48px rgb(9 45 29 / 0.14));
+}
+
+.browser {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--pv-line);
+  background: var(--pv-soft);
+}
+.browser > i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: rgb(16 40 29 / 0.16); }
+.browser > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  margin-left: 6px;
+  overflow: hidden;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--pv-card);
+  color: var(--pv-muted);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.browser > span > svg { flex: 0 0 auto; }
+
+.cover {
+  position: relative;
+  display: grid;
+  height: 138px;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 45%, #0c2a1b));
+}
+.coverImg { object-fit: cover; }
+.coverEmoji { font-size: 54px; filter: drop-shadow(0 8px 14px rgb(0 0 0 / 0.25)); }
+.coverShade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.38)); }
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  color: #10281d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.body { padding: 0 14px 14px; }
+.identity { position: relative; display: flex; align-items: flex-start; gap: 10px; min-width: 0; margin-top: -26px; }
+.logo {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  place-items: center;
+  border: 3px solid var(--pv-card);
+  border-radius: 16px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 850;
+  font-size: 17px;
+  box-shadow: 0 8px 18px rgb(9 45 29 / 0.18);
+}
+.titles { display: flex; min-width: 0; flex: 1; flex-direction: column; padding-top: 30px; }
+.titles b { overflow: hidden; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; text-overflow: ellipsis; }
+.titles b.placeholder { color: var(--pv-muted); font-weight: 700; }
+.titles span { display: flex; align-items: center; gap: 4px; margin-top: 2px; overflow: hidden; color: var(--pv-muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  margin-top: 32px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgb(245 158 11 / 0.14);
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.services { display: grid; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
+.services li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--pv-line);
+  border-radius: 14px;
+  background: var(--pv-soft);
+}
+.services li > span { display: flex; min-width: 0; flex-direction: column; }
+.services b { overflow: hidden; font-size: 13px; font-weight: 750; white-space: nowrap; text-overflow: ellipsis; }
+.services small { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--pv-muted); font-size: 11px; }
+.services em { flex: 0 0 auto; font-style: normal; font-size: 13px; font-weight: 850; }
+
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: #14532d;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.compact { box-shadow: none; border-radius: 20px; }
+.compact .cover { height: 112px; }
+
+:global(:root[data-theme="dark"]) .browser > i { background: rgb(255 255 255 / 0.18); }
+:global(:root[data-theme="dark"]) .rating { color: #fbbf24; }
+:global(:root[data-theme="dark"]) .cta { background: #d7ff70; color: #10281d; }

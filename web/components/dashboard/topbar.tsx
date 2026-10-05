@@ -1,287 +1,165 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { logout } from "@/features/auth/auth-service";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { Check, ChevronDown, CirclePlus, Clock3, Compass, ExternalLink, LogOut, Plus, Store, UserRound } from "lucide-react";
+import { logout } from "@/features/auth/auth-service";
+import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
-import { ArrowDown, ArrowUp, Check, ChevronDown, CirclePlus, Clock3, Cloud, CloudOff, Compass, Eye, EyeOff, ExternalLink, Gauge, LayoutPanelTop, LoaderCircle, LogOut, MousePointer2, Palette, RotateCcw, Sparkles, Store, UserRound, X, Zap } from "lucide-react";
+import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 import { NotificationCenter } from "@/components/dashboard/notification-center";
 import { DashboardCommandCenter } from "@/components/dashboard/command-center";
-import { getDashboardAppearancePreferences, saveDashboardAppearancePreferences } from "@/features/users/appearance-preferences-repository";
-import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
+import { AppearanceStudio } from "@/components/dashboard/appearance-studio";
+import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
+import { Badge, Button, Sheet, dashTokensClassName } from "@/components/dashboard/ui";
+import { cn } from "@/lib/utils/cn";
+import styles from "./topbar.module.css";
 
-const dashboardSkins = [
-  { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#061d15", "#0b6b45", "#39c98b", "#bdf65e"] },
-  { id: "midnight", name: "Gece", note: "Odaklı ve güçlü", colors: ["#07152f", "#2563eb", "#22d3ee"] },
-  { id: "pearl", name: "İnci", note: "Sade ve premium", colors: ["#18202b", "#64748b", "#f5b942", "#fffdf8"] },
-  { id: "ocean", name: "Okyanus", note: "Ferah ve berrak", colors: ["#083344", "#0891b2", "#67e8f9"] },
-  { id: "violet", name: "Lavanta", note: "Yaratıcı ve seçkin", colors: ["#2e1065", "#7c3aed", "#9f7aea", "#c4b5fd"] },
-  { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#431407", "#ea580c", "#fde047"] },
-  { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#4c0519", "#be123c", "#e11d48", "#fda4af"] },
-  { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#0f172a", "#334155", "#38bdf8"] },
-  { id: "champagne", name: "Şampanya", note: "Sıcak ve sofistike", colors: ["#422006", "#a16207", "#f5b942", "#fde68a"] },
-  { id: "forest", name: "Orman", note: "Doğal ve prestijli", colors: ["#052e16", "#166534", "#86efac"] },
-  { id: "ruby", name: "Yakut", note: "Güçlü ve seçkin", colors: ["#4c0519", "#9f1239", "#e11d48", "#fbbf24"] },
-  { id: "indigo", name: "İndigo", note: "Teknolojik ve sakin", colors: ["#1e1b4b", "#4338ca", "#a5b4fc"] },
-] as const;
-
-type DashboardSkin = (typeof dashboardSkins)[number]["id"];
-type DashboardDensity = "comfortable" | "compact";
-type DashboardMotion = "alive" | "calm";
-
-const dashboardCursors = [
-  { id: "normal", name: "Normal", note: "Klasik sistem imleci" },
-  { id: "orbit", name: "Yörünge", note: "Marka halkası" },
-  { id: "aurora", name: "Aurora", note: "Turkuaz parıltı" },
-  { id: "neon", name: "Neon", note: "Canlı ve enerjik" },
-  { id: "pearl", name: "İnci", note: "Sade ve premium" },
-  { id: "comet", name: "Kuyruklu yıldız", note: "Hareketli ışık izi" },
-] as const;
-
-type DashboardCursor = (typeof dashboardCursors)[number]["id"];
-type AppearanceSyncState = "loading" | "saved" | "offline";
-type AppearanceSection = "colors" | "behavior" | "cursor" | "layout";
-
-const defaultDashboardModules = [
-  { id: "command", label: "Komuta merkezi" },
-  { id: "insights", label: "İşletme nabzı" },
-  { id: "profile", label: "Profil durumu" },
-  { id: "kpis", label: "Performans kartları" },
-  { id: "operations", label: "Operasyon akışı" },
-] as const;
-
-type DashboardModuleId = (typeof defaultDashboardModules)[number]["id"];
-type DashboardModulePreference = { id: DashboardModuleId; enabled: boolean };
+function initials(value?: string | null) {
+  const clean = (value ?? "").trim();
+  if (!clean) return "S";
+  const parts = clean.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? parts[0][0] + parts[1][0] : clean.slice(0, 2)).toLocaleUpperCase("tr-TR");
+}
 
 export function DashboardTopBar() {
   const { user } = useAuth();
   const { businesses, businessId, setBusinessId, access } = useBusinessContext();
   const { can, plan } = useSubscriptionPlan();
+  const router = useRouter();
   const isStaff = access?.role === "staff";
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
-  const router = useRouter();
-  const [skinOpen, setSkinOpen] = useState(false);
-  const [appearanceSection, setAppearanceSection] = useState<AppearanceSection | null>("colors");
-  const [skin, setSkin] = useState<DashboardSkin>("emerald");
-  const [density, setDensity] = useState<DashboardDensity>("comfortable");
-  const [motion, setMotion] = useState<DashboardMotion>("alive");
-  const [cursor, setCursor] = useState<DashboardCursor>("orbit");
-  const [syncState, setSyncState] = useState<AppearanceSyncState>("loading");
-  const [modulePreferences, setModulePreferences] = useState<DashboardModulePreference[]>(defaultDashboardModules.map((item) => ({ id: item.id, enabled: true })));
-  const skinPanelRef = useRef<HTMLDivElement>(null);
-  const skinReadyRef = useRef(false);
-  const accountReadyRef = useRef(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function normalizeModules(value: unknown): DashboardModulePreference[] {
-    const fallback = defaultDashboardModules.map((item) => ({ id: item.id, enabled: true }));
-    if (!Array.isArray(value)) return fallback;
-    const valid = value.filter((item): item is { id: DashboardModuleId; enabled?: boolean } => Boolean(item && typeof item === "object" && "id" in item && defaultDashboardModules.some((module) => module.id === (item as { id?: string }).id)));
-    if (!valid.length) return fallback;
-    return [
-      ...valid.map((item) => ({ id: item.id, enabled: item.enabled !== false })),
-      ...defaultDashboardModules.filter((module) => !valid.some((item) => item.id === module.id)).map((item) => ({ id: item.id, enabled: true })),
-    ];
-  }
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const accountRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const canAddBranch = !isStaff && can("branches") && businesses.length < (plan?.maxStores ?? 10);
+  const canSwitch = businesses.length > 1 || canAddBranch;
 
   useEffect(() => {
-    const storedSkin = window.localStorage.getItem("sr-dashboard-skin");
-    const savedSkin = dashboardSkins.some((item) => item.id === storedSkin) ? storedSkin as DashboardSkin : "emerald";
-    const savedDensity = window.localStorage.getItem("sr-dashboard-density") === "compact" ? "compact" : "comfortable";
-    const savedMotion = window.localStorage.getItem("sr-dashboard-motion") === "calm" ? "calm" : "alive";
-    const storedCursor = window.localStorage.getItem("sr-dashboard-cursor");
-    const savedCursor = dashboardCursors.some((item) => item.id === storedCursor) ? storedCursor as DashboardCursor : "orbit";
-    const storedModules = window.localStorage.getItem("sr-dashboard-modules");
-    let savedModules: DashboardModulePreference[] = defaultDashboardModules.map((item) => ({ id: item.id, enabled: true }));
-    try {
-      savedModules = normalizeModules(JSON.parse(storedModules ?? "[]"));
-    } catch { /* Geçersiz eski tercih güvenli varsayılana döner. */ }
-    document.documentElement.dataset.dashboardSkin = savedSkin;
-    document.documentElement.dataset.dashboardDensity = savedDensity;
-    document.documentElement.dataset.dashboardMotion = savedMotion;
-    document.documentElement.dataset.dashboardCursor = savedCursor;
-    skinReadyRef.current = true;
-    queueMicrotask(() => {
-      setSkin(savedSkin);
-      setDensity(savedDensity);
-      setMotion(savedMotion);
-      setCursor(savedCursor);
-      setModulePreferences(savedModules);
-    });
+    const onScroll = () => setScrolled(window.scrollY > 6);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    if (!user?.uid || !skinReadyRef.current) return;
-    let cancelled = false;
-    accountReadyRef.current = false;
-    setSyncState("loading");
-    void getDashboardAppearancePreferences(user.uid).then((remote) => {
-      if (cancelled) return;
-      if (remote) {
-        const remoteSkin = dashboardSkins.some((item) => item.id === remote.skin) ? remote.skin as DashboardSkin : skin;
-        const remoteDensity = remote.density === "compact" ? "compact" : "comfortable";
-        const remoteMotion = remote.motion === "calm" ? "calm" : "alive";
-        const remoteCursor = dashboardCursors.some((item) => item.id === remote.cursor) ? remote.cursor as DashboardCursor : cursor;
-        setSkin(remoteSkin);
-        setDensity(remoteDensity);
-        setMotion(remoteMotion);
-        setCursor(remoteCursor);
-        setModulePreferences(normalizeModules(remote.modules));
-      }
-      accountReadyRef.current = true;
-      setSyncState("saved");
-      if (!remote) setModulePreferences((items) => [...items]);
-    }).catch(() => {
-      if (!cancelled) {
-        accountReadyRef.current = true;
-        setSyncState("offline");
-      }
-    });
-    return () => { cancelled = true; };
-    // İlk hesap yüklemesi yalnızca kullanıcı değiştiğinde çalışır; güncel tercihler ayrı etkide kaydedilir.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!skinReadyRef.current) return;
-    document.documentElement.dataset.dashboardSkin = skin;
-    document.documentElement.dataset.dashboardDensity = density;
-    document.documentElement.dataset.dashboardMotion = motion;
-    document.documentElement.dataset.dashboardCursor = cursor;
-    window.localStorage.setItem("sr-dashboard-skin", skin);
-    window.localStorage.setItem("sr-dashboard-density", density);
-    window.localStorage.setItem("sr-dashboard-motion", motion);
-    window.localStorage.setItem("sr-dashboard-cursor", cursor);
-    window.localStorage.setItem("sr-dashboard-modules", JSON.stringify(modulePreferences));
-    window.dispatchEvent(new Event("sr-dashboard-cursor-change"));
-    window.dispatchEvent(new CustomEvent("sr-dashboard-layout-change", { detail: modulePreferences }));
-    if (!accountReadyRef.current || !user?.uid) return;
-    setSyncState("loading");
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      void saveDashboardAppearancePreferences(user.uid, { skin, density, motion, cursor, modules: modulePreferences })
-        .then(() => setSyncState("saved"))
-        .catch(() => setSyncState("offline"));
-    }, 450);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [skin, density, motion, cursor, modulePreferences, user?.uid]);
-
-  useEffect(() => {
-    const openStudio = () => setSkinOpen(true);
-    window.addEventListener("sr-dashboard-open-appearance", openStudio);
-    window.addEventListener("sr-dashboard-open-layout", openStudio);
-    return () => {
-      window.removeEventListener("sr-dashboard-open-appearance", openStudio);
-      window.removeEventListener("sr-dashboard-open-layout", openStudio);
+    if (!accountOpen) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!accountRef.current?.contains(target) && !menuRef.current?.contains(target)) setAccountOpen(false);
     };
-  }, []);
-
-  useEffect(() => {
-    if (!skinOpen) return;
-    const close = (event: MouseEvent) => {
-      if (!skinPanelRef.current?.contains(event.target as Node)) setSkinOpen(false);
-    };
-    const closeWithKeyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSkinOpen(false);
-    };
+    const esc = (event: KeyboardEvent) => { if (event.key === "Escape") setAccountOpen(false); };
     window.addEventListener("pointerdown", close);
-    window.addEventListener("keydown", closeWithKeyboard);
-    return () => {
-      window.removeEventListener("pointerdown", close);
-      window.removeEventListener("keydown", closeWithKeyboard);
-    };
-  }, [skinOpen]);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", esc); };
+  }, [accountOpen]);
 
-  function chooseSkin(value: DashboardSkin) {
-    setSkin(value);
+  function toggleAccount() {
+    const rect = accountRef.current?.getBoundingClientRect();
+    if (rect && window.matchMedia("(min-width: 640px)").matches) setMenuStyle({ top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) });
+    else setMenuStyle({});
+    setAccountOpen((value) => !value);
   }
 
-  function resetAppearance() {
-    setSkin("emerald");
-    setDensity("comfortable");
-    setMotion("alive");
-    setCursor("orbit");
-    setModulePreferences(defaultDashboardModules.map((item) => ({ id: item.id, enabled: true })));
+  async function signOut() {
+    setAccountOpen(false);
+    await logout();
+    router.push("/isletmeler/giris");
   }
 
-  function moveModule(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= modulePreferences.length) return;
-    setModulePreferences((items) => {
-      const next = [...items];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  }
+  const statusBadge = activeBusiness?.status === "pending_review"
+    ? <Badge tone="amber" size="sm" icon={Clock3}>Onay bekliyor</Badge>
+    : activeBusiness?.status === "rejected" ? <Badge tone="red" size="sm">Reddedildi</Badge> : null;
+
+  const businessButton = (
+    <>
+      <span className={styles.bizAvatar} aria-hidden>
+        {activeBusiness?.logoUrl
+          ? <Image src={activeBusiness.logoUrl} alt="" width={36} height={36} unoptimized />
+          : initials(activeBusiness?.name)}
+      </span>
+      <span className={styles.bizText}>
+        <small>{isStaff ? "Çalışan paneli" : "İşletme"}</small>
+        <b>{activeBusiness?.name ?? "SeninRandevun"}</b>
+      </span>
+      {canSwitch && <ChevronDown size={16} className={styles.bizChevron} aria-hidden />}
+    </>
+  );
 
   return (
-    <header className="dashboard-topbar dashboard-command-bar">
-      <div className="dashboard-command-inner">
-        <div className="dashboard-command-copy">
-          <p><span /> {isStaff ? "ÇALIŞAN ÇALIŞMA ALANI" : "İŞLETME OS"} <i>CANLI</i></p>
-          <h1>{isStaff ? "Kişisel randevu merkeziniz hazır." : "Operasyon merkeziniz hazır."}</h1>
+    <header className={cn(styles.topbar, scrolled && styles.topbarScrolled)}>
+      <div className={styles.inner}>
+        <div className={styles.left}>
+          {canSwitch
+            ? <button type="button" className={styles.biz} onClick={() => setSwitcherOpen(true)} aria-haspopup="dialog" aria-label={`İşletme: ${activeBusiness?.name ?? ""}. Değiştir`}>{businessButton}</button>
+            : <Link href={isStaff ? "/dashboard/takvim" : "/dashboard"} className={styles.biz}>{businessButton}</Link>}
+          {statusBadge && <span className={styles.statusSlot}>{statusBadge}</span>}
         </div>
-        <div className="dashboard-command-actions">
-          {businesses.length > 1 && (
-            <select
-              value={activeBusiness?.id ?? ""}
-              onChange={(e) => setBusinessId(e.target.value)}
-              className="command-business-select h-8 max-w-[150px] truncate rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text-1)] outline-none hover:bg-[var(--surface-3)] focus:border-[var(--accent)]"
-              aria-label="İşletme değiştir"
-            >
-              {businesses.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}{b.status === "pending_review" ? " · Onay bekliyor" : b.status === "rejected" ? " · Reddedildi" : ""}
-                </option>
-              ))}
-            </select>
-          )}
-          {!isStaff && can("branches") && businesses.length < (plan?.maxStores ?? 10) && <Link href="/dashboard/subeler" className="command-link command-new-store"><CirclePlus size={17} /><span>Yeni şube</span></Link>}
-          {activeBusiness?.status === "pending_review" && <span className="command-link command-pending text-amber-700"><Clock3 size={16} /><span>Süper admin onayı bekleniyor</span></span>}
-          {!isStaff && <NotificationCenter key={businessId} businessId={businessId}/>}
+
+        <div className={styles.center}>
           <DashboardCommandCenter />
-          <div className="dashboard-skin-picker" ref={skinPanelRef}>
-            <button type="button" className="command-link dashboard-skin-trigger" onClick={() => setSkinOpen((value) => !value)} aria-expanded={skinOpen} aria-label="Panel görünümünü değiştir"><Palette size={17}/><span>Görünüm</span></button>
-            <div className={`dashboard-skin-menu ${skinOpen ? "open" : ""}`} role="dialog" aria-label="Panel görünümü ayarları">
-              <header><span><Sparkles size={14}/> Görünüm stüdyosu</span><small>Tercihlerin hesabına kaydedilir ve giriş yaptığın tüm cihazlarda uygulanır.</small><button type="button" className="dashboard-skin-close" onClick={() => setSkinOpen(false)} aria-label="Görünüm stüdyosunu kapat"><X size={17}/></button></header>
-              <div className="dashboard-skin-preview" aria-hidden="true"><i/><span><b>{dashboardSkins.find((item) => item.id === skin)?.name}</b><small>Canlı panel önizlemesi</small></span><em><i/><i/><i/></em></div>
-              <section className={`dashboard-skin-accordion ${appearanceSection === "colors" ? "open" : ""}`}>
-                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "colors"} onClick={() => setAppearanceSection((value) => value === "colors" ? null : "colors")}><i><Palette size={14}/></i><span><b>Renk atmosferi</b><small>{dashboardSkins.length} paletten görünümünü seç</small></span><ChevronDown size={16}/></button>
-                {appearanceSection === "colors" && <div className="dashboard-skin-accordion__content"><div className="dashboard-skin-grid">{dashboardSkins.map((item) => <button type="button" key={item.id} onClick={() => chooseSkin(item.id)} className={skin === item.id ? "active" : ""} aria-pressed={skin === item.id}><i>{item.colors.map((color) => <b key={color} style={{background:color}}/>)}</i><span>{item.name}<small>{item.note}</small></span>{skin === item.id && <Check size={15}/>}</button>)}</div></div>}
-              </section>
-              <section className={`dashboard-skin-accordion ${appearanceSection === "behavior" ? "open" : ""}`}>
-                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "behavior"} onClick={() => setAppearanceSection((value) => value === "behavior" ? null : "behavior")}><i><Gauge size={14}/></i><span><b>Panel davranışı</b><small>Yerleşim ve hareket yoğunluğu</small></span><ChevronDown size={16}/></button>
-                {appearanceSection === "behavior" && <div className="dashboard-skin-accordion__content"><div className="dashboard-skin-controls"><div><span><Gauge size={13}/> Yerleşim</span><div className="dashboard-segmented"><button type="button" className={density === "comfortable" ? "active" : ""} onClick={() => setDensity("comfortable")}>Rahat</button><button type="button" className={density === "compact" ? "active" : ""} onClick={() => setDensity("compact")}>Kompakt</button></div></div><div><span><Zap size={13}/> Hareket</span><div className="dashboard-segmented"><button type="button" className={motion === "alive" ? "active" : ""} onClick={() => setMotion("alive")}>Canlı</button><button type="button" className={motion === "calm" ? "active" : ""} onClick={() => setMotion("calm")}>Sakin</button></div></div></div></div>}
-              </section>
-              <section className={`dashboard-skin-accordion ${appearanceSection === "cursor" ? "open" : ""}`}>
-                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "cursor"} onClick={() => setAppearanceSection((value) => value === "cursor" ? null : "cursor")}><i><MousePointer2 size={14}/></i><span><b>Mouse imleci</b><small>Normal ve 5 özel imleç</small></span><ChevronDown size={16}/></button>
-                {appearanceSection === "cursor" && <div className="dashboard-skin-accordion__content"><div className="dashboard-cursor-grid">{dashboardCursors.map((item) => <button type="button" key={item.id} className={cursor === item.id ? "active" : ""} onClick={() => setCursor(item.id)} aria-pressed={cursor === item.id}><i data-cursor-preview={item.id}><b/><em/></i><span>{item.name}<small>{item.note}</small></span>{cursor === item.id && <Check size={14}/>}</button>)}</div></div>}
-              </section>
-              <section className={`dashboard-skin-accordion ${appearanceSection === "layout" ? "open" : ""}`}>
-                <button type="button" className="dashboard-skin-accordion__trigger" aria-expanded={appearanceSection === "layout"} onClick={() => setAppearanceSection((value) => value === "layout" ? null : "layout")}><i><LayoutPanelTop size={14}/></i><span><b>Ana panel düzeni</b><small>Modülleri sırala veya gizle</small></span><ChevronDown size={16}/></button>
-                {appearanceSection === "layout" && <div className="dashboard-skin-accordion__content"><div className="dashboard-module-editor"><div>{modulePreferences.map((item, index) => <article key={item.id}><button type="button" onClick={() => setModulePreferences((items) => items.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={`${defaultDashboardModules.find((module) => module.id === item.id)?.label} modülünü ${item.enabled ? "gizle" : "göster"}`}>{item.enabled ? <Eye size={14}/> : <EyeOff size={14}/>}</button><span>{defaultDashboardModules.find((module) => module.id === item.id)?.label}</span><div><button type="button" disabled={index === 0} onClick={() => moveModule(index, -1)} aria-label="Yukarı taşı"><ArrowUp size={13}/></button><button type="button" disabled={index === modulePreferences.length - 1} onClick={() => moveModule(index, 1)} aria-label="Aşağı taşı"><ArrowDown size={13}/></button></div></article>)}</div></div></div>}
-              </section>
-              <footer><span className={`appearance-sync ${syncState}`}>{syncState === "loading" ? <LoaderCircle size={13}/> : syncState === "offline" ? <CloudOff size={13}/> : <Cloud size={13}/>} {syncState === "loading" ? "Hesaba kaydediliyor" : syncState === "offline" ? "Yerelde saklandı" : "Hesabınla senkronize"}</span><button type="button" onClick={resetAppearance}><RotateCcw size={13}/> Sıfırla</button></footer>
-            </div>
+        </div>
+
+        <div className={styles.right}>
+          <Button variant="primary" size="sm" icon={Plus} className={styles.newBtn} onClick={() => openQuickAppointment()}>Yeni randevu</Button>
+          {!isStaff && <NotificationCenter key={businessId} businessId={businessId} triggerClassName={styles.iconBtn} />}
+          <AppearanceStudio triggerClassName={cn(styles.iconBtn, styles.hideMobile)} />
+          <div className={styles.account} ref={accountRef}>
+            <button type="button" className={styles.avatarBtn} onClick={toggleAccount} aria-expanded={accountOpen} aria-haspopup="menu" aria-label="Hesap menüsü">
+              {initials(user?.email)}
+            </button>
+            {accountOpen && typeof document !== "undefined" && createPortal(
+              <div className={dashTokensClassName}>
+                <button type="button" className={styles.menuBackdrop} aria-label="Menüyü kapat" onClick={() => setAccountOpen(false)} />
+                <div className={styles.menu} role="menu" aria-label="Hesap" ref={menuRef} style={menuStyle}>
+                  <div className={styles.menuHead}>
+                    <span className={styles.menuAvatar} aria-hidden>{initials(user?.email)}</span>
+                    <span className="min-w-0"><small>{isStaff ? "Çalışan hesabı" : "İşletme hesabı"}</small><b>{user?.email ?? ""}</b></span>
+                  </div>
+                  {activeBusiness?.slug && <Link role="menuitem" href={`/isletme/${activeBusiness.slug}`} className={styles.menuItem} onClick={() => setAccountOpen(false)}><Store size={16} aria-hidden /> Mağazamı gör <ExternalLink size={13} className={styles.menuTrail} aria-hidden /></Link>}
+                  <Link role="menuitem" href="/kesfet" className={styles.menuItem} onClick={() => setAccountOpen(false)}><Compass size={16} aria-hidden /> Keşfet</Link>
+                  <Link role="menuitem" href="/hesabim" className={styles.menuItem} onClick={() => setAccountOpen(false)}><UserRound size={16} aria-hidden /> Müşteri moduna geç</Link>
+                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} onClick={() => { setAccountOpen(false); window.dispatchEvent(new Event("sr-dashboard-open-appearance")); }}><span className={styles.menuIcon} aria-hidden>◐</span> Görünüm stüdyosu</button>
+                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.menuDanger)} onClick={() => void signOut()}><LogOut size={16} aria-hidden /> Çıkış yap</button>
+                </div>
+              </div>,
+              document.body,
+            )}
           </div>
-          <Link href="/kesfet" className="command-link command-link-discover"><Compass size={17} /><span>Keşfet</span></Link>
-          {activeBusiness?.slug && <Link href={`/isletme/${activeBusiness.slug}`} className="command-link command-link-store"><Store size={17} /><span>Mağazamı gör</span><ExternalLink size={14} /></Link>}
-          <Link href="/hesabim" className="command-account" title="Müşteri hesabına geç"><i><UserRound size={15} /></i><span><small>MÜŞTERİ MODU</small><b>{user?.email ?? ""}</b></span></Link>
-          <Button
-            variant="ghost"
-            className="command-logout"
-            onClick={async () => {
-              await logout();
-              router.push("/isletmeler/giris");
-            }}
-          >
-            <LogOut size={16} /><span>Çıkış yap</span>
-          </Button>
         </div>
       </div>
+
+      <Sheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} size="sm" title="İşletme değiştir" description="Panelde gördüğünüz veriler seçtiğiniz işletmeye göre güncellenir.">
+        <div className={styles.bizList} role="list">
+          {businesses.map((business) => {
+            const active = business.id === activeBusiness?.id;
+            return (
+              <button
+                key={business.id}
+                type="button"
+                role="listitem"
+                className={cn(styles.bizRow, active && styles.bizRowActive)}
+                onClick={() => { setBusinessId(business.id); setSwitcherOpen(false); }}
+                aria-current={active ? "true" : undefined}
+              >
+                <span className={styles.bizAvatar} aria-hidden>{initials(business.name)}</span>
+                <span className={styles.bizRowText}>
+                  <b>{business.name}</b>
+                  <small>{business.status === "pending_review" ? "Süper admin onayı bekleniyor" : business.status === "rejected" ? "Reddedildi" : [business.district, business.city].filter(Boolean).join(", ") || "Aktif"}</small>
+                </span>
+                {active && <Check size={18} className={styles.bizCheck} aria-hidden />}
+              </button>
+            );
+          })}
+        </div>
+        {canAddBranch && <Button href="/dashboard/subeler" variant="soft" icon={CirclePlus} block className="mt-3" onClick={() => setSwitcherOpen(false)}>Yeni şube ekle</Button>}
+      </Sheet>
     </header>
   );
 }

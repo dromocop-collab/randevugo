@@ -128,7 +128,8 @@ export interface DynamicCategory {
 export async function listDynamicCategories(): Promise<DynamicCategory[]> {
   const db = getDb();
   const snap = await getDocs(collection(db, "categories"));
-  return snap.docs.map((d) => ({
+  // Süper adminin gizlediği (kullanılmayan) kategoriler listelerde gösterilmez.
+  return snap.docs.filter((d) => d.data().hidden !== true).map((d) => ({
     slug: d.id,
     label: d.data().label ?? d.id,
     emoji: d.data().emoji ?? "📂",

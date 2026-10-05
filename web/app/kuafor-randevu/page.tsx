@@ -1,9 +1,12 @@
 import { SeoLandingPage } from "@/components/seo/seo-landing-page";
 import { createProfessionMetadata } from "@/lib/profession-seo";
 
+// Kategori işletme listesi saatte bir yenilenir.
+export const revalidate = 3600;
+
 export const metadata = createProfessionMetadata({
-  title: "Kuaför Randevusu Al | Online Kuaför Randevu",
-  description: "Yakınınızdaki kuaförleri keşfedin, saç kesimi ve bakım hizmetlerini inceleyin, uygun saati seçerek online kuaför randevunuzu hemen alın.",
+  title: "Kuaför Randevusu Al – Online ve Ücretsiz",
+  description: "Yakınındaki kuaförleri keşfet; saç kesimi, boya ve bakım hizmetlerinin fiyatlarını, yorumlarını ve müsait saatlerini karşılaştırıp online randevu al.",
   pathname: "/kuafor-randevu",
   category: "kuafor",
 });

@@ -1,158 +1,63 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
+import { notFound } from "next/navigation";
 import { getBusinessBySlugCached } from "@/features/businesses/business-slug-cache";
-import { listBookableServices } from "@/features/services/service-repository";
-
-const SITE_URL = "https://seninrandevun.com";
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  kuafor: "Kuaför", berber: "Berber", guzellik: "Güzellik Merkezi", nail: "Nail Studio",
-  spa: "Spa & Masaj", spor: "Spor & PT", saglik: "Sağlık", danismanlik: "Danışmanlık",
-  veteriner: "Veteriner", yazilim: "Yazılım", egitim: "Eğitim", servis: "Servis & Teknik",
-};
-
-function labelFromSlug(slug: string) {
-  return decodeURIComponent(slug)
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase("tr-TR"));
-}
+import { canonicalBusinessCategory } from "@/lib/business-categories";
+import { categoryDisplayName, seoCategory } from "@/lib/seo/categories";
+import { canonicalAlternates, robotsFor } from "@/lib/seo/metadata";
+import { SITE_LOCALE, SITE_NAME, absoluteUrl, businessPath } from "@/lib/seo/site";
+import { composeDescription, displayPlace, locative } from "@/lib/seo/text";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusinessBySlugCached(slug).catch(() => null);
-  const label = business?.name ?? labelFromSlug(slug);
+  if (!business || business.status !== "active" || !business.isPublished) {
+    return { title: "İşletme bulunamadı", robots: { index: false, follow: false } };
+  }
+
   // Gizlenen işletmenin doğrudan linki açık kalır ama arama motorlarına kapalıdır.
-  const indexable = business?.isPublished === true && business.status === "active" && business.hiddenFromDiscovery !== true;
-  const canonical = `${SITE_URL}/isletme/${encodeURIComponent(slug)}`;
-  const location = business ? `${business.district}, ${business.city}` : "";
-  const categoryLabel = CATEGORY_LABELS[business?.category ?? ""] ?? "";
-  const title = `${label}${business?.district ? ` ${business.district}` : ""} | Fiyatlar, Yorumlar ve Randevu`;
-  const description = business?.description?.trim() || `${label} ${location} hizmetlerini, fiyatlarını, çalışma saatlerini, ekibini ve gerçek müşteri yorumlarını inceleyin; uygun saati seçerek online randevu alın.`;
-
-  // Use business cover/logo for OG image, fallback to /og.png
-  const ogImages: string[] = [];
-  if (business?.coverUrl) ogImages.push(business.coverUrl);
-  else if (business?.logoUrl) ogImages.push(business.logoUrl);
-  if (ogImages.length === 0) ogImages.push("/og.png");
-
-  const keywords = [
-    label,
-    categoryLabel && `${categoryLabel} ${location}`,
-    categoryLabel && `${categoryLabel} randevu`,
-    location && `${location} randevu`,
-    "online randevu",
-    "SeninRandevun",
-  ].filter(Boolean) as string[];
+  const indexable = business.hiddenFromDiscovery !== true;
+  const path = businessPath(business.slug || slug);
+  const category = canonicalBusinessCategory(business.category ?? "");
+  const label = categoryDisplayName(category);
+  const noun = seoCategory(category)?.noun ?? label.toLocaleLowerCase("tr-TR");
+  const city = displayPlace(business.city);
+  const district = displayPlace(business.district);
+  const place = [district, city].filter(Boolean).join(", ");
+  // Çok kısa/anlamsız açıklamalar (ör. test metni) arama sonucuna yazılmaz.
+  const ownDescription = (business.description?.trim().length ?? 0) >= 40 ? business.description!.trim() : undefined;
+  const nameHasLabel = business.name.toLocaleLowerCase("tr-TR").includes(label.toLocaleLowerCase("tr-TR"));
+  const qualifier = [district, nameHasLabel ? "" : label].filter(Boolean).join(" ");
+  const title = `${business.name}${qualifier ? ` – ${qualifier}` : ""}: Fiyatlar ve Online Randevu`;
+  const rated = (business.reviewCount ?? 0) > 0 && (business.rating ?? 0) > 0;
+  const description = composeDescription([
+    ownDescription,
+    `${business.name}${city ? `, ${locative(district || city)} hizmet veren bir ${noun}` : ""}.`,
+    rated ? `${business.reviewCount} müşteri yorumuyla 5 üzerinden ${business.rating.toFixed(1)} puan.` : undefined,
+    "Hizmetleri, fiyatları ve çalışma saatlerini incele, uygun saati seçip online randevu al.",
+    place ? `Adres: ${place}.` : undefined,
+  ]);
+  const ogTitle = `${business.name} | ${SITE_NAME}`;
 
   return {
     title,
     description,
-    keywords,
-    alternates: { canonical, languages: { "tr-TR": canonical, "x-default": canonical } },
-    openGraph: { title, description, url: canonical, type: "website", locale: "tr_TR", siteName: "SeninRandevun", images: ogImages },
-    twitter: { card: "summary_large_image", title, description, images: ogImages },
-    robots: { index: indexable, follow: true, googleBot: { index: indexable, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
+    alternates: canonicalAlternates(path),
+    robots: robotsFor(indexable),
+    // Paylaşım görseli aynı klasördeki opengraph-image.tsx'ten gelir (images yazılmaz).
+    openGraph: { title: ogTitle, description, url: absoluteUrl(path), type: "website", locale: SITE_LOCALE, siteName: SITE_NAME },
+    twitter: { card: "summary_large_image", title: ogTitle, description },
   };
 }
 
+/**
+ * Olmayan/yayında olmayan işletmede vitrin, randevu ve canlı sıra sayfaları gerçek 404 döner
+ * (yanıt akışı başlamadan kontrol edilir). Yapısal veri ve içerik sayfa bileşenindedir.
+ */
 export default async function BusinessProfileLayout({ children, params }: { children: ReactNode; params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const business = await getBusinessBySlugCached(slug).catch(() => null);
-  if (!business || !business.isPublished || business.status !== "active") return <>{children}</>;
-
-  // Fetch working hours and services for rich schema
-  const [workingHours, services] = await Promise.all([
-    listBusinessWorkingHours(business.id).catch(() => []),
-    listBookableServices(business.id).catch(() => []),
-  ]);
-
-  // Build openingHoursSpecification
-  const openingHours = workingHours
-    .filter((wh) => wh.isOpen)
-    .map((wh) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: DAY_NAMES[wh.day] ?? "Monday",
-      opens: wh.start,
-      closes: wh.end,
-    }));
-
-  // Build hasOfferCatalog with services
-  const offerCatalog = services.length > 0 ? {
-    "@type": "OfferCatalog",
-    name: `${business.name} Hizmetleri`,
-    itemListElement: services.slice(0, 20).map((service) => ({
-      "@type": "Offer",
-      itemOffered: {
-        "@type": "Service",
-        name: service.name,
-        ...(service.description ? { description: service.description } : {}),
-      },
-      ...(service.price != null ? {
-        price: service.price,
-        priceCurrency: "TRY",
-      } : {}),
-    })),
-  } : undefined;
-
-  // Determine priceRange from services
-  const prices = services.map((s) => s.price).filter((p): p is number => typeof p === "number" && p > 0);
-  const priceRange = prices.length > 0
-    ? prices.length === 1
-      ? `${prices[0]} ₺`
-      : `${Math.min(...prices)} ₺ - ${Math.max(...prices)} ₺`
-    : undefined;
-
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${SITE_URL}/isletme/${slug}#business`,
-    name: business.name,
-    url: `${SITE_URL}/isletme/${slug}`,
-    image: business.coverUrl || business.logoUrl,
-    description: business.description,
-    telephone: business.phone,
-    ...(business.email ? { email: business.email } : {}),
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: business.address,
-      addressLocality: business.district,
-      addressRegion: business.city,
-      addressCountry: "TR",
-    },
-    ...(openingHours.length > 0 ? { openingHoursSpecification: openingHours } : {}),
-    ...(offerCatalog ? { hasOfferCatalog: offerCatalog } : {}),
-    ...(priceRange ? { priceRange } : {}),
-    ...(business.reviewCount > 0 && business.rating > 0 ? {
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: business.rating,
-        reviewCount: business.reviewCount,
-        bestRating: 5,
-        worstRating: 1,
-      },
-    } : {}),
-    ...(business.socialMedia?.instagram ? {
-      sameAs: [`https://instagram.com/${business.socialMedia.instagram.replace(/^@/, "")}`],
-    } : {}),
-    potentialAction: {
-      "@type": "ReserveAction",
-      target: {
-        "@type": "EntryPoint",
-        urlTemplate: `${SITE_URL}/isletme/${slug}/randevu`,
-        actionPlatform: ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"],
-      },
-      result: {
-        "@type": "Reservation",
-        name: `${business.name} Online Randevu`,
-      },
-    },
-  };
-
-  return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }} />
-    {children}
-  </>;
+  // Bağlantı hatası 404 sayılmaz (Google sayfayı dizinden silmesin); hata sayfası 500 döner.
+  const business = await getBusinessBySlugCached(slug);
+  if (!business || business.status !== "active" || !business.isPublished) notFound();
+  return children;
 }

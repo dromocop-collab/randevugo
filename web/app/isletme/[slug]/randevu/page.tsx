@@ -30,14 +30,17 @@ export default function BookingPage() {
   const [workingHours, setWorkingHours] = useState<DaySchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     const slug = params.slug;
     if (!slug) return;
 
     let cancelled = false;
+    // Bağlantı takılırsa sonsuz iskelet yerine anlaşılır hata ve "tekrar dene" gösterilir.
+    const timeout = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Bağlantı yavaş görünüyor. Lütfen tekrar deneyin.")), 15_000));
 
-    getBusinessBySlug(slug)
+    Promise.race([getBusinessBySlug(slug), timeout])
       .then(async (row) => {
         if (cancelled) return;
         if (!row) {
@@ -53,10 +56,10 @@ export default function BookingPage() {
           return;
         }
 
-        const [schedules, services] = await Promise.all([
+        const [schedules, services] = await Promise.race([Promise.all([
           listBusinessWorkingHours(row.id),
           listBookableServices(row.id),
-        ]);
+        ]), timeout]);
         if (cancelled) return;
         if (services.length === 0) {
           setError("Bu işletme henüz online randevu kabul etmiyor.");
@@ -77,7 +80,7 @@ export default function BookingPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.slug]);
+  }, [params.slug, retryKey]);
 
   const shellHeader = (
     <header className={styles.header}>
@@ -119,6 +122,7 @@ export default function BookingPage() {
           <ErrorState
             title="Randevu Oluşturulamıyor"
             description={error ?? "İşletme kaydı bulunamadı."}
+            action={error?.startsWith("Bağlantı") ? <button type="button" className={styles.stateLink} onClick={() => { setError(null); setLoading(true); setRetryKey((value) => value + 1); }}>Tekrar dene</button> : undefined}
           />
           <Link href="/kesfet" className={styles.stateLink}>
             ← İşletmelere göz at

@@ -1,218 +1,112 @@
 import type { MetadataRoute } from "next";
-import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, type LocalCategorySlug } from "@/lib/seo/local-seo";
-import { searchBusinesses } from "@/features/discovery/search-repository";
-import { GEO_CATEGORIES, businessesInCategory, seoSlug, type GeoCategorySlug } from "@/lib/seo/geo-seo";
+import { SEO_CATEGORIES } from "@/lib/seo/categories";
+import { LOCAL_CATEGORIES, businessesForCategory, type LocalCategorySlug } from "@/lib/seo/local-seo";
+import { categoryCounts, getSeoIndex, groupByCity, type SeoBusiness } from "@/lib/seo/seo-data";
+import { absoluteUrl, businessPath } from "@/lib/seo/site";
+import { seoSlug } from "@/lib/seo/text";
 
-/** Static pages omit lastModified unless the build pipeline provides a truthful timestamp. */
-const configuredBuildTime = process.env.NEXT_PUBLIC_BUILD_TIME
-  ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME)
-  : undefined;
-const STATIC_LAST_MODIFIED = configuredBuildTime && Number.isFinite(configuredBuildTime.getTime())
-  ? configuredBuildTime
-  : undefined;
+/** Statik sayfalarda lastModified yalnızca derleme hattı gerçek bir zaman verirse yazılır. */
+const configuredBuildTime = process.env.NEXT_PUBLIC_BUILD_TIME ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME) : undefined;
+const STATIC_LAST_MODIFIED = configuredBuildTime && Number.isFinite(configuredBuildTime.getTime()) ? configuredBuildTime : undefined;
 
 export const revalidate = 3600;
 
-const CATEGORY_IMAGES: Record<string, string> = {
-  kuafor: "/images/categories/kuafor.png",
-  berber: "/images/categories/berber.png",
-  guzellik: "/images/categories/guzellik.png",
-  spa: "/images/categories/spa.png",
-  nail: "/images/categories/nail.png",
-  spor: "/images/categories/spor.png",
-  saglik: "/images/categories/saglik.png",
-  danismanlik: "/images/categories/danismanlik.png",
-  veteriner: "/images/categories/veteriner.png",
-  yazilim: "/images/categories/yazilim.png",
-};
-
 /**
- * Ensure image URLs are valid inside XML by encoding bare `&` as `&amp;`.
- * Next.js sitemap generator does NOT XML-encode image URLs, causing
- * Google Search Console parse errors (e.g. Firebase Storage token URLs).
+ * Next.js sitemap üreticisi görsel adreslerindeki `&` karakterini XML'e kaçışlamaz;
+ * Firebase Storage token adresleri Search Console'da ayrıştırma hatası verir.
  */
 function xmlSafeUrl(url: string): string {
   return url.replace(/&(?!amp;)/g, "&amp;");
 }
 
-function businessLastModified(value: unknown): Date | undefined {
-  if (typeof value === "string" || typeof value === "number" || value instanceof Date) {
-    const parsed = new Date(value);
-    if (Number.isFinite(parsed.getTime())) return parsed;
-  }
-
-  if (value && typeof value === "object" && "toDate" in value) {
-    const toDate = (value as { toDate?: unknown }).toDate;
-    if (typeof toDate === "function") {
-      try {
-        const parsed = toDate.call(value) as Date;
-        if (Number.isFinite(parsed.getTime())) return parsed;
-      } catch {
-        // Use the stable deployment date below.
-      }
-    }
-  }
-
-  return STATIC_LAST_MODIFIED;
+function entry(path: string, options: Omit<MetadataRoute.Sitemap[number], "url" | "alternates"> = {}): MetadataRoute.Sitemap[number] {
+  const url = absoluteUrl(path);
+  return {
+    url,
+    lastModified: STATIC_LAST_MODIFIED,
+    alternates: { languages: { "tr-TR": url, "x-default": url } },
+    ...options,
+    ...(options.images ? { images: options.images.map((image) => xmlSafeUrl(absoluteUrl(image))) } : {}),
+  };
 }
+
+/** Listedeki en yeni güncelleme tarihi (şehir/kategori sayfaları için gerçek değişiklik zamanı). */
+function latest(rows: SeoBusiness[]): Date | undefined {
+  const times = rows.map((row) => (row.updatedAt ? Date.parse(row.updatedAt) : Number.NaN)).filter(Number.isFinite);
+  return times.length ? new Date(Math.max(...times)) : STATIC_LAST_MODIFIED;
+}
+
+const STATIC_PAGES: [string, number, MetadataRoute.Sitemap[number]["changeFrequency"]][] = [
+  ["/", 1, "daily"],
+  ["/kesfet", 0.9, "daily"],
+  ["/kategoriler", 0.88, "daily"],
+  ["/online-randevu", 0.85, "weekly"],
+  ["/simdi-musait", 0.7, "daily"],
+  ["/isletmeler", 0.8, "weekly"],
+  ["/fiyatlar", 0.7, "monthly"],
+  ["/ozellikler", 0.7, "monthly"],
+  ["/mobil-uygulama", 0.7, "monthly"],
+  ["/yardim-merkezi", 0.5, "monthly"],
+  ["/isletmeler/yardim", 0.5, "monthly"],
+  ["/hakkimizda", 0.4, "yearly"],
+  ["/iletisim", 0.4, "yearly"],
+  ["/guvenlik", 0.3, "yearly"],
+  ["/kvkk", 0.2, "yearly"],
+  ["/gizlilik", 0.2, "yearly"],
+  ["/kullanim-kosullari", 0.2, "yearly"],
+  ["/cerez-politikasi", 0.2, "yearly"],
+];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://seninrandevun.com").replace(/\/+$/, "");
-  const alternates = (url: string) => ({ languages: { "tr-TR": url, "x-default": url } });
+  const index = await getSeoIndex();
+  const cities = groupByCity(index);
+  const urls: MetadataRoute.Sitemap = [];
 
-  // Fetch ALL active businesses for sitemap (not just Fethiye)
-  const [allBusinesses, fethiyeBusinesses] = await Promise.all([
-    searchBusinesses({ maxResults: 500 }).catch(() => []),
-    getFethiyeBusinesses().catch(() => []),
-  ]);
+  for (const [path, priority, changeFrequency] of STATIC_PAGES) {
+    urls.push(entry(path, { priority, changeFrequency, lastModified: path === "/" || path === "/kesfet" ? latest(index) : STATIC_LAST_MODIFIED }));
+  }
 
-  // Local SEO pages
-  const localPages: MetadataRoute.Sitemap = ["mugla", "mugla/fethiye"].map((path) => ({
-    url: `${baseUrl}/${path}`, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: path === "mugla/fethiye" ? 0.95 : 0.8,
-    alternates: alternates(`${baseUrl}/${path}`),
-  }));
-  for (const slug of Object.keys(LOCAL_CATEGORIES) as LocalCategorySlug[]) {
-    const hasBusiness = businessesForCategory(fethiyeBusinesses, slug).length > 0;
-    if (hasBusiness) {
-      const url = `${baseUrl}/mugla/fethiye/${slug}`;
-      localPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.85, alternates: alternates(url), images: [xmlSafeUrl(`${baseUrl}${LOCAL_CATEGORIES[slug].image}`)] });
+  // Kategori tanıtım sayfaları
+  for (const category of Object.values(SEO_CATEGORIES)) {
+    if (!category.landing) continue;
+    const rows = index.filter((row) => row.category === category.slug);
+    urls.push(entry(category.landing, { priority: 0.85, changeFrequency: "weekly", lastModified: latest(rows), images: category.image ? [category.image] : undefined }));
+  }
+
+  // Şehir ve şehir × kategori sayfaları: yalnızca en az bir yayında işletme varsa
+  for (const city of cities) {
+    urls.push(entry(`/sehir/${city.slug}`, { priority: 0.85, changeFrequency: "daily", lastModified: latest(city.businesses) }));
+    for (const item of categoryCounts(city.businesses)) {
+      const rows = city.businesses.filter((row) => row.category === item.slug);
+      const image = SEO_CATEGORIES[item.slug]?.image;
+      urls.push(entry(`/sehir/${city.slug}/${item.slug}`, { priority: 0.8, changeFrequency: "daily", lastModified: latest(rows), images: image ? [image] : undefined }));
     }
   }
 
-  // All active business pages
-  const businessPages: MetadataRoute.Sitemap = allBusinesses
-    .filter((business) => business.slug && business.isPublished && business.status === "active" && business.hiddenFromDiscovery !== true)
-    .map((business) => {
-      const url = `${baseUrl}/isletme/${encodeURIComponent(business.slug)}`;
-      const images = [business.coverUrl, business.logoUrl]
-        .filter((image): image is string => Boolean(image))
-        .map((image) => image.startsWith("http") ? image : `${baseUrl}${image.startsWith("/") ? image : `/${image}`}`)
-        .map(xmlSafeUrl);
-      return {
-        url,
-        lastModified: businessLastModified(business.updatedAt || business.createdAt),
-        changeFrequency: "daily" as const,
-        priority: business.isVerified ? 0.86 : 0.8,
-        alternates: alternates(url),
-        images: images.length ? images : undefined,
-      };
-    });
-
-  // Only publish programmatic city/category URLs when real active inventory exists.
-  const cities = new Map<string, typeof allBusinesses>();
-  for (const business of allBusinesses) {
-    const slug = seoSlug(business.city);
-    if (!slug) continue;
-    cities.set(slug, [...(cities.get(slug) ?? []), business]);
-  }
-  const geoPages: MetadataRoute.Sitemap = [];
-  for (const [citySlug, rows] of cities) {
-    const cityUrl = `${baseUrl}/sehir/${citySlug}`;
-    geoPages.push({ url: cityUrl, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.86, alternates: alternates(cityUrl) });
-    for (const category of Object.keys(GEO_CATEGORIES) as GeoCategorySlug[]) {
-      if (businessesInCategory(rows, category).length === 0) continue;
-      const url = `${cityUrl}/${category}`;
-      geoPages.push({ url, lastModified: STATIC_LAST_MODIFIED, changeFrequency: "daily", priority: 0.84, alternates: alternates(url), images: [xmlSafeUrl(`${baseUrl}${GEO_CATEGORIES[category].image}`)] });
+  // Fethiye ilçe sayfaları (eski yerel adresler; kanonik ve içerik olarak bağımsız)
+  const fethiye = index.filter((row) => row.citySlug === "mugla" && seoSlug(row.district).includes("fethiye"));
+  if (fethiye.length > 0) {
+    urls.push(entry("/mugla/fethiye", { priority: 0.8, changeFrequency: "daily", lastModified: latest(fethiye) }));
+    for (const slug of Object.keys(LOCAL_CATEGORIES) as LocalCategorySlug[]) {
+      const rows = businessesForCategory(fethiye, slug);
+      if (rows.length === 0) continue;
+      urls.push(entry(`/mugla/fethiye/${slug}`, { priority: 0.75, changeFrequency: "daily", lastModified: latest(rows) }));
     }
   }
 
-  // Category landing pages with images
-  const categoryLandingPages: MetadataRoute.Sitemap = [
-    { path: "kuafor-randevu", cat: "kuafor", priority: 0.85 },
-    { path: "berber-randevu", cat: "berber", priority: 0.85 },
-    { path: "guzellik-merkezi-randevu", cat: "guzellik", priority: 0.85 },
-    { path: "spa-randevu", cat: "spa", priority: 0.8 },
-    { path: "saglik-randevu", cat: "saglik", priority: 0.8 },
-    { path: "spor-randevu", cat: "spor", priority: 0.8 },
-    { path: "veteriner-randevu", cat: "veteriner", priority: 0.8 },
-    { path: "nail-studio-randevu", cat: "nail", priority: 0.8 },
-    { path: "danismanlik-randevu", cat: "danismanlik", priority: 0.8 },
-    { path: "yazilim-web-randevu", cat: "yazilim", priority: 0.8 },
-  ].map(({ path, cat, priority }) => ({
-    url: `${baseUrl}/${path}`,
-    lastModified: STATIC_LAST_MODIFIED,
-    changeFrequency: "weekly" as const,
-    priority,
-    alternates: alternates(`${baseUrl}/${path}`),
-    images: CATEGORY_IMAGES[cat] ? [xmlSafeUrl(`${baseUrl}${CATEGORY_IMAGES[cat]}`)] : undefined,
-  }));
+  // Tüm yayındaki, gizlenmemiş işletmeler (dizin bunları zaten süzer)
+  for (const business of index) {
+    const images = [business.coverUrl, business.logoUrl].filter((image): image is string => Boolean(image));
+    urls.push(entry(businessPath(business.slug), {
+      priority: business.isVerified ? 0.8 : 0.75,
+      changeFrequency: "weekly",
+      lastModified: business.updatedAt ? new Date(business.updatedAt) : STATIC_LAST_MODIFIED,
+      images: images.length ? images : undefined,
+    }));
+  }
 
-  return [
-    {
-      url: baseUrl,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 1,
-      alternates: alternates(baseUrl),
-      images: [`${baseUrl}/og.png`],
-    },
-    {
-      url: `${baseUrl}/kesfet`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "daily",
-      priority: 0.9,
-      alternates: alternates(`${baseUrl}/kesfet`),
-    },
-    {
-      url: `${baseUrl}/kategoriler`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "daily",
-      priority: 0.88,
-      alternates: alternates(`${baseUrl}/kategoriler`),
-      images: Object.values(CATEGORY_IMAGES).slice(0, 4).map((image) => xmlSafeUrl(`${baseUrl}${image}`)),
-    },
-    {
-      url: `${baseUrl}/fiyatlar`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "monthly",
-      priority: 0.8,
-      alternates: alternates(`${baseUrl}/fiyatlar`),
-    },
-    {
-      url: `${baseUrl}/isletmeler`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 0.9,
-      alternates: alternates(`${baseUrl}/isletmeler`),
-    },
-    {
-      url: `${baseUrl}/online-randevu`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "weekly",
-      priority: 0.9,
-      alternates: alternates(`${baseUrl}/online-randevu`),
-      images: [`${baseUrl}/og.png`],
-    },
-    {
-      url: `${baseUrl}/simdi-musait`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "daily",
-      priority: 0.82,
-      alternates: alternates(`${baseUrl}/simdi-musait`),
-      images: [`${baseUrl}/og.png`],
-    },
-    ...[
-      ["ozellikler", 0.9],
-      ["mobil-uygulama", 0.92],
-      ["hakkimizda", 0.6],
-      ["iletisim", 0.6],
-      ["yardim-merkezi", 0.7],
-      ["isletmeler/yardim", 0.75],
-      ["guvenlik", 0.6],
-      ["kvkk", 0.4],
-      ["gizlilik", 0.4],
-      ["kullanim-kosullari", 0.4],
-      ["cerez-politikasi", 0.4],
-    ].map(([path, priority]) => ({
-      url: `${baseUrl}/${path}`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: "monthly" as const,
-      priority: priority as number,
-      alternates: alternates(`${baseUrl}/${path}`),
-    })),
-    ...categoryLandingPages,
-    ...localPages,
-    ...geoPages,
-    ...businessPages,
-  ];
+  // Aynı URL iki kez yazılmasın.
+  const seen = new Set<string>();
+  return urls.filter((item) => (seen.has(item.url) ? false : (seen.add(item.url), true)));
 }
+

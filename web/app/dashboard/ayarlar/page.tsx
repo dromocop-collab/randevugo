@@ -1,29 +1,28 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { LoadingState } from "@/components/ui/states";
+import {
+  AtSign, Building2, CalendarCog, CheckCircle2, Clock3, Gauge, Globe2, Images, LoaderCircle, MapPin, MessageSquareText,
+  Palette, Search, Send, Share2, ShieldAlert, ShieldCheck, Sparkles, Store, Trash2, type LucideIcon,
+} from "lucide-react";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useBusiness } from "@/hooks/use-business";
 import { LiveQueueSettings } from "@/features/live-queue/live-queue-settings";
 import { BusinessAvailabilitySettings } from "@/features/availability/business-availability-settings";
 import { PushToggleCard } from "@/features/push";
 import { BusinessBookingFieldsEditor } from "@/features/booking-fields/business-booking-fields-editor";
-import {
-  getBusinessById,
-  updateBusiness,
-} from "@/features/businesses/business-repository";
+import { getBusinessById, updateBusiness } from "@/features/businesses/business-repository";
 import { submitBusinessProfileChange } from "@/features/businesses/business-profile-review-repository";
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import type { Business, BusinessCategory, BusinessType, SmsPreferences, SocialMediaLinks } from "@/types/business";
-import { AtSign, Building2, CalendarCog, CheckCircle2, Clock3, Gauge, Globe2, Images, LoaderCircle, MapPin, Save, Search, Share2, ShieldCheck, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
-import Image from "next/image";
+import { ConfirmSheet, HeroChip, Notice, Panel, SaveBar, Sk, StudioHero, StudioPage, ToggleRow, cx, studio as k } from "../_studio";
+import { AppearanceSection } from "./appearance-section";
+import st from "./settings.module.css";
+import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
 
 const DEFAULT_CATEGORY_OPTIONS = [
   { value: "kuafor", label: "Kuaför" },
@@ -47,7 +46,46 @@ const BIZ_TYPE_OPTIONS = [
   { value: "unisex", label: "Unisex" },
 ];
 
-type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu";
+
+const SOCIAL_FIELDS = [
+  { key: "instagram", label: "Instagram", placeholder: "instagram.com/isletmeniz" },
+  { key: "facebook", label: "Facebook", placeholder: "facebook.com/isletmeniz" },
+  { key: "twitter", label: "Twitter / X", placeholder: "x.com/isletmeniz" },
+  { key: "tiktok", label: "TikTok", placeholder: "tiktok.com/@isletmeniz" },
+  { key: "youtube", label: "YouTube", placeholder: "youtube.com/@isletmeniz" },
+  { key: "whatsapp", label: "WhatsApp", placeholder: "05XX XXX XX XX" },
+] as const;
+
+const SMS_FIELDS = [
+  ["confirmation", "Randevu onayı", "Randevu oluştuğunda bilgi verir"],
+  ["reminder", "1 saat önce hatırlatma", "Randevu öncesinde otomatik gönderilir"],
+  ["cancellation", "İptal bildirimi", "İptal edilen randevuyu müşteriye bildirir"],
+  ["reschedule", "Saat değişikliği", "Yeni tarih ve saati müşteriye iletir"],
+] as const;
+
+type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu" | "gorunum";
+
+type InfoForm = { name: string; category: BusinessCategory; businessType: BusinessType | ""; description: string; phone: string; email: string; address: string; city: string; district: string; website: string };
+type RulesForm = { minNotice: number; maxDaysAhead: number; bufferBefore: number; bufferAfter: number; slotInterval: number; allowCancel: boolean; allowReschedule: boolean; allowOnlineBooking: boolean; cancelDeadline: number; smsPreferences: SmsPreferences };
+
+const EMPTY_INFO: InfoForm = { name: "", category: "diger", businessType: "", description: "", phone: "", email: "", address: "", city: "", district: "", website: "" };
+const DEFAULT_RULES: RulesForm = { minNotice: 60, maxDaysAhead: 45, bufferBefore: 0, bufferAfter: 10, slotInterval: 15, allowCancel: true, allowReschedule: true, allowOnlineBooking: true, cancelDeadline: 60, smsPreferences: { confirmation: true, reminder: true, cancellation: true, reschedule: true } };
+
+const TABS: { id: Tab; label: string; short: string; note: string; icon: LucideIcon }[] = [
+  { id: "bilgiler", label: "İşletme Bilgileri", short: "Profil", note: "Profil, iletişim ve konum", icon: Building2 },
+  { id: "gorseller", label: "Marka Stüdyosu", short: "Görseller", note: "Logo, kapak ve galeri", icon: Images },
+  { id: "sosyal", label: "Dijital Kanallar", short: "Kanallar", note: "Sosyal medya ve WhatsApp", icon: Share2 },
+  { id: "randevu", label: "Randevu Motoru", short: "Randevu", note: "Takvim, süre, iptal, SMS ve bildirim", icon: CalendarCog },
+  { id: "gorunum", label: "Görünüm", short: "Görünüm", note: "Panel renk atmosferi", icon: Palette },
+];
+
+function same(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function cleanSocial(value: SocialMediaLinks) {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => typeof v === "string" && v.trim() !== "")) as SocialMediaLinks;
+}
 
 export default function SettingsPage() {
   const { businessId } = useBusiness();
@@ -58,35 +96,26 @@ export default function SettingsPage() {
   const [settingsSearch, setSettingsSearch] = useState("");
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
 
-  // Form states — Tab 1
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<BusinessCategory>("diger");
-  const [businessType, setBusinessType] = useState<BusinessType | "">("");
-  const [description, setDescription] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [district, setDistrict] = useState("");
-  const [website, setWebsite] = useState("");
+  // Profil formu + kayıtlı (yayındaki / onaya gönderilen) taban
+  const [info, setInfo] = useState<InfoForm>(EMPTY_INFO);
+  const [infoBase, setInfoBase] = useState<InfoForm>(EMPTY_INFO);
   const [customCategory, setCustomCategory] = useState("");
   const [requestingCategory, setRequestingCategory] = useState(false);
   const [categoryRequested, setCategoryRequested] = useState(false);
 
-  // Tab 3 — Social
+  // Dijital kanallar
   const [social, setSocial] = useState<SocialMediaLinks>({});
+  const [socialBase, setSocialBase] = useState<SocialMediaLinks>({});
 
-  // Tab 4 — Appointment settings
-  const [minNotice, setMinNotice] = useState(60);
-  const [maxDaysAhead, setMaxDaysAhead] = useState(45);
-  const [bufferBefore, setBufferBefore] = useState(0);
-  const [bufferAfter, setBufferAfter] = useState(10);
-  const [slotInterval, setSlotInterval] = useState(15);
-  const [allowCancel, setAllowCancel] = useState(true);
-  const [allowReschedule, setAllowReschedule] = useState(true);
-  const [allowOnlineBooking, setAllowOnlineBooking] = useState(true);
-  const [cancelDeadline, setCancelDeadline] = useState(60);
-  const [smsPreferences, setSmsPreferences] = useState<SmsPreferences>({ confirmation: true, reminder: true, cancellation: true, reschedule: true });
+  // Randevu kuralları
+  const [rules, setRules] = useState<RulesForm>(DEFAULT_RULES);
+  const [rulesBase, setRulesBase] = useState<RulesForm>(DEFAULT_RULES);
+
+  const [galleryToRemove, setGalleryToRemove] = useState<string | null>(null);
+  const [removingGallery, setRemovingGallery] = useState(false);
+
+  const setInfoField = <K extends keyof InfoForm>(key: K, value: InfoForm[K]) => setInfo((current) => ({ ...current, [key]: value }));
+  const setRule = <K extends keyof RulesForm>(key: K, value: RulesForm[K]) => setRules((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
     if (!businessId) return;
@@ -95,32 +124,41 @@ export default function SettingsPage() {
     getBusinessById(businessId).then((biz) => {
       if (cancelled || !biz) return;
       setBusiness(biz);
-      setName(biz.name);
-      setCategory(canonicalBusinessCategory(biz.category));
-      setBusinessType(biz.businessType ?? "");
-      setDescription(biz.description ?? "");
-      setPhone(biz.phone);
-      setEmail(biz.email);
-      setAddress(biz.address);
-      setCity(biz.city);
-      setDistrict(biz.district);
-      setWebsite(biz.website ?? "");
+      const nextInfo: InfoForm = {
+        name: biz.name,
+        category: canonicalBusinessCategory(biz.category),
+        businessType: biz.businessType ?? "",
+        description: biz.description ?? "",
+        phone: biz.phone,
+        email: biz.email,
+        address: biz.address,
+        city: biz.city,
+        district: biz.district,
+        website: biz.website ?? "",
+      };
+      setInfo(nextInfo);
+      setInfoBase(nextInfo);
       setSocial(biz.socialMedia ?? {});
-      setMinNotice(biz.minimumBookingNoticeMinutes);
-      setMaxDaysAhead(biz.maximumBookingDaysAhead);
-      setBufferBefore(biz.bufferBeforeMinutes ?? 0);
-      setBufferAfter(biz.bufferAfterMinutes ?? biz.appointmentBufferMinutes ?? 10);
-      setSlotInterval(biz.slotIntervalMinutes ?? 15);
-      setAllowCancel(biz.allowCancellation ?? true);
-      setAllowReschedule(biz.allowReschedule ?? true);
-      setAllowOnlineBooking(biz.allowOnlineBooking !== false);
-      setCancelDeadline(biz.cancellationDeadlineMinutes ?? 60);
-      setSmsPreferences({
-        confirmation: biz.smsPreferences?.confirmation !== false,
-        reminder: biz.smsPreferences?.reminder !== false,
-        cancellation: biz.smsPreferences?.cancellation !== false,
-        reschedule: biz.smsPreferences?.reschedule !== false,
-      });
+      setSocialBase(biz.socialMedia ?? {});
+      const nextRules: RulesForm = {
+        minNotice: biz.minimumBookingNoticeMinutes,
+        maxDaysAhead: biz.maximumBookingDaysAhead,
+        bufferBefore: biz.bufferBeforeMinutes ?? 0,
+        bufferAfter: biz.bufferAfterMinutes ?? biz.appointmentBufferMinutes ?? 10,
+        slotInterval: biz.slotIntervalMinutes ?? 15,
+        allowCancel: biz.allowCancellation ?? true,
+        allowReschedule: biz.allowReschedule ?? true,
+        allowOnlineBooking: biz.allowOnlineBooking !== false,
+        cancelDeadline: biz.cancellationDeadlineMinutes ?? 60,
+        smsPreferences: {
+          confirmation: biz.smsPreferences?.confirmation !== false,
+          reminder: biz.smsPreferences?.reminder !== false,
+          cancellation: biz.smsPreferences?.cancellation !== false,
+          reschedule: biz.smsPreferences?.reschedule !== false,
+        },
+      };
+      setRules(nextRules);
+      setRulesBase(nextRules);
       setLoading(false);
     }).catch(() => {
       if (!cancelled) setLoading(false);
@@ -129,11 +167,11 @@ export default function SettingsPage() {
     return () => { cancelled = true; };
   }, [businessId]);
 
-  // Fetch dynamic categories from Firestore
+  // Firestore'daki dinamik kategoriler
   useEffect(() => {
     listDynamicCategories().then((dynamic) => {
       const existing = new Set(DEFAULT_CATEGORY_OPTIONS.map((o) => o.value));
-      const merged = [...DEFAULT_CATEGORY_OPTIONS.filter(o => o.value !== "diger")];
+      const merged = [...DEFAULT_CATEGORY_OPTIONS.filter((o) => o.value !== "diger")];
       dynamic.forEach((dc) => {
         const canonicalSlug = canonicalBusinessCategory(dc.slug);
         if (!existing.has(canonicalSlug)) {
@@ -141,40 +179,46 @@ export default function SettingsPage() {
           merged.push({ value: canonicalSlug, label: dc.label });
         }
       });
-      // Always keep "Diğer" at the end
+      // "Diğer" her zaman sonda
       merged.push({ value: "diger", label: "Diğer" });
       setCategoryOptions(merged);
     }).catch(() => {});
   }, []);
 
+  const infoDirty = !same(info, infoBase);
+  const socialDirty = !same(cleanSocial(social), cleanSocial(socialBase));
+  const rulesDirty = !same(rules, rulesBase);
+  const dirtyByTab: Partial<Record<Tab, boolean>> = { bilgiler: infoDirty, sosyal: socialDirty, randevu: rulesDirty };
+
   async function handleSaveInfo(e: FormEvent) {
     e.preventDefault();
     if (!businessId) return;
 
-    if (!name.trim()) { toast.error("İşletme adı zorunludur."); return; }
-    if (!phone.trim()) { toast.error("Telefon zorunludur."); return; }
-    if (!email.trim()) { toast.error("E-posta zorunludur."); return; }
-    if (!address.trim()) { toast.error("Adres zorunludur."); return; }
-    if (!city.trim()) { toast.error("Şehir zorunludur."); return; }
-    if (!district.trim()) { toast.error("İlçe zorunludur."); return; }
+    if (!info.name.trim()) { toast.error("İşletme adı zorunludur."); return; }
+    if (!info.phone.trim()) { toast.error("Telefon zorunludur."); return; }
+    if (!info.email.trim()) { toast.error("E-posta zorunludur."); return; }
+    if (!info.address.trim()) { toast.error("Adres zorunludur."); return; }
+    if (!info.city.trim()) { toast.error("Şehir zorunludur."); return; }
+    if (!info.district.trim()) { toast.error("İlçe zorunludur."); return; }
 
     setSaving(true);
     try {
       const updateData: Record<string, unknown> = {
-        name: name.trim(),
-        category,
-        businessType: businessType || null,
-        phone: phone.trim(),
-        email: email.trim(),
-        address: address.trim(),
-        city: city.trim(),
-        district: district.trim(),
-        description: description.trim(),
-        website: website.trim(),
+        name: info.name.trim(),
+        category: info.category,
+        businessType: info.businessType || null,
+        phone: info.phone.trim(),
+        email: info.email.trim(),
+        address: info.address.trim(),
+        city: info.city.trim(),
+        district: info.district.trim(),
+        description: info.description.trim(),
+        website: info.website.trim(),
       };
 
       await submitBusinessProfileChange(businessId, updateData);
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      setInfoBase(info);
       toast.success("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır.");
     } catch (err) {
       console.error("updateBusiness error:", err);
@@ -196,6 +240,7 @@ export default function SettingsPage() {
     try {
       await submitBusinessProfileChange(businessId, { socialMedia: social });
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      setSocialBase(social);
       toast.success("Dijital kanallar süper admin onayına gönderildi.");
     } catch {
       toast.error("Güncelleme başarısız.");
@@ -207,6 +252,7 @@ export default function SettingsPage() {
   async function handleSaveAppointment(e: FormEvent) {
     e.preventDefault();
     if (!businessId) return;
+    const { minNotice, maxDaysAhead, bufferBefore, bufferAfter, cancelDeadline } = rules;
     if (minNotice < 0 || minNotice > 10080) { toast.error("Minimum bildirim süresi 0 ile 10.080 dakika arasında olmalıdır."); return; }
     if (maxDaysAhead < 1 || maxDaysAhead > 365) { toast.error("Randevu penceresi 1 ile 365 gün arasında olmalıdır."); return; }
     if (bufferBefore < 0 || bufferBefore > 180 || bufferAfter < 0 || bufferAfter > 180) { toast.error("Hazırlık süreleri en fazla 180 dakika olabilir."); return; }
@@ -219,13 +265,14 @@ export default function SettingsPage() {
         appointmentBufferMinutes: bufferAfter,
         bufferBeforeMinutes: bufferBefore,
         bufferAfterMinutes: bufferAfter,
-        slotIntervalMinutes: slotInterval,
-        allowCancellation: allowCancel,
-        allowReschedule,
-        allowOnlineBooking,
+        slotIntervalMinutes: rules.slotInterval,
+        allowCancellation: rules.allowCancel,
+        allowReschedule: rules.allowReschedule,
+        allowOnlineBooking: rules.allowOnlineBooking,
         cancellationDeadlineMinutes: cancelDeadline,
-        smsPreferences,
+        smsPreferences: rules.smsPreferences,
       });
+      setRulesBase(rules);
       toast.success("Randevu ayarları güncellendi.");
     } catch {
       toast.error("Güncelleme başarısız.");
@@ -234,464 +281,387 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) {
-    return <LoadingState title="Ayarlar yükleniyor" description="İşletme bilgileri getiriliyor..." />;
+  async function requestCategory() {
+    if (!businessId || !customCategory.trim()) return;
+    setRequestingCategory(true);
+    try {
+      await createCategoryRequest(businessId, info.name, customCategory.trim());
+      setCategoryRequested(true);
+      toast.success("Kategori isteğiniz Super Admin onayına gönderildi.");
+    } catch {
+      toast.error("Kategori isteği gönderilemedi.");
+    } finally {
+      setRequestingCategory(false);
+    }
   }
 
-  const TABS: { id: Tab; label: string; note: string; icon: LucideIcon }[] = [
-    { id: "bilgiler", label: "İşletme Bilgileri", note: "Profil, iletişim ve konum", icon: Building2 },
-    { id: "gorseller", label: "Marka Stüdyosu", note: "Logo, kapak ve galeri", icon: Images },
-    { id: "sosyal", label: "Dijital Kanallar", note: "Sosyal medya ve WhatsApp", icon: Share2 },
-    { id: "randevu", label: "Randevu Motoru", note: "Takvim, süre ve müşteri izinleri", icon: CalendarCog },
-  ];
-  const filteredTabs = settingsSearch.trim()
-    ? TABS.filter((tab) => `${tab.label} ${tab.note}`.toLocaleLowerCase("tr-TR").includes(settingsSearch.trim().toLocaleLowerCase("tr-TR")))
-    : TABS;
-  const profileSignals = [name, category !== "diger" ? category : "", phone, email, address, city, district, description, business?.logoUrl, business?.coverUrl];
-  const profileScore = Math.round(profileSignals.filter(Boolean).length / profileSignals.length * 100);
-  const socialCount = Object.values(social).filter((value) => value?.trim()).length;
+  async function removeGalleryImage() {
+    if (!businessId || !galleryToRemove) return;
+    const updated = (business?.galleryUrls ?? []).filter((item) => item !== galleryToRemove);
+    setRemovingGallery(true);
+    try {
+      await submitBusinessProfileChange(businessId, { galleryUrls: updated });
+      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      toast.success("Galeri değişikliği onaya gönderildi.");
+      setGalleryToRemove(null);
+    } catch {
+      toast.error("Değişiklik gönderilemedi.");
+    } finally {
+      setRemovingGallery(false);
+    }
+  }
 
   function applyBookingPreset(preset: "balanced" | "flexible" | "protected") {
-    if (preset === "flexible") { setMinNotice(30); setMaxDaysAhead(60); setBufferBefore(0); setBufferAfter(5); setSlotInterval(15); }
-    if (preset === "balanced") { setMinNotice(60); setMaxDaysAhead(45); setBufferBefore(5); setBufferAfter(10); setSlotInterval(15); }
-    if (preset === "protected") { setMinNotice(180); setMaxDaysAhead(30); setBufferBefore(10); setBufferAfter(15); setSlotInterval(15); }
+    if (preset === "flexible") setRules((r) => ({ ...r, minNotice: 30, maxDaysAhead: 60, bufferBefore: 0, bufferAfter: 5, slotInterval: 15 }));
+    if (preset === "balanced") setRules((r) => ({ ...r, minNotice: 60, maxDaysAhead: 45, bufferBefore: 5, bufferAfter: 10, slotInterval: 15 }));
+    if (preset === "protected") setRules((r) => ({ ...r, minNotice: 180, maxDaysAhead: 30, bufferBefore: 10, bufferAfter: 15, slotInterval: 15 }));
     toast.success("Randevu profili uygulandı. Kaydederek etkinleştirebilirsiniz.");
   }
 
-  return (
-    <div className="settings-page">
-      <section className="settings-command-hero">
-        <div className="settings-command-copy">
-          <span><Sparkles size={15} /> İŞLETME KONTROL MERKEZİ</span>
-          <h1>Mağazanı kusursuzlaştır.</h1>
-          <p>Profil, marka, iletişim ve randevu kurallarını tek bir akıştan güvenle yönet.</p>
-        </div>
-        <div className="settings-command-status"><span><ShieldCheck size={25} /></span><div><small>PROFİL SAĞLIĞI</small><b><CheckCircle2 size={15} /> %{profileScore} tamamlandı</b><i><em style={{width:`${profileScore}%`}}/></i></div></div>
-      </section>
+  const filteredTabs = useMemo(() => {
+    const term = settingsSearch.trim().toLocaleLowerCase("tr-TR");
+    return term ? TABS.filter((tab) => `${tab.label} ${tab.note}`.toLocaleLowerCase("tr-TR").includes(term)) : TABS;
+  }, [settingsSearch]);
 
-      <section className="settings-vitals" aria-label="Ayar özeti">
-        <button type="button" onClick={() => setActiveTab("bilgiler")}><i><MapPin size={18}/></i><span><small>MAĞAZA PROFİLİ</small><b>{city && district ? `${district}, ${city}` : "Konumu tamamlayın"}</b></span><em>{profileScore}%</em></button>
-        <button type="button" onClick={() => setActiveTab("sosyal")}><i><AtSign size={18}/></i><span><small>DİJİTAL ERİŞİM</small><b>{socialCount ? `${socialCount} kanal bağlı` : "Kanallarınızı bağlayın"}</b></span><em>{socialCount}/6</em></button>
-        <button type="button" onClick={() => setActiveTab("randevu")}><i><Clock3 size={18}/></i><span><small>RANDEVU PENCERESİ</small><b>{minNotice} dk → {maxDaysAhead} gün</b></span><em>{slotInterval} dk</em></button>
-      </section>
+  if (loading) {
+    return (
+      <StudioPage label="Ayarlar yükleniyor">
+        <div role="status" aria-live="polite" className={st.skeleton}>
+          <Sk h={170} r={26} />
+          <div className={st.layout}>
+            <div className={st.skeletonNav}>{TABS.map((tab) => <Sk key={tab.id} h={56} r={16} />)}</div>
+            <div className={k.panel} style={{ display: "grid", gap: 14 }}>
+              <Sk h={22} w="45%" />
+              {Array.from({ length: 5 }, (_, i) => <Sk key={i} h={50} r={14} />)}
+            </div>
+          </div>
+          <span className={k.srOnly}>Ayarlar yükleniyor</span>
+        </div>
+      </StudioPage>
+    );
+  }
+
+  const profileSignals = [info.name, info.category !== "diger" ? info.category : "", info.phone, info.email, info.address, info.city, info.district, info.description, business?.logoUrl, business?.coverUrl];
+  const profileScore = Math.round(profileSignals.filter(Boolean).length / profileSignals.length * 100);
+  const socialCount = Object.values(social).filter((value) => value?.trim()).length;
+  const assetCount = (business?.galleryUrls?.length ?? 0) + Number(Boolean(business?.logoUrl)) + Number(Boolean(business?.coverUrl));
+  const activeMeta = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
+
+  const saveBar = activeTab === "bilgiler"
+    ? <SaveBar visible={infoDirty} saving={saving} form="settings-info-form" saveLabel="Onaya gönder" note="Onaya kadar mevcut profil yayında" onReset={() => { setInfo(infoBase); setCategoryRequested(false); }} />
+    : activeTab === "sosyal"
+      ? <SaveBar visible={socialDirty} saving={saving} form="settings-social-form" saveLabel="Onaya gönder" note="Kontrol sonrası yayınlanır" onReset={() => setSocial(socialBase)} />
+      : activeTab === "randevu"
+        ? <SaveBar visible={rulesDirty} saving={saving} form="settings-rules-form" saveLabel="Kaydet" note="Uygunluk motoruna anında yansır" onReset={() => setRules(rulesBase)} />
+        : null;
+
+  return (
+    <StudioPage className={st.page}>
+      <StudioHero
+        eyebrow="İşletme kontrol merkezi"
+        icon={Sparkles}
+        title="Ayarlar"
+        description="Profil, marka, kanallar ve randevu kurallarını tek yerden, güvenle yönet."
+        actions={business?.slug
+          ? <a className={cx(k.btn, k.btnGlass)} href={`/isletme/${business.slug}`} target="_blank" rel="noreferrer"><Globe2 size={16} aria-hidden /> Profili önizle</a>
+          : null}
+      >
+        <HeroChip icon={ShieldCheck} value={`%${profileScore}`} label="profil" />
+        <HeroChip icon={AtSign} value={`${socialCount}/6`} label="kanal" />
+        <HeroChip icon={Clock3} value={`${rules.slotInterval} dk`} label="slot" />
+      </StudioHero>
 
       {business?.profileReviewStatus === "pending" && (
-        <div className="settings-review-banner" role="status"><ShieldCheck size={18}/><div><b>Yayın öncesi inceleme sürüyor</b><span>Gönderdiğiniz profil değişiklikleri güvenlik ve içerik kontrolünden sonra yayına alınacak. Bu sırada mevcut profiliniz kesintisiz görünür.</span></div></div>
+        <Notice tone="warn" icon={ShieldCheck} title="Yayın öncesi inceleme sürüyor">
+          Gönderdiğiniz profil değişiklikleri güvenlik ve içerik kontrolünden sonra yayına alınacak. Bu sırada mevcut profiliniz kesintisiz görünür.
+        </Notice>
+      )}
+      {business?.profileReviewStatus === "rejected" && (
+        <Notice tone="bad" icon={ShieldAlert} title="Son profil değişikliği onaylanmadı">
+          {business.profileReviewNote || "Bilgileri gözden geçirip yeniden gönderebilirsiniz."}
+        </Notice>
       )}
 
-      {/* Tab Navigation */}
-      <div className="settings-navigator"><label><Search size={17}/><input value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder="Ayarlarda ara…"/></label><div className="settings-tabs">
-        {filteredTabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`settings-tab ${
-                activeTab === tab.id
-                  ? "is-active"
-                  : ""
-              }`}
-            >
-              <Icon aria-hidden="true" size={17} strokeWidth={1.9} />
-              <span>{tab.label}<small>{tab.note}</small></span>
-            </button>
-          );
-        })}
-        {!filteredTabs.length && <p className="settings-search-empty">Bu ifadeyle eşleşen ayar bulunamadı.</p>}
-      </div></div>
+      <div className={st.layout}>
+        <nav className={st.nav} aria-label="Ayar bölümleri">
+          <label className={st.navSearch}>
+            <Search size={16} aria-hidden />
+            <span className={k.srOnly}>Ayarlarda ara</span>
+            <input type="search" value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder="Ayarlarda ara…" />
+          </label>
+          <div className={st.navList} role="tablist" aria-orientation="vertical">
+            {filteredTabs.map((tab) => {
+              const Icon = tab.icon;
+              const selected = activeTab === tab.id;
+              return (
+                <button key={tab.id} type="button" role="tab" aria-selected={selected} aria-controls="settings-panel" className={st.navItem} onClick={() => setActiveTab(tab.id)}>
+                  <i aria-hidden><Icon size={17} strokeWidth={1.9} /></i>
+                  <span><b><em className={st.long}>{tab.label}</em><em className={st.short}>{tab.short}</em></b><small>{tab.note}</small></span>
+                  {dirtyByTab[tab.id] ? <span className={st.dirtyDot} aria-label="Kaydedilmemiş değişiklik" /> : null}
+                </button>
+              );
+            })}
+            {!filteredTabs.length && <p className={st.navEmpty}>Bu ifadeyle eşleşen ayar bulunamadı.</p>}
+          </div>
+        </nav>
 
-      <div key={activeTab} className="settings-tab-content">
-      {/* Tab 1: İşletme Bilgileri */}
-      {activeTab === "bilgiler" && (
-        <Card title="İşletme Bilgileri" description="İşletmenizin temel bilgilerini düzenleyin.">
-          <div className="settings-profile-preview"><div>{business?.logoUrl ? <Image src={business.logoUrl} alt="" width={58} height={58}/> : <Building2 size={24}/>}<span><small>CANLI MAĞAZA KARTI</small><b>{name || "İşletme adınız"}</b><em>{district || "İlçe"}, {city || "Şehir"}</em></span></div><a href={business?.slug ? `/isletme/${business.slug}` : undefined} target="_blank" aria-disabled={!business?.slug}><Globe2 size={15}/> Profili önizle</a></div>
-          <form className="settings-form space-y-4" onSubmit={handleSaveInfo}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="İşletme Adı *"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="Örn: Güzel Saçlar Kuaförü"
-              />
-              <Select
-                label="Kategori *"
-                value={category}
-                onChange={(e) => {
-                  setCategory(e.target.value as BusinessCategory);
-                  setCategoryRequested(false);
-                }}
-                options={categoryOptions}
-              />
-              {category === "diger" && (
-                <div className="sm:col-span-2">
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-                    <p className="mb-2 text-sm font-medium text-amber-700">
-                      📝 İstediğiniz kategoriyi yazın, onay sonrası listeye eklenecektir.
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={customCategory}
-                        onChange={(e) => setCustomCategory(e.target.value)}
-                        placeholder="Örn: Diş Kliniği, Müzik Stüdyosu..."
-                        className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-                      />
-                      <button
-                        type="button"
-                        disabled={requestingCategory || !customCategory.trim() || categoryRequested}
-                        onClick={async () => {
-                          if (!businessId || !customCategory.trim()) return;
-                          setRequestingCategory(true);
-                          try {
-                            await createCategoryRequest(businessId, name, customCategory.trim());
-                            setCategoryRequested(true);
-                            toast.success("Kategori isteğiniz Super Admin onayına gönderildi.");
-                          } catch {
-                            toast.error("Kategori isteği gönderilemedi.");
-                          } finally {
-                            setRequestingCategory(false);
-                          }
-                        }}
-                        className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                          categoryRequested
-                            ? "bg-emerald-500/10 text-emerald-600 cursor-default"
-                            : "bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50"
-                        }`}
-                      >
-                        {requestingCategory
-                          ? "Gönderiliyor..."
-                          : categoryRequested
-                            ? "✅ Gönderildi"
-                            : "📨 Onay İste"}
-                      </button>
-                    </div>
-                    {categoryRequested && (
-                      <p className="mt-2 text-xs text-emerald-600">
-                        İsteğiniz inceleniyor. Onaylanma sonrası kategoriniz otomatik olarak güncellenecektir.
-                      </p>
+        <div id="settings-panel" role="tabpanel" aria-label={activeMeta.label} className={st.content} key={activeTab}>
+          {activeTab === "bilgiler" && (
+            <>
+              <div className={st.storeCard}>
+                <span className={st.storeLogo}>{business?.logoUrl ? <Image src={business.logoUrl} alt="" width={56} height={56} /> : <Store size={24} aria-hidden />}</span>
+                <span className={st.storeText}><small>Canlı mağaza kartı</small><b>{info.name || "İşletme adınız"}</b><em><MapPin size={13} aria-hidden /> {info.district || "İlçe"}, {info.city || "Şehir"}</em></span>
+                <span className={st.scoreRing} style={{ ["--score" as string]: `${profileScore}` }} aria-label={`Profil %${profileScore} tamamlandı`}><b>%{profileScore}</b></span>
+              </div>
+
+              <form id="settings-info-form" className={st.form} onSubmit={handleSaveInfo}>
+                <p className={k.sectionLabel}>Kimlik</p>
+                <div className={st.card}>
+                  <div className={cx(k.fields, k.fields2)}>
+                    <label className={k.field}><span className={k.label}>İşletme adı *</span><input className={k.input} value={info.name} onChange={(e) => setInfoField("name", e.target.value)} required placeholder="Örn: Güzel Saçlar Kuaförü" /></label>
+                    <label className={k.field}><span className={k.label}>Kategori *</span>
+                      <select className={k.select} value={info.category} onChange={(e) => { setInfoField("category", e.target.value as BusinessCategory); setCategoryRequested(false); }}>
+                        {categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    {info.category === "diger" && (
+                      <div className={cx(k.span2, st.categoryRequest)}>
+                        <b>Kategorin listede yok mu?</b>
+                        <span>İstediğin kategoriyi yaz; onay sonrası listeye eklenir ve profilin otomatik güncellenir.</span>
+                        <div className={st.inline}>
+                          <input className={k.input} value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Örn: Diş Kliniği, Müzik Stüdyosu..." aria-label="Yeni kategori adı" />
+                          <button type="button" className={cx(k.btn, categoryRequested ? k.btnSoft : k.btnPrimary)} disabled={requestingCategory || !customCategory.trim() || categoryRequested} onClick={requestCategory}>
+                            {requestingCategory ? <><LoaderCircle size={16} className={k.spin} aria-hidden /> Gönderiliyor</> : categoryRequested ? <><CheckCircle2 size={16} aria-hidden /> Gönderildi</> : <><Send size={16} aria-hidden /> Onay iste</>}
+                          </button>
+                        </div>
+                        {categoryRequested && <small>İsteğiniz inceleniyor. Onaylanma sonrası kategoriniz otomatik olarak güncellenecektir.</small>}
+                      </div>
                     )}
+                    <label className={k.field}><span className={k.label}>İşletme tipi</span>
+                      <select className={k.select} value={info.businessType} onChange={(e) => setInfoField("businessType", e.target.value as BusinessType | "")}>
+                        {BIZ_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <label className={k.field}><span className={k.label}>Website</span><input className={k.input} type="url" inputMode="url" value={info.website} onChange={(e) => setInfoField("website", e.target.value)} placeholder="https://" /></label>
+                    <label className={cx(k.field, k.span2)}><span className={k.label}>Açıklama</span><textarea className={k.textarea} rows={3} value={info.description} onChange={(e) => setInfoField("description", e.target.value)} placeholder="İşletmenizi kısaca tanıtın..." /><span className={k.help}>{info.description.length} karakter · Keşfet ve mağaza sayfasında görünür.</span></label>
                   </div>
                 </div>
-              )}
-              <Select
-                label="İşletme Tipi"
-                value={businessType}
-                onChange={(e) => setBusinessType(e.target.value as BusinessType | "")}
-                options={BIZ_TYPE_OPTIONS}
-              />
-              <Input
-                label="Telefon *"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-                placeholder="05XX XXX XX XX"
-              />
-              <Input
-                label="E-posta *"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <Input
-                label="Website"
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://"
-              />
-            </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[var(--text-2)]">
-                Açıklama
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
-                placeholder="İşletmenizi kısaca tanıtın..."
-              />
-            </div>
+                <p className={k.sectionLabel}>İletişim</p>
+                <div className={st.card}>
+                  <div className={cx(k.fields, k.fields2)}>
+                    <label className={k.field}><span className={k.label}>Telefon *</span><input className={k.input} type="tel" inputMode="tel" autoComplete="tel" value={info.phone} onChange={(e) => setInfoField("phone", e.target.value)} required placeholder="05XX XXX XX XX" /></label>
+                    <label className={k.field}><span className={k.label}>E-posta *</span><input className={k.input} type="email" inputMode="email" autoComplete="email" value={info.email} onChange={(e) => setInfoField("email", e.target.value)} required /></label>
+                  </div>
+                </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Input
-                label="Adres *"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-                placeholder="Cadde / Sokak / No"
-              />
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">Şehir *</label>
-                <select
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                >
-                  <option value="">Şehir seçiniz...</option>
-                  {[
-                    "Adana","Adıyaman","Afyonkarahisar","Ağrı","Aksaray","Amasya","Ankara",
-                    "Antalya","Ardahan","Artvin","Aydın","Balıkesir","Bartın","Batman",
-                    "Bayburt","Bilecik","Bingöl","Bitlis","Bolu","Burdur","Bursa",
-                    "Çanakkale","Çankırı","Çorum","Denizli","Diyarbakır","Düzce","Edirne",
-                    "Elazığ","Erzincan","Erzurum","Eskişehir","Gaziantep","Giresun",
-                    "Gümüşhane","Hakkari","Hatay","Iğdır","Isparta","İstanbul","İzmir",
-                    "Kahramanmaraş","Karabük","Karaman","Kars","Kastamonu","Kayseri",
-                    "Kilis","Kırıkkale","Kırklareli","Kırşehir","Kocaeli","Konya","Kütahya",
-                    "Malatya","Manisa","Mardin","Mersin","Muğla","Muş","Nevşehir","Niğde",
-                    "Ordu","Osmaniye","Rize","Sakarya","Samsun","Şanlıurfa","Siirt",
-                    "Sinop","Sivas","Şırnak","Tekirdağ","Tokat","Trabzon","Tunceli",
-                    "Uşak","Van","Yalova","Yozgat","Zonguldak",
-                  ].map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                <p className={k.sectionLabel}>Konum</p>
+                <div className={st.card}>
+                  <div className={cx(k.fields, k.fields3)}>
+                    <label className={k.field}><span className={k.label}>Adres *</span><input className={k.input} value={info.address} onChange={(e) => setInfoField("address", e.target.value)} required placeholder="Cadde / Sokak / No" /></label>
+                    <div className={k.field}><label htmlFor="settings-city" className={k.label}>Şehir *</label>
+                      <CitySelect id="settings-city" value={info.city} onChange={(city) => { if (city !== info.city) setInfoField("district", ""); setInfoField("city", city); }} placeholder="Şehir seç veya yaz" inputClassName={k.input} />
+                    </div>
+                    <div className={k.field}><label htmlFor="settings-district" className={k.label}>İlçe *</label>
+                      <DistrictSelect id="settings-district" city={info.city} value={info.district} onChange={(district) => setInfoField("district", district)} placeholder="İlçe seç veya yaz" inputClassName={k.input} />
+                    </div>
+                  </div>
+                </div>
+                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Profil değişiklikleri süper admin onayından sonra yayınlanır; o zamana kadar mevcut profil yayında kalır.</p>
+              </form>
+            </>
+          )}
+
+          {activeTab === "gorseller" && (
+            <>
+              <Notice tone="accent" icon={Sparkles} title={`Marka kalite rehberi · ${assetCount} varlık`}>
+                Net logo, yatay kapak ve gerçek işletme fotoğrafları keşfet görünümünüzü güçlendirir. Yüklenen görseller onaydan sonra yayınlanır.
+              </Notice>
+              <Panel title="Logo ve kapak" icon={Images} description="Kare logo ve yatay (16:9) kapak önerilir.">
+                <div className={st.uploadGrid}>
+                  <ImageUploader
+                    label="Logo"
+                    currentUrl={business?.logoUrl}
+                    shape="square"
+                    uploadFn={(file) => uploadBusinessImage(businessId!, "logo", file)}
+                    onUpload={async (url) => {
+                      await submitBusinessProfileChange(businessId!, { logoUrl: url });
+                      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                      toast.success("Yeni logo onaya gönderildi.");
+                    }}
+                  />
+                  <ImageUploader
+                    label="Kapak Fotoğrafı"
+                    currentUrl={business?.coverUrl}
+                    shape="wide"
+                    uploadFn={(file) => uploadBusinessImage(businessId!, "cover", file)}
+                    onUpload={async (url) => {
+                      await submitBusinessProfileChange(businessId!, { coverUrl: url });
+                      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                      toast.success("Yeni kapak görseli onaya gönderildi.");
+                    }}
+                  />
+                </div>
+              </Panel>
+              <Panel title="Galeri" icon={Images} description={`${business?.galleryUrls?.length ?? 0} fotoğraf · İşletmenizin içinden gerçek kareler ekleyin.`}>
+                <div className={st.gallery}>
+                  {(business?.galleryUrls ?? []).map((url, i) => (
+                    <figure key={url} className={st.galleryItem}>
+                      <Image src={url} alt={`Galeri ${i + 1}`} width={240} height={180} />
+                      <button type="button" aria-label={`Galeri ${i + 1} görselini kaldır`} onClick={() => setGalleryToRemove(url)}><Trash2 size={15} aria-hidden /></button>
+                    </figure>
                   ))}
-                </select>
-              </div>
-              <Input
-                label="İlçe *"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="settings-save-row">
-              <span><ShieldCheck size={15}/> Değişiklikler onaylanana kadar mevcut profil yayında kalır.</span>
-              <Button type="submit" disabled={saving} className="settings-save-button">
-                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Gönderiliyor</> : <><Save size={16}/> Onaya Gönder</>}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {/* Tab 2: Görseller */}
-      {activeTab === "gorseller" && (
-        <Card title="Görsel Yönetimi" description="Logo, kapak fotoğrafı ve galeri görselleri yükleyin.">
-          <div className="settings-brand-guide"><Sparkles size={18}/><div><b>Marka kalite rehberi</b><span>Net logo, yatay kapak ve gerçek işletme fotoğrafları keşfet görünümünüzü güçlendirir.</span></div><em>{(business?.galleryUrls?.length ?? 0) + Number(Boolean(business?.logoUrl)) + Number(Boolean(business?.coverUrl))} varlık</em></div>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <ImageUploader
-              label="Logo"
-              currentUrl={business?.logoUrl}
-              shape="square"
-              uploadFn={(file) => uploadBusinessImage(businessId!, "logo", file)}
-              onUpload={async (url) => {
-                await submitBusinessProfileChange(businessId!, { logoUrl: url });
-                setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                toast.success("Yeni logo onaya gönderildi.");
-              }}
-            />
-            <ImageUploader
-              label="Kapak Fotoğrafı"
-              currentUrl={business?.coverUrl}
-              shape="wide"
-              uploadFn={(file) => uploadBusinessImage(businessId!, "cover", file)}
-              onUpload={async (url) => {
-                await submitBusinessProfileChange(businessId!, { coverUrl: url });
-                setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                toast.success("Yeni kapak görseli onaya gönderildi.");
-              }}
-            />
-          </div>
-
-          {/* Gallery */}
-          <div className="mt-6 space-y-3">
-            <h4 className="text-sm font-semibold text-[var(--text-1)]">Galeri</h4>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-              {(business?.galleryUrls ?? []).map((url, i) => (
-                <div key={url} className="settings-gallery-item group relative">
-                  <Image src={url} alt={`Galeri ${i + 1}`} width={160} height={80} className="h-20 w-full rounded-xl object-cover" />
-                  <button type="button" aria-label="Görseli galeriden kaldır" onClick={async () => { if (!businessId) return; const updated = (business?.galleryUrls ?? []).filter((item) => item !== url); try { await submitBusinessProfileChange(businessId, { galleryUrls: updated }); setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev); toast.success("Galeri değişikliği onaya gönderildi."); } catch { toast.error("Değişiklik gönderilemedi."); } }}><Trash2 size={14}/></button>
+                  <div className={st.galleryAdd}>
+                    <ImageUploader
+                      label=""
+                      shape="square"
+                      uploadFn={(file) => uploadBusinessImage(businessId!, "gallery", file)}
+                      onUpload={async (url) => {
+                        const current = business?.galleryUrls ?? [];
+                        const updated = [...current, url];
+                        await submitBusinessProfileChange(businessId!, { galleryUrls: updated });
+                        setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+                        toast.success("Galeri görseli onaya gönderildi.");
+                      }}
+                    />
+                  </div>
                 </div>
-              ))}
-              {/* Add Gallery Image */}
-              <ImageUploader
-                label=""
-                shape="square"
-                uploadFn={(file) => uploadBusinessImage(businessId!, "gallery", file)}
-                onUpload={async (url) => {
-                  const current = business?.galleryUrls ?? [];
-                  const updated = [...current, url];
-                  await submitBusinessProfileChange(businessId!, { galleryUrls: updated });
-                  setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                  toast.success("Galeri görseli onaya gönderildi.");
-                }}
-              />
-            </div>
-          </div>
-        </Card>
-      )}
+              </Panel>
+            </>
+          )}
 
-      {/* Tab 3: Sosyal Medya */}
-      {activeTab === "sosyal" && (
-        <Card title="Sosyal Medya Linkleri" description="Müşterilerinizin sizi sosyal medyada bulmasını sağlayın.">
-          <div className="settings-social-health"><Share2 size={18}/><span><small>DİJİTAL AYAK İZİ</small><b>{socialCount ? `${socialCount} kanal müşterilere açık` : "Henüz kanal bağlanmadı"}</b></span><em><i style={{width:`${socialCount / 6 * 100}%`}}/></em></div>
-          <form className="settings-form space-y-4" onSubmit={handleSaveSocial}>
-            <div className="settings-social-grid grid gap-4 sm:grid-cols-2">
-              {([
-                { key: "instagram", label: "Instagram", placeholder: "instagram.com/isletmeniz" },
-                { key: "facebook", label: "Facebook", placeholder: "facebook.com/isletmeniz" },
-                { key: "twitter", label: "Twitter / X", placeholder: "x.com/isletmeniz" },
-                { key: "tiktok", label: "TikTok", placeholder: "tiktok.com/@isletmeniz" },
-                { key: "youtube", label: "YouTube", placeholder: "youtube.com/@isletmeniz" },
-                { key: "whatsapp", label: "WhatsApp", placeholder: "05XX XXX XX XX" },
-              ] as const).map((item) => (
-                <div key={item.key} data-connected={Boolean(social[item.key]?.trim())}><Input
-                  label={item.label}
-                  value={social[item.key] ?? ""}
-                  onChange={(e) => setSocial({ ...social, [item.key]: e.target.value })}
-                  placeholder={item.placeholder}
-                /><span>{social[item.key]?.trim() ? <><CheckCircle2 size={12}/> Bağlı</> : "Bağlantı bekleniyor"}</span></div>
-              ))}
-            </div>
-            <div className="settings-save-row">
-              <span><Globe2 size={15}/> Kanallar kontrol sonrası mağaza profilinde yayınlanır.</span>
-              <Button type="submit" disabled={saving} className="settings-save-button">
-                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Gönderiliyor</> : <><Save size={16}/> Onaya Gönder</>}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {/* Tab 4: Randevu Ayarları */}
-      {activeTab === "randevu" && (
-        <Card title="Randevu Ayarları" description="Randevu sisteminizin kurallarını belirleyin.">
-          <div className="settings-preset-grid"><button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={16}/><span><b>Esnek</b><small>Daha fazla müsaitlik</small></span></button><button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={16}/><span><b>Dengeli</b><small>Önerilen çalışma düzeni</small></span></button><button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={16}/><span><b>Korumalı</b><small>Daha geniş hazırlık süresi</small></span></button></div>
-          <form className="settings-form space-y-4" onSubmit={handleSaveAppointment}>
-            <div className="settings-policy-card rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-              <label className="settings-switch-row">
-                <input type="checkbox" checked={allowOnlineBooking} onChange={(event) => setAllowOnlineBooking(event.target.checked)}/>
-                <i/><span><b>Müşteri online randevusu</b><small>Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir.</small></span>
-              </label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Input
-                  label="Minimum Bildirim Süresi (dakika)"
-                  type="number"
-                  value={String(minNotice)}
-                  onChange={(e) => setMinNotice(Number(e.target.value))}
-                  min={0}
-                />
-                <p className="mt-1 text-xs text-[var(--text-3)]">
-                  Müşteri en az bu süre öncesinden randevu alabilir.
-                </p>
+          {activeTab === "sosyal" && (
+            <form id="settings-social-form" className={st.form} onSubmit={handleSaveSocial}>
+              <div className={st.socialHealth}>
+                <span className={k.panelIcon}><Share2 size={19} aria-hidden /></span>
+                <span><small>Dijital ayak izi</small><b>{socialCount ? `${socialCount} kanal müşterilere açık` : "Henüz kanal bağlanmadı"}</b></span>
+                <i aria-hidden><em style={{ width: `${socialCount / 6 * 100}%` }} /></i>
               </div>
-              <div>
-                <Input
-                  label="Maksimum İleri Gün"
-                  type="number"
-                  value={String(maxDaysAhead)}
-                  onChange={(e) => setMaxDaysAhead(Number(e.target.value))}
-                  min={1}
-                  max={365}
-                />
-                <p className="mt-1 text-xs text-[var(--text-3)]">
-                  Müşteri en fazla bu kadar gün sonrası için randevu alabilir.
-                </p>
-              </div>
-              <div>
-                <Input
-                  label="Randevu Öncesi Hazırlık (dk)"
-                  type="number"
-                  value={String(bufferBefore)}
-                  onChange={(e) => setBufferBefore(Math.max(0, Number(e.target.value)))}
-                  min={0}
-                  max={180}
-                />
-                <p className="mt-1 text-xs text-[var(--text-3)]">
-                  Hizmet başlamadan önce takvimde ayrılan süre.
-                </p>
-              </div>
-              <div><Input label="Randevu Sonrası Buffer (dk)" type="number" value={String(bufferAfter)} onChange={(e) => setBufferAfter(Math.max(0, Number(e.target.value)))} min={0} max={180}/><p className="mt-1 text-xs text-[var(--text-3)]">Temizlik, hazırlık veya mola için ayrılan süre.</p></div>
-              <Select
-                label="Slot Aralığı"
-                value={String(slotInterval)}
-                onChange={(e) => setSlotInterval(Number(e.target.value))}
-                options={[
-                  { value: "10", label: "10 Dakika" },
-                  { value: "15", label: "15 Dakika" },
-                  { value: "20", label: "20 Dakika" },
-                  { value: "30", label: "30 Dakika" },
-                  { value: "60", label: "60 Dakika" },
-                ]}
-              />
-            </div>
-
-            <div className="settings-policy-card space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-              <h4 className="text-sm font-semibold text-[var(--text-1)]">İptal & Yeniden Planlama</h4>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <label className="settings-switch-row">
-                  <input
-                    type="checkbox"
-                    checked={allowCancel}
-                    onChange={(e) => setAllowCancel(e.target.checked)}
-                  />
-                  <i/><span><b>İptal izni</b><small>Müşteri randevuyu iptal edebilir</small></span>
-                </label>
-                <label className="settings-switch-row">
-                  <input
-                    type="checkbox"
-                    checked={allowReschedule}
-                    onChange={(e) => setAllowReschedule(e.target.checked)}
-                  />
-                  <i/><span><b>Yeniden planlama</b><small>Müşteri uygun başka saate geçebilir</small></span>
-                </label>
-                <div>
-                  <Input
-                    label="İptal Son Tarihi (dk)"
-                    type="number"
-                    value={String(cancelDeadline)}
-                    onChange={(e) => setCancelDeadline(Number(e.target.value))}
-                    min={0}
-                  />
+              <div className={st.card}>
+                <div className={cx(k.fields, k.fields2)}>
+                  {SOCIAL_FIELDS.map((item) => {
+                    const connected = Boolean(social[item.key]?.trim());
+                    return (
+                      <label key={item.key} className={k.field}>
+                        <span className={st.socialLabel}><span className={k.label}>{item.label}</span><span className={cx(k.pill, connected ? k.pillOk : undefined)}>{connected ? <><CheckCircle2 size={12} aria-hidden /> Bağlı</> : "Bekleniyor"}</span></span>
+                        <input className={k.input} value={social[item.key] ?? ""} onChange={(e) => setSocial({ ...social, [item.key]: e.target.value })} placeholder={item.placeholder} inputMode={item.key === "whatsapp" ? "tel" : "url"} />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
+              <p className={st.footnote}><Globe2 size={14} aria-hidden /> Kanallar kontrol sonrası mağaza profilinde yayınlanır.</p>
+            </form>
+          )}
 
-            <div className="settings-policy-card space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-              <div><h4 className="text-sm font-semibold text-[var(--text-1)]">Müşteri SMS bildirimleri</h4><p className="mt-1 text-xs text-[var(--text-3)]">Müşteriye hangi operasyon mesajlarının gönderileceğini seçin. Doğrulama kodu güvenlik nedeniyle her zaman açıktır.</p></div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {([
-                  ["confirmation", "Randevu onayı", "Randevu oluştuğunda bilgi verir"],
-                  ["reminder", "1 saat önce hatırlatma", "Randevu öncesinde otomatik gönderilir"],
-                  ["cancellation", "İptal bildirimi", "İptal edilen randevuyu müşteriye bildirir"],
-                  ["reschedule", "Saat değişikliği", "Yeni tarih ve saati müşteriye iletir"],
-                ] as const).map(([key, label, note]) => (
-                  <label key={key} className="settings-switch-row">
-                    <input type="checkbox" checked={smsPreferences[key] !== false} onChange={(event) => setSmsPreferences((current) => ({ ...current, [key]: event.target.checked }))}/>
-                    <i/><span><b>{label}</b><small>{note}</small></span>
-                  </label>
-                ))}
+          {activeTab === "randevu" && (
+            <>
+              <form id="settings-rules-form" className={st.form} onSubmit={handleSaveAppointment}>
+                <p className={k.sectionLabel}>Hazır profiller</p>
+                <div className={st.presets}>
+                  <button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={17} aria-hidden /><span><b>Esnek</b><small>Daha fazla müsaitlik</small></span></button>
+                  <button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={17} aria-hidden /><span><b>Dengeli</b><small>Önerilen düzen</small></span></button>
+                  <button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={17} aria-hidden /><span><b>Korumalı</b><small>Geniş hazırlık süresi</small></span></button>
+                </div>
+
+                <p className={k.sectionLabel}>Online randevu</p>
+                <div className={k.group}>
+                  <ToggleRow title="Müşteri online randevusu" note="Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir." checked={rules.allowOnlineBooking} onChange={(v) => setRule("allowOnlineBooking", v)} />
+                </div>
+
+                <p className={k.sectionLabel}>Takvim penceresi</p>
+                <div className={st.card}>
+                  <div className={cx(k.fields, k.fields2)}>
+                    <NumberField label="Minimum bildirim süresi" unit="dk" value={rules.minNotice} min={0} max={10080} onChange={(v) => setRule("minNotice", v)} help="Müşteri en az bu süre öncesinden randevu alabilir." />
+                    <NumberField label="Maksimum ileri gün" unit="gün" value={rules.maxDaysAhead} min={1} max={365} onChange={(v) => setRule("maxDaysAhead", v)} help="Müşteri en fazla bu kadar gün sonrası için randevu alabilir." />
+                    <label className={cx(k.field, k.span2)}><span className={k.label}>Slot aralığı</span>
+                      <div className={k.seg} role="group" aria-label="Slot aralığı">
+                        {[10, 15, 20, 30, 60].map((value) => <button key={value} type="button" className={k.segBtn} aria-pressed={rules.slotInterval === value} onClick={() => setRule("slotInterval", value)}>{value} dk</button>)}
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <p className={k.sectionLabel}>Hazırlık süreleri (buffer)</p>
+                <div className={st.card}>
+                  <div className={cx(k.fields, k.fields2)}>
+                    <NumberField label="Randevu öncesi hazırlık" unit="dk" value={rules.bufferBefore} min={0} max={180} onChange={(v) => setRule("bufferBefore", Math.max(0, v))} help="Hizmet başlamadan önce takvimde ayrılan süre." />
+                    <NumberField label="Randevu sonrası buffer" unit="dk" value={rules.bufferAfter} min={0} max={180} onChange={(v) => setRule("bufferAfter", Math.max(0, v))} help="Temizlik, hazırlık veya mola için ayrılan süre." />
+                  </div>
+                </div>
+
+                <p className={k.sectionLabel}>İptal ve yeniden planlama</p>
+                <div className={k.group}>
+                  <ToggleRow title="İptal izni" note="Müşteri randevuyu iptal edebilir" checked={rules.allowCancel} onChange={(v) => setRule("allowCancel", v)} />
+                  <ToggleRow title="Yeniden planlama" note="Müşteri uygun başka saate geçebilir" checked={rules.allowReschedule} onChange={(v) => setRule("allowReschedule", v)} />
+                  <div className={cx(k.row, st.rowField)}>
+                    <span className={k.rowText}><b>İptal son tarihi</b><small>Randevuya bu süreden az kala iptal kapanır.</small></span>
+                    <span className={cx(k.inputAffix, st.rowInput)}><input className={k.input} type="number" inputMode="numeric" min={0} value={String(rules.cancelDeadline)} onChange={(e) => setRule("cancelDeadline", Number(e.target.value))} aria-label="İptal son tarihi (dakika)" /><span>dk</span></span>
+                  </div>
+                </div>
+
+                <p className={k.sectionLabel}>Müşteri SMS bildirimleri</p>
+                <div className={k.group}>
+                  {SMS_FIELDS.map(([key, label, note]) => (
+                    <ToggleRow key={key} icon={MessageSquareText} title={label} note={note} checked={rules.smsPreferences[key] !== false} onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, [key]: checked })} />
+                  ))}
+                </div>
+                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır.</p>
+
+                <div className={st.rulePreview}>
+                  <Clock3 size={20} aria-hidden />
+                  <span><small>Canlı kural özeti</small><b>Müşteri en erken {rules.minNotice} dk sonra, en fazla {rules.maxDaysAhead} gün ileriye randevu alabilir.</b><em>{rules.bufferBefore + rules.bufferAfter} dk toplam hazırlık · {rules.slotInterval} dk slot · iptal {rules.allowCancel ? `${rules.cancelDeadline} dk öncesine kadar` : "kapalı"}</em></span>
+                </div>
+              </form>
+
+              {business && (
+                <div className={st.mounted}>
+                  <p className={k.sectionLabel}>Canlı sıra ve müsaitlik</p>
+                  <LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
+                    setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} />
+                  <BusinessAvailabilitySettings business={business} onChanged={(setting, value) =>
+                    setBusiness((current) => current ? { ...current, [setting]: value } : current)} />
+                  <p className={k.sectionLabel}>Randevu formu</p>
+                  <BusinessBookingFieldsEditor business={business} />
+                </div>
+              )}
+              <div className={st.mounted}>
+                <p className={k.sectionLabel}>Bildirimler</p>
+                <PushToggleCard audience="business" />
               </div>
-            </div>
+            </>
+          )}
 
-            <div className="settings-booking-preview"><Clock3 size={18}/><span><small>CANLI KURAL ÖZETİ</small><b>Müşteri en erken {minNotice} dk sonra, en fazla {maxDaysAhead} gün ileriye randevu alabilir.</b><em>{bufferBefore + bufferAfter} dk toplam hazırlık • {slotInterval} dk slot</em></span></div>
-            <div className="settings-save-row">
-              <span><CheckCircle2 size={15}/> Yeni kurallar uygunluk motoruna anında yansır.</span>
-              <Button type="submit" disabled={saving} className="settings-save-button">
-                {saving ? <><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</> : <><Save size={16}/> Randevu Motorunu Kaydet</>}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-      {activeTab === "randevu" && business &&
-        <LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
-          setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} />}
-      {activeTab === "randevu" && business &&
-        <BusinessAvailabilitySettings business={business} onChanged={(setting, value) =>
-          setBusiness((current) => current ? { ...current, [setting]: value } : current)} />}
-      {activeTab === "randevu" && business && <BusinessBookingFieldsEditor business={business} />}
-      {activeTab === "randevu" && <PushToggleCard audience="business" />}
+          {activeTab === "gorunum" && <AppearanceSection />}
+
+          {saveBar}
+        </div>
       </div>
-    </div>
+
+      <ConfirmSheet
+        open={Boolean(galleryToRemove)}
+        title="Görsel galeriden kaldırılsın mı?"
+        description="Değişiklik onaya gönderilir; onaylandığında görsel mağaza profilinizden kalkar."
+        confirmLabel="Kaldır"
+        busy={removingGallery}
+        onConfirm={removeGalleryImage}
+        onClose={() => setGalleryToRemove(null)}
+      >
+        {galleryToRemove ? <Image className={st.confirmPreview} src={galleryToRemove} alt="" width={320} height={200} /> : null}
+      </ConfirmSheet>
+    </StudioPage>
+  );
+}
+
+function NumberField({ label, unit, value, min, max, onChange, help }: { label: string; unit: string; value: number; min?: number; max?: number; onChange: (value: number) => void; help?: string }) {
+  return (
+    <label className={k.field}>
+      <span className={k.label}>{label}</span>
+      <span className={k.inputAffix}>
+        <input className={k.input} type="number" inputMode="numeric" value={String(value)} min={min} max={max} onChange={(e) => onChange(Number(e.target.value))} />
+        <span>{unit}</span>
+      </span>
+      {help ? <span className={k.help}>{help}</span> : null}
+    </label>
   );
 }

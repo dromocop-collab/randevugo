@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { FirebaseError } from "firebase/app";
@@ -10,18 +10,36 @@ import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusiness } from "@/hooks/use-business";
 import { firstErrorMessage, onboardingSchema } from "@/lib/validation/schemas";
-import { listDynamicCategories } from "@/features/categories/category-request-repository";
+import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import { clearBusinessOnboardingDraft, readBusinessOnboardingDraft } from "@/features/businesses/onboarding-draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
+import { StarterServicesStep } from "@/features/businesses/starter-services-step";
+import { StoreReady } from "@/features/businesses/store-ready";
+import { applyStarterServices } from "@/features/businesses/starter-setup";
+import {
+  buildStarterServicePlan,
+  defaultStarterSelections,
+  type StarterSelections,
+} from "@/features/businesses/service-templates";
+import {
+  createDefaultWorkingHours,
+  finalizeSlug,
+  slugifyBusinessName,
+  summarizeWorkingHours,
+  validateWorkingHours,
+  type WorkingDay,
+} from "@/features/businesses/setup-helpers";
+import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
 
 const DEFAULT_CATEGORIES = [
   { value: "kuafor", label: "Kuaför" },
   { value: "berber", label: "Berber" },
   { value: "guzellik", label: "Güzellik Merkezi" },
   { value: "nail", label: "Nail Studio" },
+  { value: "spa", label: "Spa & Masaj" },
   { value: "spor", label: "Spor / Personal Training" },
   { value: "danismanlik", label: "Danışmanlık" },
   { value: "veteriner", label: "Veteriner" },
@@ -42,33 +60,10 @@ const businessTypes = [
 const STEP_GUIDANCE = [
   { title: "Markanı doğru konumlandır", text: "Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur.", items: ["Benzersiz mağaza adresi", "Doğru müşteri segmenti", "SEO uyumlu profil başlangıcı"] },
   { title: "Müşterilerin sana ulaşsın", text: "İletişim ve konum bilgileri randevu güvenini yükseltir.", items: ["Türkiye telefon doğrulaması", "Şehir ve ilçe eşleşmesi", "Harita için hazır adres"] },
-  { title: "Vitrinini güçlendir", text: "Net logo, kapak ve açıklama mağazanı profesyonel gösterir.", items: ["Mobil uyumlu görseller", "Akılda kalan profil adresi", "600 karakterlik marka hikâyesi"] },
-  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; kurulum güvenli şekilde tamamlanacak.", items: ["İlk 3 ay ücretsiz kullanım", "Online randevu altyapısı", "Çoklu mağaza onay güvencesi"] },
+  { title: "Randevuya hazır vitrin", text: "Hazır hizmet şablonları ve çalışma saatleriyle mağazan ilk günden randevu almaya başlar.", items: ["Kategorine özel hizmetler", "Önerilen fiyat aralıkları", "Tek tıkla çalışma saatleri"] },
+  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; istersen logo ve kapak da ekle.", items: ["İlk 3 ay ücretsiz kullanım", "Paylaşılabilir mağaza linki ve QR", "Çoklu mağaza onay güvencesi"] },
 ] as const;
 
-const defaultWorkingHours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
-  day,
-  isOpen: day !== 0,
-  start: "09:00",
-  end: "19:00",
-  breakStart: "13:00",
-  breakEnd: "14:00",
-}));
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/ş/g, "s")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .replace(/ı/g, "i")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
 
 function mapOnboardingError(error: unknown): string {
   const code = (error as FirebaseError | undefined)?.code;
@@ -87,8 +82,8 @@ interface StepConfig {
 const STEPS: StepConfig[] = [
   { title: "İşletme Bilgileri", subtitle: "Temel bilgilerinizi girin", icon: "🏢" },
   { title: "Konum & İletişim", subtitle: "Müşterileriniz sizi bulsun", icon: "📍" },
-  { title: "Profil Detayları", subtitle: "İşletmenizi öne çıkarın", icon: "✨" },
-  { title: "Son Adım", subtitle: "Kontrol edin ve başlayın", icon: "🚀" },
+  { title: "Hizmetler & Saatler", subtitle: "Hazır şablonlardan seç, fiyatı ayarla", icon: "🗓️" },
+  { title: "Son Adım", subtitle: "Kontrol et, istersen logo ekle", icon: "🚀" },
 ];
 
 export function OnboardingWizard() {
@@ -98,6 +93,7 @@ export function OnboardingWizard() {
 
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const creatingRef = useRef(false);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   // Fetch dynamic categories from Firestore
@@ -143,6 +139,27 @@ export function OnboardingWizard() {
   const [appointmentManagers, setAppointmentManagers] = useState<"owner" | "team">("owner");
   const [dailyAppointmentVolume, setDailyAppointmentVolume] = useState<"0-5" | "6-10" | "11-20" | "21+">("0-5");
   const [allowOnlineBooking, setAllowOnlineBooking] = useState(true);
+  const [customCategory, setCustomCategory] = useState("");
+
+  // Step 3: hizmet şablonları + çalışma saatleri
+  const [selectionsByCategory, setSelectionsByCategory] = useState<Record<string, StarterSelections>>({});
+  const selections = selectionsByCategory[category] ?? defaultStarterSelections(category);
+  const [hours, setHours] = useState<WorkingDay[]>(() => createDefaultWorkingHours());
+  const [hoursTouched, setHoursTouched] = useState(false);
+  const hoursError = hoursTouched ? validateWorkingHours(hours) : null;
+
+  // Kurulum sonucu ("Mağazan hazır" ekranı)
+  const [ready, setReady] = useState<null | {
+    businessId: string;
+    name: string;
+    slug: string;
+    category: string;
+    pendingApproval: boolean;
+    servicesCreated: number;
+    servicesFailed: boolean;
+    logoUploaded: boolean;
+    coverUploaded: boolean;
+  }>(null);
 
   useEffect(() => {
     const draft = readBusinessOnboardingDraft();
@@ -151,6 +168,8 @@ export function OnboardingWizard() {
       if (draft.category) setCategory(draft.category);
       if (draft.phone) setPhone(draft.phone.startsWith("0") ? draft.phone : `0${draft.phone}`);
       if (draft.city) setCity(draft.city);
+      if (draft.district) setDistrict(draft.district);
+      if (draft.customCategory) setCustomCategory(draft.customCategory);
       if (draft.slug) setSlug(draft.slug);
       if (draft.goals) setGoals(draft.goals);
       if (draft.appointmentManagers) setAppointmentManagers(draft.appointmentManagers);
@@ -161,8 +180,9 @@ export function OnboardingWizard() {
     });
   }, [user?.email]);
 
-  const computedSlug = useMemo(() => slugify(name), [name]);
-  const finalSlug = slug || computedSlug;
+  const computedSlug = useMemo(() => finalizeSlug(slugifyBusinessName(name)), [name]);
+  const finalSlug = finalizeSlug(slug) || computedSlug;
+  const servicePlan = useMemo(() => buildStarterServicePlan(category, selections), [category, selections]);
 
   function validateStep(s: number): boolean {
     if (s === 0) {
@@ -175,6 +195,14 @@ export function OnboardingWizard() {
       if (!address.trim()) { toast.error("Adres zorunludur."); return false; }
       if (!city.trim()) { toast.error("Şehir zorunludur."); return false; }
       if (!district.trim()) { toast.error("İlçe zorunludur."); return false; }
+      return true;
+    }
+    if (s === 2) {
+      setHoursTouched(true);
+      const hoursProblem = validateWorkingHours(hours);
+      if (hoursProblem) { toast.error(hoursProblem); return false; }
+      const missingPrice = Object.entries(selections).some(([, choice]) => choice.selected && !(choice.price > 0));
+      if (missingPrice) { toast.error("Seçtiğin hizmetler için fiyat gir (ya da işaretini kaldır)."); return false; }
       return true;
     }
     return true;
@@ -233,6 +261,15 @@ export function OnboardingWizard() {
       return;
     }
 
+    const hoursProblem = validateWorkingHours(hours);
+    if (hoursProblem) {
+      setHoursTouched(true);
+      setStep(2);
+      toast.error(hoursProblem);
+      return;
+    }
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setLoading(true);
 
     try {
@@ -252,46 +289,91 @@ export function OnboardingWizard() {
         coverUrl: payload.coverUrl && payload.coverUrl !== "pending-upload" ? payload.coverUrl : undefined,
         description,
         slug: payload.slug,
-        workingHours: defaultWorkingHours,
+        workingHours: hours.map(({ day, isOpen, start, end, breakStart, breakEnd }) => ({
+          day, isOpen, start, end, ...(breakStart && breakEnd ? { breakStart, breakEnd } : {}),
+        })),
         onboardingGoals: goals,
         appointmentManagers,
         dailyAppointmentVolume,
         allowOnlineBooking,
       });
       const businessId = creation.businessId;
-
-      // Upload images after business is created
-      const imageUpdates: Record<string, string> = {};
-      let mediaWarning = false;
-      if (logoFile) {
-        try {
-          imageUpdates.logoUrl = await uploadBusinessImage(businessId, "logo", logoFile);
-        } catch { mediaWarning = true; }
-      }
-      if (coverFile) {
-        try {
-          imageUpdates.coverUrl = await uploadBusinessImage(businessId, "cover", coverFile);
-        } catch { mediaWarning = true; }
-      }
-      if (Object.keys(imageUpdates).length > 0) {
-        try {
-          await updateBusiness(businessId, imageUpdates);
-        } catch { mediaWarning = true; }
-      }
-
       setBusinessId(businessId);
       clearBusinessOnboardingDraft();
-      toast.success(`🏪 ${creation.storePosition}. mağazan oluşturuldu ve süper admin onayına gönderildi.`);
-      if (mediaWarning) toast.warning("Mağazan oluşturuldu ancak bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin.", { duration: 9000 });
-      router.push("/dashboard");
+
+      // Aşağıdakiler kritik değil: hata olursa mağaza yine hazır, kullanıcı panelden tamamlar.
+      const [servicesOutcome, mediaOutcome] = await Promise.all([
+        applyStarterServices(businessId, payload.category, servicePlan)
+          .then((result) => ({ created: result.created, failed: false }))
+          .catch(() => ({ created: 0, failed: servicePlan.length > 0 })),
+        (async () => {
+          const imageUpdates: Record<string, string> = {};
+          let warning = false;
+          if (logoFile) {
+            try { imageUpdates.logoUrl = await uploadBusinessImage(businessId, "logo", logoFile); } catch { warning = true; }
+          }
+          if (coverFile) {
+            try { imageUpdates.coverUrl = await uploadBusinessImage(businessId, "cover", coverFile); } catch { warning = true; }
+          }
+          if (Object.keys(imageUpdates).length > 0) {
+            try { await updateBusiness(businessId, imageUpdates); } catch { warning = true; delete imageUpdates.logoUrl; delete imageUpdates.coverUrl; }
+          }
+          return { warning, logo: Boolean(imageUpdates.logoUrl), cover: Boolean(imageUpdates.coverUrl) };
+        })(),
+        payload.category === "diger" && customCategory.trim().length >= 2
+          ? createCategoryRequest(businessId, payload.name, customCategory.trim()).catch(() => undefined)
+          : Promise.resolve(undefined),
+      ]);
+
+      if (mediaOutcome.warning) toast.warning("Bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin.", { duration: 9000 });
+      setReady({
+        businessId,
+        name: payload.name,
+        slug: payload.slug,
+        category: payload.category,
+        pendingApproval: creation.requiresApproval || creation.status === "pending_review",
+        servicesCreated: servicesOutcome.created,
+        servicesFailed: servicesOutcome.failed,
+        logoUploaded: mediaOutcome.logo,
+        coverUploaded: mediaOutcome.cover,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
+      creatingRef.current = false;
       toast.error(mapOnboardingError(error));
     } finally {
       setLoading(false);
     }
   }
 
+  async function retryServices() {
+    if (!ready) return;
+    try {
+      const result = await applyStarterServices(ready.businessId, ready.category, servicePlan);
+      setReady((current) => current && { ...current, servicesCreated: current.servicesCreated + result.created, servicesFailed: false });
+      toast.success(result.created ? `${result.created} hizmet eklendi.` : "Hizmetlerin zaten ekli.");
+    } catch {
+      toast.error("Hizmetler yine eklenemedi. Panelde Hizmetler bölümünden ekleyebilirsin.");
+    }
+  }
+
   const categoryLabel = categories.find((c) => c.value === category)?.label ?? category;
+
+  if (ready) {
+    return (
+      <StoreReady
+        businessName={ready.name}
+        slug={ready.slug}
+        pendingApproval={ready.pendingApproval}
+        servicesCreated={ready.servicesCreated}
+        servicesFailed={ready.servicesFailed}
+        onRetryServices={retryServices}
+        logoUploaded={ready.logoUploaded}
+        coverUploaded={ready.coverUploaded}
+        onGoToDashboard={() => router.push("/dashboard")}
+      />
+    );
+  }
 
   return (
     <div className="onboarding-wizard mx-auto max-w-4xl">
@@ -397,14 +479,28 @@ export function OnboardingWizard() {
                   />
                 </div>
                 <p className="rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs leading-5 text-[var(--text-3)]">Kategori mağazanı doğru listelerde gösterir. İşletme tipi ise müşterilerin kendilerine uygun hizmeti daha hızlı bulmasına yardımcı olur.</p>
-                {name && (
-                  <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-3">
-                    <p className="text-xs text-[var(--text-3)]">Profil URL&apos;niz:</p>
-                    <p className="mt-0.5 text-sm font-medium text-[var(--accent)]">
-                      seninrandevun.com/isletme/<span className="font-bold">{computedSlug || "..."}</span>
-                    </p>
-                  </div>
+                {category === "diger" && (
+                  <Input
+                    label="Kategorin (isteğe bağlı)"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value.slice(0, 60))}
+                    placeholder="Örn: Dövme stüdyosu"
+                  />
                 )}
+                <div>
+                  <Input
+                    label="Mağaza adresi"
+                    value={slug || computedSlug}
+                    onChange={(e) => setSlug(slugifyBusinessName(e.target.value))}
+                    onBlur={() => setSlug((current) => finalizeSlug(current))}
+                    placeholder="isletmeniz"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                  />
+                  <p className="mt-1 break-all text-xs text-[var(--text-3)]">
+                    seninrandevun.com/isletme/<strong className="text-[var(--accent)]">{finalSlug || "..."}</strong>
+                  </p>
+                </div>
               </div>
             )}
 
@@ -437,47 +533,94 @@ export function OnboardingWizard() {
                   required
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">Şehir *</label>
-                    <select
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      required
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                    >
-                      <option value="">Şehir seçiniz...</option>
-                      {[
-                        "Adana","Adıyaman","Afyonkarahisar","Ağrı","Aksaray","Amasya","Ankara",
-                        "Antalya","Ardahan","Artvin","Aydın","Balıkesir","Bartın","Batman",
-                        "Bayburt","Bilecik","Bingöl","Bitlis","Bolu","Burdur","Bursa",
-                        "Çanakkale","Çankırı","Çorum","Denizli","Diyarbakır","Düzce","Edirne",
-                        "Elazığ","Erzincan","Erzurum","Eskişehir","Gaziantep","Giresun",
-                        "Gümüşhane","Hakkari","Hatay","Iğdır","Isparta","İstanbul","İzmir",
-                        "Kahramanmaraş","Karabük","Karaman","Kars","Kastamonu","Kayseri",
-                        "Kilis","Kırıkkale","Kırklareli","Kırşehir","Kocaeli","Konya","Kütahya",
-                        "Malatya","Manisa","Mardin","Mersin","Muğla","Muş","Nevşehir","Niğde",
-                        "Ordu","Osmaniye","Rize","Sakarya","Samsun","Şanlıurfa","Siirt",
-                        "Sinop","Sivas","Şırnak","Tekirdağ","Tokat","Trabzon","Tunceli",
-                        "Uşak","Van","Yalova","Yozgat","Zonguldak",
-                      ].map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                  <div className="min-w-0">
+                    <label htmlFor="onboarding-city" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">Şehir *</label>
+                    <CitySelect id="onboarding-city" value={city} onChange={(next) => { if (next !== city) setDistrict(""); setCity(next); }} placeholder="Şehir seç veya yaz" inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
                   </div>
-                  <Input
-                    label="İlçe *"
-                    value={district}
-                    onChange={(e) => setDistrict(e.target.value)}
-                    placeholder="Kadıköy"
-                    required
-                  />
+                  <div className="min-w-0">
+                    <label htmlFor="onboarding-district" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">İlçe *</label>
+                    <DistrictSelect id="onboarding-district" city={city} value={district} onChange={setDistrict} placeholder="İlçe seç veya yaz" inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Profil Detayları */}
+            {/* Step 3: Hizmetler & Saatler */}
             {step === 2 && (
-              <div className="space-y-5">
+              <StarterServicesStep
+                category={category}
+                selections={selections}
+                onSelectionsChange={(next) => setSelectionsByCategory((current) => ({ ...current, [category]: next }))}
+                hours={hours}
+                onHoursChange={(next) => { setHours(next); setHoursTouched(true); }}
+                hoursError={hoursError}
+              />
+            )}
+
+            {/* Step 4: Özet & Onay */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <p className="text-sm text-[var(--text-2)]">
+                  Aşağıdaki bilgileri kontrol edin. Her şey doğruysa kurulumu tamamlayabilirsiniz.
+                </p>
+
+                <div className="space-y-3">
+                  {/* Business Info Summary */}
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🏢 İşletme Bilgileri</h4>
+                      <button type="button" onClick={() => setStep(0)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                    </div>
+                    <div className="grid gap-1 text-sm">
+                      <SummaryRow label="İşletme Adı" value={name} />
+                      <SummaryRow label="Kategori" value={categoryLabel} />
+                      <SummaryRow label="Tip" value={businessType ? (businessType === "kadin" ? "Kadın" : businessType === "erkek" ? "Erkek" : "Unisex") : "Belirtilmemiş"} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">📍 Konum & İletişim</h4>
+                      <button type="button" onClick={() => setStep(1)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                    </div>
+                    <div className="grid gap-1 text-sm">
+                      <SummaryRow label="Telefon" value={phone} />
+                      <SummaryRow label="E-posta" value={email} />
+                      <SummaryRow label="Adres" value={`${address}, ${district}, ${city}`} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🗓️ Hizmetler &amp; Saatler</h4>
+                      <button type="button" onClick={() => setStep(2)} className="min-h-11 px-2 text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                    </div>
+                    <div className="grid gap-1 text-sm">
+                      <SummaryRow label="Hizmetler" value={servicePlan.length ? servicePlan.map((item) => item.name).join(", ") : "Panelden eklenecek"} />
+                      <SummaryRow label="Saatler" value={summarizeWorkingHours(hours)} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">✨ Profil</h4>
+                      <button type="button" onClick={() => setStep(2)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                    </div>
+                    <div className="grid gap-1 text-sm">
+                      <SummaryRow label="URL" value={`/isletme/${finalSlug}`} />
+                      <SummaryRow label="Açıklama" value={description || "—"} />
+                      <SummaryRow label="Logo" value={logoFile ? "✅ Seçildi" : "Yok"} />
+                      <SummaryRow label="Kapak" value={coverFile ? "✅ Seçildi" : "Yok"} />
+                    </div>
+                  </div>
+                </div>
+
+                <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4" open={Boolean(description || logoFile || coverFile) || undefined}>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--text-1)]">
+                    <span>✨ Vitrinini güçlendir <span className="font-normal text-[var(--text-3)]">· isteğe bağlı (logo, kapak, açıklama)</span></span>
+                    <span aria-hidden="true" className="transition group-open:rotate-180">⌄</span>
+                  </summary>
+              <div className="mt-4 space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
                     İşletme Açıklaması
@@ -561,66 +704,8 @@ export function OnboardingWizard() {
                     <p className="mt-1 text-[10px] text-[var(--text-3)]">PNG, JPEG · Maks. 5MB</p>
                   </div>
                 </div>
-                <div>
-                  <Input
-                    label="Profil URL Slug"
-                    value={slug || computedSlug}
-                    onChange={(e) => setSlug(slugify(e.target.value))}
-                    placeholder="isletmeniz"
-                  />
-                  <p className="mt-1 text-xs text-[var(--text-3)]">
-                    seninrandevun.com/isletme/<strong>{finalSlug || "..."}</strong>
-                  </p>
-                </div>
               </div>
-            )}
-
-            {/* Step 4: Özet & Onay */}
-            {step === 3 && (
-              <div className="space-y-4">
-                <p className="text-sm text-[var(--text-2)]">
-                  Aşağıdaki bilgileri kontrol edin. Her şey doğruysa kurulumu tamamlayabilirsiniz.
-                </p>
-
-                <div className="space-y-3">
-                  {/* Business Info Summary */}
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🏢 İşletme Bilgileri</h4>
-                      <button type="button" onClick={() => setStep(0)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
-                    </div>
-                    <div className="grid gap-1 text-sm">
-                      <SummaryRow label="İşletme Adı" value={name} />
-                      <SummaryRow label="Kategori" value={categoryLabel} />
-                      <SummaryRow label="Tip" value={businessType ? (businessType === "kadin" ? "Kadın" : businessType === "erkek" ? "Erkek" : "Unisex") : "Belirtilmemiş"} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">📍 Konum & İletişim</h4>
-                      <button type="button" onClick={() => setStep(1)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
-                    </div>
-                    <div className="grid gap-1 text-sm">
-                      <SummaryRow label="Telefon" value={phone} />
-                      <SummaryRow label="E-posta" value={email} />
-                      <SummaryRow label="Adres" value={`${address}, ${district}, ${city}`} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">✨ Profil</h4>
-                      <button type="button" onClick={() => setStep(2)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
-                    </div>
-                    <div className="grid gap-1 text-sm">
-                      <SummaryRow label="URL" value={`/isletme/${finalSlug}`} />
-                      <SummaryRow label="Açıklama" value={description || "—"} />
-                      <SummaryRow label="Logo" value={logoFile ? "✅ Seçildi" : "Yok"} />
-                      <SummaryRow label="Kapak" value={coverFile ? "✅ Seçildi" : "Yok"} />
-                    </div>
-                  </div>
-                </div>
+                </details>
 
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
                   <div className="flex items-start gap-3">
@@ -628,8 +713,8 @@ export function OnboardingWizard() {
                     <div className="text-sm text-[var(--text-2)]">
                       <p className="font-medium text-emerald-600">Kurulumdan sonra neler olacak?</p>
                       <ul className="mt-1.5 space-y-1 text-xs text-[var(--text-3)]">
-                        <li>• Çalışma saatleriniz varsayılan olarak ayarlanacak (daha sonra değiştirebilirsiniz)</li>
-                        <li>• Dashboard&apos;dan hizmetlerinizi ve çalışanlarınızı ekleyebilirsiniz</li>
+                        <li>• Çalışma saatlerin: {summarizeWorkingHours(hours)}</li>
+                        <li>• {servicePlan.length ? `${servicePlan.length} hizmet online randevuya açık olarak eklenecek` : "Hizmetlerini panelden ekleyebilirsin"}; çalışanlarını panelden davet edebilirsin</li>
                         <li>• Her yeni şube Süper Admin onayından sonra yayınlanır; firma başına en fazla 10 şube açılabilir</li>
                       </ul>
                     </div>
@@ -706,9 +791,9 @@ export function OnboardingWizard() {
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between py-0.5">
-      <span className="text-[var(--text-3)]">{label}</span>
-      <span className="font-medium text-[var(--text-1)]">{value || "—"}</span>
+    <div className="flex justify-between gap-3 py-0.5">
+      <span className="shrink-0 text-[var(--text-3)]">{label}</span>
+      <span className="min-w-0 break-words text-right font-medium text-[var(--text-1)]">{value || "—"}</span>
     </div>
   );
 }

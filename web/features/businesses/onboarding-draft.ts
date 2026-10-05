@@ -9,7 +9,10 @@ export interface BusinessOnboardingDraft {
   name: string;
   slug: string;
   city: string;
+  district: string;
   phone: string;
+  /** "Diğer" seçildiğinde işletmenin yazdığı kategori; işletme oluşunca kategori talebi olarak gönderilir. */
+  customCategory: string;
 }
 
 export function readBusinessOnboardingDraft(): Partial<BusinessOnboardingDraft> {
@@ -24,10 +27,18 @@ export function readBusinessOnboardingDraft(): Partial<BusinessOnboardingDraft> 
 
 export function writeBusinessOnboardingDraft(value: Partial<BusinessOnboardingDraft>) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(BUSINESS_ONBOARDING_DRAFT_KEY, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(BUSINESS_ONBOARDING_DRAFT_KEY, JSON.stringify(value));
+  } catch {
+    // Gizli sekme / dolu depolama: taslak kaydedilemezse sihirbaz yine çalışır.
+  }
 }
 
 export function clearBusinessOnboardingDraft() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(BUSINESS_ONBOARDING_DRAFT_KEY);
+  try {
+    window.localStorage.removeItem(BUSINESS_ONBOARDING_DRAFT_KEY);
+  } catch {
+    // yok say
+  }
 }

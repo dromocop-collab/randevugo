@@ -2,20 +2,41 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, CreditCard, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { Building2, Check, CreditCard, Crown, LoaderCircle, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription, requestSubscriptionPurchase } from "@/features/subscriptions/subscription-repository";
 import { listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
+import { ConfirmSheet, EmptyState, HeroChip, Notice, Panel, Pill, Segmented, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "@/app/dashboard/_studio";
+import css from "./abonelik.module.css";
+
+type Cycle = "monthly" | "yearly";
+
+function money(value: number, currency: string) {
+  return `${value.toLocaleString("tr-TR")} ${currency === "TRY" ? "₺" : currency}`;
+}
+
+function yearlySaving(plan: PlatformPlan) {
+  const full = plan.monthlyPrice * 12;
+  if (!full || plan.yearlyPrice <= 0 || plan.yearlyPrice >= full) return 0;
+  return Math.round((full - plan.yearlyPrice) / full * 100);
+}
+
+function formatDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) : null;
+}
 
 export default function SubscriptionPage() {
   const { businessId } = useBusiness();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [plans, setPlans] = useState<PlatformPlan[]>([]);
-  const [cycle, setCycle] = useState<"monthly" | "yearly">("yearly");
+  const [cycle, setCycle] = useState<Cycle>("yearly");
   const [loading, setLoading] = useState(true);
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<PlatformPlan | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -42,31 +63,115 @@ export default function SubscriptionPage() {
     } finally { setBusyPlan(null); }
   }
 
-  if (loading) return <div className="grid min-h-72 place-items-center"><LoaderCircle className="animate-spin text-[var(--accent)]"/></div>;
+  function confirmChoice() {
+    const plan = confirmPlan;
+    if (!plan) return;
+    void choosePlan(plan).finally(() => setConfirmPlan(null));
+  }
+
+  if (loading) return <StudioPage label="Abonelik"><StudioSkeleton stats={0} rows={3} label="Paket bilgileri yükleniyor" /></StudioPage>;
   const active = isSubscriptionActive(subscription);
   const lifetime = subscription?.isLifetime === true || subscription?.accessMode === "lifetime";
   const currentPlan = plans.find((plan) => plan.id === subscription?.plan);
+  const statusLabel = lifetime ? "Süresiz" : active ? "Aktif" : "Süresi doldu";
+  const endsAt = lifetime ? null : formatDate(subscription?.status === "trialing" ? subscription?.trialEndsAt : subscription?.subscriptionEndsAt);
+  const bestSaving = plans.reduce((max, plan) => Math.max(max, yearlySaving(plan)), 0);
+  const cycleOptions = [
+    { value: "monthly" as const, label: "Aylık" },
+    { value: "yearly" as const, label: bestSaving ? <>Yıllık <span className={css.saveTag}>-%{bestSaving}</span></> : "Yıllık" },
+  ];
+  const confirmPrice = confirmPlan ? (cycle === "yearly" ? confirmPlan.yearlyPrice : confirmPlan.monthlyPrice) : 0;
 
-  return <div className="space-y-6">
-    <section className="dashboard-theme-hero relative overflow-hidden rounded-[30px] p-7 text-white shadow-xl sm:p-9">
-      <div className="dashboard-theme-hero__orb absolute -right-14 -top-20 h-60 w-60 rounded-full"/>
-      <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><span className="dashboard-theme-hero__kicker text-[10px] font-black tracking-[.18em]">ABONELİK MERKEZİ</span><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight">İşletmenize uygun paketi seçin.</h1><p className="dashboard-theme-hero__description mt-3 max-w-2xl text-sm leading-7">Paketinizde bulunan özellikler panelinize yansır. Paket değişiminde mevcut verileriniz korunur.</p></div><div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur"><small className="text-white/65">MEVCUT PAKET</small><b className="mt-1 block text-xl">{currentPlan?.label ?? subscription?.plan ?? "Tanımsız"}</b><span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${active ? "bg-emerald-300 text-emerald-950" : "bg-rose-200 text-rose-900"}`}>{lifetime ? "Süresiz" : active ? "Aktif" : "Süresi doldu"}</span></div></div>
-    </section>
-    <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--surface-2)] text-[var(--accent)]"><ShieldCheck size={19}/></span><div><b className="text-sm text-[var(--text-1)]">Güvenli paket geçişi</b><p className="text-xs text-[var(--text-3)]">Ücret tahsil edilmeden ücretli paket aktifleştirilmez; kayıtlarınız hiçbir zaman silinmez.</p></div></div>
-    <section className="rounded-[26px] border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><span className="text-[10px] font-black tracking-[.16em] text-[var(--accent)]">PAKETLER</span><h2 className="mt-1 text-2xl font-bold text-[var(--text-1)]">İhtiyacınız kadarını seçin</h2></div><div className="inline-flex rounded-xl bg-[var(--surface-2)] p-1"><CycleButton active={cycle === "monthly"} onClick={() => setCycle("monthly")}>Aylık</CycleButton><CycleButton active={cycle === "yearly"} onClick={() => setCycle("yearly")}>Yıllık</CycleButton></div></div>
-      {plans.length === 0 ? <p className="mt-6 rounded-2xl bg-[var(--surface-2)] p-6 text-center text-sm text-[var(--text-3)]">Şu anda satışa açık paket bulunmuyor.</p> : <div className="mt-6 grid gap-4 xl:grid-cols-3">{plans.map((plan) => <PlanCard key={plan.id} plan={plan} cycle={cycle} selected={plan.id === subscription?.plan} lifetime={lifetime} busy={busyPlan !== null} onChoose={() => void choosePlan(plan)}/>)}</div>}
-      <p className="mt-5 text-center text-[10px] leading-5 text-[var(--text-3)]">Ödeme sağlayıcısı hazırsa güvenli ödeme ekranı açılır. Henüz yapılandırılmadıysa talep kaydedilir ve ücret tahsil edilmeden paket açılmaz.</p>
-    </section>
-  </div>;
+  return (
+    <StudioPage label="Abonelik">
+      <StudioHero
+        eyebrow="Abonelik merkezi"
+        icon={CreditCard}
+        title="İşletmenize uygun paketi seçin."
+        description="Paketinizde bulunan özellikler panelinize yansır. Paket değişiminde mevcut verileriniz korunur."
+        mascot="happy"
+      >
+        <HeroChip icon={Crown} value={currentPlan?.label ?? subscription?.plan ?? "Tanımsız"} label="mevcut paket" />
+        <Pill tone={active ? "ok" : "bad"} dot className={css.heroPill}>{statusLabel}</Pill>
+        {endsAt ? <HeroChip value={endsAt} label={subscription?.status === "trialing" ? "deneme bitişi" : "yenileme"} /> : null}
+      </StudioHero>
+
+      <Notice tone="accent" icon={ShieldCheck} title="Güvenli paket geçişi">
+        Ücret tahsil edilmeden ücretli paket aktifleştirilmez; kayıtlarınız hiçbir zaman silinmez.
+      </Notice>
+
+      <Panel icon={Sparkles} title="İhtiyacınız kadarını seçin" description="Tüm paketlerde verileriniz korunur.">
+        {plans.length ? <div className={css.cycleRow}><Segmented label="Ödeme dönemi" options={cycleOptions} value={cycle} onChange={setCycle} /></div> : null}
+        {plans.length === 0
+          ? <EmptyState mood="thinking" title="Şu anda satışa açık paket bulunmuyor." description="Yeni paketler yayınlandığında burada görünecek." />
+          : (
+            <div className={css.plans}>
+              {plans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan} cycle={cycle} selected={plan.id === subscription?.plan} active={active} lifetime={lifetime}
+                  busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => setConfirmPlan(plan)} />
+              ))}
+            </div>
+          )}
+        <p className={css.footnote}>Ödeme sağlayıcısı hazırsa güvenli ödeme ekranı açılır. Henüz yapılandırılmadıysa talep kaydedilir ve ücret tahsil edilmeden paket açılmaz.</p>
+      </Panel>
+
+      <ConfirmSheet
+        open={confirmPlan !== null}
+        tone="primary"
+        title={confirmPlan ? `${confirmPlan.label} paketini seçiyorsunuz` : "Paket seçimi"}
+        description="Ödeme sağlayıcısı hazırsa güvenli ödeme ekranına yönlendirilirsiniz; değilse talebiniz kaydedilir ve ücret tahsil edilmeden paket açılmaz."
+        confirmLabel={busyPlan ? "Hazırlanıyor…" : "Onayla ve devam et"}
+        busy={busyPlan !== null}
+        onConfirm={confirmChoice}
+        onClose={() => setConfirmPlan(null)}
+      >
+        {confirmPlan ? (
+          <div className={css.confirmSummary}>
+            <span>{cycle === "yearly" ? "Yıllık ödeme" : "Aylık ödeme"}</span>
+            <b>{money(confirmPrice, confirmPlan.currency)}<small> / {cycle === "yearly" ? "yıl" : "ay"}</small></b>
+          </div>
+        ) : null}
+      </ConfirmSheet>
+    </StudioPage>
+  );
 }
 
-function CycleButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} className={`rounded-lg px-4 py-2 text-xs font-bold ${active ? "bg-[var(--surface-1)] text-[var(--text-1)] shadow" : "text-[var(--text-3)]"}`}>{children}</button>;
-}
-
-function PlanCard({ plan, cycle, selected, lifetime, busy, onChoose }: { plan: PlatformPlan; cycle: "monthly" | "yearly"; selected: boolean; lifetime: boolean; busy: boolean; onChoose: () => void }) {
+function PlanCard({ plan, cycle, selected, active, lifetime, busy, pending, onChoose }: { plan: PlatformPlan; cycle: Cycle; selected: boolean; active: boolean; lifetime: boolean; busy: boolean; pending: boolean; onChoose: () => void }) {
   const entitlements = plan.entitlements.length ? plan.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS;
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
-  return <article className={`relative flex flex-col rounded-[24px] border p-5 ${plan.isRecommended ? "border-[var(--accent)] shadow-lg" : "border-[var(--border)] bg-[var(--surface-2)]"}`}>{plan.isRecommended && <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[9px] font-black text-white"><Sparkles size={11}/> ÖNERİLEN</span>}<small className="font-black tracking-[.14em] text-[var(--accent)]">{plan.id}</small><h3 className="mt-2 text-2xl font-bold text-[var(--text-1)]">{plan.label}</h3><p className="mt-2 min-h-10 text-xs leading-5 text-[var(--text-3)]">{plan.description}</p><p className="mt-5"><b className="text-3xl text-[var(--text-1)]">{price.toLocaleString("tr-TR")} {plan.currency === "TRY" ? "₺" : plan.currency}</b><span className="text-xs text-[var(--text-3)]"> / {cycle === "yearly" ? "yıl" : "ay"}</span></p><div className="mt-4 flex gap-2 text-[10px] font-bold text-[var(--text-2)]"><span className="rounded-lg bg-[var(--surface-1)] px-2 py-1">{plan.maxStores} şube</span><span className="rounded-lg bg-[var(--surface-1)] px-2 py-1">{plan.maxStaff} çalışan</span></div><ul className="mt-5 flex-1 space-y-2">{entitlements.map((key) => <li key={key} className="flex items-center gap-2 text-xs font-semibold text-[var(--text-2)]"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check size={12}/></span>{entitlementLabel(key)}</li>)}</ul><button type="button" disabled={selected || lifetime || busy} onClick={onChoose} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-bold text-white shadow-lg disabled:opacity-55"><CreditCard size={17}/>{selected ? "Mevcut paketiniz" : lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : "Bu paketi seç"}</button></article>;
+  const saving = yearlySaving(plan);
+  const perMonth = cycle === "yearly" && plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : 0;
+  return (
+    <article className={cx(css.plan, plan.isRecommended && css.planRecommended, selected && css.planCurrent)} aria-current={selected ? "true" : undefined}>
+      <div className={css.planHead}>
+        <small className={css.planCode}>{plan.id}</small>
+        <div className={css.planBadges}>
+          {selected ? <Pill tone={active || lifetime ? "ok" : "warn"} dot>Mevcut paket</Pill> : null}
+          {plan.isRecommended ? <Pill tone="accent"><Sparkles size={12} aria-hidden /> Önerilen</Pill> : null}
+        </div>
+      </div>
+      <h3 className={css.planName}>{plan.label}</h3>
+      {plan.description ? <p className={css.planDesc}>{plan.description}</p> : null}
+      <div className={css.price}>
+        <b>{money(price, plan.currency)}</b>
+        <span>/ {cycle === "yearly" ? "yıl" : "ay"}</span>
+      </div>
+      <div className={css.priceNote}>
+        {perMonth ? <span>Aylık ~{money(perMonth, plan.currency)}</span> : null}
+        {cycle === "yearly" && saving ? <Pill tone="ok">%{saving} tasarruf</Pill> : null}
+      </div>
+      <div className={css.limits}>
+        <span><Building2 size={14} aria-hidden />{plan.maxStores} şube</span>
+        <span><UsersRound size={14} aria-hidden />{plan.maxStaff} çalışan</span>
+      </div>
+      <ul className={css.features}>
+        {entitlements.map((key) => <li key={key}><span className={css.check} aria-hidden><Check size={12} strokeWidth={3} /></span>{entitlementLabel(key)}</li>)}
+      </ul>
+      <button type="button" disabled={selected || lifetime || busy} onClick={onChoose}
+        className={cx(studio.btn, studio.btnLg, studio.btnBlock, plan.isRecommended || !selected ? studio.btnPrimary : undefined)}>
+        {pending ? <LoaderCircle size={17} className={studio.spin} aria-hidden /> : <CreditCard size={17} aria-hidden />}
+        {selected ? "Mevcut paketiniz" : lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : "Bu paketi seç"}
+      </button>
+    </article>
+  );
 }

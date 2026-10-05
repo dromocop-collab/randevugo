@@ -1,28 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, type Timestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, type Timestamp } from "firebase/firestore";
 import { toast } from "sonner";
-import { ArrowRight, CheckCircle2, Headphones, LoaderCircle, Mail, MessageCircleMore, Phone, Search, Send, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
+import { Headphones, LoaderCircle, MessageCircleMore, MessagesSquare, Send, ShieldCheck, UserRound } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuthContext } from "@/features/auth/auth-context";
 import { useBusiness } from "@/hooks/use-business";
-import { EmptyState } from "@/components/ui/states";
+import { EmptyState, HeroChip, Pill, SearchField, Segmented, Sheet, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "../_studio";
+import { TicketThread, statusLabel, statusTone, type Ticket } from "./ticket-thread";
+import css from "./support.module.css";
 
-type Ticket = { id:string; title:string; category:string; status:string; createdAt:string; message:string; requesterName:string; requesterPhone:string; requesterEmail:string; source:string; target:string; hasAccount:boolean };
-type Message = { id:string; body:string; senderRole:string; createdAt:string };
 type Tab = "customers"|"platform";
 const categories=[{value:"technical",label:"Teknik sorun"},{value:"billing",label:"Faturalama"},{value:"account",label:"Hesap ve erişim"},{value:"feature_request",label:"Özellik talebi"},{value:"other",label:"Diğer"}];
-const statusText:Record<string,string>={open:"Açık",in_progress:"İşleniyor",waiting_user:"Yanıtınız bekleniyor",waiting_admin:"Ekip yanıtı bekleniyor",resolved:"Çözüldü",closed:"Kapalı"};
+
+const DESKTOP_QUERY = "(min-width: 1024px)";
+function subscribeDesktop(callback: () => void) {
+  const mq = window.matchMedia(DESKTOP_QUERY);
+  mq.addEventListener("change", callback);
+  return () => mq.removeEventListener("change", callback);
+}
+function useIsDesktop() {
+  return useSyncExternalStore(subscribeDesktop, () => window.matchMedia(DESKTOP_QUERY).matches, () => false);
+}
 
 export default function DashboardSupportPage(){
   const {user}=useAuthContext(); const {businessId}=useBusiness();
   const [tickets,setTickets]=useState<Ticket[]>([]); const [loading,setLoading]=useState(true); const [tab,setTab]=useState<Tab>("customers");
   const [search,setSearch]=useState(""); const [showForm,setShowForm]=useState(false); const [selected,setSelected]=useState<Ticket|null>(null);
   const [title,setTitle]=useState(""); const [category,setCategory]=useState("technical"); const [message,setMessage]=useState(""); const [submitting,setSubmitting]=useState(false);
+  const isDesktop = useIsDesktop();
 
   useEffect(()=>{
     if(new URLSearchParams(window.location.search).get("mode")!=="billing")return;
@@ -43,26 +53,165 @@ export default function DashboardSupportPage(){
   async function submit(){if(!title.trim()||!message.trim()||!businessId||!user)return;setSubmitting(true);try{await httpsCallable(getFunctions(getFirebaseApp(),"europe-west1"),"createBusinessSupportTicket")({businessId,title:title.trim(),category,message:message.trim()});toast.success("Talebiniz destek ekibine ulaştı.");setTitle("");setMessage("");setShowForm(false)}catch(error){toast.error((error as Error).message)}finally{setSubmitting(false)}}
   async function resolveCustomer(id:string){try{await updateDoc(doc(getDb(),"supportTickets",id),{status:"resolved",updatedAt:serverTimestamp()});toast.success("Müşteri mesajı çözüldü olarak işaretlendi.")}catch(error){toast.error((error as Error).message)}}
 
-  return <div className="support-dashboard-page space-y-5">
-    <section className="support-command-hero relative overflow-hidden rounded-[30px] bg-[linear-gradient(130deg,#071f15,#0b6b45)] p-6 text-white shadow-[0_28px_70px_rgba(6,57,37,.22)] sm:p-8"><div className="absolute -right-14 -top-20 h-56 w-56 rounded-full border border-white/10 bg-[#c9f45b]/10"/><div className="relative flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><span className="flex items-center gap-2 text-[10px] font-black tracking-[.18em] text-[#c9f45b]"><Sparkles size={14}/> İLETİŞİM MERKEZİ</span><h1 className="mt-3 font-[var(--font-space-grotesk)] text-4xl font-semibold tracking-[-.055em] sm:text-5xl">Mesajlar ayrıştı.<br/>Takip kolaylaştı.</h1><p className="mt-4 max-w-xl text-sm leading-7 text-white/60">Mağaza müşterilerinizi yönetin veya SeninRandevun ekibiyle güvenli bir destek görüşmesi başlatın.</p></div><div className="grid grid-cols-2 gap-2"><Metric value={customerTickets.filter(x=>x.status!=="resolved").length} label="açık müşteri mesajı"/><Metric value={platformTickets.filter(x=>x.status!=="resolved").length} label="aktif destek talebi"/></div></div></section>
-    <section className="rounded-[26px] border border-[var(--border)] bg-[var(--surface-1)] p-3 shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="flex gap-2 overflow-x-auto"><TabButton active={tab==="customers"} onClick={()=>{setTab("customers");setSelected(null)}} icon={<UserRound size={17}/>} label="Müşteri mesajları" count={customerTickets.length}/><TabButton active={tab==="platform"} onClick={()=>{setTab("platform");setSelected(null)}} icon={<Headphones size={17}/>} label="Platform desteği" count={platformTickets.length}/></div><label className="flex items-center gap-2 rounded-2xl bg-[var(--surface-2)] px-4 py-3 md:w-80"><Search size={16}/><input className="w-full bg-transparent text-sm outline-none" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Mesajlarda ara…"/></label></div></section>
-    {tab==="platform"&&<section className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface-2)] p-5"><div><b className="text-sm text-[var(--text-1)]">Profesyonel destek hattı</b><p className="mt-1 text-xs text-[var(--text-3)]">Teknik, hesap ve faturalama talepleriniz için yeni görüşme açın.</p></div><button onClick={()=>setShowForm(true)} className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-[var(--accent)] px-4 py-3 text-xs font-bold text-white shadow-lg"><MessageCircleMore size={16}/> Yeni talep</button></section>}
-    {loading?<div className="grid gap-3">{[1,2].map(x=><div key={x} className="h-32 animate-pulse rounded-[24px] bg-[var(--surface-2)]"/>)}</div>:visible.length===0?<EmptyState title={tab==="customers"?"Müşteri mesajı yok":"Destek talebi yok"} description={tab==="customers"?"Mağazanıza gönderilen mesajlar burada görünür.":"İhtiyaç duyduğunuzda destek ekibimiz yanınızda."}/>:<section className="grid gap-3">{visible.map(ticket=><TicketCard key={ticket.id} ticket={ticket} customers={tab==="customers"} select={()=>setSelected(ticket)} resolve={()=>resolveCustomer(ticket.id)}/>)}</section>}
-    {showForm&&createPortal(<SupportForm title={title} setTitle={setTitle} category={category} setCategory={setCategory} message={message} setMessage={setMessage} submitting={submitting} submit={submit} close={()=>setShowForm(false)}/>,document.body)}
-    {selected&&createPortal(<TicketPanel ticket={selected} platform={tab==="platform"} userId={user?.uid??""} onClose={()=>setSelected(null)}/>,document.body)}
-  </div>
+  // Seçili talebin canlı halini (durum değişiklikleri dahil) kullan.
+  const active = selected ? tickets.find(item=>item.id===selected.id) ?? selected : null;
+  const customers = tab==="customers";
+  const openCustomer = customerTickets.filter(x=>x.status!=="resolved").length;
+  const openPlatform = platformTickets.filter(x=>x.status!=="resolved").length;
+
+  const closeForm = useCallback(()=>setShowForm(false),[]);
+  const closeThread = useCallback(()=>setSelected(null),[]);
+  function switchTab(next:Tab){setTab(next);setSelected(null)}
+  function openNewTicket(){if(tab!=="platform")switchTab("platform");setShowForm(true)}
+
+  const mobileThreadOpen = !!active && !isDesktop;
+  useEffect(()=>{
+    if(!mobileThreadOpen)return;
+    const overflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")closeThread()};
+    document.addEventListener("keydown",onKey);
+    return()=>{document.body.style.overflow=overflow;document.removeEventListener("keydown",onKey)};
+  },[mobileThreadOpen,closeThread]);
+
+  const thread = active ? (
+    <TicketThread
+      key={active.id}
+      ticket={active}
+      platform={!customers}
+      userId={user?.uid??""}
+      onBack={isDesktop ? undefined : closeThread}
+      onResolve={customers ? ()=>resolveCustomer(active.id) : undefined}
+    />
+  ) : null;
+
+  return (
+    <StudioPage label="İletişim merkezi">
+      <StudioHero
+        eyebrow="İletişim merkezi"
+        icon={MessagesSquare}
+        title="Mesajlar & destek"
+        description="Mağaza müşterilerinizden gelen mesajları yanıtlayın veya SeninRandevun ekibiyle güvenli bir destek görüşmesi başlatın."
+        actions={<button type="button" className={cx(studio.btn, studio.btnBright)} onClick={openNewTicket}><MessageCircleMore size={17} aria-hidden /> Yeni destek talebi</button>}
+      >
+        <HeroChip icon={UserRound} value={openCustomer} label="açık müşteri mesajı" />
+        <HeroChip icon={Headphones} value={openPlatform} label="aktif destek talebi" />
+      </StudioHero>
+
+      <div className={css.toolbar}>
+        <Segmented
+          label="Mesaj türü"
+          value={tab}
+          onChange={switchTab}
+          options={[
+            { value: "customers", label: "Müşteri mesajları", icon: UserRound, count: customerTickets.length },
+            { value: "platform", label: "Platform desteği", icon: Headphones, count: platformTickets.length },
+          ]}
+        />
+        <SearchField value={search} onChange={setSearch} placeholder="Mesajlarda ara…" />
+      </div>
+
+      {loading ? (
+        <StudioSkeleton stats={0} rows={4} label="Mesajlar yükleniyor" />
+      ) : (
+        <div className={css.inbox}>
+          <section className={css.listPane} aria-label={customers ? "Müşteri mesajları" : "Destek talepleri"}>
+            <div className={css.listHead}>
+              <span>{customers ? "Gelen kutusu" : "Talepleriniz"}</span>
+              <span>{visible.length}</span>
+            </div>
+            {visible.length===0 ? (
+              <div className={css.listEmpty}>
+                <EmptyState
+                  title={search.trim() ? "Sonuç bulunamadı" : customers ? "Müşteri mesajı yok" : "Destek talebi yok"}
+                  description={search.trim() ? "Farklı bir kelimeyle aramayı deneyin." : customers ? "Mağazanıza gönderilen mesajlar burada görünür." : "İhtiyaç duyduğunuzda destek ekibimiz yanınızda."}
+                  mood={customers ? "wave" : "happy"}
+                  size={84}
+                  action={!customers && !search.trim() ? <button type="button" className={cx(studio.btn, studio.btnPrimary)} onClick={()=>setShowForm(true)}><MessageCircleMore size={16} aria-hidden /> Yeni talep</button> : undefined}
+                />
+              </div>
+            ) : (
+              <ul className={css.list}>
+                {visible.map(ticket=>{
+                  const needsAction = customers ? ticket.status==="open" : ticket.status==="waiting_user";
+                  return (
+                    <li key={ticket.id}>
+                      <button type="button" className={css.item} aria-current={active?.id===ticket.id ? "true" : undefined} onClick={()=>setSelected(ticket)}>
+                        <span className={css.itemIcon} aria-hidden>
+                          {customers?<UserRound size={20}/>:<Headphones size={20}/>}
+                          {needsAction ? <i className={css.unreadDot} /> : null}
+                        </span>
+                        <span className={css.itemBody}>
+                          <span className={css.itemTop}>
+                            <span className={css.itemTitle}>{ticket.title}</span>
+                            <span className={css.itemTime}>{ticket.createdAt.split(" ")[0]}</span>
+                          </span>
+                          <span className={css.itemSub}>{ticket.requesterName}</span>
+                          <span className={css.itemFoot}>
+                            <Pill tone={statusTone(ticket.status, customers)} dot>{statusLabel(ticket.status, customers)}</Pill>
+                            <span className={css.itemPreview}>{ticket.message}</span>
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className={css.threadPane} aria-label="Konuşma">
+            {isDesktop && thread ? thread : (
+              <div className={css.placeholder}>
+                <div>
+                  <EmptyState
+                    title="Bir görüşme seçin"
+                    description={customers ? "Soldaki listeden bir müşteri mesajı seçerek yanıtlayın." : "Soldaki listeden bir talep seçin veya yeni bir destek görüşmesi başlatın."}
+                    mood="thinking"
+                    size={88}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {mobileThreadOpen && typeof document!=="undefined" ? createPortal(
+        <div className={cx(studio.page, css.full)} role="dialog" aria-modal="true" aria-label={active?.title}>
+          {thread}
+        </div>,
+        document.body,
+      ) : null}
+
+      <Sheet
+        open={showForm}
+        onClose={closeForm}
+        title="Yeni destek görüşmesi"
+        description="Bize anlatın, birlikte çözelim."
+        footer={<>
+          <button type="button" className={studio.btn} onClick={closeForm}>Vazgeç</button>
+          <button type="button" className={cx(studio.btn, studio.btnPrimary)} disabled={submitting||!title.trim()||!message.trim()} onClick={submit}>
+            {submitting?<LoaderCircle size={16} className={studio.spin} aria-hidden/>:<Send size={16} aria-hidden/>} Gönder
+          </button>
+        </>}
+      >
+        <div className={css.form}>
+          <div className={studio.field}>
+            <label className={studio.label} htmlFor="support-title">Konu</label>
+            <input id="support-title" className={studio.input} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Kısaca konu başlığı"/>
+          </div>
+          <div className={studio.field}>
+            <label className={studio.label} htmlFor="support-category">Kategori</label>
+            <select id="support-category" className={studio.select} value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}</select>
+          </div>
+          <div className={studio.field}>
+            <label className={studio.label} htmlFor="support-message">Mesaj</label>
+            <textarea id="support-message" className={studio.textarea} rows={5} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Talebinizi detaylandırın…"/>
+          </div>
+          <p className={css.privacy}><ShieldCheck size={15} aria-hidden/> Görüşmeniz yalnızca işletmeniz ve platform ekibi tarafından görülür.</p>
+        </div>
+      </Sheet>
+    </StudioPage>
+  );
 }
-
-function Metric({value,label}:{value:number;label:string}){return <span className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-xl"><b className="block text-2xl text-[var(--dash-bright)]">{value}</b><small className="text-[9px] text-white/55">{label}</small></span>}
-function TabButton({active,onClick,icon,label,count}:{active:boolean;onClick:()=>void;icon:ReactNode;label:string;count:number}){return <button onClick={onClick} className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-xs font-bold transition ${active?"bg-[var(--accent)] text-white shadow-lg":"bg-[var(--surface-2)] text-[var(--text-2)]"}`}>{icon}{label}<span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[9px] ${active?"bg-white/15":"bg-[var(--surface-1)]"}`}>{count}</span></button>}
-function TicketCard({ticket,customers,select,resolve}:{ticket:Ticket;customers:boolean;select:()=>void;resolve:()=>void}){return <article className="group rounded-[24px] border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--surface-3)] text-[var(--accent)]">{customers?<UserRound/>:<Headphones/>}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[9px] font-black tracking-[.13em] text-[var(--accent)]">{customers?"MAĞAZA MÜŞTERİSİ":"SENİNRANDEVUN DESTEK"}</span><i className="rounded-full bg-[var(--surface-2)] px-2 py-1 text-[9px] not-italic text-[var(--text-3)]">{statusText[ticket.status]??ticket.status}</i></div><h2 className="mt-2 text-base font-bold text-[var(--text-1)]">{ticket.title}</h2><p className="mt-1 text-xs text-[var(--text-3)]">{ticket.requesterName} · {ticket.createdAt}</p><p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--text-2)]">{ticket.message}</p></div><button onClick={select} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--border)] text-[var(--accent)] transition group-hover:bg-[var(--accent)] group-hover:text-white"><ArrowRight size={17}/></button></div>{customers&&<div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">{ticket.requesterPhone&&<a className="inline-flex items-center gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs font-bold" href={`tel:${ticket.requesterPhone}`}><Phone size={14}/> Ara</a>}{ticket.requesterEmail&&<a className="inline-flex items-center gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs font-bold" href={`mailto:${ticket.requesterEmail}`}><Mail size={14}/> E-posta</a>}<button disabled={ticket.status==="resolved"} onClick={resolve} className="inline-flex items-center gap-2 rounded-xl bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800 disabled:opacity-50"><CheckCircle2 size={14}/> Çözüldü</button></div>}</article>}
-
-function SupportForm(p:{title:string;setTitle:(x:string)=>void;category:string;setCategory:(x:string)=>void;message:string;setMessage:(x:string)=>void;submitting:boolean;submit:()=>void;close:()=>void}){return <div className="fixed inset-0 z-[120] grid place-items-center bg-black/70 p-4 backdrop-blur-md" onMouseDown={e=>{if(e.target===e.currentTarget)p.close()}}><div className="w-full max-w-xl rounded-[30px] border border-white/30 bg-[var(--surface-1)] p-6 shadow-2xl sm:p-8"><div className="flex items-start justify-between"><div><span className="text-[9px] font-black tracking-[.15em] text-[var(--accent)]">YENİ DESTEK GÖRÜŞMESİ</span><h2 className="mt-2 text-2xl font-bold text-[var(--text-1)]">Bize anlatın, birlikte çözelim.</h2></div><button onClick={p.close} className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--surface-2)]"><X/></button></div><div className="mt-6 grid gap-3"><input className="rounded-2xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--accent)]" value={p.title} onChange={e=>p.setTitle(e.target.value)} placeholder="Konu"/><select className="rounded-2xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm" value={p.category} onChange={e=>p.setCategory(e.target.value)}>{categories.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}</select><textarea className="min-h-36 rounded-2xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm outline-none focus:border-[var(--accent)]" value={p.message} onChange={e=>p.setMessage(e.target.value)} placeholder="Talebinizi detaylandırın…"/><button disabled={p.submitting||!p.title.trim()||!p.message.trim()} onClick={p.submit} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 py-4 text-sm font-bold text-white disabled:opacity-50">{p.submitting?<LoaderCircle className="animate-spin"/>:<Send size={17}/>} Destek ekibine gönder</button></div><p className="mt-4 flex items-center gap-2 text-[10px] text-[var(--text-3)]"><ShieldCheck size={14}/> Görüşmeniz yalnızca işletmeniz ve platform ekibi tarafından görülür.</p></div></div>}
-
-function TicketPanel({ticket,platform,userId,onClose}:{ticket:Ticket;platform:boolean;userId:string;onClose:()=>void}){
-  const [messages,setMessages]=useState<Message[]>([]);const [body,setBody]=useState("");const [sending,setSending]=useState(false);
-  useEffect(()=>{return onSnapshot(query(collection(getDb(),"supportTickets",ticket.id,"messages"),orderBy("createdAt","asc")),snapshot=>setMessages(snapshot.docs.map(item=>{const d=item.data();const stamp=d.createdAt as Timestamp|undefined;return{id:item.id,body:String(d.body??""),senderRole:String(d.senderRole??"business"),createdAt:stamp?.toDate?stamp.toDate().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"}):"Şimdi"}})),()=>setMessages([]));},[ticket.id]);
-  async function send(){if(!body.trim()||!userId)return;setSending(true);try{await addDoc(collection(getDb(),"supportTickets",ticket.id,"messages"),{body:body.trim(),senderId:userId,senderRole:"business",createdAt:serverTimestamp()});await updateDoc(doc(getDb(),"supportTickets",ticket.id),{status:platform?"waiting_admin":"waiting_user",updatedAt:serverTimestamp()});setBody("")}catch(error){toast.error((error as Error).message)}finally{setSending(false)}}
-  return <div className="fixed inset-0 z-[121] flex justify-end bg-black/60 backdrop-blur-sm" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><aside className="flex h-full w-full max-w-xl animate-[supportSlide_.35s_ease_both] flex-col bg-[var(--surface-1)] shadow-2xl"><header className="support-thread-header p-6 text-white"><button className="float-right grid h-10 w-10 place-items-center rounded-xl bg-white/10" onClick={onClose}><X/></button><span className="text-[9px] font-black tracking-[.15em] text-[var(--dash-bright)]">{platform?"PLATFORM GÖRÜŞMESİ":"MÜŞTERİ MESAJI"}</span><h2 className="mt-2 pr-12 text-2xl font-bold">{ticket.title}</h2><p className="mt-2 text-xs text-white/55">{ticket.requesterName} · {ticket.createdAt}</p></header><div className="flex-1 space-y-3 overflow-y-auto p-5"><Bubble body={ticket.message} role={platform?"business":"customer"} time={ticket.createdAt}/>{messages.map(item=><Bubble key={item.id} body={item.body} role={item.senderRole} time={item.createdAt}/>)}</div><footer className="border-t border-[var(--border)] p-4"><div className="flex items-end gap-2 rounded-2xl bg-[var(--surface-2)] p-2"><textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Mesajınızı yazın…" className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"/><button onClick={send} disabled={sending||!body.trim()} className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--accent)] text-white disabled:opacity-40">{sending?<LoaderCircle className="animate-spin" size={17}/>:<Send size={17}/>}</button></div>{!platform&&<div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] p-4">{ticket.requesterPhone&&<a href={`tel:${ticket.requesterPhone}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-3 py-3 text-xs font-bold text-white"><Phone size={15}/> Telefon et</a>}{ticket.requesterEmail&&<a href={`mailto:${ticket.requesterEmail}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-3 text-xs font-bold"><Mail size={15}/> E-posta gönder</a>}</div>}{!platform&&!ticket.hasAccount&&<p className="mt-2 text-[11px] text-amber-600">Müşteri giriş yapmadan yazdı; yazılı yanıtınızı göremeyebilir. En hızlısı telefonla dönmek.</p>}</footer></aside></div>
-}
-function Bubble({body,role,time}:{body:string;role:string;time:string}){const mine=role==="business";return <div className={`flex ${mine?"justify-end":"justify-start"}`}><div className={`support-chat-bubble ${mine?"mine":"theirs"} max-w-[84%] rounded-[20px] px-4 py-3 ${mine?"rounded-br-md bg-[var(--accent)] text-white":"rounded-bl-md bg-[var(--surface-2)] text-[var(--text-1)]"}`}><p className="text-sm leading-6">{body}</p><small className={`mt-1 block text-[9px] ${mine?"text-white/50":"text-[var(--text-3)]"}`}>{role==="admin"?"SeninRandevun ekibi":role==="customer"?"Müşteri":"Siz"} · {time}</small></div></div>}
