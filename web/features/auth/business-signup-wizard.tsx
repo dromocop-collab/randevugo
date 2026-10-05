@@ -17,6 +17,7 @@ import {
   type BusinessOnboardingDraft,
 } from "@/features/businesses/onboarding-draft";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
+import w from "./business-signup.module.css";
 
 const BASE_CATEGORIES = [
   ["kuafor", "Kuaför", "Saç, bakım ve stil", Scissors],
@@ -108,7 +109,7 @@ export function BusinessSignupWizard() {
   const selectedCategory = useMemo(() => categories.find((item) => item.value === draft.category), [categories, draft.category]);
 
   return (
-    <main className="business-signup-stage">
+    <main className={`business-signup-stage ${w.stage}`}>
       <header className="business-signup-header">
         <Link href="/" aria-label="Ana sayfa"><Image src="/logo.png" alt="" width={42} height={42}/><b>Senin<span>Randevun</span></b></Link>
         <div><small>İLK 3 AY ÜCRETSİZ</small><span><BadgeCheck size={14}/> Kredi kartı gerekmez</span></div>
@@ -116,14 +117,14 @@ export function BusinessSignupWizard() {
 
       <section className="business-signup-shell">
         <aside className="business-signup-rail">
-          <div className="signup-rovi"><RoviMascot size={78} alt="Rovi" /><span><small>ROVİ · KURULUM KOÇUN</small><b>İşletmeni birlikte hazırlayalım.</b></span></div>
+          <div className="signup-rovi"><RoviMascot size={78} mood={step === STEP_TITLES.length - 1 ? "happy" : "wave"} alt="Rovi" /><span><small>ROVİ · KURULUM KOÇUN</small><b>İşletmeni birlikte hazırlayalım.</b></span></div>
           <ol>{STEP_TITLES.map((title, index) => <li key={title} className={index === step ? "active" : index < step ? "done" : ""}><i>{index < step ? <Check size={14}/> : index + 1}</i><span><b>{title}</b><small>{index < step ? "Tamamlandı" : index === step ? "Şimdi buradasın" : "Bir sonraki adım"}</small></span></li>)}</ol>
           <div className="signup-rail-note"><Sparkles size={17}/><p><b>Akıllı başlangıç</b><span>Yanıtların panelini ve önerilerini işletmene göre hazırlar.</span></p></div>
         </aside>
 
         <div className="business-signup-main">
           <div className="signup-mobile-top"><Link href="/"><Image src="/logo.png" alt="" width={34} height={34}/><b>SeninRandevun</b></Link><span>{step + 1}/{STEP_TITLES.length}</span></div>
-          <div className="signup-progress"><i style={{ width: `${progress}%` }}/></div>
+          <div className="signup-progress" role="progressbar" aria-label="Kurulum ilerlemesi" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><i style={{ width: `${progress}%` }}/></div>
           <div className="signup-topline"><button type="button" onClick={() => step > 0 ? setStep(step - 1) : history.back()} aria-label="Geri"><ArrowLeft size={21}/></button><span>ADIM {step + 1} / {STEP_TITLES.length}</span><small>%{progress} tamamlandı</small></div>
 
           <div key={step} className="signup-step">

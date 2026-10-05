@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { AuthShell } from "@/components/layout/auth-shell";
-import { LoginForm } from "@/features/auth/auth-forms";
+import { AuthScreen, LoginForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Giriş | SeninRandevun",
+  title: "Giriş",
   description: "SeninRandevun işletme paneline giriş yapın.",
   robots: { index: false, follow: false },
 };
 
 export default function LoginPage() {
   return (
-    <AuthShell
-      eyebrow="YENİDEN HOŞ GELDİNİZ"
-      title="Günün kontrolü yeniden sizde."
-      subtitle="Randevu, ekip, müşteri, kasa ve işletme verilerinize güvenli oturumunuzla her cihazdan ulaşın."
-    >
+    <AuthScreen variant="business" mode="login">
       <LoginForm />
-    </AuthShell>
+    </AuthScreen>
   );
 }

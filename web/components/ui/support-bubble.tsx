@@ -43,6 +43,8 @@ export function SupportBubble() {
   const btnRef = useRef<HTMLButtonElement>(null);
   const hasEmbeddedSupport = pathname === "/hesabim";
   const isBusinessPanel = pathname.startsWith("/dashboard") || pathname.startsWith("/isletme/") || pathname.startsWith("/super-admin");
+  // Giriş/kayıt ekranlarında Rovi zaten karşılıyor; ikinci maskot gereksiz.
+  const isAuthScreen = ["/giris", "/kayit", "/musteri/", "/sifremi-unuttum", "/isletmeler/giris", "/isletmeler/kayit"].some((route) => pathname.startsWith(route));
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
@@ -100,7 +102,7 @@ export function SupportBubble() {
     };
   }, [isOpen, handleClose]);
 
-  if (isBusinessPanel || hasEmbeddedSupport) return null;
+  if (isBusinessPanel || hasEmbeddedSupport || isAuthScreen) return null;
 
   return (
     <>

@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { AuthShell } from "@/components/layout/auth-shell";
-import { ForgotPasswordForm } from "@/features/auth/auth-forms";
+import { AuthScreen, ForgotPasswordForm } from "@/features/auth/auth-forms";
 
 export const metadata: Metadata = {
-  title: "Sifremi Unuttum | SeninRandevun",
-  description: "SeninRandevun sifrenizi guvenli sekilde sifirlayin.",
+  title: "Şifremi Unuttum",
+  description: "SeninRandevun şifrenizi e-postanıza gelen kodla güvenle yenileyin.",
   robots: { index: false, follow: false },
 };
 
 export default function ForgotPasswordPage() {
   return (
-    <AuthShell
-      eyebrow="HESAP GUVENLIGI"
-      title="Sifrenizi guvenli sekilde yenileyin"
-      subtitle="Kayitli e-posta adresinize sifirlama baglantisi gonderelim. Baglanti geldiginde yeni sifre belirleyip hesabiniza geri donebilirsiniz."
-    >
+    <AuthScreen variant="customer" mode="forgot">
       <ForgotPasswordForm />
-    </AuthShell>
+    </AuthScreen>
   );
 }

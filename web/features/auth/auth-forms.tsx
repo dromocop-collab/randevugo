@@ -1,8 +1,19 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState, useRef, useEffect, useCallback } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import type { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import { httpsCallable } from "firebase/functions";
@@ -13,11 +24,45 @@ import {
   registerWithEmailPassword,
 } from "@/features/auth/auth-service";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ArrowRight, BadgeCheck, Building2, CalendarCheck2, Check, CreditCard, Eye, EyeOff, Gift, LockKeyhole, Mail, ShieldCheck, Smartphone, Sparkles, UserRound, Zap } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { RoviMascot, type RoviMood } from "@/components/brand/rovi-mascot";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  BarChart3,
+  BellRing,
+  Building2,
+  CalendarCheck2,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Compass,
+  CreditCard,
+  Eye,
+  EyeOff,
+  Gift,
+  Heart,
+  KeyRound,
+  LockKeyhole,
+  Mail,
+  MailCheck,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Star,
+  UserRound,
+  UsersRound,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+import s from "./auth.module.css";
 
 const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
+
+type AccountType = "business" | "customer";
+type ScreenMode = "login" | "register" | "forgot";
 
 function getCloudFunctions() {
   return getFunctions(getFirebaseApp(), "europe-west1");
@@ -48,24 +93,248 @@ function mapAuthError(error: unknown): string {
   return message ?? "Beklenmeyen bir hata oluştu.";
 }
 
-/* ─── 6-DIGIT CODE INPUT ─── */
-function CodeInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+/* ─────────────────── UI yardımcıları (yalnız görsel) ─────────────────── */
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function emailError(value: string): string | undefined {
+  if (!value.trim()) return "E-posta adresini yaz.";
+  if (!EMAIL_PATTERN.test(value.trim())) return "Geçerli bir e-posta adresi yaz (ör. ad@ornek.com).";
+  return undefined;
+}
+
+function cx(...names: Array<string | false | null | undefined>) {
+  return names.filter(Boolean).join(" ");
+}
+
+function focusById(id: string | undefined) {
+  if (!id) return;
+  document.getElementById(id)?.focus();
+}
+
+/** Mevcut ?next= parametresini Giriş ↔ Kayıt geçişlerinde korur (yalnız bağlantı metni; yönlendirme getSafeNextPath ile yapılır). */
+function useCarriedQuery() {
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next) queueMicrotask(() => setQuery(`?next=${encodeURIComponent(next)}`));
+  }, []);
+  return query;
+}
+
+type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "className"> & {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  error?: string;
+  hint?: ReactNode;
+  valid?: boolean;
+  labelAside?: ReactNode;
+};
+
+function TextField({ id, label, icon: Icon, error, hint, valid, labelAside, ...input }: FieldProps) {
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
+  return (
+    <div className={s.field}>
+      <div className={s.labelRow}>
+        <label className={s.label} htmlFor={id}>{label}</label>
+        {labelAside}
+      </div>
+      <div className={s.control} data-invalid={error ? "true" : undefined} data-valid={valid && !error ? "true" : undefined}>
+        <Icon size={18} aria-hidden="true" />
+        <input id={id} className={s.input} aria-invalid={error ? true : undefined} aria-describedby={describedBy} {...input} />
+        <CheckCircle2 className={s.validIcon} size={18} aria-hidden="true" />
+      </div>
+      {error ? <p id={errorId} className={s.error}><AlertCircle size={14} aria-hidden="true" />{error}</p> : null}
+      {hint ? <div id={hintId} className={s.hint}>{hint}</div> : null}
+    </div>
+  );
+}
+
+type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "type"> & {
+  id: string;
+  label: string;
+  error?: string;
+  hint?: ReactNode;
+  labelAside?: ReactNode;
+};
+
+function PasswordField({ id, label, error, hint, labelAside, onBlur, ...input }: PasswordFieldProps) {
+  const [visible, setVisible] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const capsId = `${id}-caps`;
+  const describedBy = [error ? errorId : null, capsOn ? capsId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
+
+  function detectCaps(event: KeyboardEvent<HTMLInputElement>) {
+    if (typeof event.getModifierState === "function") setCapsOn(event.getModifierState("CapsLock"));
+  }
+
+  return (
+    <div className={s.field}>
+      <div className={s.labelRow}>
+        <label className={s.label} htmlFor={id}>{label}</label>
+        {labelAside}
+      </div>
+      <div className={s.control} data-invalid={error ? "true" : undefined}>
+        <LockKeyhole size={18} aria-hidden="true" />
+        <input
+          id={id}
+          className={s.input}
+          type={visible ? "text" : "password"}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          onKeyDown={detectCaps}
+          onKeyUp={detectCaps}
+          onBlur={(event) => { setCapsOn(false); onBlur?.(event); }}
+          {...input}
+        />
+        <button
+          type="button"
+          className={s.toggle}
+          onClick={() => setVisible((current) => !current)}
+          aria-label={visible ? "Şifreyi gizle" : "Şifreyi göster"}
+          aria-pressed={visible}
+          aria-controls={id}
+        >
+          {visible ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+          <span aria-hidden="true">{visible ? "Gizle" : "Göster"}</span>
+        </button>
+      </div>
+      {capsOn ? <p id={capsId} className={s.caps} role="status"><AlertCircle size={14} aria-hidden="true" />Caps Lock açık</p> : null}
+      {error ? <p id={errorId} className={s.error}><AlertCircle size={14} aria-hidden="true" />{error}</p> : null}
+      {hint ? <div id={hintId} className={s.hint}>{hint}</div> : null}
+    </div>
+  );
+}
+
+function PasswordStrength({ password }: { password: string }) {
+  // Mevcut kayıt formundaki güç hesabı aynen korunur.
+  const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 8 ? 2 : /(?=.*[A-Z])(?=.*[0-9])/.test(password) ? 4 : 3;
+  const strengthLabel = ["", "Çok zayıf", "Zayıf", "Orta", "Güçlü"];
+  const tip = strength === 0
+    ? "En az 8 karakter kullan."
+    : strength < 3
+      ? `${Math.max(0, 8 - password.length)} karakter daha ekle.`
+      : strength === 3
+        ? "Büyük harf ve rakam ekleyerek güçlendir."
+        : "Harika, şifren güçlü.";
+  return (
+    <div className={s.strength} data-level={strength}>
+      <div className={s.bars} aria-hidden="true"><i /><i /><i /><i /></div>
+      <div className={s.strengthText} aria-live="polite">
+        <span>Şifre gücü: <b>{strength ? strengthLabel[strength] : "—"}</b></span>
+        <span>{tip}</span>
+      </div>
+    </div>
+  );
+}
+
+function SubmitButton({ loading, loadingText, children, disabled, onClick, type = "submit" }: { loading: boolean; loadingText: string; children: ReactNode; disabled?: boolean; onClick?: () => void; type?: "submit" | "button" }) {
+  return (
+    <button className={s.submit} type={type} disabled={loading || disabled} onClick={onClick} aria-busy={loading || undefined}>
+      {loading ? <><span className={s.spinner} aria-hidden="true" />{loadingText}</> : children}
+    </button>
+  );
+}
+
+function FormAlert({ message }: { message: string | null }) {
+  if (!message) return null;
+  return <div className={s.alert} role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{message}</span></div>;
+}
+
+function Segmented({ accountType, active }: { accountType: AccountType; active: "login" | "register" }) {
+  const carried = useCarriedQuery();
+  const customer = accountType === "customer";
+  const loginHref = customer ? `/musteri/giris${carried}` : "/isletmeler/giris";
+  const registerHref = customer ? `/musteri/kayit${carried}` : "/isletmeler/kayit?source=login";
+  return (
+    <nav className={s.segmented} data-active={active === "register" ? "1" : "0"} aria-label="Giriş veya kayıt">
+      <Link href={loginHref} aria-current={active === "login" ? "page" : undefined}>Giriş yap</Link>
+      <Link href={registerHref} aria-current={active === "register" ? "page" : undefined}>{customer ? "Kayıt ol" : "Ücretsiz başla"}</Link>
+    </nav>
+  );
+}
+
+function CardHead({ icon: Icon, title, subtitle }: { icon: LucideIcon; title: string; subtitle: ReactNode }) {
+  return (
+    <header className={s.head}>
+      <div className={s.headRow}>
+        <span className={s.mark} aria-hidden="true"><Icon size={22} /></span>
+        <div>
+          <h2 className={s.title}>{title}</h2>
+          <p className={s.subtitle}>{subtitle}</p>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+const CUSTOMER_BENEFITS: Array<[LucideIcon, string]> = [
+  [CalendarCheck2, "Randevularını tek yerden yönet"],
+  [BellRing, "Hatırlatma bildirimleri"],
+  [Heart, "Favori işletmeler"],
+];
+
+function CustomerExtras() {
+  return (
+    <>
+      <ul className={s.benefits} aria-label="Hesabınla neler yapabilirsin">
+        {CUSTOMER_BENEFITS.map(([Icon, text]) => <li key={text}><span aria-hidden="true"><Icon size={16} /></span>{text}</li>)}
+      </ul>
+      <div className={s.note}>
+        <Sparkles size={17} aria-hidden="true" />
+        <span>Bu cihazda misafir olarak aldığın randevular, giriş yaptıktan sonra otomatik olarak hesabına aktarılır.</span>
+      </div>
+    </>
+  );
+}
+
+function TrustLine({ accountType }: { accountType: AccountType }) {
+  return (
+    <div className={s.trust}>
+      <span><ShieldCheck size={14} aria-hidden="true" /> Güvenli giriş</span>
+      <span><BadgeCheck size={14} aria-hidden="true" /> <Link href="/kvkk">KVKK uyumlu</Link></span>
+      <span><Smartphone size={14} aria-hidden="true" /> {accountType === "customer" ? "Her cihazdan erişim" : "7/24 panel erişimi"}</span>
+    </div>
+  );
+}
+
+/* ─── 6 HANELİ KOD ─── */
+function CodeInput({ value, onChange, labelledBy, invalid }: { value: string; onChange: (val: string) => void; labelledBy?: string; invalid?: boolean }) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? "");
 
-  const handleChange = useCallback((index: number, char: string) => {
-    if (!/^\d?$/.test(char)) return;
+  const handleChange = useCallback((index: number, raw: string) => {
+    const clean = raw.replace(/\D/g, "");
     const arr = digits.slice();
-    arr[index] = char;
-    onChange(arr.join(""));
-    if (char && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+    if (clean.length > 1) {
+      // Otomatik doldurma (one-time-code) veya yapıştırma: kutulara dağıt.
+      clean.slice(0, 6 - index).split("").forEach((char, offset) => { arr[index + offset] = char; });
+      onChange(arr.join("").slice(0, 6));
+      inputRefs.current[Math.min(index + clean.length, 5)]?.focus();
+      return;
     }
+    arr[index] = clean;
+    onChange(arr.join(""));
+    if (clean && index < 5) inputRefs.current[index + 1]?.focus();
   }, [digits, onChange]);
 
-  const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((index: number, e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Backspace" && !digits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      e.preventDefault();
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      e.preventDefault();
+      inputRefs.current[index + 1]?.focus();
     }
   }, [digits]);
 
@@ -79,25 +348,29 @@ function CodeInput({ value, onChange }: { value: string; onChange: (val: string)
   }, [onChange]);
 
   return (
-    <div className="flex justify-center gap-2.5" onPaste={handlePaste}>
+    <div className={s.otp} role="group" aria-labelledby={labelledBy} onPaste={handlePaste}>
       {digits.map((d, i) => (
         <input
           key={i}
           ref={(el) => { inputRefs.current[i] = el; }}
           type="text"
           inputMode="numeric"
-          maxLength={1}
+          pattern="[0-9]*"
+          autoComplete={i === 0 ? "one-time-code" : "off"}
+          aria-label={`Kodun ${i + 1}. hanesi`}
+          aria-invalid={invalid || undefined}
           value={d}
+          data-filled={d ? "true" : undefined}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
-          className="h-14 w-12 rounded-xl border-2 border-[var(--border)] bg-[var(--surface-2)] text-center text-2xl font-black text-[var(--accent)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:scale-105"
         />
       ))}
     </div>
   );
 }
 
-/* ─── COUNTDOWN TIMER ─── */
+/* ─── GERİ SAYIM ─── */
 function useCountdown(initialSeconds: number) {
   const [seconds, setSeconds] = useState(0);
   const [active, setActive] = useState(false);
@@ -121,16 +394,160 @@ function useCountdown(initialSeconds: number) {
   return { seconds, active, start };
 }
 
+function ResendRow({ countdown, onResend, label = "Kod gelmedi mi?" }: { countdown: { seconds: number; active: boolean }; onResend: () => void; label?: string }) {
+  return (
+    <div className={s.otpMeta}>
+      <span>{label}</span>
+      {countdown.active
+        ? <span aria-live="polite">Yeniden gönder: <b>{countdown.seconds} sn</b></span>
+        : <button type="button" className={s.ghostBtn} onClick={onResend}>Kodu tekrar gönder <ArrowRight size={15} aria-hidden="true" /></button>}
+    </div>
+  );
+}
+
+/* ─────────────────── EKRAN İSKELETİ ─────────────────── */
+
+const SCREEN_COPY: Record<AccountType, Record<ScreenMode, { eyebrow: string; title: ReactNode; text: string; bubble: string; mood: RoviMood }>> = {
+  customer: {
+    login: { eyebrow: "MÜŞTERİ HESABI", title: <>Tekrar <em>hoş geldin!</em></>, text: "Randevularını, hatırlatmalarını ve favori işletmelerini tek yerden yönet.", bubble: "Merhaba!", mood: "wave" },
+    register: { eyebrow: "ÜCRETSİZ ÜYELİK", title: <>Aramıza <em>hoş geldin!</em></>, text: "Ücretsiz hesabını aç; randevularını saniyeler içinde al, kolayca yönet.", bubble: "Hadi başlayalım!", mood: "happy" },
+    forgot: { eyebrow: "HESAP GÜVENLİĞİ", title: <>Şifreni <em>birlikte</em> yenileyelim.</>, text: "E-postana gelen 6 haneli kodla birkaç adımda hesabına geri dön.", bubble: "Hallederiz!", mood: "thinking" },
+  },
+  business: {
+    login: { eyebrow: "İŞLETME PANELİ", title: <>İşletmeni <em>tek ekrandan</em> yönet.</>, text: "Takvim, ekip, müşteri ve kasa — kaldığın yerden güvenle devam et.", bubble: "Hoş geldin!", mood: "wave" },
+    register: { eyebrow: "İLK 3 AY ÜCRETSİZ", title: <>İşletmen için <em>online randevu</em>, dakikalar içinde.</>, text: "Mağaza sayfanı kur, hizmet ve ekibini ekle, ilk online randevunu bugün al.", bubble: "Kuralım mı?", mood: "happy" },
+    forgot: { eyebrow: "HESAP GÜVENLİĞİ", title: <>Şifreni <em>güvenle</em> yenile.</>, text: "E-postana gelen 6 haneli kodla birkaç adımda paneline geri dön.", bubble: "Hallederiz!", mood: "thinking" },
+  },
+};
+
+function VisualCards({ variant }: { variant: AccountType }) {
+  if (variant === "business") {
+    return (
+      <>
+        <div className={cx(s.float, s.float1)}><span><CalendarCheck2 size={19} /></span><p><small>Bugün</small><b>18 randevu</b></p><em>CANLI</em></div>
+        <div className={cx(s.float, s.float2)}><span><BarChart3 size={19} /></span><p><small>Doluluk oranı</small><b>%84</b><span className={s.meter}><i /></span></p></div>
+        <div className={cx(s.float, s.float3)}><span><UsersRound size={19} /></span><p><small>Yeni online randevu</small><b>14:30 · Saç kesimi</b></p><em>YENİ</em></div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className={cx(s.float, s.float1)}><span><CalendarCheck2 size={19} /></span><p><small>Yarın · 14:30</small><b>Saç kesimi & fön</b></p><em>ONAYLI</em></div>
+      <div className={cx(s.float, s.float2)}><span><BellRing size={19} /></span><p><small>Hatırlatma</small><b>Randevuna 1 saat kaldı</b></p></div>
+      <div className={cx(s.float, s.float3)}><span><Heart size={19} /></span><p><small>Favori işletmen</small><b><Star size={13} fill="currentColor" aria-hidden="true" /> 4.9 · Yeni saatler açıldı</b></p></div>
+    </>
+  );
+}
+
+/** Giriş/kayıt/şifre sayfalarının ortak iskeleti: mobilde degrade başlık + kart, masaüstünde bölünmüş yerleşim. */
+export function AuthScreen({ variant = "customer", mode, children }: { variant?: AccountType; mode: ScreenMode; children: ReactNode }) {
+  const { user, status } = useAuth();
+  const copy = SCREEN_COPY[variant][mode];
+  const customer = variant === "customer";
+  const topLink = customer ? { href: "/kesfet", label: "Keşfet", icon: Compass } : { href: "/isletmeler", label: "İşletmeler", icon: Building2 };
+  const TopIcon = topLink.icon;
+  const brand = (
+    <Link href="/" className={s.brand} aria-label="SeninRandevun ana sayfa">
+      <Image src="/logo.png" alt="" width={34} height={34} />
+      <b>Senin<span>Randevun</span></b>
+    </Link>
+  );
+
+  return (
+    <main className={cx(s.screen, !customer && s.business)}>
+      <aside className={s.visual} aria-label="SeninRandevun">
+        <div className={s.grid} aria-hidden="true" />
+        <div className={s.vTop}>
+          {brand}
+          <Link href={topLink.href} className={s.topLink}><TopIcon size={15} aria-hidden="true" />{topLink.label}</Link>
+        </div>
+        <div className={s.stage} aria-hidden="true">
+          <div className={s.halo} />
+          <div className={s.vRovi}><RoviMascot size={230} mood={copy.mood} alt="" /></div>
+          <VisualCards variant={variant} />
+        </div>
+        <div className={s.vCopy}>
+          <span className={s.eyebrow}>{copy.eyebrow}</span>
+          <h1 className={s.vTitle}>{copy.title}</h1>
+          <p className={s.vText}>{copy.text}</p>
+          <div className={s.vStats}>
+            {customer
+              ? <><span><Gift size={15} aria-hidden="true" /> Üyelik ücretsiz</span><span><Clock3 size={15} aria-hidden="true" /> 7/24 online randevu</span><span><BellRing size={15} aria-hidden="true" /> Akıllı hatırlatmalar</span></>
+              : <><span><Gift size={15} aria-hidden="true" /> İlk 3 ay ücretsiz</span><span><CreditCard size={15} aria-hidden="true" /> Kredi kartı gerekmez</span><span><Zap size={15} aria-hidden="true" /> Dakikalar içinde kurulum</span></>}
+          </div>
+        </div>
+      </aside>
+
+      <section className={s.formSide}>
+        <header className={s.mHero}>
+          <div className={s.grid} aria-hidden="true" />
+          <div className={s.topbar}>
+            {brand}
+            <Link href={topLink.href} className={s.topLink}><TopIcon size={15} aria-hidden="true" />{topLink.label}</Link>
+          </div>
+          <div className={s.mHeroBody}>
+            <div className={s.mHeroCopy}>
+              <span className={s.eyebrow}>{copy.eyebrow}</span>
+              <h1 className={s.mHeroTitle}>{copy.title}</h1>
+              <p className={s.mHeroText}>{copy.text}</p>
+            </div>
+            <div className={cx(s.roviWrap, s.mHeroRovi)} aria-hidden="true">
+              <span className={s.bubble}>{copy.bubble}</span>
+              <RoviMascot size={96} mood={copy.mood} alt="" />
+            </div>
+          </div>
+        </header>
+
+        <div className={s.formWrap}>
+          <div className={s.formTop}>
+            {customer
+              ? <>İşletme sahibi misin? <Link href="/isletmeler/giris">İşletme girişi</Link></>
+              : <>Randevu almak mı istiyorsun? <Link href="/musteri/giris">Müşteri girişi</Link></>}
+          </div>
+          {status === "authenticated" && user && mode !== "forgot" ? (
+            <Link href={customer ? "/hesabim" : "/dashboard"} className={s.session}>
+              <span aria-hidden="true"><Check size={16} /></span>
+              <span><b>Oturumun zaten açık</b><small>{customer ? "Hesabıma" : "Panele"} devam et</small></span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          ) : null}
+          {children}
+        </div>
+
+        <footer className={s.legal}>
+          <Link href="/kullanim-kosullari">Kullanım Koşulları</Link>
+          <Link href="/kvkk">KVKK</Link>
+          <Link href="/gizlilik">Gizlilik</Link>
+          <Link href="/yardim-merkezi">Yardım</Link>
+        </footer>
+      </section>
+    </main>
+  );
+}
+
 /* ─────────────────── LOGIN ─────────────────── */
 export function LoginForm({ accountType = "business" }: { accountType?: "business" | "customer" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState({ email: false, password: false });
+  const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
+  const emailId = useId();
+  const passwordId = useId();
+  const customer = accountType === "customer";
+
+  const emailMsg = emailError(email);
+  const passwordMsg = password ? undefined : "Şifreni yaz.";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setTouched({ email: true, password: true });
+    if (emailMsg || passwordMsg) {
+      focusById(emailMsg ? emailId : passwordId);
+      return;
+    }
+    setFormError(null);
     setLoading(true);
 
     try {
@@ -140,86 +557,75 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
       const fallback = normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : accountType === "customer" ? "/hesabim" : "/dashboard";
       router.push(getSafeNextPath(fallback));
     } catch (error) {
-      toast.error(mapAuthError(error));
+      const message = mapAuthError(error);
+      setFormError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className={`auth-login-stack auth-login-stack--${accountType} space-y-5`}>
-      {/* Form Card */}
-      <div className="auth-form-card auth-login-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-        <div className="auth-login-status"><span><i/> {accountType === "customer" ? "KİŞİSEL ALAN" : "GÜVENLİ BAĞLANTI"}</span><small><ShieldCheck size={13}/> {accountType === "customer" ? "Randevuların yalnızca sana özel" : "Oturum koruması aktif"}</small></div>
-        <div className="auth-login-heading mb-7">
-          <span className="auth-login-mark">{accountType === "customer" ? <UserRound size={23}/> : <Building2 size={23}/>}</span>
-          <div><small>{accountType === "customer" ? "MÜŞTERİ HESABI" : "İŞLETME ÇALIŞMA ALANI"}</small><h2>Tekrar hoş geldiniz.</h2><p>{accountType === "customer" ? "Randevularınıza ve favori mağazalarınıza ulaşın." : "Bugünün akışına güvenle kaldığınız yerden devam edin."}</p></div>
+    <div className={s.card}>
+      <Segmented accountType={accountType} active="login" />
+      <CardHead
+        icon={customer ? UserRound : Building2}
+        title={customer ? "Hesabına giriş yap" : "İşletme paneline giriş"}
+        subtitle={customer ? "E-posta adresin ve şifrenle devam et." : "Bugünün akışına kaldığın yerden devam et."}
+      />
+
+      <form className={s.form} onSubmit={onSubmit} noValidate>
+        <FormAlert message={formError} />
+        <TextField
+          id={emailId}
+          label="E-posta"
+          icon={Mail}
+          type="email"
+          name="email"
+          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="ornek@email.com"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
+          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+          error={touched.email ? emailMsg : undefined}
+          valid={!emailMsg}
+          required
+        />
+        <PasswordField
+          id={passwordId}
+          label="Şifre"
+          name="password"
+          autoComplete="current-password"
+          placeholder="Şifren"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setFormError(null); }}
+          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+          error={touched.password ? passwordMsg : undefined}
+          labelAside={<Link className={s.labelLink} href={customer ? "/sifremi-unuttum?hesap=musteri" : "/sifremi-unuttum?hesap=isletme"}>Şifremi unuttum</Link>}
+          required
+        />
+        <SubmitButton loading={loading} loadingText="Giriş yapılıyor…">
+          {customer ? "Giriş yap" : "Panele giriş yap"} <ArrowRight size={18} aria-hidden="true" />
+        </SubmitButton>
+      </form>
+
+      {customer ? <CustomerExtras /> : (
+        <div className={s.chips}>
+          <span><CalendarCheck2 size={14} aria-hidden="true" /> Canlı takvim</span>
+          <span><UsersRound size={14} aria-hidden="true" /> Ekip & müşteri</span>
+          <span><BarChart3 size={14} aria-hidden="true" /> Kasa & rapor</span>
         </div>
+      )}
 
-        <form className="auth-login-form space-y-4" onSubmit={onSubmit}>
-          <div className="register-field"><Mail size={18} aria-hidden="true"/><Input
-            label="E-posta Adresi"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="ornek@email.com"
-            className="register-input"
-          /></div>
-          <div className="register-field relative"><LockKeyhole size={18} aria-hidden="true"/>
-            <Input
-              label="Şifre"
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="register-input register-password-input"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="register-password-toggle"
-              aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
-            >
-              {showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}<span>{showPassword ? "Gizle" : "Göster"}</span>
-            </button>
-          </div>
-
-          <div className="auth-login-options">
-            <label>
-              <input type="checkbox" defaultChecked />
-              <i><Check size={12}/></i><span>Oturumu açık tut<small>Bu cihazda güvenli erişim</small></span>
-            </label>
-            <Link href="/sifremi-unuttum">Şifremi unuttum <ArrowRight size={13}/></Link>
-          </div>
-
-          <Button className="auth-login-submit w-full" disabled={loading} type="submit" glow>
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Giriş yapılıyor...
-              </span>
-            ) : (
-              <>{accountType === "customer" ? "Randevularıma git" : "Güvenli giriş yap"} <ArrowRight size={17}/></>
-            )}
-          </Button>
-        </form>
-
-        <div className="auth-login-divider"><span>veya</span></div>
-        <Link href={accountType === "customer" ? "/musteri/kayit" : "/isletmeler/kayit?source=login"} className="auth-login-start">
-          <span>{accountType === "customer" ? <UserRound size={19}/> : <Sparkles size={19}/>}</span>
-          <p><small>{accountType === "customer" ? "YENİ MÜŞTERİ HESABI" : "YENİ İŞLETME · 90 GÜN ÜCRETSİZ"}</small><b>{accountType === "customer" ? "Ücretsiz hesabını oluştur" : "Akıllı kurulumu başlat"}</b><em>{accountType === "customer" ? "Randevularını tek yerde yönet" : "Kategori seçimiyle başlayan 7 kolay adım"}</em></p>
-          <ArrowRight size={18}/>
-        </Link>
-      </div>
-
-      {/* Trust badges */}
-      <div className="auth-login-trust">
-        <span><ShieldCheck size={14}/> Şifreli erişim</span>
-        <span><BadgeCheck size={14}/> KVKK odaklı</span>
-        <span><CalendarCheck2 size={14}/> {accountType === "customer" ? "7/24 randevu erişimi" : "7/24 operasyon"}</span>
-      </div>
+      <p className={s.switchLine}>
+        {customer
+          ? <>Hesabın yok mu? <Link href="/musteri/kayit">Ücretsiz kayıt ol</Link></>
+          : <>Henüz işletmeni eklemedin mi? <Link href="/isletmeler/kayit?source=login">3 ay ücretsiz başla</Link></>}
+      </p>
+      <TrustLine accountType={accountType} />
     </div>
   );
 }
@@ -242,15 +648,22 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [step, setStep] = useState<"form" | "verify">("form");
   const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [touched, setTouched] = useState({ name: false, email: false, password: false, agreed: false });
+  const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
   const countdown = useCountdown(60);
+  const nameId = useId();
+  const emailId = useId();
+  const passwordId = useId();
+  const consentId = useId();
+  const codeLabelId = useId();
+  const customer = accountType === "customer";
 
   useEffect(() => {
     // Paneldeki kayıt anahtarı sadece yeni işletme çalışma alanlarını kontrol eder.
@@ -261,12 +674,25 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
       .catch(() => setRegistrationOpen(true));
   }, [accountType]);
 
+  const nameMsg = name.trim().length >= 2 ? undefined : "Adını ve soyadını yaz.";
+  const emailMsg = emailError(email);
+  const passwordMsg = password.length >= 8 ? undefined : password ? "Şifren en az 8 karakter olmalı." : "Bir şifre belirle.";
+  const consentMsg = agreed ? undefined : "Devam etmek için koşulları onaylamalısın.";
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!agreed) {
-      toast.error("Kullanım şartlarını kabul etmelisiniz.");
+    setTouched({ name: true, email: true, password: true, agreed: true });
+    const firstInvalid = nameMsg ? nameId : emailMsg ? emailId : passwordMsg ? passwordId : undefined;
+    if (firstInvalid) {
+      focusById(firstInvalid);
       return;
     }
+    if (!agreed) {
+      toast.error("Kullanım şartlarını kabul etmelisiniz.");
+      focusById(consentId);
+      return;
+    }
+    setFormError(null);
     setLoading(true);
 
     try {
@@ -280,7 +706,9 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
       toast.success("Kayıt başarılı! Doğrulama kodu e-postanıza gönderildi.");
       setStep("verify");
     } catch (error) {
-      toast.error(mapAuthError(error));
+      const message = mapAuthError(error);
+      setFormError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -292,6 +720,7 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
       return;
     }
     setVerifying(true);
+    setFormError(null);
 
     try {
       const fn = httpsCallable(getCloudFunctions(), "verifyEmailCode");
@@ -300,6 +729,7 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
       router.push(accountType === "customer" ? "/hesabim" : "/onboarding");
     } catch (error) {
       const msg = (error as { message?: string })?.message || "Doğrulama başarısız.";
+      setFormError(msg);
       toast.error(msg);
     } finally {
       setVerifying(false);
@@ -319,237 +749,188 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
     }
   }
 
-  // Password strength
-  const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 8 ? 2 : /(?=.*[A-Z])(?=.*[0-9])/.test(password) ? 4 : 3;
-  const strengthLabel = ["", "Çok zayıf", "Zayıf", "Orta", "Güçlü"];
-  const strengthColor = ["", "bg-rose-500", "bg-amber-500", "bg-yellow-500", "bg-emerald-500"];
+  const shellClass = embedded ? cx(s.embedTokens, s.embedded) : s.card;
 
   if (!registrationOpen) {
     return (
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-8 text-center shadow-xl shadow-[var(--shadow-hard)]">
-        <span className="text-4xl">🚧</span>
-        <h2 className="mt-3 text-lg font-bold text-[var(--text-1)]">Yeni kayıtlar geçici olarak kapalı</h2>
-        <p className="mt-2 text-sm text-[var(--text-3)]">Platform şu anda yeni kayıt almıyor. Lütfen daha sonra tekrar deneyin.</p>
+      <div className={shellClass}>
+        <CardHead icon={Clock3} title="Yeni kayıtlar geçici olarak kapalı" subtitle="Platform şu anda yeni işletme kaydı almıyor. Lütfen daha sonra tekrar deneyin." />
+        <p className={s.switchLine}>Zaten hesabın var mı? <Link href="/isletmeler/giris">Giriş yap</Link></p>
       </div>
     );
   }
 
   if (step === "verify") {
     return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-          {/* Header */}
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)] shadow-lg shadow-sky-500/25">
-              <span className="text-3xl">📧</span>
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text-1)]">E-posta Doğrulama</h2>
-            <p className="mt-2 text-sm text-[var(--text-3)]">
-              <span className="font-medium text-[var(--text-2)]">{email}</span> adresine
-              <br />6 haneli doğrulama kodu gönderdik
-            </p>
-          </div>
-
-          {/* Code input */}
-          <div className="mb-6">
-            <CodeInput value={code} onChange={setCode} />
-          </div>
-
-          {/* Timer */}
-          <div className="mb-5 text-center">
-            {countdown.active ? (
-              <p className="text-xs text-[var(--text-3)]">
-                Yeni kod gönderebilmek için{" "}
-                <span className="font-bold text-[var(--accent)]">{countdown.seconds}s</span>{" "}
-                bekleyin
-              </p>
-            ) : (
-              <button
-                onClick={resendCode}
-                className="text-sm font-semibold text-[var(--accent)] hover:underline"
-              >
-                Kodu tekrar gönder →
-              </button>
-            )}
-          </div>
-
-          {/* Verify button */}
-          <Button
-            className="w-full"
-            disabled={verifying || code.length !== 6}
-            onClick={onVerify}
-          >
-            {verifying ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Doğrulanıyor...
-              </span>
-            ) : (
-              "✅ Kodu Doğrula"
-            )}
-          </Button>
-
-          {/* Security note */}
-          <div className="mt-5 rounded-xl bg-[var(--surface-2)] p-3 text-center">
-            <p className="text-[11px] text-[var(--text-3)]">
-              🔒 Kod 5 dakika geçerlidir. Spam klasörünüzü kontrol etmeyi unutmayın.
-            </p>
-          </div>
+      <div className={shellClass}>
+        {!embedded && customer ? <div className={s.successRovi} aria-hidden="true"><RoviMascot size={76} mood="happy" alt="" /></div> : null}
+        <CardHead
+          icon={MailCheck}
+          title="E-postanı doğrula"
+          subtitle={<>Son bir adım kaldı. 6 haneli kodu şu adrese gönderdik:<br /><span className={s.emailPill}><Mail size={14} aria-hidden="true" />{email}</span></>}
+        />
+        <form className={s.form} onSubmit={(e) => { e.preventDefault(); void onVerify(); }} noValidate>
+          <FormAlert message={formError} />
+          <span id={codeLabelId} className={s.label}>Doğrulama kodu</span>
+          <CodeInput value={code} onChange={(val) => { setCode(val); setFormError(null); }} labelledBy={codeLabelId} invalid={Boolean(formError)} />
+          <ResendRow countdown={countdown} onResend={resendCode} />
+          <SubmitButton loading={verifying} loadingText="Doğrulanıyor…" disabled={code.length !== 6}>
+            Kodu doğrula <ArrowRight size={18} aria-hidden="true" />
+          </SubmitButton>
+        </form>
+        <div className={s.note}>
+          <ShieldCheck size={17} aria-hidden="true" />
+          <span>Kod 5 dakika geçerlidir. Gelen kutunda göremezsen spam / gereksiz klasörünü kontrol et.</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Form Card */}
-      <div className="auth-form-card auth-register-card rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
-        {!embedded && <div className="register-progress" aria-label="Kayıt ilerlemesi"><span className="active"><b>1</b> Hesap bilgileri</span><i /><span><b>2</b> İşletme kurulumu</span></div>}
-        <div className={`register-heading mb-6 text-center ${embedded ? "sr-only" : ""}`}>
-          <span className="register-heading-icon"><Sparkles size={20} /></span>
-          <h2 className="text-xl font-extrabold tracking-tight text-[var(--text-1)]">{accountType === "customer" ? "Ücretsiz müşteri hesabınızı açın." : "Ücretsiz çalışma alanınızı açın."}</h2>
-          <p className="mt-1 text-sm text-[var(--text-3)]">{accountType === "customer" ? "Randevularınız tek yerde · Üyelik tamamen ücretsiz" : "Lansmana özel · Tüm özellikler ilk 3 ay ücretsiz"}</p>
+    <div className={shellClass}>
+      {!embedded && <Segmented accountType={accountType} active="register" />}
+      {embedded
+        ? <h2 className="sr-only">Hesabını oluştur</h2>
+        : <CardHead
+            icon={customer ? Sparkles : Building2}
+            title={customer ? "Ücretsiz hesap oluştur" : "Çalışma alanını oluştur"}
+            subtitle={customer ? "Bir dakikadan kısa sürer, üyelik tamamen ücretsiz." : "Lansmana özel: tüm özellikler ilk 3 ay ücretsiz."}
+          />}
+
+      <form className={s.form} onSubmit={onSubmit} noValidate>
+        <FormAlert message={formError} />
+        <TextField
+          id={nameId}
+          label="Ad Soyad"
+          icon={UserRound}
+          name="name"
+          autoComplete="name"
+          autoCapitalize="words"
+          placeholder="Adın ve soyadın"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+          error={touched.name ? nameMsg : undefined}
+          valid={!nameMsg}
+          required
+        />
+        <TextField
+          id={emailId}
+          label="E-posta"
+          icon={Mail}
+          type="email"
+          name="email"
+          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="ornek@email.com"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
+          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+          error={touched.email ? emailMsg : undefined}
+          valid={!emailMsg}
+          hint={customer && !(touched.email && emailMsg) ? "Randevu onayları ve hatırlatmalar bu adrese gelir." : undefined}
+          required
+        />
+        <PasswordField
+          id={passwordId}
+          label="Şifre"
+          name="new-password"
+          autoComplete="new-password"
+          placeholder="En az 8 karakter"
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+          error={touched.password ? passwordMsg : undefined}
+          hint={<PasswordStrength password={password} />}
+          required
+        />
+
+        <label className={s.consent} data-invalid={touched.agreed && consentMsg ? "true" : undefined}>
+          <input
+            id={consentId}
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            aria-invalid={touched.agreed && consentMsg ? true : undefined}
+            aria-describedby={touched.agreed && consentMsg ? `${consentId}-error` : undefined}
+          />
+          <span className={s.box} aria-hidden="true"><Check size={14} /></span>
+          <span>
+            <Link href="/kullanim-kosullari" target="_blank" rel="noopener">Kullanım Koşulları</Link>&apos;nı,{" "}
+            <Link href="/kvkk" target="_blank" rel="noopener">KVKK Aydınlatma Metni</Link>&apos;ni ve{" "}
+            <Link href="/gizlilik" target="_blank" rel="noopener">Gizlilik Politikası</Link>&apos;nı okudum, kabul ediyorum.
+          </span>
+        </label>
+        {touched.agreed && consentMsg ? <p id={`${consentId}-error`} className={s.error}><AlertCircle size={14} aria-hidden="true" />{consentMsg}</p> : null}
+
+        <SubmitButton loading={loading} loadingText="Hesap oluşturuluyor…">
+          {customer ? "Ücretsiz hesap oluştur" : "İlk 3 ay ücretsiz başla"} <ArrowRight size={18} aria-hidden="true" />
+        </SubmitButton>
+      </form>
+
+      {!embedded && customer ? <CustomerExtras /> : null}
+      {!embedded && !customer ? (
+        <div className={s.chips}>
+          <span><Gift size={14} aria-hidden="true" /> İlk 3 ay ücretsiz</span>
+          <span><Zap size={14} aria-hidden="true" /> 2 dk kurulum</span>
+          <span><CreditCard size={14} aria-hidden="true" /> Kredi kartı yok</span>
         </div>
+      ) : null}
 
-        <form className="register-form space-y-4" onSubmit={onSubmit}>
-          <div className="register-field"><UserRound size={18} aria-hidden="true" /><Input
-            label="Ad Soyad"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Adınız Soyadınız"
-            className="register-input"
-          /></div>
-          <div className="register-field"><Mail size={18} aria-hidden="true" /><Input
-            label="E-posta Adresi"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="ornek@email.com"
-            className="register-input"
-          /></div>
-          <div className="register-password-block">
-            <div className="register-field relative"><LockKeyhole size={18} aria-hidden="true" />
-              <Input
-                label="Şifre"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-                placeholder="En az 8 karakter"
-                className="register-input register-password-input"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="register-password-toggle"
-                aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
-              >
-                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}<span>{showPassword ? "Gizle" : "Göster"}</span>
-              </button>
-            </div>
-            {/* Strength bar */}
-            {password.length > 0 && (
-              <div className="register-strength mt-2">
-                <div className="flex gap-1" aria-hidden="true">
-                  {[1, 2, 3, 4].map((level) => (
-                    <div
-                      key={level}
-                      className={`h-1 flex-1 rounded-full transition-all duration-500 ${
-                        level <= strength ? strengthColor[strength] : "bg-[var(--surface-3)]"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <p className="mt-1 text-[10px] text-[var(--text-3)]">
-                  Şifre gücü: <span className="font-medium">{strengthLabel[strength]}</span>
-                </p>
-              </div>
-            )}
-          </div>
-
-          <label className={`register-consent ${agreed ? "checked" : ""}`}>
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="sr-only"
-            />
-            <i aria-hidden="true">{agreed && <Check size={13} />}</i>
-            <span>
-              <Link href="/kullanim-kosullari" className="text-[var(--accent)] hover:underline">Kullanım Şartları</Link>
-              {" "}ve{" "}
-              <Link href="/gizlilik" className="text-[var(--accent)] hover:underline">Gizlilik Politikası</Link>
-              &apos;nı okudum ve kabul ediyorum.
-            </span>
-          </label>
-
-          <Button className="register-submit w-full" disabled={loading || !agreed} type="submit" glow>
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Hesap oluşturuluyor...
-              </span>
-            ) : (
-              <>{accountType === "customer" ? "Ücretsiz Hesap Oluştur" : "İlk 3 Ay Ücretsiz Başla"}<ArrowRight size={17} /></>
-            )}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-[var(--text-3)]">
-            Zaten hesabın var mı?{" "}
-            <Link href={accountType === "customer" ? "/musteri/giris" : "/isletmeler/giris"} className="font-semibold text-[var(--accent)] hover:underline">
-              Giriş Yap →
-            </Link>
-          </p>
-        </div>
-      </div>
-
-      {/* Benefits */}
-      {!embedded && <div className="register-benefits grid grid-cols-2 gap-3">
-        {(accountType === "customer" ? [
-          { icon: "✓", text: "Tamamen ücretsiz" }, { icon: "⌕", text: "Kolay keşif" }, { icon: "♡", text: "Favori mağazalar" }, { icon: "◷", text: "Randevu geçmişi" },
-        ] : [
-          { icon: Gift, text: "İlk 3 ay ücretsiz" }, { icon: Zap, text: "2 dk kurulum" }, { icon: CreditCard, text: "Kredi kartı yok" }, { icon: Smartphone, text: "Tüm cihazlar" },
-        ]).map((b) => {
-          const BenefitIcon = b.icon;
-          return <div key={b.text} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-xs text-[var(--text-2)]">
-            <span>{typeof BenefitIcon === "string" ? BenefitIcon : <BenefitIcon size={15} />}</span>
-            {b.text}
-          </div>;
-        })}
-      </div>}
+      <p className={s.switchLine}>
+        Zaten hesabın var mı?{" "}
+        <Link href={customer ? "/musteri/giris" : "/isletmeler/giris"}>Giriş yap</Link>
+      </p>
+      {!embedded && <TrustLine accountType={accountType} />}
     </div>
   );
 }
 
-/* ─────────────────── FORGOT PASSWORD (6-digit code) ─────────────────── */
+/* ─────────────────── ŞİFREMİ UNUTTUM (6 haneli kod) ─────────────────── */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [staffInvite, setStaffInvite] = useState(false);
+  const [loginHref, setLoginHref] = useState("/giris");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "done">("email");
+  const [codeStage, setCodeStage] = useState<"code" | "password">("code");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const countdown = useCountdown(60);
+  const emailId = useId();
+  const passwordId = useId();
+  const codeLabelId = useId();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const invited = params.get("source") === "staff-invite";
     const invitedEmail = params.get("email") ?? "";
+    const audience = params.get("hesap");
     queueMicrotask(() => {
       setStaffInvite(invited);
       if (invitedEmail) setEmail(invitedEmail);
+      setLoginHref(invited || audience === "isletme" ? "/isletmeler/giris" : audience === "musteri" ? "/musteri/giris" : "/giris");
     });
   }, []);
 
+  const emailMsg = emailError(email);
+  const passwordMsg = newPassword.length >= 8 ? undefined : "Şifren en az 8 karakter olmalı.";
+
   async function onSendCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setEmailTouched(true);
+    if (emailMsg) {
+      focusById(emailId);
+      return;
+    }
+    setFormError(null);
     setLoading(true);
 
     try {
@@ -558,8 +939,10 @@ export function ForgotPasswordForm() {
       countdown.start();
       toast.success("Şifre sıfırlama kodu gönderildi!");
       setStep("code");
+      setCodeStage("code");
     } catch (error) {
       const msg = (error as { message?: string })?.message || "Kod gönderilemedi.";
+      setFormError(msg);
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -576,6 +959,7 @@ export function ForgotPasswordForm() {
       return;
     }
     setResetting(true);
+    setFormError(null);
 
     try {
       const fn = httpsCallable(getCloudFunctions(), "resetPasswordWithCode");
@@ -584,6 +968,7 @@ export function ForgotPasswordForm() {
       setStep("done");
     } catch (error) {
       const msg = (error as { message?: string })?.message || "Şifre sıfırlama başarısız.";
+      setFormError(msg);
       toast.error(msg);
     } finally {
       setResetting(false);
@@ -596,6 +981,8 @@ export function ForgotPasswordForm() {
       await fn({ email });
       countdown.start();
       setCode("");
+      setCodeStage("code");
+      setFormError(null);
       toast.success("Yeni kod gönderildi!");
     } catch (error) {
       const msg = (error as { message?: string })?.message || "Kod gönderilemedi.";
@@ -603,142 +990,137 @@ export function ForgotPasswordForm() {
     }
   }
 
+  const stepIndex = step === "email" ? 0 : step === "done" ? 3 : codeStage === "code" ? 1 : 2;
+  const stepLabels: Array<[string, LucideIcon]> = [["E-posta", Mail], ["Kod", KeyRound], [staffInvite ? "Şifre belirle" : "Yeni şifre", LockKeyhole]];
+
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-xl shadow-[var(--shadow-hard)] sm:p-8">
+    <div className={s.card}>
+      <ol className={s.steps} aria-label="Şifre yenileme adımları">
+        {stepLabels.map(([label, Icon], index) => {
+          const state = index < stepIndex ? "done" : index === stepIndex ? "active" : "todo";
+          return (
+            <li key={label} data-state={state} aria-current={state === "active" ? "step" : undefined}>
+              <span>{state === "done" ? <Check size={13} aria-hidden="true" /> : <Icon size={13} aria-hidden="true" />}{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+
       {step === "done" ? (
-        /* ── SUCCESS ── */
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25">
-            <span className="text-3xl">✅</span>
+        <div>
+          <div className={s.successRovi} aria-hidden="true"><RoviMascot size={92} mood="happy" alt="" /></div>
+          <CardHead
+            icon={CheckCircle2}
+            title={staffInvite ? "Çalışan hesabın hazır!" : "Şifren güncellendi!"}
+            subtitle={staffInvite ? "Yeni şifrenle kişisel çalışan paneline giriş yapabilirsin." : "Yeni şifrenle hemen giriş yapabilirsin."}
+          />
+          <div className={s.form}>
+            <Link href={loginHref} className={s.submit}>Giriş yap <ArrowRight size={18} aria-hidden="true" /></Link>
           </div>
-          <h2 className="text-xl font-bold text-[var(--text-1)]">{staffInvite ? "Çalışan hesabınız hazır!" : "Şifre güncellendi!"}</h2>
-          <p className="mt-2 text-sm text-[var(--text-3)]">
-            {staffInvite ? "Yeni şifrenizle kişisel çalışan panelinize giriş yapabilirsiniz." : "Yeni şifrenizle giriş yapabilirsiniz."}
-          </p>
-          <Link
-            href={staffInvite ? "/isletmeler/giris" : "/giris"}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
-          >
-            🔐 Giriş Yap
-          </Link>
         </div>
       ) : step === "code" ? (
-        /* ── CODE + NEW PASSWORD ── */
-        <div>
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)] shadow-lg shadow-sky-500/25">
-              <span className="text-3xl">🔑</span>
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text-1)]">Şifre Sıfırlama</h2>
-            <p className="mt-2 text-sm text-[var(--text-3)]">
-              <span className="font-medium text-[var(--text-2)]">{email}</span> adresine
-              <br />6 haneli sıfırlama kodu gönderdik
-            </p>
-          </div>
-
-          {/* Code */}
-          <div className="mb-5">
-            <p className="mb-2 text-xs font-medium text-[var(--text-2)]">Doğrulama Kodu</p>
-            <CodeInput value={code} onChange={setCode} />
-          </div>
-
-          {/* Timer */}
-          <div className="mb-5 text-center">
-            {countdown.active ? (
-              <p className="text-xs text-[var(--text-3)]">
-                Yeni kod:{" "}
-                <span className="font-bold text-[var(--accent)]">{countdown.seconds}s</span>
-              </p>
-            ) : (
-              <button
-                onClick={resendCode}
-                className="text-sm font-semibold text-[var(--accent)] hover:underline"
-              >
-                Kodu tekrar gönder →
+        codeStage === "code" ? (
+          <div>
+            <CardHead
+              icon={KeyRound}
+              title="Kodu gir"
+              subtitle={<>6 haneli kodu şu adrese gönderdik:<br /><span className={s.emailPill}><Mail size={14} aria-hidden="true" />{email}</span></>}
+            />
+            <form className={s.form} onSubmit={(e) => { e.preventDefault(); if (code.length === 6) setCodeStage("password"); }} noValidate>
+              <span id={codeLabelId} className={s.label}>Doğrulama kodu</span>
+              <CodeInput value={code} onChange={setCode} labelledBy={codeLabelId} invalid={Boolean(formError)} />
+              <ResendRow countdown={countdown} onResend={resendCode} />
+              <SubmitButton loading={false} loadingText="" disabled={code.length !== 6}>
+                Devam et <ArrowRight size={18} aria-hidden="true" />
+              </SubmitButton>
+              <button type="button" className={s.ghostBtn} onClick={() => { setStep("email"); setFormError(null); }}>
+                <ArrowLeft size={15} aria-hidden="true" /> E-postayı değiştir
               </button>
-            )}
+            </form>
           </div>
-
-          {/* New Password */}
-          <div className="mb-5 relative">
-            <Input
-              label="Yeni Şifre"
-              type={showPassword ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              minLength={8}
-              placeholder="En az 8 karakter"
+        ) : (
+          <div>
+            <CardHead
+              icon={LockKeyhole}
+              title={staffInvite ? "Şifreni belirle" : "Yeni şifreni belirle"}
+              subtitle="Kolay tahmin edilmeyen, en az 8 karakterlik bir şifre seç."
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-[38px] text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition"
+            <form
+              className={s.form}
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPasswordTouched(true);
+                if (passwordMsg) { focusById(passwordId); return; }
+                void onReset();
+              }}
+              noValidate
             >
-              {showPassword ? "Gizle" : "Göster"}
-            </button>
+              <FormAlert message={formError} />
+              <input type="email" name="email" autoComplete="username" value={email} readOnly hidden />
+              <PasswordField
+                id={passwordId}
+                label={staffInvite ? "Şifre" : "Yeni şifre"}
+                name="new-password"
+                autoComplete="new-password"
+                placeholder="En az 8 karakter"
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                onBlur={() => setPasswordTouched(true)}
+                error={passwordTouched ? passwordMsg : undefined}
+                hint={<PasswordStrength password={newPassword} />}
+                required
+              />
+              <SubmitButton loading={resetting} loadingText="Şifre güncelleniyor…" disabled={code.length !== 6}>
+                {staffInvite ? "Şifremi kaydet" : "Şifremi güncelle"} <ArrowRight size={18} aria-hidden="true" />
+              </SubmitButton>
+              <button type="button" className={s.ghostBtn} onClick={() => { setCodeStage("code"); setFormError(null); }}>
+                <ArrowLeft size={15} aria-hidden="true" /> Kodu düzenle
+              </button>
+            </form>
           </div>
-
-          <Button
-            className="w-full"
-            disabled={resetting || code.length !== 6 || newPassword.length < 8}
-            onClick={onReset}
-          >
-            {resetting ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Şifre güncelleniyor...
-              </span>
-            ) : (
-              "🔐 Şifremi Güncelle"
-            )}
-          </Button>
-
-          <div className="mt-4 rounded-xl bg-[var(--surface-2)] p-3 text-center">
-            <p className="text-[11px] text-[var(--text-3)]">
-              🔒 Kod 5 dakika geçerlidir. Spam klasörünüzü kontrol edin.
-            </p>
-          </div>
-        </div>
+        )
       ) : (
-        /* ── EMAIL INPUT ── */
         <div>
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-3)] shadow-lg shadow-sky-500/25">
-              <span className="text-3xl">🔑</span>
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text-1)]">Şifrenizi sıfırlayın</h2>
-            <p className="mt-1 text-sm text-[var(--text-3)]">
-              E-posta adresinize 6 haneli sıfırlama kodu göndereceğiz
-            </p>
-          </div>
-
-          <form className="space-y-4" onSubmit={onSendCode}>
-            <Input
-              label="E-posta Adresi"
+          <CardHead
+            icon={staffInvite ? UsersRound : KeyRound}
+            title={staffInvite ? "Çalışan hesabını etkinleştir" : "Şifreni mi unuttun?"}
+            subtitle={staffInvite
+              ? "İşletmen seni ekibine ekledi. E-postana 6 haneli bir kod gönderelim, ardından kendi şifreni belirle."
+              : "Sorun değil. Kayıtlı e-posta adresine 6 haneli bir sıfırlama kodu gönderelim."}
+          />
+          <form className={s.form} onSubmit={onSendCode} noValidate>
+            <FormAlert message={formError} />
+            <TextField
+              id={emailId}
+              label="E-posta"
+              icon={Mail}
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              name="email"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
               placeholder="ornek@email.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
+              onBlur={() => setEmailTouched(true)}
+              error={emailTouched ? emailMsg : undefined}
+              valid={!emailMsg}
+              required
             />
-            <Button className="w-full" disabled={loading} type="submit">
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Gönderiliyor...
-                </span>
-              ) : (
-                "📨 Sıfırlama Kodu Gönder"
-              )}
-            </Button>
-            <p className="text-center text-sm text-[var(--text-3)]">
-              <Link href="/giris" className="text-[var(--accent)] hover:underline">
-                ← Giriş sayfasına dön
-              </Link>
-            </p>
+            <SubmitButton loading={loading} loadingText="Gönderiliyor…">
+              Kodu gönder <ArrowRight size={18} aria-hidden="true" />
+            </SubmitButton>
+            <Link href={loginHref} className={s.ghostBtn}><ArrowLeft size={15} aria-hidden="true" /> Giriş sayfasına dön</Link>
           </form>
         </div>
       )}
+
+      <div className={s.note}>
+        <ShieldCheck size={17} aria-hidden="true" />
+        <span>Kod 5 dakika geçerlidir. Gelen kutunda göremezsen spam / gereksiz klasörünü kontrol et.</span>
+      </div>
     </div>
   );
 }
