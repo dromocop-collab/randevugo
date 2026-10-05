@@ -36,6 +36,7 @@ import {
   CircleDollarSign, Clock3, FileCheck2, Mail, MessageSquareText, Phone,
   Send, ShieldCheck, Sparkles, UserRound, UsersRound, WandSparkles, X, type LucideIcon,
 } from "lucide-react";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 
 interface Props {
   businessId: string;
@@ -558,12 +559,8 @@ export function BookingWizard(props: Props) {
     return (
       <div className="mx-auto max-w-lg space-y-5">
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 text-center shadow-lg backdrop-blur-xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-            <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="mt-4 text-xl font-bold text-[var(--text-1)]">
+          <div className="flex justify-center"><RoviMascot size={132} mood="happy" alt="Rovi randevunu kutluyor" priority /></div>
+          <h2 className="mt-3 text-xl font-bold text-[var(--text-1)]">
             Randevunuz Onaylandı!
           </h2>
           <p className="mt-1 text-sm text-[var(--text-3)]">

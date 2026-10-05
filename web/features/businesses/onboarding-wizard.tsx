@@ -15,6 +15,7 @@ import { clearBusinessOnboardingDraft, readBusinessOnboardingDraft } from "@/fea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 
 const DEFAULT_CATEGORIES = [
   { value: "kuafor", label: "Kuaför" },
@@ -297,7 +298,7 @@ export function OnboardingWizard() {
       {/* Header */}
       <div className="onboarding-heading mb-8 text-center">
         <div className="onboarding-logo onboarding-rande-logo mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl">
-          <Image src="/mascots/randevu-rehberi.png" alt="Rovi kurulum koçu" width={62} height={57} priority/>
+          <RoviMascot size={62} alt="Rovi kurulum koçu" priority />
         </div>
         <h1 className="text-2xl font-bold text-[var(--text-1)]">İşletme Kurulumu</h1>
         <p className="mt-1 text-sm text-[var(--text-3)]">
@@ -639,7 +640,7 @@ export function OnboardingWizard() {
           </div>
           <aside className="onboarding-sidecar" aria-label="Kurulum rehberi">
             <div>
-              <div className="onboarding-rande-coach"><span><Image src="/mascots/randevu-rehberi.png" alt="" width={74} height={68}/></span><div><small>ROVİ · KURULUM KOÇUN</small><b>Bu adımda yanındayım</b></div></div>
+              <div className="onboarding-rande-coach"><span><RoviMascot size={74} alt="" /></span><div><small>ROVİ · KURULUM KOÇUN</small><b>Bu adımda yanındayım</b></div></div>
               <small>ADIM {step + 1} · AKILLI REHBER</small>
               <h3>{STEP_GUIDANCE[step]!.title}</h3>
               <p>{STEP_GUIDANCE[step]!.text}</p>

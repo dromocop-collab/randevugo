@@ -16,6 +16,7 @@ import {
   writeBusinessOnboardingDraft,
   type BusinessOnboardingDraft,
 } from "@/features/businesses/onboarding-draft";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 
 const BASE_CATEGORIES = [
   ["kuafor", "Kuaför", "Saç, bakım ve stil", Scissors],
@@ -115,7 +116,7 @@ export function BusinessSignupWizard() {
 
       <section className="business-signup-shell">
         <aside className="business-signup-rail">
-          <div className="signup-rovi"><Image src="/mascots/randevu-rehberi.png" alt="Rovi" width={78} height={72}/><span><small>ROVİ · KURULUM KOÇUN</small><b>İşletmeni birlikte hazırlayalım.</b></span></div>
+          <div className="signup-rovi"><RoviMascot size={78} alt="Rovi" /><span><small>ROVİ · KURULUM KOÇUN</small><b>İşletmeni birlikte hazırlayalım.</b></span></div>
           <ol>{STEP_TITLES.map((title, index) => <li key={title} className={index === step ? "active" : index < step ? "done" : ""}><i>{index < step ? <Check size={14}/> : index + 1}</i><span><b>{title}</b><small>{index < step ? "Tamamlandı" : index === step ? "Şimdi buradasın" : "Bir sonraki adım"}</small></span></li>)}</ol>
           <div className="signup-rail-note"><Sparkles size={17}/><p><b>Akıllı başlangıç</b><span>Yanıtların panelini ve önerilerini işletmene göre hazırlar.</span></p></div>
         </aside>

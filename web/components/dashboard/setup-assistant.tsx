@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, MousePointer2, Play, Sparkles, X } from "lucide-react";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 
 export interface SetupAssistantStep {
   title: string;
@@ -162,7 +162,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
         className="setup-assistant-trigger fixed bottom-24 right-4 z-[60] inline-flex min-h-14 items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-left shadow-2xl transition hover:-translate-y-0.5 lg:bottom-6 lg:right-6 lg:z-[70]"
         aria-label={`Rovi ile kurulum rehberini aç. ${completed}/${steps.length} adım tamamlandı`}
       >
-        <span className="setup-assistant-trigger__mascot" aria-hidden="true"><Image src="/mascots/randevu-rehberi.png" alt="" width={54} height={50}/></span>
+        <span className="setup-assistant-trigger__mascot" aria-hidden="true"><RoviMascot size={54} alt="" /></span>
         <span className="leading-tight"><b className="block text-xs">Rovi yardım etsin</b><small className="text-[9px] font-semibold opacity-70">Sıradaki: {nextStep.title}</small></span>
         <span className="setup-assistant-trigger__progress rounded-full px-2 py-1 text-[10px] font-black">{completed}/{steps.length}</span>
       </button>
@@ -180,7 +180,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
         <div className="setup-assistant__coach">
           <div className="setup-assistant__mascot" aria-hidden="true">
             <span className="setup-assistant__mascot-glow"/>
-            <Image src="/mascots/randevu-rehberi.png" alt="" width={154} height={141} priority/>
+            <RoviMascot size={154} alt="" priority />
           </div>
           <div className="setup-assistant__bubble">
             <span className="setup-assistant__kicker inline-flex items-center gap-1.5 text-[9px] font-black tracking-[.15em]"><Sparkles size={12}/> ROVİ · KURULUM KOÇUN</span>
@@ -228,7 +228,7 @@ export function SetupAssistant({ businessId, ready, steps }: Props) {
         {targetRect && <span className="dashboard-tour-spotlight" style={{ top: targetRect.top - 7, left: targetRect.left - 7, width: targetRect.width + 14, height: targetRect.height + 14 } as CSSProperties}/>}
           <section className="dashboard-tour-card" style={tourCardStyle} aria-live="polite" tabIndex={-1}>
             <button type="button" className="dashboard-tour-close" onClick={() => setTourIndex(null)} aria-label="Panel turunu kapat"><X size={17}/></button>
-            <div className="dashboard-tour-coach"><span><Image src="/mascots/randevu-rehberi.png" alt="Rovi panel rehberi" width={84} height={77}/></span><div><small>ROVİ İLE PANEL TURU · {tourIndex + 1}/{PANEL_TOUR_STEPS.length}</small><b>Bu alanı birlikte inceleyelim</b></div></div>
+            <div className="dashboard-tour-coach"><span><RoviMascot size={84} alt="Rovi panel rehberi" /></span><div><small>ROVİ İLE PANEL TURU · {tourIndex + 1}/{PANEL_TOUR_STEPS.length}</small><b>Bu alanı birlikte inceleyelim</b></div></div>
             <span className="dashboard-tour-kicker"><MousePointer2 size={14}/> ŞİMDİ BURAYA BAK</span>
             <h2>{tourStep.title}</h2>
             <p>{tourStep.description}</p>
