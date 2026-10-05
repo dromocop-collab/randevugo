@@ -47,6 +47,9 @@ export interface Appointment extends EntityBase {
   remainingAmount?: number;
   paymentMethod?: "cash" | "card" | "transfer" | "other";
   checkedOutAt?: string;
+  /** Müşterinin kendi yaptığı saat değişikliği sayısı (sunucu en fazla 3'e izin verir). */
+  rescheduleCount?: number;
+  lastRescheduledBy?: "customer" | "business";
 }
 
 export interface AppointmentCreateInput {

@@ -83,6 +83,8 @@ export interface Business extends EntityBase {
   galleryUrls?: string[];
   socialMedia?: SocialMediaLinks;
   isPublished: boolean;
+  /** Süper admin gizledi: keşif/arama/sitemap dışında; doğrudan link açık, arama motorlarına kapalı. */
+  hiddenFromDiscovery?: boolean;
   status: BusinessStatus;
   approvalStatus?: "pending" | "approved" | "rejected";
   profileReviewStatus?: "pending" | "approved" | "rejected";

@@ -13,6 +13,7 @@ import { PageViewTracker } from "@/components/layout/page-view-tracker";
 import { IosSmartBanner } from "@/components/marketing/ios-smart-banner";
 import { BrandCursor } from "@/components/ui/brand-cursor";
 import { initializeFirebaseAppCheck } from "@/lib/firebase/app-check";
+import { PushAutoRefresh } from "@/features/push";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -30,6 +31,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
             {children}
           </MaintenanceGate>
           <ToastProvider />
+          {/* Push açıksa her sayfada ön plan bildirimi (zil + toast) çalışır; izin istemez. */}
+          <PushAutoRefresh />
           <SupportBubble />
           <IosSmartBanner />
           <BrandCursor />

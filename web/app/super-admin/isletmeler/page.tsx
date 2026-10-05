@@ -18,7 +18,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import Link from "next/link";
-import { Download, ExternalLink, RefreshCw } from "lucide-react";
+import { Download, ExternalLink, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ interface BusinessItem {
   status: string;
   statusBeforeSuspension?: string;
   isSuspended: boolean;
+  hiddenFromDiscovery: boolean;
   plan: string;
   city: string;
   category: string;
@@ -59,6 +60,7 @@ function toBusinessItem(snapshot: QueryDocumentSnapshot | DocumentSnapshot): Bus
     status: String(d.status ?? "active"),
     statusBeforeSuspension: typeof d.statusBeforeSuspension === "string" ? d.statusBeforeSuspension : undefined,
     isSuspended: d.isSuspended === true,
+    hiddenFromDiscovery: d.hiddenFromDiscovery === true,
     plan: String(d.plan ?? "RANDEVUGO"),
     city: String(d.city ?? ""),
     category: String(d.category ?? ""),
@@ -148,6 +150,21 @@ function BusinessesView() {
     } finally {
       setBusyId(null);
       setConfirmAction(null);
+    }
+  }
+
+  // Gizlenen işletme keşif/arama/sitemap ve uygulama listelerinde görünmez; doğrudan linki açık kalır.
+  async function toggleHidden(biz: BusinessItem) {
+    setBusyId(biz.id);
+    try {
+      const next = !biz.hiddenFromDiscovery;
+      await updateDoc(doc(getDb(), "businesses", biz.id), { hiddenFromDiscovery: next, updatedAt: serverTimestamp() });
+      patchBusiness(biz.id, { hiddenFromDiscovery: next });
+      toast.success(next ? "İşletme gizlendi; keşif ve aramada görünmeyecek." : "İşletme yeniden listelerde görünür.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -272,6 +289,7 @@ function BusinessesView() {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${biz.status === "pending_review" ? "bg-amber-100 text-amber-800" : biz.status === "rejected" || biz.isSuspended ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
                         {biz.status === "pending_review" ? "Onay bekliyor" : biz.status === "rejected" ? "Reddedildi" : biz.isSuspended ? "Askıda" : "Aktif"}
                       </span>
+                      {biz.hiddenFromDiscovery && <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"><EyeOff size={11}/> Gizli</span>}
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${planColors[biz.plan] ?? "bg-gray-100 text-gray-700"}`}>
                         {biz.plan}
                       </span>
@@ -296,6 +314,9 @@ function BusinessesView() {
                       {!plans.some((plan) => plan.id === biz.plan) && <option value={biz.plan}>{biz.plan} (eski)</option>}
                       {plans.filter((plan) => plan.isActive).map((plan) => <option key={plan.id} value={plan.id}>{plan.label}</option>)}
                     </select>
+                    <Button variant="ghost" className="text-xs" disabled={busyId === biz.id} onClick={() => toggleHidden(biz)}>
+                      {biz.hiddenFromDiscovery ? <><Eye size={13}/> Göster</> : <><EyeOff size={13}/> Gizle</>}
+                    </Button>
                     {confirmAction?.id === biz.id ? (
                       <div className="flex items-center gap-1">
                         <Button

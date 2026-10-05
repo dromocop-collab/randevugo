@@ -81,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // All active business pages
   const businessPages: MetadataRoute.Sitemap = allBusinesses
-    .filter((business) => business.slug && business.isPublished && business.status === "active")
+    .filter((business) => business.slug && business.isPublished && business.status === "active" && business.hiddenFromDiscovery !== true)
     .map((business) => {
       const url = `${baseUrl}/isletme/${encodeURIComponent(business.slug)}`;
       const images = [business.coverUrl, business.logoUrl]

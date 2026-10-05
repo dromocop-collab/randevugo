@@ -388,6 +388,9 @@ async function sendTokenBatches(
       },
       apns: { ...(collapseId ? { headers: { "apns-collapse-id": collapseId } } : {}),
         payload: { aps: { sound: "default", badge: 1 } } },
+      webpush: {
+        notification: { icon: "/icon-192.png", badge: "/icon-192.png", silent: false, ...(collapseId ? { tag: collapseId, renotify: true } : {}) },
+      },
     });
     successCount += response.successCount;
     failureCount += response.failureCount;
@@ -1866,16 +1869,18 @@ export const registerPushToken = onCall(
     await Promise.all(duplicateTokens.docs
       .filter((document) => document.ref.path !== deviceRef.path)
       .map((document) => document.ref.delete()));
+    const platform = request.data?.platform === "android" ? "android" : request.data?.platform === "web" ? "web" : "ios";
     await deviceRef.set({
       fcmToken: token,
-      platform: request.data?.platform === "android" ? "android" : "ios",
+      platform,
       appVersion: String(request.data?.appVersion ?? ""),
       locale: String(request.data?.locale ?? "tr_TR"),
       enabled: true,
       updatedAt: FieldValue.serverTimestamp(),
       ...(!existingDevice.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
     }, { merge: true });
-    await messaging.subscribeToTopic([token], GLOBAL_PUSH_TOPIC);
+    // Web tarayıcıları platform duyurularına (iOS/Android konusu) abone edilmez; randevu bildirimleri yine ulaşır.
+    if (platform !== "web") await messaging.subscribeToTopic([token], GLOBAL_PUSH_TOPIC);
     return { success: true };
   }
 );
@@ -2637,6 +2642,260 @@ export const submitPublicSupportRequest = onCall(
   }
 );
 
+// Müşterinin (hesaplı veya bağlantılı misafir) kendi randevusunu değiştirme kuralları.
+const MAX_CUSTOMER_RESCHEDULES = 3;
+const PUBLIC_TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type CustomerChangePolicy = {
+  allowCancellation: boolean;
+  allowReschedule: boolean;
+  deadlineMinutes: number;
+  maxReschedules: number;
+  rescheduleCount: number;
+  canCancel: boolean;
+  canReschedule: boolean;
+  cancelBlockedReason: string | null;
+  rescheduleBlockedReason: string | null;
+};
+
+function customerChangePolicy(
+  business: FirebaseFirestore.DocumentData,
+  appointment: FirebaseFirestore.DocumentData,
+  now = Date.now()
+): CustomerChangePolicy {
+  const allowCancellation = business.allowCancellation !== false;
+  const allowReschedule = business.allowReschedule !== false;
+  const deadlineMinutes = Math.max(0, numberOr(business.cancellationDeadlineMinutes, 120));
+  const rescheduleCount = Math.max(0, Math.floor(numberOr(appointment.rescheduleCount, 0)));
+  const startAt = appointment.startAt instanceof Timestamp ? appointment.startAt.toMillis() : null;
+  const active = ["pending", "confirmed"].includes(String(appointment.status));
+  const past = startAt === null || startAt <= now;
+  const insideWindow = startAt !== null && startAt - now < deadlineMinutes * 60_000;
+
+  let cancelBlockedReason: string | null = null;
+  if (!active) cancelBlockedReason = "Bu randevu artık iptal edilemez.";
+  else if (!allowCancellation) cancelBlockedReason = "İşletme online iptal kabul etmiyor. Lütfen işletmeyle iletişime geçin.";
+  else if (past) cancelBlockedReason = "Geçmiş randevu iptal edilemez.";
+  else if (insideWindow) cancelBlockedReason = `Randevuya ${deadlineMinutes} dakikadan az kaldığı için online iptal yapılamaz.`;
+
+  let rescheduleBlockedReason: string | null = null;
+  if (!active) rescheduleBlockedReason = "Yalnızca aktif randevuların saati değiştirilebilir.";
+  else if (!allowReschedule) rescheduleBlockedReason = "İşletme online saat değişikliği kabul etmiyor. Lütfen işletmeyle iletişime geçin.";
+  else if (past) rescheduleBlockedReason = "Geçmiş randevunun saati değiştirilemez.";
+  else if (insideWindow) rescheduleBlockedReason = `Randevuya ${deadlineMinutes} dakikadan az kaldığı için online saat değişikliği yapılamaz.`;
+  else if (rescheduleCount >= MAX_CUSTOMER_RESCHEDULES) {
+    rescheduleBlockedReason = `Bu randevunun saati en fazla ${MAX_CUSTOMER_RESCHEDULES} kez değiştirilebilir. Lütfen işletmeyle iletişime geçin.`;
+  }
+
+  return {
+    allowCancellation,
+    allowReschedule,
+    deadlineMinutes,
+    maxReschedules: MAX_CUSTOMER_RESCHEDULES,
+    rescheduleCount,
+    canCancel: cancelBlockedReason === null,
+    canReschedule: rescheduleBlockedReason === null,
+    cancelBlockedReason,
+    rescheduleBlockedReason,
+  };
+}
+
+type CustomerActor = { uid: string | null; via: "account" | "token" };
+
+/** Müşteri iptali: hesaptan (cancelCustomerAppointment) ve SMS bağlantısından (manageAppointmentByToken) ortak. */
+async function cancelAppointmentAsCustomer(input: {
+  businessId: string;
+  appointmentId: string;
+  actor: CustomerActor;
+  reason: string | null;
+}) {
+  const { businessId, appointmentId, actor, reason } = input;
+  const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+  const businessRef = db.doc(`businesses/${businessId}`);
+
+  await db.runTransaction(async (tx) => {
+    const [appointmentSnap, businessSnap] = await Promise.all([tx.get(appointmentRef), tx.get(businessRef)]);
+    if (!appointmentSnap.exists || !businessSnap.exists) {
+      throw new HttpsError("not-found", "Randevu bulunamadı.");
+    }
+    const appointment = appointmentSnap.data()!;
+    if (actor.via === "account" && appointment.customerId !== actor.uid) {
+      throw new HttpsError("permission-denied", "Bu randevu üzerinde işlem yetkiniz yok.");
+    }
+    const policy = customerChangePolicy(businessSnap.data()!, appointment);
+    if (!policy.canCancel) throw new HttpsError("failed-precondition", policy.cancelBlockedReason!);
+    tx.update(appointmentRef, {
+      status: "cancelled",
+      cancelledBy: "customer",
+      cancelledVia: actor.via,
+      ...(reason ? { cancellationReason: reason } : {}),
+      cancelledAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const notificationRef = db.collection(`businesses/${businessId}/notifications`).doc();
+    tx.set(notificationRef, {
+      type: "appointment_cancelled",
+      title: "Randevu müşteri tarafından iptal edildi",
+      body: `${String(appointment.customerName ?? "Müşteri")} randevusunu iptal etti.${reason ? ` Neden: ${reason}` : ""}`,
+      appointmentId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+type RescheduleActor =
+  | { kind: "manager"; uid: string }
+  | { kind: "customer"; uid: string | null; via: "account" | "token" };
+
+/**
+ * Yeniden planlamanın ortak çekirdeği: slot doğrulama, çakışma sorgusu ve bookingDayLocks transaction'ı.
+ * Bildirim gönderilmez; appointmentAutomationUpdated tetikleyicisi SMS/push'u startAt değişiminden üretir.
+ */
+async function rescheduleAppointmentCore(input: {
+  businessId: string;
+  appointmentId: string;
+  startAtMillis: number;
+  requestedStaffId: string | null;
+  actor: RescheduleActor;
+}) {
+  const { businessId, appointmentId, startAtMillis, requestedStaffId, actor } = input;
+  const customer = actor.kind === "customer";
+  if (!Number.isFinite(startAtMillis)) throw new HttpsError("invalid-argument", "Yeni randevu saati geçersiz.");
+  if (startAtMillis < Date.now() - 60_000) throw new HttpsError("failed-precondition", "Randevu geçmiş bir saate taşınamaz.");
+
+  const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+  const appointmentSnapshot = await appointmentRef.get();
+  if (!appointmentSnapshot.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
+  const appointment = appointmentSnapshot.data()!;
+  if (customer && actor.via === "account" && appointment.customerId !== actor.uid) {
+    throw new HttpsError("permission-denied", "Bu randevu üzerinde işlem yetkiniz yok.");
+  }
+  if (!["pending", "confirmed"].includes(String(appointment.status))) {
+    throw new HttpsError("failed-precondition", "Yalnızca aktif randevular yeniden planlanabilir.");
+  }
+  const serviceId = requireString(appointment.serviceId, "serviceId");
+  const currentStaffId = typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null;
+  // Çalışan seçilmezse mevcut atama korunur; çalışansız işletmelerde boş kalır.
+  const staffId = requestedStaffId ?? currentStaffId;
+  if (customer) {
+    await requireBookingEntitlement(businessId);
+    await requirePlanEntitlement(businessId, "appointments");
+  }
+  const context = await loadBookingContext(businessId, serviceId, staffId, { managerAction: !customer });
+  if (customer) {
+    const policy = customerChangePolicy(context.business, appointment);
+    if (!policy.canReschedule) throw new HttpsError("failed-precondition", policy.rescheduleBlockedReason!);
+    if (context.business.allowOnlineBooking === false) {
+      throw new HttpsError("failed-precondition", "İşletme online randevu değişikliği kabul etmiyor. Lütfen işletmeyle iletişime geçin.");
+    }
+    const currentStart = appointment.startAt instanceof Timestamp ? appointment.startAt.toMillis() : null;
+    if (currentStart === startAtMillis && staffId === currentStaffId) {
+      throw new HttpsError("invalid-argument", "Randevunuz zaten bu saatte.");
+    }
+    const maximumDays = Math.max(1, numberOr(context.business.maximumBookingDaysAhead, 30));
+    if (startAtMillis > Date.now() + maximumDays * 86_400_000 + 86_400_000) {
+      throw new HttpsError("failed-precondition", "Seçilen tarih rezervasyon aralığının dışında.");
+    }
+  }
+  // Preserve the complete appointment duration when extra services were added.
+  const durationMinutes = normalizedBookingDuration(
+    appointment.serviceDurationMinutes ?? context.service.durationMinutes
+  );
+  const startAt = Timestamp.fromMillis(startAtMillis);
+  const endAt = Timestamp.fromMillis(startAtMillis + durationMinutes * 60_000);
+  const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
+  const selectedLocal = localParts(startAt.toDate(), timeZone);
+  // Müşteri için ek hizmetlerle uzayan süre de kapanış/mola sınırına sığmalı.
+  const slotContext = customer ? { ...context, service: { ...context.service, durationMinutes } } : context;
+  if (!buildSlots(slotContext, selectedLocal.dateKey, staffId, []).includes(startAtMillis)) {
+    throw new HttpsError("failed-precondition", customer
+      ? "Seçilen saat çalışma planına veya rezervasyon kurallarına uygun değil."
+      : "Seçilen saat çalışma planına uygun değil.");
+  }
+  const dayStart = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
+  const dayEnd = zonedTimeToMillis(addDaysToDateKey(selectedLocal.dateKey, 1), 0, timeZone);
+  const conflicts = db.collection(`businesses/${businessId}/appointments`)
+    .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS))
+    .where("startAt", "<", Timestamp.fromMillis(dayEnd));
+  const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
+
+  return db.runTransaction(async (tx) => {
+    const [bookingLock, currentAppointment] = await Promise.all([tx.get(bookingLockRef), tx.get(appointmentRef)]);
+    const current = currentAppointment.data();
+    if (!currentAppointment.exists || !current || !["pending", "confirmed"].includes(String(current.status))) {
+      throw new HttpsError("failed-precondition", "Randevu artık yeniden planlanamaz.");
+    }
+    let rescheduleCount = Math.max(0, Math.floor(numberOr(current.rescheduleCount, 0)));
+    if (customer) {
+      const policy = customerChangePolicy(context.business, current);
+      if (!policy.canReschedule) throw new HttpsError("failed-precondition", policy.rescheduleBlockedReason!);
+      rescheduleCount += 1;
+    }
+    const conflictSnapshot = await tx.get(conflicts);
+    const bufferBefore = Math.max(0, numberOr(context.business.bufferBeforeMinutes, 0));
+    const bufferAfter = Math.max(0, numberOr(context.business.bufferAfterMinutes, numberOr(context.business.appointmentBufferMinutes, 0)));
+    const collision = conflictSnapshot.docs.some((item) => {
+      if (item.id === appointmentId) return false;
+      const row = item.data();
+      if (!["pending", "confirmed"].includes(String(row.status))) return false;
+      if (staffId && row.staffId && row.staffId !== staffId) return false;
+      const existingStart = row.startAt as Timestamp | undefined;
+      const existingEnd = row.endAt as Timestamp | undefined;
+      return !!existingStart && !!existingEnd
+        && existingStart.toMillis() < endAt.toMillis() + bufferAfter * 60_000
+        && existingEnd.toMillis() > startAt.toMillis() - bufferBefore * 60_000;
+    });
+    if (collision) throw new HttpsError("already-exists", "Seçilen saat artık müsait değil.");
+    tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
+      updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEnd + 7 * 86_400_000) }, { merge: true });
+    tx.update(appointmentRef, {
+      ...(staffId ? { staffId } : {}),
+      staffName: String(context.staff?.fullName ?? context.business.name ?? "İşletme"),
+      startAt,
+      endAt,
+      serviceDurationMinutes: durationMinutes,
+      ...(customer ? { rescheduleCount } : {}),
+      lastRescheduledBy: customer ? "customer" : "business",
+      lastRescheduledAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const customerName = String(current.customerName ?? "Müşteri");
+    tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+      type: "appointment_rescheduled",
+      title: customer ? "Randevu müşteri tarafından yeniden planlandı" : "Randevu yeniden planlandı",
+      body: customer ? `${customerName} randevusunu yeni bir saate taşıdı.` : `${customerName} randevusu yeni saate taşındı.`,
+      appointmentId,
+      isRead: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+      action: "appointment.rescheduled",
+      entityId: appointmentId,
+      actorUid: actor.uid,
+      actorType: customer ? "customer" : "business",
+      ...(customer ? { via: actor.via } : {}),
+      previousStartAt: current.startAt ?? null,
+      previousStaffId: current.staffId ?? null,
+      startAt,
+      staffId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { startAtMillis, staffId, rescheduleCount };
+  });
+}
+
+function optionalStaffId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function optionalCancellationReason(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const reason = value.trim().replace(/\s+/g, " ");
+  if (reason.length > 300) throw new HttpsError("invalid-argument", "İptal nedeni 300 karakteri geçemez.");
+  return reason || null;
+}
+
 export const cancelCustomerAppointment = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -2644,52 +2903,12 @@ export const cancelCustomerAppointment = onCall(
       throw new HttpsError("unauthenticated", "Randevuyu iptal etmek için giriş yapmalısınız.");
     }
     const data = request.data ?? {};
-    const businessId = requireString(data.businessId, "businessId");
-    const appointmentId = requireString(data.appointmentId, "appointmentId");
-    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
-    const businessRef = db.doc(`businesses/${businessId}`);
-
-    await db.runTransaction(async (tx) => {
-      const [appointmentSnap, businessSnap] = await Promise.all([tx.get(appointmentRef), tx.get(businessRef)]);
-      if (!appointmentSnap.exists || !businessSnap.exists) {
-        throw new HttpsError("not-found", "Randevu bulunamadı.");
-      }
-      const appointment = appointmentSnap.data()!;
-      const business = businessSnap.data()!;
-      if (appointment.customerId !== request.auth!.uid) {
-        throw new HttpsError("permission-denied", "Bu randevu üzerinde işlem yetkiniz yok.");
-      }
-      if (!["pending", "confirmed"].includes(String(appointment.status))) {
-        throw new HttpsError("failed-precondition", "Bu randevu artık iptal edilemez.");
-      }
-      if (business.allowCancellation === false) {
-        throw new HttpsError("failed-precondition", "İşletme online iptal kabul etmiyor. Lütfen işletmeyle iletişime geçin.");
-      }
-      const startAt = appointment.startAt as Timestamp | undefined;
-      if (!startAt || startAt.toMillis() <= Date.now()) {
-        throw new HttpsError("failed-precondition", "Geçmiş randevu iptal edilemez.");
-      }
-      const deadlineMinutes = Number(business.cancellationDeadlineMinutes ?? 120);
-      if (startAt.toMillis() - Date.now() < deadlineMinutes * 60_000) {
-        throw new HttpsError("failed-precondition", `Randevuya ${deadlineMinutes} dakikadan az kaldığı için online iptal yapılamaz.`);
-      }
-      tx.update(appointmentRef, {
-        status: "cancelled",
-        cancelledBy: "customer",
-        cancelledAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      const notificationRef = db.collection(`businesses/${businessId}/notifications`).doc();
-      tx.set(notificationRef, {
-        type: "appointment_cancelled",
-        title: "Randevu müşteri tarafından iptal edildi",
-        body: `${String(appointment.customerName ?? "Müşteri")} randevusunu iptal etti.`,
-        appointmentId,
-        isRead: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+    await cancelAppointmentAsCustomer({
+      businessId: requireString(data.businessId, "businessId"),
+      appointmentId: requireString(data.appointmentId, "appointmentId"),
+      actor: { uid: request.auth.uid, via: "account" },
+      reason: optionalCancellationReason(data.reason),
     });
-
     return { success: true };
   }
 );
@@ -2702,91 +2921,84 @@ export const rescheduleAppointment = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const appointmentId = requireString(data.appointmentId, "appointmentId");
-    const requestedStaffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
     const startAtMillis = Number(data.startAtMillis);
     if (!Number.isFinite(startAtMillis)) throw new HttpsError("invalid-argument", "Yeni randevu saati geçersiz.");
-    if (startAtMillis < Date.now() - 60_000) throw new HttpsError("failed-precondition", "Randevu geçmiş bir saate taşınamaz.");
     await requireBusinessManager(uid, businessId);
-
-    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
-    const appointmentSnapshot = await appointmentRef.get();
-    if (!appointmentSnapshot.exists) throw new HttpsError("not-found", "Randevu bulunamadı.");
-    const appointment = appointmentSnapshot.data()!;
-    if (!["pending", "confirmed"].includes(String(appointment.status))) {
-      throw new HttpsError("failed-precondition", "Yalnızca aktif randevular yeniden planlanabilir.");
-    }
-    const serviceId = requireString(appointment.serviceId, "serviceId");
-    // Çalışan seçilmezse mevcut atama korunur; çalışansız işletmelerde boş kalır.
-    const staffId = requestedStaffId ?? (typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null);
-    const context = await loadBookingContext(businessId, serviceId, staffId, { managerAction: true });
-    // Preserve the complete appointment duration when extra services were added.
-    const durationMinutes = normalizedBookingDuration(
-      appointment.serviceDurationMinutes ?? context.service.durationMinutes
-    );
-    const startAt = Timestamp.fromMillis(startAtMillis);
-    const endAt = Timestamp.fromMillis(startAtMillis + durationMinutes * 60_000);
-    const timeZone = typeof context.business.timeZone === "string" ? context.business.timeZone : "Europe/Istanbul";
-    const selectedLocal = localParts(startAt.toDate(), timeZone);
-    if (!buildSlots(context, selectedLocal.dateKey, staffId, []).includes(startAtMillis)) {
-      throw new HttpsError("failed-precondition", "Seçilen saat çalışma planına uygun değil.");
-    }
-    const dayStart = zonedTimeToMillis(selectedLocal.dateKey, 0, timeZone);
-    const nextDay = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
-    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-    const dayEnd = zonedTimeToMillis(nextDay.toISOString().slice(0, 10), 0, timeZone);
-    const conflicts = db.collection(`businesses/${businessId}/appointments`)
-      .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS))
-      .where("startAt", "<", Timestamp.fromMillis(dayEnd));
-    const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
-
-    await db.runTransaction(async (tx) => {
-      const [bookingLock, currentAppointment] = await Promise.all([tx.get(bookingLockRef), tx.get(appointmentRef)]);
-      if (!currentAppointment.exists || !["pending", "confirmed"].includes(String(currentAppointment.data()?.status))) {
-        throw new HttpsError("failed-precondition", "Randevu artık yeniden planlanamaz.");
-      }
-      const conflictSnapshot = await tx.get(conflicts);
-      const bufferBefore = Math.max(0, numberOr(context.business.bufferBeforeMinutes, 0));
-      const bufferAfter = Math.max(0, numberOr(context.business.bufferAfterMinutes, numberOr(context.business.appointmentBufferMinutes, 0)));
-      const collision = conflictSnapshot.docs.some((item) => {
-        if (item.id === appointmentId) return false;
-        const row = item.data();
-        if (!["pending", "confirmed"].includes(String(row.status))) return false;
-        if (staffId && row.staffId && row.staffId !== staffId) return false;
-        const existingStart = row.startAt as Timestamp | undefined;
-        const existingEnd = row.endAt as Timestamp | undefined;
-        return !!existingStart && !!existingEnd
-          && existingStart.toMillis() < endAt.toMillis() + bufferAfter * 60_000
-          && existingEnd.toMillis() > startAt.toMillis() - bufferBefore * 60_000;
-      });
-      if (collision) throw new HttpsError("already-exists", "Seçilen saat artık müsait değil.");
-      tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
-        updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEnd + 7 * 86_400_000) }, { merge: true });
-      tx.update(appointmentRef, {
-        ...(staffId ? { staffId } : {}),
-        staffName: String(context.staff?.fullName ?? context.business.name ?? "İşletme"),
-        startAt,
-        endAt,
-        serviceDurationMinutes: durationMinutes,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
-        type: "appointment_rescheduled",
-        title: "Randevu yeniden planlandı",
-        body: `${String(appointment.customerName ?? "Müşteri")} randevusu yeni saate taşındı.`,
-        appointmentId,
-        isRead: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-      tx.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
-        action: "appointment.rescheduled",
-        entityId: appointmentId,
-        actorUid: uid,
-        previousStartAt: appointment.startAt ?? null,
-        startAt,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+    await rescheduleAppointmentCore({
+      businessId,
+      appointmentId,
+      startAtMillis,
+      requestedStaffId: optionalStaffId(data.staffId),
+      actor: { kind: "manager", uid },
     });
     return { success: true };
+  }
+);
+
+/** Giriş yapmış müşteri kendi randevusunun saatini değiştirir (appointment.customerId === uid). */
+export const rescheduleCustomerAppointment = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Randevu saatini değiştirmek için giriş yapmalısınız.");
+    const data = request.data ?? {};
+    await consumeSecurityLimit(`appointment:reschedule:${uid}`, 20, 60 * 60_000);
+    const result = await rescheduleAppointmentCore({
+      businessId: requireString(data.businessId, "businessId"),
+      appointmentId: requireString(data.appointmentId, "appointmentId"),
+      startAtMillis: Number(data.startAtMillis),
+      requestedStaffId: optionalStaffId(data.staffId),
+      actor: { kind: "customer", uid, via: "account" },
+    });
+    return { success: true, ...result };
+  }
+);
+
+async function resolvePublicAppointmentToken(value: unknown) {
+  const token = requireString(value, "Randevu bağlantısı");
+  if (!PUBLIC_TOKEN_PATTERN.test(token)) {
+    throw new HttpsError("invalid-argument", "Randevu bağlantısı geçersiz.");
+  }
+  const tokenSnapshot = await db.doc(`appointmentTokens/${token}`).get();
+  if (!tokenSnapshot.exists) {
+    throw new HttpsError("not-found", "Randevu bulunamadı veya bağlantının süresi dolmuş olabilir.");
+  }
+  return {
+    token,
+    businessId: requireString(tokenSnapshot.data()?.businessId, "businessId"),
+    appointmentId: requireString(tokenSnapshot.data()?.appointmentId, "appointmentId"),
+  };
+}
+
+/** SMS/e-posta bağlantısındaki publicToken sahibi (misafir dahil) randevuyu iptal eder veya saatini değiştirir. */
+export const manageAppointmentByToken = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const data = request.data ?? {};
+    const action = data.action;
+    if (action !== "cancel" && action !== "reschedule") {
+      throw new HttpsError("invalid-argument", "İşlem türü geçersiz.");
+    }
+    await consumeSecurityLimit(`appointment-token:ip:hour:${clientIpFrom(request.rawRequest)}`, 30, 60 * 60_000);
+    const { token, businessId, appointmentId } = await resolvePublicAppointmentToken(data.publicToken);
+    await consumeSecurityLimit(`appointment-token:token:hour:${token}`, 10, 60 * 60_000);
+    const appointmentSnapshot = await db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get();
+    if (!appointmentSnapshot.exists || appointmentSnapshot.data()?.publicToken !== token) {
+      throw new HttpsError("not-found", "Randevu kaydı bulunamadı.");
+    }
+    const actor = { uid: request.auth?.uid ?? null, via: "token" as const };
+    if (action === "cancel") {
+      await cancelAppointmentAsCustomer({ businessId, appointmentId, actor, reason: optionalCancellationReason(data.reason) });
+      return { success: true, action, status: "cancelled" };
+    }
+    const result = await rescheduleAppointmentCore({
+      businessId,
+      appointmentId,
+      startAtMillis: Number(data.startAtMillis),
+      requestedStaffId: optionalStaffId(data.staffId),
+      actor: { kind: "customer", ...actor },
+    });
+    return { success: true, action, status: "rescheduled", ...result };
   }
 );
 
@@ -3736,18 +3948,7 @@ export const claimGuestAppointments = onCall(
 export const getAppointmentByPublicToken = onCall(
   publicCallableOptions,
   async (request) => {
-    const token = requireString(request.data?.publicToken, "Randevu bağlantısı");
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)) {
-      throw new HttpsError("invalid-argument", "Randevu bağlantısı geçersiz.");
-    }
-
-    const tokenSnapshot = await db.doc(`appointmentTokens/${token}`).get();
-    if (!tokenSnapshot.exists) {
-      throw new HttpsError("not-found", "Randevu bulunamadı veya bağlantının süresi dolmuş olabilir.");
-    }
-
-    const businessId = requireString(tokenSnapshot.data()?.businessId, "businessId");
-    const appointmentId = requireString(tokenSnapshot.data()?.appointmentId, "appointmentId");
+    const { businessId, appointmentId } = await resolvePublicAppointmentToken(request.data?.publicToken);
     const [appointmentSnapshot, businessSnapshot] = await Promise.all([
       db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get(),
       db.doc(`businesses/${businessId}`).get(),
@@ -3760,6 +3961,7 @@ export const getAppointmentByPublicToken = onCall(
     const business = businessSnapshot.data() ?? {};
     const startAt = appointment.startAt as Timestamp | undefined;
     const endAt = appointment.endAt as Timestamp | undefined;
+    const policy = customerChangePolicy(business, appointment);
     const additionalServices = Array.isArray(appointment.additionalServices)
       ? appointment.additionalServices.flatMap((item: unknown) => {
           if (!item || typeof item !== "object") return [];
@@ -3787,6 +3989,22 @@ export const getAppointmentByPublicToken = onCall(
         serviceDurationMinutes: normalizedBookingDuration(appointment.serviceDurationMinutes),
         startAt: startAt?.toDate().toISOString() ?? "",
         endAt: endAt?.toDate().toISOString() ?? "",
+        businessId,
+        serviceId: String(appointment.serviceId ?? ""),
+        staffId: typeof appointment.staffId === "string" ? appointment.staffId : "",
+        rescheduleCount: policy.rescheduleCount,
+      },
+      policy: {
+        canCancel: policy.canCancel,
+        canReschedule: policy.canReschedule,
+        cancelBlockedReason: policy.cancelBlockedReason,
+        rescheduleBlockedReason: policy.rescheduleBlockedReason,
+        allowCancellation: policy.allowCancellation,
+        allowReschedule: policy.allowReschedule,
+        deadlineMinutes: policy.deadlineMinutes,
+        maxReschedules: policy.maxReschedules,
+        maximumBookingDaysAhead: Math.max(1, numberOr(business.maximumBookingDaysAhead, 30)),
+        timeZone: typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul",
       },
       business: {
         name: String(business.name ?? "İşletme"),
@@ -6194,6 +6412,7 @@ async function availabilityGate(businessId: string, module: "availabilityAlerts"
     catch { return null; }
   }
   return !!row && row.status === "active" && row.isPublished === true && row.isSuspended !== true &&
+    row.hiddenFromDiscovery !== true &&
     liveModuleEnabled(settings.data()?.featureFlags, module, row[`${module}Enabled`]) ? row : null;
 }
 
@@ -6631,7 +6850,7 @@ async function rebuildLiveQueueDiscovery(businessId: string) {
     });
   }
   if (!row || row.liveQueueEnabled !== true || row.liveQueueIntakePaused === true ||
-      row.status !== "active" || row.isPublished !== true || row.isSuspended === true ||
+      row.status !== "active" || row.isPublished !== true || row.isSuspended === true || row.hiddenFromDiscovery === true ||
       typeof row.slug !== "string" || row.slug.trim().length === 0) {
     await persist(null);
     return;
@@ -6682,7 +6901,7 @@ export const liveQueueDiscoveryBusinessUpdated = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
-    const relevant = ["liveQueueEnabled", "liveQueueIntakePaused", "status", "isPublished", "isSuspended",
+    const relevant = ["liveQueueEnabled", "liveQueueIntakePaused", "status", "isPublished", "isSuspended", "hiddenFromDiscovery",
       "name", "slug", "category", "city", "district", "logoUrl", "timeZone",
       "bufferBeforeMinutes", "bufferAfterMinutes", "appointmentBufferMinutes"];
     if (relevant.every((key) => before?.[key] === after?.[key])) return;

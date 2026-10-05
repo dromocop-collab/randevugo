@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { toast } from "sonner";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, CalendarPlus, CheckCircle2, Clock3, Download, History, MapPin, Navigation, Phone, ShieldCheck, Store, UserRound, WalletCards, XCircle, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, CheckCircle2, Clock3, Download, History, MapPin, Navigation, Phone, ShieldCheck, Store, LoaderCircle, UserRound, WalletCards, X, XCircle, type LucideIcon } from "lucide-react";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { LoadingState, ErrorState } from "@/components/ui/states";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { addGuestBooking } from "@/features/appointments/guest-booking-store";
 import { downloadIcs, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import { RescheduleDialog } from "@/features/appointments/reschedule-dialog";
+import { appointmentChangeError, manageAppointmentByToken } from "@/features/appointments/appointment-change";
+import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import type { Appointment } from "@/types/appointments";
+import type { PublicAppointmentPolicy } from "@/types/appointment-change";
 
 type BusinessInfo = { name:string; address:string; phone:string; slug:string; logoUrl:string };
 type PublicAppointmentResponse = {
   appointment: Appointment;
   business: BusinessInfo;
+  policy?: PublicAppointmentPolicy;
 };
 
 const statusMap: Record<string,{label:string;className:string;icon:LucideIcon;style:CSSProperties;iconColor:string}> = {
@@ -39,7 +45,14 @@ export default function AppointmentDetailPage() {
   const [business,setBusiness] = useState<BusinessInfo>({name:"",address:"",phone:"",slug:"",logoUrl:""});
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState<string|null>(null);
-  const [now] = useState(() => Date.now());
+  const [now,setNow] = useState(() => Date.now());
+  const [policy,setPolicy] = useState<PublicAppointmentPolicy|null>(null);
+  const [reloadKey,setReloadKey] = useState(0);
+  const [rescheduleOpen,setRescheduleOpen] = useState(false);
+  const [cancelOpen,setCancelOpen] = useState(false);
+  const [cancelReason,setCancelReason] = useState("");
+  const [cancelBusy,setCancelBusy] = useState(false);
+  const closeReschedule = useCallback(()=>setRescheduleOpen(false),[]);
 
   useEffect(()=>{
     const token=params.publicToken; if(!token)return; let cancelled=false;
@@ -49,6 +62,8 @@ export default function AppointmentDetailPage() {
       if(cancelled)return;
       setAppointment(result.data.appointment);
       setBusiness(result.data.business);
+      setPolicy(result.data.policy??null);
+      setNow(Date.now());
     }catch(reason){
       if(!cancelled){
         const message=(reason as {message?:string}).message??"Randevu bilgilerine ulaşılamadı.";
@@ -56,7 +71,38 @@ export default function AppointmentDetailPage() {
       }
     }finally{if(!cancelled)setLoading(false)}})();
     return()=>{cancelled=true};
-  },[params.publicToken]);
+  },[params.publicToken,reloadKey]);
+
+  useEffect(()=>{
+    if(!cancelOpen)return;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape"&&!cancelBusy)setCancelOpen(false)};
+    document.addEventListener("keydown",onKeyDown);
+    return()=>{document.body.style.overflow=previousOverflow;document.removeEventListener("keydown",onKeyDown)};
+  },[cancelOpen,cancelBusy]);
+
+  async function confirmReschedule(slot:AvailableAppointmentSlot){
+    // Hata RescheduleDialog içinde gösterilir.
+    await manageAppointmentByToken({publicToken:params.publicToken,action:"reschedule",startAtMillis:slot.startAtMillis,...(slot.staffId?{staffId:slot.staffId}:{})});
+    toast.success("Randevu saatiniz güncellendi ve işletmeye bildirildi.");
+    setRescheduleOpen(false);
+    setReloadKey(key=>key+1);
+  }
+
+  async function confirmCancel(){
+    if(cancelBusy)return;
+    setCancelBusy(true);
+    try{
+      const reason=cancelReason.trim();
+      await manageAppointmentByToken({publicToken:params.publicToken,action:"cancel",...(reason?{reason}:{})});
+      toast.success("Randevunuz iptal edildi ve işletmeye bildirildi.");
+      setCancelOpen(false);
+      setCancelReason("");
+      setReloadKey(key=>key+1);
+    }catch(reason){toast.error(appointmentChangeError(reason,"Randevu iptal edilemedi. Lütfen yeniden deneyin."))}
+    finally{setCancelBusy(false)}
+  }
 
   const signedIn = authStatus === "authenticated";
   const back = signedIn ? {href:"/hesabim",label:"Randevularıma dön"} : {href:"/",label:"Ana sayfaya dön"};
@@ -121,13 +167,31 @@ export default function AppointmentDetailPage() {
           <button type="button" onClick={()=>downloadIcs(calendarEvent,`randevu-${start.toISOString().slice(0,10)}.ics`)} className="inline-flex items-center gap-2 rounded-xl border border-[#d8e4d4] bg-white px-3.5 py-2.5 text-xs font-bold text-[#0b6b45] transition hover:border-[#0b6b45]"><Download size={15}/> Takvime ekle (.ics)</button>
           <a href={googleCalendarUrl(calendarEvent)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[#d8e4d4] bg-white px-3.5 py-2.5 text-xs font-bold text-[#0b6b45] transition hover:border-[#0b6b45]"><CalendarPlus size={15}/> Google Takvim</a>
         </div>}
+        {upcomingActive&&policy&&<div className="mt-3 rounded-2xl border border-[#e3e8dc] bg-[#fbfbf6] p-4">
+          <span className="text-[8px] font-black tracking-[.14em] text-[#0b6b45]">RANDEVUYU YÖNET</span>
+          {(policy.canReschedule||policy.canCancel)&&<div className="mt-2 flex flex-wrap gap-2">
+            {policy.canReschedule&&<button type="button" onClick={()=>setRescheduleOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#0b6b45] px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-[#095a3a]"><CalendarClock size={15}/> Saati değiştir</button>}
+            {policy.canCancel&&<button type="button" onClick={()=>setCancelOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-[#efc9c9] bg-white px-3.5 py-2.5 text-xs font-bold text-[#a64848] transition hover:border-[#a64848]"><XCircle size={15}/> Randevuyu iptal et</button>}
+          </div>}
+          <ul className="mt-2 grid gap-1 text-[11px] text-[#586c61]">
+            {!policy.canReschedule&&policy.rescheduleBlockedReason&&<li>{policy.rescheduleBlockedReason}</li>}
+            {!policy.canCancel&&policy.cancelBlockedReason&&policy.cancelBlockedReason!==policy.rescheduleBlockedReason&&<li>{policy.cancelBlockedReason}</li>}
+            {(policy.canReschedule||policy.canCancel)&&policy.deadlineMinutes>0&&<li>Değişiklik ve iptal, randevudan en geç {policy.deadlineMinutes} dakika önceye kadar yapılabilir.</li>}
+            {policy.canReschedule&&<li>Saat değişikliği hakkı: {Math.max(0,policy.maxReschedules-(appointment.rescheduleCount??0))}/{policy.maxReschedules}</li>}
+          </ul>
+        </div>}
         {showSaveToAccount&&<Link href={SAVE_TO_ACCOUNT_HREF} onClick={()=>addGuestBooking({publicToken:params.publicToken,businessId:appointment.businessId??"",appointmentId:appointment.id??""})} className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-[#cfe6d5] bg-[#effaf2] px-4 py-3 text-xs font-bold text-[#0b6b45] transition hover:border-[#0b6b45]">
           <span><small className="block text-[8px] font-black tracking-[.14em] text-[#3d8a62]">HESABIMA KAYDET</small>Giriş yapın, bu randevu Randevularım listenize eklensin.</span><ArrowRight size={17}/>
         </Link>}
       </div>
       <aside className="appointment-detail-side"><span>İŞLETME BİLGİLERİ</span><h2>{business.name}</h2><p><MapPin size={17}/>{business.address||"Adres bilgisi işletmeden alınabilir."}</p><div>{business.phone&&<a href={`tel:${business.phone}`}><Phone size={17}/> İşletmeyi ara</a>}<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address)}`} target="_blank" rel="noopener noreferrer"><Navigation size={17}/> Yol tarifi</a>{business.slug&&<Link href={`/isletme/${business.slug}`}><Store size={17}/> Mağazayı görüntüle</Link>}</div><small><ShieldCheck size={14}/> Bilgileriniz güvenli şekilde korunur.</small></aside>
     </section>
-  </main><MarketingFooter/></div>;
+  </main><MarketingFooter/>
+    {rescheduleOpen&&upcomingActive&&<RescheduleDialog businessId={appointment.businessId} serviceId={appointment.serviceId} staffId={appointment.staffId||undefined} currentStartAt={appointment.startAt} title={business.name||"Randevunuz"} subtitle={`${serviceSummary} · Şu an: ${date} ${time}`} timeZone={policy?.timeZone} maximumBookingDaysAhead={policy?.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
+    {cancelOpen&&<div className="account-overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!cancelBusy)setCancelOpen(false)}}><section className="account-cancel-modal" role="dialog" aria-modal="true" aria-labelledby="public-cancel-title"><button className="account-modal-close" onClick={()=>setCancelOpen(false)} disabled={cancelBusy} aria-label="Kapat"><X/></button><div><CalendarDays size={27}/></div><span>RANDEVU İPTALİ</span><h2 id="public-cancel-title">Bu randevuyu iptal etmek istediğinize emin misiniz?</h2><p><b>{business.name}</b><br/>{serviceSummary} · {date} {time}</p>
+      <label className="mt-4 block text-left text-[11px] font-bold text-[#52675c]">İptal nedeni (isteğe bağlı)<textarea value={cancelReason} onChange={event=>setCancelReason(event.target.value)} maxLength={300} rows={3} placeholder="İşletmeye iletilecek kısa bir not" className="mt-1.5 w-full resize-none rounded-xl border border-[#d8e4d4] bg-white px-3 py-2.5 text-xs font-normal text-[#0f2a1f] outline-none focus:border-[#0b6b45]"/></label>
+      <small>İptal bilgisi anında işletmeye iletilecek.</small><footer><button onClick={()=>setCancelOpen(false)} disabled={cancelBusy}>Vazgeç</button><button onClick={()=>void confirmCancel()} disabled={cancelBusy}>{cancelBusy?<LoaderCircle className="animate-spin"/>:"Evet, iptal et"}</button></footer></section></div>}
+  </div>;
 }
 
 function Detail({icon,label,value}:{icon:ReactNode;label:string;value:string}){return <article><i>{icon}</i><span><small>{label}</small><b>{value}</b></span></article>}

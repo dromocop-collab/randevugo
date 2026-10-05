@@ -33,6 +33,8 @@ export interface BusinessSearchResult extends Business {
 }
 
 function isPublicReadyBusiness(business: Business): boolean {
+  // Süper admin tarafından gizlenen işletmeler keşif, arama ve listelerde görünmez.
+  if (business.hiddenFromDiscovery === true) return false;
   return [business.id, business.slug, business.name, business.category, business.phone, business.address, business.city, business.district]
     .every((value) => typeof value === "string" && value.trim().length > 0);
 }

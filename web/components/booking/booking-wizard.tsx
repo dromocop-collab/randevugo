@@ -603,7 +603,7 @@ export function BookingWizard(props: Props) {
             href={`/randevu/${encodeURIComponent(successData.publicToken)}`}
             className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-100"
           >
-            <span><small className="block font-semibold text-emerald-600">GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle ve takvime ekle</span>
+            <span><small className="block font-semibold text-emerald-600">GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle, saatini değiştir veya iptal et</span>
             <ArrowRight size={18} />
           </a>
         )}

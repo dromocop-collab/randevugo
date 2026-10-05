@@ -11,6 +11,7 @@ import { ImageUploader } from "@/components/ui/image-uploader";
 import { useBusiness } from "@/hooks/use-business";
 import { LiveQueueSettings } from "@/features/live-queue/live-queue-settings";
 import { BusinessAvailabilitySettings } from "@/features/availability/business-availability-settings";
+import { PushToggleCard } from "@/features/push";
 import {
   getBusinessById,
   updateBusiness,
@@ -687,6 +688,7 @@ export default function SettingsPage() {
       {activeTab === "randevu" && business &&
         <BusinessAvailabilitySettings business={business} onChanged={(setting, value) =>
           setBusiness((current) => current ? { ...current, [setting]: value } : current)} />}
+      {activeTab === "randevu" && <PushToggleCard audience="business" />}
       </div>
     </div>
   );

@@ -81,7 +81,9 @@ service cloud.firestore {
           // Sahiplik, yayın durumu ve mağaza adresi yalnızca sunucu/platform yöneticisi tarafından değişir.
           "ownerUid", "isPublished", "slug",
           // Askıdan çıkarılınca geri yüklenecek durum; işletme kendini "active"e döndüremesin.
-          "statusBeforeSuspension"]));
+          "statusBeforeSuspension",
+          // Keşiften gizleme yalnızca süper admin kararıdır.
+          "hiddenFromDiscovery"]));
     }
 
     // Public storefront identity is published only after platform moderation.

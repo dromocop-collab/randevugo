@@ -24,6 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const business = await getBusinessBySlugCached(slug).catch(() => null);
   const label = business?.name ?? labelFromSlug(slug);
+  // Gizlenen işletmenin doğrudan linki açık kalır ama arama motorlarına kapalıdır.
+  const indexable = business?.isPublished === true && business.status === "active" && business.hiddenFromDiscovery !== true;
   const canonical = `${SITE_URL}/isletme/${encodeURIComponent(slug)}`;
   const location = business ? `${business.district}, ${business.city}` : "";
   const categoryLabel = CATEGORY_LABELS[business?.category ?? ""] ?? "";
@@ -52,7 +54,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical, languages: { "tr-TR": canonical, "x-default": canonical } },
     openGraph: { title, description, url: canonical, type: "website", locale: "tr_TR", siteName: "SeninRandevun", images: ogImages },
     twitter: { card: "summary_large_image", title, description, images: ogImages },
-    robots: { index: business?.isPublished === true && business.status === "active", follow: true, googleBot: { index: business?.isPublished === true && business.status === "active", follow: true, "max-image-preview": "large", "max-snippet": -1 } },
+    robots: { index: indexable, follow: true, googleBot: { index: indexable, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
   };
 }
 

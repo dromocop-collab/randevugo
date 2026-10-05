@@ -5,7 +5,9 @@ import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketi
 import { AppStoreButton } from "@/components/marketing/app-store-button";
 import { IosAppVisual } from "@/components/marketing/ios-app-visual";
 import { APP_STORE_URL } from "@/lib/app-store";
-import { HomeInteractive } from "./home-client";
+import { HomeInteractive, type HomeInitialData } from "./home-client";
+import { getBusinessCities, getPopularBusinesses } from "@/features/discovery/search-repository";
+import { listDynamicCategories } from "@/features/categories/category-request-repository";
 import { CustomerLiveHome } from "@/features/live-queue/customer-live-home";
 import { LastMinuteHome } from "@/features/availability/last-minute-home";
 import { createPublicMetadata, safeJsonLd, SEO_SITE_URL } from "@/lib/seo/metadata";
@@ -43,7 +45,26 @@ const SEO_JOURNEYS = [
   { href: "/isletmeler", title: "İşletmeler için", text: "Takvimini, ekibini ve müşterilerini tek merkezden yönet.", icon: Building2 },
 ];
 
-export default function HomePage() {
+// Öne çıkan mağazalar sunucuda hazırlanıp 5 dakikada bir yenilenir.
+export const revalidate = 300;
+
+async function loadHomeInitialData(): Promise<HomeInitialData | null> {
+  try {
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4_000));
+    const [businesses, cities, dynamicCategories] = await Promise.race([
+      Promise.all([getPopularBusinesses(8), getBusinessCities(), listDynamicCategories()]),
+      timeout,
+    ]);
+    // Firestore Timestamp gibi sınıflar istemci bileşenine düz veri olarak geçer.
+    return JSON.parse(JSON.stringify({ businesses, cities, dynamicCategories })) as HomeInitialData;
+  } catch {
+    // Sunucuda yüklenemezse istemci kendi yükler.
+    return null;
+  }
+}
+
+export default async function HomePage() {
+  const initialData = await loadHomeInitialData();
   return <div className="marketing-page customer-home">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(homeJsonLd) }}/>
     <MarketingHeader />
@@ -66,7 +87,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <HomeInteractive />
+        <HomeInteractive initialData={initialData} />
       </section>
 
       <CustomerLiveHome />

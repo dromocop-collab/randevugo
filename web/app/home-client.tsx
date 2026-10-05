@@ -26,13 +26,27 @@ export const DEFAULT_CATEGORIES: HomeCategory[] = [
   { slug: "yazilim", label: "Yazılım", emoji: "</>", tone: "blue", image: "/images/categories/yazilim.png", description: "Web, mobil ve dijital çözümler" },
 ];
 
-export function HomeInteractive() {
-  const [popular, setPopular] = useState<Business[]>([]);
+export type HomeInitialData = { businesses: Business[]; cities: string[]; dynamicCategories: DynamicCategory[] };
+
+function mergeCategories(dynamic: DynamicCategory[]): HomeCategory[] {
+  const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
+  const additions = dynamic.flatMap((item: DynamicCategory) => {
+    const slug = canonicalBusinessCategory(item.slug);
+    if (known.has(slug)) return [];
+    known.add(slug);
+    return [{ slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }];
+  });
+  return [...DEFAULT_CATEGORIES, ...additions];
+}
+
+/** initialData sunucuda hazırlanır: mağaza linkleri ilk HTML'de gelir (arama motorları görür), istemci tekrar yüklemez. */
+export function HomeInteractive({ initialData }: { initialData?: HomeInitialData | null }) {
+  const [popular, setPopular] = useState<Business[]>(initialData?.businesses ?? []);
   const [results, setResults] = useState<Business[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [categories, setCategories] = useState<HomeCategory[]>(DEFAULT_CATEGORIES);
+  const [cities, setCities] = useState<string[]>(initialData?.cities ?? []);
+  const [categories, setCategories] = useState<HomeCategory[]>(() => initialData ? mergeCategories(initialData.dynamicCategories) : DEFAULT_CATEGORIES);
   const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState("");
   const categoryRailRef = useRef<HTMLDivElement>(null);
@@ -60,14 +74,7 @@ export function HomeInteractive() {
       const [businesses, cityList, dynamic] = await Promise.all([getPopularBusinesses(8), getBusinessCities(), listDynamicCategories()]);
       setPopular(businesses);
       setCities(cityList);
-      const known = new Set(DEFAULT_CATEGORIES.map((item) => item.slug));
-      const additions = dynamic.flatMap((item: DynamicCategory) => {
-        const slug = canonicalBusinessCategory(item.slug);
-        if (known.has(slug)) return [];
-        known.add(slug);
-        return [{ slug, label: item.label, emoji: item.emoji || "•", tone: "mint" }];
-      });
-      setCategories([...DEFAULT_CATEGORIES, ...additions]);
+      setCategories(mergeCategories(dynamic));
     } catch {
       setErrorMessage("İşletmeler şu anda yüklenemedi. Bağlantını kontrol edip yeniden deneyebilirsin.");
     } finally {
@@ -76,8 +83,9 @@ export function HomeInteractive() {
   }, []);
 
   useEffect(() => {
+    if (initialData) return;
     queueMicrotask(() => { void loadHomepage(); });
-  }, [loadHomepage]);
+  }, [initialData, loadHomepage]);
 
   async function runSearch(params: { searchText: string; category: string; city: string }) {
     setLoading(true); setErrorMessage(null); setSearched(true); setActiveCategory(params.category);
