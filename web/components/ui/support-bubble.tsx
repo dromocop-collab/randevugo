@@ -3,6 +3,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight, Clock3, Headphones, Mail, MessageCircleMore, Phone, X } from "lucide-react";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
+
+const HINT_KEY = "sr_rovi_hint_seen";
 
 const SUPPORT_CHANNELS = [
   {
@@ -35,6 +38,7 @@ export function SupportBubble() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const hasEmbeddedSupport = pathname === "/hesabim";
@@ -55,6 +59,19 @@ export function SupportBubble() {
       setIsOpen(true);
     }
   }, [isOpen, handleClose]);
+
+  // Rovi oturum başına bir kez kendini tanıtır; kısa süre sonra kendiliğinden kaybolur.
+  useEffect(() => {
+    let seen = false;
+    try { seen = window.sessionStorage.getItem(HINT_KEY) === "1"; } catch { /* depolama kapalı olabilir */ }
+    if (seen) return;
+    const show = window.setTimeout(() => {
+      setShowHint(true);
+      try { window.sessionStorage.setItem(HINT_KEY, "1"); } catch { /* depolama kapalı olabilir */ }
+    }, 4_000);
+    const hide = window.setTimeout(() => setShowHint(false), 11_000);
+    return () => { window.clearTimeout(show); window.clearTimeout(hide); };
+  }, []);
 
   // Close on click outside
   useEffect(() => {
@@ -121,20 +138,29 @@ export function SupportBubble() {
         </div>
       )}
 
-      {/* Floating Button */}
+      {/* Rovi tanıtım balonu */}
+      {showHint && !isOpen && (
+        <button type="button" className="rovi-support-hint" onClick={() => { setShowHint(false); setIsOpen(true); }}>
+          <strong>Merhaba, ben Rovi! 👋</strong>
+          <span>Yardım lazım mı? Bana dokun.</span>
+        </button>
+      )}
+
+      {/* Floating Button — canlı Rovi */}
       <button
         ref={btnRef}
-        onClick={handleToggle}
-        className={`support-bubble-btn ${isOpen && !isClosing ? "open" : ""}`}
+        onClick={() => { setShowHint(false); handleToggle(); }}
+        className={`support-bubble-btn support-bubble-btn--rovi ${isOpen && !isClosing ? "open" : ""}`}
         aria-label="Destek"
         aria-expanded={isOpen && !isClosing}
-        title="Bize Ulaşın"
+        title="Rovi'ye sor"
       >
-        {isOpen && !isClosing ? (
-          <X size={25} />
-        ) : (
-          <MessageCircleMore size={26} />
-        )}
+        <span className="rovi-support-disc" aria-hidden="true" />
+        <RoviMascot size={78} mood={isOpen && !isClosing ? "happy" : "idle"} interactive={false} alt="" className="rovi-support-figure" />
+        <span className="rovi-support-badge" aria-hidden="true">
+          {isOpen && !isClosing ? <X size={13} strokeWidth={3} /> : <MessageCircleMore size={13} strokeWidth={2.6} />}
+        </span>
+        <span className="rovi-support-online" aria-hidden="true" />
       </button>
     </>
   );

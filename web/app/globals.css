@@ -30633,3 +30633,30 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 @media (max-width: 760px) { .customer-rail-fade { --rail-fade-left: 24px; --rail-fade-right: 36px } }
 /* Şeridin son kartı ve gölgesi kenarda kesilmesin; yapışma sonda takılmasın. */
 .customer-category-carousel.customer-rail-fade, .customer-business-carousel.customer-rail-fade { scroll-snap-type: inline proximity; scroll-padding-inline: 4px; padding-inline-end: 28px }
+
+/* ── Destek butonu: canlı Rovi (cam dairenin içinden yukarı taşan karakter) ── */
+.support-bubble-btn.support-bubble-btn--rovi { width: 70px; height: 70px; padding: 0; border-radius: 50%; background: transparent; box-shadow: none; animation: none; overflow: visible; }
+.support-bubble-btn.support-bubble-btn--rovi:before { display: none; }
+.support-bubble-btn.support-bubble-btn--rovi:hover { transform: translateY(-3px); box-shadow: none; }
+.support-bubble-btn.support-bubble-btn--rovi.open { transform: none; }
+.support-bubble-btn--rovi .rovi-support-disc { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #2f8a57, #14532d 72%); box-shadow: 0 12px 30px rgb(9 45 29 / .32), 0 0 0 4px rgb(215 255 112 / .22), inset 0 1px 0 rgb(255 255 255 / .22); transition: box-shadow .3s ease; }
+.support-bubble-btn--rovi:hover .rovi-support-disc { box-shadow: 0 16px 36px rgb(9 45 29 / .38), 0 0 0 6px rgb(215 255 112 / .3), inset 0 1px 0 rgb(255 255 255 / .22); }
+.support-bubble-btn--rovi .rovi-support-figure { position: absolute; left: 50%; bottom: 4px; translate: -50% 0; z-index: 1; }
+.support-bubble-btn--rovi .rovi-support-badge { position: absolute; left: -4px; top: -6px; z-index: 2; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #d7ff70; color: #14532d; box-shadow: 0 4px 12px rgb(9 45 29 / .3), 0 0 0 2px #fff; transition: transform .25s cubic-bezier(.2,.8,.2,1.3); }
+.support-bubble-btn--rovi:hover .rovi-support-badge { transform: scale(1.12) rotate(-8deg); }
+.support-bubble-btn--rovi .rovi-support-online { position: absolute; right: 3px; bottom: 3px; z-index: 2; width: 13px; height: 13px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 2.5px #fff; }
+.support-bubble-btn--rovi .rovi-support-online:after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid #22c55e; opacity: 0; animation: roviOnlinePing 2.4s ease-out infinite; }
+@keyframes roviOnlinePing { 0% { transform: scale(.6); opacity: .7; } 100% { transform: scale(1.6); opacity: 0; } }
+.rovi-support-hint { position: fixed; right: 1.5rem; bottom: calc(1.5rem + 96px); z-index: 9999; display: flex; flex-direction: column; gap: 2px; max-width: 220px; padding: 11px 14px; border: 1px solid rgb(20 83 45 / .12); border-radius: 16px 16px 4px 16px; background: #fff; color: #10281d; text-align: left; box-shadow: 0 14px 34px rgb(9 45 29 / .16); cursor: pointer; animation: roviHintIn .45s cubic-bezier(.2,.8,.2,1.2) both; }
+.rovi-support-hint strong { font-size: 13px; }
+.rovi-support-hint span { font-size: 12px; color: #5b6b62; }
+@keyframes roviHintIn { from { opacity: 0; transform: translateY(10px) scale(.9); } }
+:root[data-theme="dark"] .rovi-support-hint { background: #13221a; color: #eef6f0; border-color: rgb(255 255 255 / .08); }
+:root[data-theme="dark"] .rovi-support-hint span { color: #a9bcb0; }
+@media (max-width: 760px) {
+  .support-bubble-btn.support-bubble-btn--rovi { width: 62px; height: 62px; right: 1rem; }
+  .support-bubble-btn--rovi .rovi-support-figure { width: 70px !important; }
+  .rovi-support-hint { right: 1rem; bottom: calc(1rem + 88px); }
+}
+body:has(.cookie-consent) .rovi-support-hint { display: none; }
+@media (prefers-reduced-motion: reduce) { .rovi-support-online:after, .rovi-support-hint { animation: none !important; } }
