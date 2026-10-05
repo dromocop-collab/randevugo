@@ -21,13 +21,14 @@ import { useBusinessContext } from "@/features/businesses/business-context";
 import { listFavoriteBusinesses, removeFavoriteBusiness, type FavoriteBusiness } from "@/features/customers/favorite-repository";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { AvailabilityAlertsPanel } from "@/features/availability/availability-alerts-panel";
+import { CustomerMessagesPanel } from "@/features/support/customer-messages-panel";
 
 interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessPhone:string; serviceId:string; staffId:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number; additionalServices?:Array<{serviceId:string;name:string;price:number;durationMinutes:number}> }
 interface SuspendedBusiness { id: string; name: string; adminNote?: string }
 interface CustomerBenefitPackage { id:string; businessId:string; businessName:string; businessSlug:string; packageName:string; serviceName:string; totalSessions:number; remainingSessions:number; status:string; expiresAt:string|null }
 interface LoyaltyBenefit { id:string; businessId:string; businessName:string; businessSlug:string; points:number; lifetimePoints:number; totalSpent:number }
 interface CustomerBenefitsPayload { packages:CustomerBenefitPackage[]; loyalty:LoyaltyBenefit[]; phoneRequired:boolean }
-type AccountTab = "overview" | "appointments" | "alerts" | "benefits" | "favorites" | "profile";
+type AccountTab = "overview" | "appointments" | "alerts" | "messages" | "benefits" | "favorites" | "profile";
 type AppointmentFilter = "all" | "upcoming" | "history" | "cancelled";
 
 const APPOINTMENT_PAGE_SIZE = 50;
@@ -35,6 +36,7 @@ const ACCOUNT_TABS = [
   {key:"overview",label:"Genel bakış",icon:LayoutDashboard},
   {key:"appointments",label:"Randevularım",icon:CalendarDays},
   {key:"alerts",label:"Müsaitlik Bildirimleri",icon:BellRing},
+  {key:"messages",label:"Mesajlarım",icon:MessageCircleMore},
   {key:"benefits",label:"Paketlerim & Puanlarım",icon:Gift},
   {key:"favorites",label:"Favorilerim",icon:Heart},
   {key:"profile",label:"Hesap ayarları",icon:CircleUserRound},
@@ -369,6 +371,7 @@ export default function CustomerAccountPage() {
           </>}
 
           {tab==="alerts"&&user&&<AvailabilityAlertsPanel uid={user.uid}/>}
+          {tab==="messages"&&user&&<CustomerMessagesPanel uid={user.uid}/>}
 
           {tab==="benefits"&&<>
             <div className="account-section-head"><div><span>PAKETLER VE AVANTAJLAR</span><h2>Kalan hakkınız, puanınız, tek yerde.</h2></div><Link href="/kesfet">Yeni deneyim keşfet <Compass size={15}/></Link></div>

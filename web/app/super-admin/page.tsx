@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, collectionGroup, doc, getDoc, getDocs, limit, query, where, type DocumentData, type Firestore } from "firebase/firestore";
+import { collection, collectionGroup, doc, getCountFromServer, getDoc, getDocs, limit, query, Timestamp, where, type DocumentData, type Firestore, type Query } from "firebase/firestore";
 import {
   Activity, AlertTriangle, ArrowRight, Building2, CalendarDays, CheckCircle2,
   Clock3, Download, Headphones, RefreshCw, ShieldAlert, Sparkles, TrendingUp,
@@ -60,6 +60,44 @@ async function readBusinessSubscriptions(db: Firestore, businessIds: string[]): 
   return settled.flatMap((result) => result.status === "fulfilled" && result.value.exists() ? [result.value] : []);
 }
 
+type AppointmentCounts = { total: number; last7: number; last30: number; completed: number; cancelled: number; noShow: number };
+const COUNTED_STATUSES = ["pending", "confirmed", "completed", "cancelled", "no_show"];
+
+function countAppointmentDocs(docs: DataDoc[], sevenDaysAgo: number, thirtyDaysAgo: number): AppointmentCounts {
+  const counts: AppointmentCounts = { total: 0, last7: 0, last30: 0, completed: 0, cancelled: 0, noShow: 0 };
+  docs.forEach((item) => {
+    const data = item.data(); const status = String(data.status ?? "");
+    if (!COUNTED_STATUSES.includes(status)) return;
+    counts.total++;
+    if (status === "completed") counts.completed++;
+    if (status === "cancelled") counts.cancelled++;
+    if (status === "no_show") counts.noShow++;
+    const appointmentDate = dateFrom(data.startAt) ?? dateFrom(data.createdAt);
+    if (appointmentDate && appointmentDate.getTime() >= thirtyDaysAgo) counts.last30++;
+    if (appointmentDate && appointmentDate.getTime() >= sevenDaysAgo) counts.last7++;
+  });
+  return counts;
+}
+
+// Tüm randevu belgelerini indirmek yerine sunucu tarafı sayım kullanılır; index yoksa eski okuma yoluna düşer.
+async function loadAppointmentCounts(db: Firestore, businessIds: string[], sevenDaysAgo: number, thirtyDaysAgo: number): Promise<AppointmentCounts> {
+  const group = collectionGroup(db, "appointments");
+  const count = (target: Query) => getCountFromServer(target).then((snapshot) => snapshot.data().count);
+  try {
+    const [total, completed, cancelled, noShow, last30, last7] = await Promise.all([
+      count(query(group, where("status", "in", COUNTED_STATUSES))),
+      count(query(group, where("status", "==", "completed"))),
+      count(query(group, where("status", "==", "cancelled"))),
+      count(query(group, where("status", "==", "no_show"))),
+      count(query(group, where("startAt", ">=", Timestamp.fromMillis(thirtyDaysAgo)))),
+      count(query(group, where("startAt", ">=", Timestamp.fromMillis(sevenDaysAgo)))),
+    ]);
+    return { total, completed, cancelled, noShow, last30, last7 };
+  } catch {
+    return countAppointmentDocs(await readBusinessChildren(db, businessIds, "appointments"), sevenDaysAgo, thirtyDaysAgo);
+  }
+}
+
 async function withFallback(primary: Promise<{ docs: DataDoc[] }>, fallback: () => Promise<DataDoc[]>): Promise<DataDoc[]> {
   try { return (await primary).docs; }
   catch { return fallback(); }
@@ -84,13 +122,13 @@ export default function SuperAdminDashboard() {
       setLoading(false);
       return;
     }
+    const now = Date.now(); const sevenDaysAgo = now - 7 * 86_400_000; const thirtyDaysAgo = now - 30 * 86_400_000;
+    const appointmentCountsRequest = loadAppointmentCounts(db, businessIds, sevenDaysAgo, thirtyDaysAgo);
+    const userCountRequest = getCountFromServer(collection(db, "users")).then((snapshot) => snapshot.data().count);
     const requests = {
+      users: userCountRequest.then((): DataDoc[] => []),
       businesses: Promise.resolve(businessDocs),
-      users: getDocs(collection(db, "users")).then((snapshot) => snapshot.docs),
-      appointments: withFallback(
-        getDocs(query(collectionGroup(db, "appointments"), where("status", "in", ["pending", "confirmed", "completed", "cancelled", "no_show"]))),
-        () => readBusinessChildren(db, businessIds, "appointments"),
-      ),
+      appointments: appointmentCountsRequest.then((): DataDoc[] => []),
       subscriptions: withFallback(
         getDocs(collection(db, "subscriptions")),
         () => readBusinessSubscriptions(db, businessIds),
@@ -110,9 +148,8 @@ export default function SuperAdminDashboard() {
       const docs = (key: SourceKey): DataDoc[] => result[key].status === "fulfilled" ? result[key].value : [];
       if (!Object.values(sourceHealth).some(Boolean)) throw new Error("Platform verilerine erişilemedi.");
 
-      const businesses = docs("businesses"); const appointments = docs("appointments");
+      const businesses = docs("businesses");
       const subscriptions = docs("subscriptions"); const supportTickets = docs("support");
-      const now = Date.now(); const sevenDaysAgo = now - 7 * 86_400_000; const thirtyDaysAgo = now - 30 * 86_400_000;
       let activeBusinesses = 0, suspendedBusinesses = 0, pendingBusinesses = 0;
       businesses.forEach((item) => {
         const data = item.data(); const status = String(data.status ?? "");
@@ -120,16 +157,8 @@ export default function SuperAdminDashboard() {
         else if (status === "pending_review" || data.approvalStatus === "pending") pendingBusinesses++;
         else if (status === "active") activeBusinesses++;
       });
-      let appointmentsLast7Days = 0, appointmentsLast30Days = 0, completedAppointments = 0, cancelledAppointments = 0, noShowAppointments = 0;
-      appointments.forEach((item) => {
-        const data = item.data(); const status = String(data.status ?? "");
-        if (status === "completed") completedAppointments++;
-        if (status === "cancelled") cancelledAppointments++;
-        if (status === "no_show") noShowAppointments++;
-        const appointmentDate = dateFrom(data.startAt) ?? dateFrom(data.createdAt);
-        if (appointmentDate && appointmentDate.getTime() >= thirtyDaysAgo) appointmentsLast30Days++;
-        if (appointmentDate && appointmentDate.getTime() >= sevenDaysAgo) appointmentsLast7Days++;
-      });
+      const appointmentCounts = await appointmentCountsRequest.catch(() => ({ total: 0, last7: 0, last30: 0, completed: 0, cancelled: 0, noShow: 0 }));
+      const { last7: appointmentsLast7Days, last30: appointmentsLast30Days, completed: completedAppointments, cancelled: cancelledAppointments, noShow: noShowAppointments } = appointmentCounts;
       let trialingBusinesses = 0, subscribedBusinesses = 0, pastDueSubscriptions = 0;
       subscriptions.forEach((item) => {
         const status = String(item.data().status ?? "");
@@ -139,7 +168,7 @@ export default function SuperAdminDashboard() {
       });
       setStats({
         totalBusinesses: businesses.length, activeBusinesses, suspendedBusinesses, pendingBusinesses,
-        totalUsers: docs("users").length, totalAppointments: appointments.length, appointmentsLast7Days, appointmentsLast30Days,
+        totalUsers: await userCountRequest.catch(() => 0), totalAppointments: appointmentCounts.total, appointmentsLast7Days, appointmentsLast30Days,
         completedAppointments, cancelledAppointments, noShowAppointments, trialingBusinesses, subscribedBusinesses, pastDueSubscriptions,
         openSupportTickets: supportTickets.length,
         criticalSupportTickets: supportTickets.filter((item) => ["critical", "high"].includes(String(item.data().priority))).length,

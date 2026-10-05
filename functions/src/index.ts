@@ -28,6 +28,8 @@ const auth = getAuth();
 const messaging = getMessaging();
 const storage = getStorage();
 const GLOBAL_PUSH_TOPIC = "senin_randevun_all";
+// Gece yarısını geçen randevular önceki gün başlar; çakışma sorguları bu kadar geriye bakar.
+const OVERLAP_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const MUTLUCELL_USERNAME = defineSecret("MUTLUCELL_USERNAME");
 const MUTLUCELL_API_KEY = defineSecret("MUTLUCELL_API_KEY");
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
@@ -2305,7 +2307,12 @@ function overlaps(start: number, end: number, blocked: AppointmentWindow): boole
   return start < blocked.end && blocked.start < end;
 }
 
-async function loadBookingContext(businessId: string, serviceId: string, staffId: string | null) {
+async function loadBookingContext(
+  businessId: string,
+  serviceId: string,
+  staffId: string | null,
+  options: { managerAction?: boolean } = {}
+) {
   const businessRef = db.doc(`businesses/${businessId}`);
   const serviceRef = db.doc(`businesses/${businessId}/services/${serviceId}`);
   const staffRef = staffId ? db.doc(`businesses/${businessId}/staff/${staffId}`) : null;
@@ -2319,11 +2326,17 @@ async function loadBookingContext(businessId: string, serviceId: string, staffId
 
   if (!businessSnap.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
   const business = businessSnap.data()!;
-  if (business.isPublished !== true || business.status !== "active" || business.isSuspended === true) {
-    throw new HttpsError("failed-precondition", "İşletme şu anda online randevu kabul etmiyor.");
-  }
-  if (!serviceSnap.exists || serviceSnap.data()?.isActive !== true || serviceSnap.data()?.isBookableOnline !== true) {
-    throw new HttpsError("failed-precondition", "Hizmet online randevuya açık değil.");
+  // İşletme yöneticisi mevcut bir randevuyu taşırken online yayın/rezervasyon ayarları engel olmamalı.
+  if (options.managerAction) {
+    if (business.isSuspended === true) throw new HttpsError("failed-precondition", "İşletme askıya alınmış.");
+    if (!serviceSnap.exists) throw new HttpsError("failed-precondition", "Randevunun hizmeti artık mevcut değil.");
+  } else {
+    if (business.isPublished !== true || business.status !== "active" || business.isSuspended === true) {
+      throw new HttpsError("failed-precondition", "İşletme şu anda online randevu kabul etmiyor.");
+    }
+    if (!serviceSnap.exists || serviceSnap.data()?.isActive !== true || serviceSnap.data()?.isBookableOnline !== true) {
+      throw new HttpsError("failed-precondition", "Hizmet online randevuya açık değil.");
+    }
   }
   if (staffId && (!staffSnap?.exists || staffSnap.data()?.isActive !== true)) {
     throw new HttpsError("failed-precondition", "Çalışan aktif değil.");
@@ -2434,7 +2447,7 @@ function effectiveSchedule(
 
 async function appointmentWindows(businessId: string, dayStart: number, dayEnd: number, staffId: string | null): Promise<AppointmentWindow[]> {
   const snapshot = await db.collection(`businesses/${businessId}/appointments`)
-    .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+    .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS))
     .where("startAt", "<", Timestamp.fromMillis(dayEnd))
     .get();
   return snapshot.docs.flatMap((item) => {
@@ -2689,9 +2702,10 @@ export const rescheduleAppointment = onCall(
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     const appointmentId = requireString(data.appointmentId, "appointmentId");
-    const staffId = requireString(data.staffId, "staffId");
+    const requestedStaffId = typeof data.staffId === "string" && data.staffId.trim() ? data.staffId.trim() : null;
     const startAtMillis = Number(data.startAtMillis);
     if (!Number.isFinite(startAtMillis)) throw new HttpsError("invalid-argument", "Yeni randevu saati geçersiz.");
+    if (startAtMillis < Date.now() - 60_000) throw new HttpsError("failed-precondition", "Randevu geçmiş bir saate taşınamaz.");
     await requireBusinessManager(uid, businessId);
 
     const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
@@ -2702,7 +2716,9 @@ export const rescheduleAppointment = onCall(
       throw new HttpsError("failed-precondition", "Yalnızca aktif randevular yeniden planlanabilir.");
     }
     const serviceId = requireString(appointment.serviceId, "serviceId");
-    const context = await loadBookingContext(businessId, serviceId, staffId);
+    // Çalışan seçilmezse mevcut atama korunur; çalışansız işletmelerde boş kalır.
+    const staffId = requestedStaffId ?? (typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null);
+    const context = await loadBookingContext(businessId, serviceId, staffId, { managerAction: true });
     // Preserve the complete appointment duration when extra services were added.
     const durationMinutes = normalizedBookingDuration(
       appointment.serviceDurationMinutes ?? context.service.durationMinutes
@@ -2719,7 +2735,7 @@ export const rescheduleAppointment = onCall(
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const dayEnd = zonedTimeToMillis(nextDay.toISOString().slice(0, 10), 0, timeZone);
     const conflicts = db.collection(`businesses/${businessId}/appointments`)
-      .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+      .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS))
       .where("startAt", "<", Timestamp.fromMillis(dayEnd));
     const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
@@ -2735,7 +2751,7 @@ export const rescheduleAppointment = onCall(
         if (item.id === appointmentId) return false;
         const row = item.data();
         if (!["pending", "confirmed"].includes(String(row.status))) return false;
-        if (row.staffId && row.staffId !== staffId) return false;
+        if (staffId && row.staffId && row.staffId !== staffId) return false;
         const existingStart = row.startAt as Timestamp | undefined;
         const existingEnd = row.endAt as Timestamp | undefined;
         return !!existingStart && !!existingEnd
@@ -2746,7 +2762,7 @@ export const rescheduleAppointment = onCall(
       tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
         updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEnd + 7 * 86_400_000) }, { merge: true });
       tx.update(appointmentRef, {
-        staffId,
+        ...(staffId ? { staffId } : {}),
         staffName: String(context.staff?.fullName ?? context.business.name ?? "İşletme"),
         startAt,
         endAt,
@@ -3063,7 +3079,7 @@ export const getAvailableDates = onCall(
     const rangeStart = zonedTimeToMillis(startDate, 0, timeZone);
     const rangeEnd = zonedTimeToMillis(addDaysToDateKey(effectiveEndDate, 1), 0, timeZone);
     const appointmentSnapshot = await db.collection(`businesses/${businessId}/appointments`)
-      .where("startAt", ">=", Timestamp.fromMillis(rangeStart))
+      .where("startAt", ">=", Timestamp.fromMillis(rangeStart - OVERLAP_LOOKBACK_MS))
       .where("startAt", "<", Timestamp.fromMillis(rangeEnd))
       .get();
     const activeAppointments = appointmentSnapshot.docs.flatMap((document) => {
@@ -3217,7 +3233,7 @@ export const createAppointment = onCall(
     }
 
     const conflictQuery = appointments
-      .where("startAt", ">=", Timestamp.fromMillis(dayStartMs))
+      .where("startAt", ">=", Timestamp.fromMillis(dayStartMs - OVERLAP_LOOKBACK_MS))
       .where("startAt", "<", Timestamp.fromMillis(dayEndMs));
     const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
@@ -3362,7 +3378,7 @@ export const createDashboardAppointment = onCall(
     const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
     const appointments = db.collection(`businesses/${businessId}/appointments`);
     const conflictQuery = appointments
-      .where("startAt", ">=", Timestamp.fromMillis(dayStartMs))
+      .where("startAt", ">=", Timestamp.fromMillis(dayStartMs - OVERLAP_LOOKBACK_MS))
       .where("startAt", "<", Timestamp.fromMillis(dayEndMs));
     const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
@@ -3481,7 +3497,7 @@ export const updateAppointmentServices = onCall(
       const lockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${local.dateKey}`);
       const [lock, sameDay] = await Promise.all([
         tx.get(lockRef),
-        tx.get(appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs)).where("startAt", "<", Timestamp.fromMillis(dayEndMs))),
+        tx.get(appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs - OVERLAP_LOOKBACK_MS)).where("startAt", "<", Timestamp.fromMillis(dayEndMs))),
       ]);
       const staffId = String(appointment.staffId ?? "");
       const conflict = sameDay.docs.some((doc) => {
@@ -3554,7 +3570,7 @@ export const updateDashboardAppointment = onCall(
     const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
     const appointments = db.collection(`businesses/${businessId}/appointments`);
     const appointmentRef = appointments.doc(appointmentId);
-    const conflictQuery = appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs)).where("startAt", "<", Timestamp.fromMillis(dayEndMs));
+    const conflictQuery = appointments.where("startAt", ">=", Timestamp.fromMillis(dayStartMs - OVERLAP_LOOKBACK_MS)).where("startAt", "<", Timestamp.fromMillis(dayEndMs));
     const bookingLockRef = db.doc(`businesses/${businessId}/bookingDayLocks/${selectedLocal.dateKey}`);
 
     await db.runTransaction(async (tx) => {
@@ -3757,6 +3773,128 @@ export const getAppointmentByPublicToken = onCall(
   }
 );
 
+// ── Randevu push bildirimleri (SMS'ten bağımsız; uygulaması olan müşteri/işletme için) ──
+async function businessRecipientIds(businessId: string, business: FirebaseFirestore.DocumentData, staffId: string | null) {
+  const members = await db.collection(`businesses/${businessId}/members`).limit(200).get();
+  const ids = new Set<string>();
+  if (typeof business.ownerUid === "string" && business.ownerUid) ids.add(business.ownerUid);
+  members.docs.forEach((member) => {
+    const data = member.data();
+    if (data.isActive === false || data.status === "removed") return;
+    const role = String(data.role ?? "");
+    if (["owner", "admin", "manager"].includes(role)) ids.add(member.id);
+    else if (role === "staff" && staffId && String(data.staffId ?? "") === staffId) ids.add(member.id);
+  });
+  return [...ids];
+}
+
+async function pushToUsers(userIds: string[], title: string, body: string, data: Record<string, string>, collapseId?: string) {
+  try {
+    const tokens = await tokensForUsers(userIds);
+    if (tokens.length === 0) return;
+    await sendTokenBatches(tokens, title, body, data, collapseId);
+  } catch (error) {
+    // Push hatası randevu akışını (SMS, CRM, otomasyon) asla bozmamalı.
+    console.warn("Appointment push failed", { kind: data.kind, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+type AppointmentPushEvent = "created" | "confirmed" | "cancelled" | "rescheduled" | "reminder";
+
+async function sendAppointmentPush(
+  businessId: string,
+  appointmentId: string,
+  appointment: FirebaseFirestore.DocumentData,
+  event: AppointmentPushEvent,
+  businessData?: FirebaseFirestore.DocumentData
+) {
+  const business = businessData ?? (await db.doc(`businesses/${businessId}`).get()).data() ?? {};
+  const startAt = appointment.startAt as Timestamp | undefined;
+  const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+  const dateText = startAt ? appointmentSmsDate(startAt, timeZone) : "";
+  const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
+  const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
+  const customerName = String(appointment.customerName ?? "Müşteri").trim().slice(0, 70);
+  const staffId = typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null;
+  const customerId = typeof appointment.customerId === "string" ? appointment.customerId : "";
+  const cancelledByCustomer = appointment.cancelledBy === "customer";
+  const data = { businessId, appointmentId, route: "appointment" };
+  const tasks: Promise<void>[] = [];
+  const toBusiness = (title: string, body: string, kind: string) => tasks.push(
+    businessRecipientIds(businessId, business, staffId)
+      .then((ids) => pushToUsers(ids.filter((id) => id !== customerId && id !== appointment.createdByUid), title, body, { ...data, kind, audience: "business" }, `${appointmentId}-${kind}`)));
+  const toCustomer = (title: string, body: string, kind: string) => {
+    if (customerId) tasks.push(pushToUsers([customerId], title, body, { ...data, kind, audience: "customer" }, `${appointmentId}-${kind}`));
+  };
+
+  if (event === "created") {
+    // Müşteri kendi aldığı randevuyu ekranda zaten gördü; bildirim işletme ekibine gider (oluşturan hariç).
+    toBusiness("Yeni randevu", `${customerName} • ${serviceName} • ${dateText}`, "appointment_created");
+  } else if (event === "confirmed") {
+    toCustomer("Randevunuz onaylandı", `${businessName} • ${serviceName} • ${dateText}`, "appointment_confirmed");
+  } else if (event === "cancelled") {
+    if (cancelledByCustomer) toBusiness("Randevu iptal edildi", `${customerName} • ${serviceName} • ${dateText}`, "appointment_cancelled");
+    else toCustomer("Randevunuz iptal edildi", `${businessName} • ${serviceName} • ${dateText}`, "appointment_cancelled");
+  } else if (event === "rescheduled") {
+    toCustomer("Randevu saatiniz değişti", `${businessName} • ${serviceName} • Yeni: ${dateText}`, "appointment_rescheduled");
+    toBusiness("Randevu saati değişti", `${customerName} • ${serviceName} • ${dateText}`, "appointment_rescheduled");
+  } else if (event === "reminder") {
+    toCustomer("Randevunuza 1 saat kaldı", `${businessName} • ${serviceName} • ${dateText}`, "appointment_reminder");
+    toBusiness("1 saat sonra randevu", `${customerName} • ${serviceName} • ${dateText}`, "appointment_reminder");
+  }
+  await Promise.all(tasks);
+}
+
+function appointmentPushReminderRef(businessId: string, appointmentId: string) {
+  const id = createHash("sha256").update(`${businessId}:${appointmentId}:push-reminder`).digest("hex").slice(0, 40);
+  return db.doc(`appointmentPushJobs/${id}`);
+}
+
+/** Aktif randevu için 1 saat önce push hatırlatma işi kurar; artık geçerli değilse siler. */
+async function syncAppointmentPushReminder(businessId: string, appointmentId: string, appointment: FirebaseFirestore.DocumentData) {
+  const ref = appointmentPushReminderRef(businessId, appointmentId);
+  const startAt = appointment.startAt as Timestamp | undefined;
+  const remindAt = startAt ? startAt.toMillis() - 60 * 60_000 : 0;
+  const alreadySent = startAt && (appointment.push as Record<string, Record<string, unknown>> | undefined)?.reminder?.forStartAt === startAt.toMillis();
+  if (!startAt || alreadySent || !["pending", "confirmed"].includes(String(appointment.status)) || remindAt <= Date.now() + 5 * 60_000) {
+    await ref.delete();
+    return;
+  }
+  await ref.set({
+    businessId, appointmentId, forStartAt: startAt.toMillis(),
+    scheduledAt: Timestamp.fromMillis(remindAt),
+    expiresAt: Timestamp.fromMillis(startAt.toMillis() + 86_400_000),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+export const sendAppointmentPushReminders = onSchedule(
+  { region: "europe-west1", schedule: "every 5 minutes", timeZone: "Europe/Istanbul", maxInstances: 1 },
+  async () => {
+    const due = await db.collection("appointmentPushJobs")
+      .where("scheduledAt", "<=", Timestamp.now()).orderBy("scheduledAt", "asc").limit(200).get();
+    for (const job of due.docs) {
+      const { businessId, appointmentId, forStartAt } = job.data();
+      // İşi önce silmek, eşzamanlı çalışmada çift bildirimi engeller.
+      const claimed = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(job.ref);
+        if (!fresh.exists) return false;
+        tx.delete(job.ref);
+        return true;
+      });
+      if (!claimed) continue;
+      const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+      const appointmentSnap = await appointmentRef.get();
+      const appointment = appointmentSnap.data();
+      const startAt = appointment?.startAt as Timestamp | undefined;
+      if (!appointment || !startAt || startAt.toMillis() !== forStartAt) continue;
+      if (!["pending", "confirmed"].includes(String(appointment.status)) || startAt.toMillis() <= Date.now()) continue;
+      await appointmentRef.update({ "push.reminder.forStartAt": forStartAt, "push.reminder.sentAt": FieldValue.serverTimestamp() });
+      await sendAppointmentPush(String(businessId), String(appointmentId), appointment, "reminder");
+    }
+  }
+);
+
 export const appointmentCreated = onDocumentCreated(
   {
     region: "europe-west1",
@@ -3769,6 +3907,19 @@ export const appointmentCreated = onDocumentCreated(
 
     const { businessId, appointmentId } = event.params;
     const appointment = snapshot.data();
+
+    // Tetikleyiciler "en az bir kez" çalışır: aynı randevu ikinci kez işlenirse bildirim, CRM sayacı
+    // ve onay SMS'i çift oluyordu. İlk çalışma bir alındı kaydı oluşturur; varsa çıkılır.
+    try {
+      await db.doc(`triggerReceipts/appointmentCreated_${businessId}_${appointmentId}`).create({
+        businessId, appointmentId, eventId: event.id,
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+      });
+    } catch (error) {
+      if ((error as { code?: number }).code === 6) return; // ALREADY_EXISTS
+      throw error;
+    }
 
     await db
       .collection(`businesses/${businessId}/notifications`)
@@ -3813,6 +3964,8 @@ export const appointmentCreated = onDocumentCreated(
       incrementAppointments: true,
     });
 
+    await sendAppointmentPush(businessId, appointmentId, appointment, "created");
+    await syncAppointmentPushReminder(businessId, appointmentId, appointment);
     await enqueueAppointmentSmsJobs(businessId, appointmentId, appointment);
     await processAppointmentSmsJob(appointmentSmsJobRef(businessId, appointmentId, "confirmation"));
     await runBusinessAutomations(businessId, "appointment_created", event.id, { ...appointment, appointmentId });
@@ -3833,6 +3986,14 @@ export const appointmentAutomationUpdated = onDocumentUpdated(
     const afterStart = after.startAt instanceof Timestamp ? after.startAt.toMillis() : 0;
     if (beforeStart !== afterStart || before.customerPhone !== after.customerPhone || before.status !== after.status) {
       await syncAppointmentReminderJob(event.params.businessId, event.params.appointmentId, after);
+      await syncAppointmentPushReminder(event.params.businessId, event.params.appointmentId, after);
+    }
+    if (before.status !== "cancelled" && after.status === "cancelled") {
+      await sendAppointmentPush(event.params.businessId, event.params.appointmentId, after, "cancelled");
+    } else if (beforeStart !== afterStart && ["pending", "confirmed"].includes(String(after.status))) {
+      await sendAppointmentPush(event.params.businessId, event.params.appointmentId, after, "rescheduled");
+    } else if (before.status === "pending" && after.status === "confirmed") {
+      await sendAppointmentPush(event.params.businessId, event.params.appointmentId, after, "confirmed");
     }
     if (before.status !== "cancelled" && after.status === "cancelled") {
       await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "cancellation");
@@ -4250,6 +4411,14 @@ function appointmentSmsDate(value: Timestamp, timeZone: string): string {
   }).format(value.toDate());
 }
 
+/** Bu başlangıç saati için hatırlatma zaten gönderildi mi? (Eski kayıtlarda forStartAt yoksa gönderilmiş sayılır.) */
+function reminderAlreadySent(appointment: FirebaseFirestore.DocumentData, startAtMillis: number): boolean {
+  const reminder = (appointment.sms as Record<string, Record<string, unknown>> | undefined)?.reminder;
+  if (!reminder || reminder.status !== "sent") return false;
+  const forStartAt = typeof reminder.forStartAt === "number" ? reminder.forStartAt : null;
+  return forStartAt === null || forStartAt === startAtMillis;
+}
+
 async function enqueueAppointmentSmsJobs(
   businessId: string,
   appointmentId: string,
@@ -4275,11 +4444,15 @@ async function enqueueAppointmentSmsJobs(
     type: "confirmation",
     scheduledAt: Timestamp.now(),
   }, { merge: true });
-  batch.set(appointmentSmsJobRef(businessId, appointmentId, "reminder"), {
-    ...base,
-    type: "reminder",
-    scheduledAt: Timestamp.fromMillis(startAt.toMillis() - 60 * 60_000),
-  }, { merge: true });
+  // 1 saatten az kalmışsa hatırlatma kurulmaz (onay SMS'i ile aynı anda ikinci mesaj gitmesin).
+  const reminderAt = startAt.toMillis() - 60 * 60_000;
+  if (reminderAt > Date.now() + 5 * 60_000) {
+    batch.set(appointmentSmsJobRef(businessId, appointmentId, "reminder"), {
+      ...base,
+      type: "reminder",
+      scheduledAt: Timestamp.fromMillis(reminderAt),
+    }, { merge: true });
+  }
   await batch.commit();
 }
 
@@ -4316,6 +4489,12 @@ async function syncAppointmentReminderJob(
   const startAt = appointment.startAt as Timestamp | undefined;
   const phone = typeof appointment.customerPhone === "string" ? appointment.customerPhone : "";
   if (!startAt || !phone || !["pending", "confirmed"].includes(String(appointment.status))) {
+    await ref.delete();
+    return;
+  }
+  // Aynı saat için zaten hatırlatıldıysa ya da 1 saatten az kaldıysa yeniden kurulmaz
+  // (durum değişikliği hatırlatmayı tekrar gönderiyordu).
+  if (reminderAlreadySent(appointment, startAt.toMillis()) || startAt.toMillis() - 60 * 60_000 <= Date.now() + 5 * 60_000) {
     await ref.delete();
     return;
   }
@@ -4379,6 +4558,10 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       return;
     }
 
+    if (type === "reminder" && reminderAlreadySent(appointment, startAt.toMillis())) {
+      await ref.delete();
+      return;
+    }
     if (type === "reminder") {
       const intendedAt = startAt.toMillis() - 60 * 60_000;
       if (intendedAt > Date.now() + 30_000) {
@@ -4421,6 +4604,7 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       [`sms.${type}.status`]: "sent",
       [`sms.${type}.providerMessageId`]: providerMessageId,
       [`sms.${type}.sentAt`]: FieldValue.serverTimestamp(),
+      ...(type === "reminder" ? { "sms.reminder.forStartAt": startAt.toMillis() } : {}),
     });
     batch.set(logRef, {
       businessId, appointmentId, type, packetId, providerMessageId,
@@ -5587,7 +5771,7 @@ async function readLiveWaitInput(businessId: string, now: number): Promise<WaitI
     queueEntries(businessId).where("status", "in", ACTIVE_QUEUE_STATUSES as unknown as string[])
       .orderBy("joinedAt", "asc").limit(201).get(),
     db.collection(`businesses/${businessId}/appointments`)
-      .where("startAt", ">=", Timestamp.fromMillis(dayStart)).where("startAt", "<", Timestamp.fromMillis(dayEnd))
+      .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS)).where("startAt", "<", Timestamp.fromMillis(dayEnd))
       .limit(501).get(),
   ]);
   if (services.size > 100 || staff.size > 100 || activeQueue.size > 200 || appointments.size > 500) return null;
@@ -6786,7 +6970,7 @@ export const transitionQueueEntry = onCall(protectedCallableOptions, async (requ
           throw new HttpsError("failed-precondition", "Hizmet çalışma saatleri içinde tamamlanamaz.");
         }
         const appointmentQuery = db.collection(`businesses/${businessId}/appointments`)
-          .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+          .where("startAt", ">=", Timestamp.fromMillis(dayStart - OVERLAP_LOOKBACK_MS))
           .where("startAt", "<", Timestamp.fromMillis(dayEnd));
         const appointments = await tx.get(appointmentQuery);
         const collision = appointments.docs.some((item) => {
