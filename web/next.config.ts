@@ -49,6 +49,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const fn = "https://europe-west1-randevugo-d1d2e.cloudfunctions.net/appointmentPass";
     return [
+      { source: "/.well-known/apple-app-site-association", destination: "/api/apple-app-site-association" },
+      { source: "/.well-known/assetlinks.json", destination: "/api/assetlinks" },
       { source: "/api/randevu/:token/takvim.ics", destination: `${fn}?token=:token&kind=ics` },
       { source: "/api/randevu/:token/cuzdan.pkpass", destination: `${fn}?token=:token&kind=pkpass` },
     ];
