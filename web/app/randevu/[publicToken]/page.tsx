@@ -19,6 +19,7 @@ import { RescheduleDialog } from "@/features/appointments/reschedule-dialog";
 import { appointmentChangeError, manageAppointmentByToken } from "@/features/appointments/appointment-change";
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import type { Appointment } from "@/types/appointments";
+import { formatCustomFieldValue, parseCustomFieldValues } from "@/features/booking-fields/booking-fields-domain";
 import type { PublicAppointmentPolicy } from "@/types/appointment-change";
 import { BottomSheet } from "@/components/booking/booking-parts";
 import bookingStyles from "@/components/booking/booking.module.css";
@@ -111,6 +112,7 @@ export default function AppointmentDetailPage() {
   const date=start.toLocaleDateString("tr-TR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
   const time=`${start.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}${Number.isNaN(end.getTime())?"":` — ${end.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}`}`;
   const additional=appointment.additionalServices??[];
+  const customFieldRows=parseCustomFieldValues(appointment.customFields);
   const serviceSummary=[appointment.serviceName,...additional.map(service=>service.name)].filter(Boolean).join(" + ")||"Belirtilmedi";
   // Backend servicePrice / serviceDurationMinutes ek hizmetler dahil TOPLAM değerleri tutar
   // (updateAppointmentServices: servicePrice = ana hizmet + ek hizmetler). Ana hizmet payı farktan bulunur.
@@ -173,6 +175,7 @@ export default function AppointmentDetailPage() {
             </ul>
           </div>}
           {appointment.notes&&<div className={styles.block}><span className={styles.blockTitle}>Randevu notunuz</span><p className={styles.note}>{appointment.notes}</p></div>}
+          {customFieldRows.length>0&&<div className={styles.block}><span className={styles.blockTitle}>Ek bilgiler</span><dl className={styles.extraList}>{customFieldRows.map((row,index)=><div key={`${row.id}-${index}`} className={styles.extraRow}><dt>{row.label}</dt><dd>{formatCustomFieldValue(row.value,row.type)}</dd></div>)}</dl></div>}
           <div className={styles.perforation} aria-hidden="true"/>
           <div className={styles.stub}>
             <Barcode seed={params.publicToken||appointment.id||"randevu"}/>

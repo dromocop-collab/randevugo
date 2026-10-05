@@ -17,7 +17,8 @@ const ThemeContext = createContext<ThemeContextValue>({
 const STORAGE_KEY = "randevugo-theme";
 
 function resolveBrowserTheme(): Theme {
-  const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
+  let stored: Theme | null = null;
+  try { stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null; } catch { /* depolama kapalı olabilir */ }
   if (stored === "light" || stored === "dark") return stored;
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -35,12 +36,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
+  // Tercih yalnızca kullanıcı temayı değiştirince kaydedilir; ilk açılıştaki varsayılan "light"
+  // kayıtlı "dark" tercihinin üzerine yazmasın (sayfa yenilenince karanlık tema kayboluyordu).
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === "light" ? "dark" : "light";
+      try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* depolama kapalı olabilir */ }
       return next;
     });
   };

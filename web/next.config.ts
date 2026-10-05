@@ -40,7 +40,6 @@ const nextConfig: NextConfig = {
       "/ios": "/mobil-uygulama",
       "/android": "/mobil-uygulama",
       "/uygulama": "/mobil-uygulama",
-      "/kategoriler": "/kesfet",
       "/magazalar": "/kesfet",
       "/randevularim": "/hesabim",
     };

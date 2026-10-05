@@ -8,7 +8,6 @@ const ALIASES: Record<string, string> = {
   ios: "/mobil-uygulama",
   android: "/mobil-uygulama",
   uygulama: "/mobil-uygulama",
-  kategoriler: "/kesfet",
   magazalar: "/kesfet",
   randevularim: "/hesabim",
 };

@@ -154,6 +154,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       alternates: alternates(`${baseUrl}/kesfet`),
     },
     {
+      url: `${baseUrl}/kategoriler`,
+      lastModified: STATIC_LAST_MODIFIED,
+      changeFrequency: "daily",
+      priority: 0.88,
+      alternates: alternates(`${baseUrl}/kategoriler`),
+      images: Object.values(CATEGORY_IMAGES).slice(0, 4).map((image) => xmlSafeUrl(`${baseUrl}${image}`)),
+    },
+    {
       url: `${baseUrl}/fiyatlar`,
       lastModified: STATIC_LAST_MODIFIED,
       changeFrequency: "monthly",

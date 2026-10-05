@@ -51,6 +51,7 @@ function toRow(item: QueryDocumentSnapshot): AlertRow {
 function alertLink(alert: AlertRow): { href: string; label: string } | null {
   if (alert.category === "review") return { href: "/super-admin/moderasyon", label: "Moderasyona git" };
   if (alert.category === "sms") return { href: "/super-admin/sms", label: "SMS merkezini aç" };
+  if (alert.category === "booking_fields") return { href: "/super-admin/randevu-alanlari", label: "Talebi incele" };
   if (alert.category === "support") return { href: "/super-admin/destek", label: "Desteği aç" };
   if (alert.category === "subscription") return { href: "/super-admin/abonelikler", label: "Abonelikleri aç" };
   if (alert.businessId) return { href: `/super-admin/isletmeler?q=${encodeURIComponent(alert.businessId)}`, label: "İşletmeyi aç" };

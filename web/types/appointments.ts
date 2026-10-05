@@ -50,6 +50,15 @@ export interface Appointment extends EntityBase {
   /** Müşterinin kendi yaptığı saat değişikliği sayısı (sunucu en fazla 3'e izin verir). */
   rescheduleCount?: number;
   lastRescheduledBy?: "customer" | "business";
+  /** İşletmenin onaylı ek randevu alanlarına verilen yanıtlar. */
+  customFields?: AppointmentCustomFieldValue[];
+}
+
+export interface AppointmentCustomFieldValue {
+  id: string;
+  label: string;
+  type: "number" | "select" | "text" | "textarea" | "checkbox";
+  value: string | number | boolean;
 }
 
 export interface AppointmentCreateInput {
@@ -61,6 +70,8 @@ export interface AppointmentCreateInput {
   customerEmail?: string;
   notes?: string;
   startAtMillis: number;
+  /** Ek alan değerleri (alan id → değer). Gönderildiğinde sunucu zorunlu alanları denetler. */
+  customFields?: Record<string, string | number | boolean>;
 }
 
 export interface DashboardAppointmentCreateInput {

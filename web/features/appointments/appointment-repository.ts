@@ -192,6 +192,7 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
     ...(input.notes ? { notes: input.notes } : {}),
     startAtMillis: input.startAtMillis,
+    ...(input.customFields ? { customFields: input.customFields } : {}),
   });
 
   const data = result.data as { appointmentId?: unknown; publicToken?: unknown };

@@ -16,6 +16,7 @@ import {
 import { listServices } from "@/features/services/service-repository";
 import type { Appointment, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
 import type { Service } from "@/types/service";
+import { AppointmentCustomFields } from "@/features/booking-fields/appointment-custom-fields";
 
 const STATUS_CONFIG: Record<
   AppointmentStatus,
@@ -573,6 +574,7 @@ export default function AppointmentsPage() {
                         <p className="mt-0.5 text-sm text-[var(--text-1)]">{appointment.notes}</p>
                       </div>
                     )}
+                    <AppointmentCustomFields values={appointment.customFields} />
 
                     {/* Action Buttons */}
                     <div className="appointment-admin-actions"><div><small>HIZLI İŞLEMLER</small><b>Randevuyu buradan yönetin</b></div><nav>

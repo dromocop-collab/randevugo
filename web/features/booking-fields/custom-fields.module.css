@@ -1,0 +1,175 @@
+/* Müşteri tarafı ek alanlar — randevu sihirbazı (components/booking/booking.module.css) ile aynı görsel dil.
+   Kendi token'larını taşır; böylece işletme/süper admin önizlemelerinde de birebir aynı görünür. */
+.fields {
+  --cf-ink: #10281d;
+  --cf-muted: #5d6f64;
+  --cf-faint: #8a9a90;
+  --cf-line: rgb(16 40 29 / 0.09);
+  --cf-line-strong: rgb(16 40 29 / 0.16);
+  --cf-card: #ffffff;
+  --cf-soft: #f2f6ee;
+  --cf-green: #14532d;
+  --cf-green-2: #1f7a4a;
+  --cf-green-ink: #1f7a4a;
+  --cf-lime: #d7ff70;
+  --cf-danger: #c2410c;
+  --cf-selected: rgb(31 122 74 / 0.07);
+  display: grid;
+  gap: 14px;
+  color: var(--cf-ink);
+}
+:global(:root[data-theme="dark"]) .fields {
+  --cf-ink: #eef6f0;
+  --cf-muted: #a3b6aa;
+  --cf-faint: #7d9186;
+  --cf-line: rgb(255 255 255 / 0.08);
+  --cf-line-strong: rgb(255 255 255 / 0.16);
+  --cf-card: #142019;
+  --cf-soft: #0f1813;
+  --cf-green-ink: #9fe3b9;
+  --cf-danger: #fb923c;
+  --cf-selected: rgb(159 227 185 / 0.08);
+}
+.fields :where(button, input, textarea, select) { font: inherit; }
+.fields :where(button, input, textarea, select):focus-visible { outline: 3px solid color-mix(in srgb, var(--cf-green-2) 55%, transparent); outline-offset: 2px; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.field { display: grid; gap: 6px; min-width: 0; }
+.label { display: flex; align-items: center; gap: 6px; color: var(--cf-muted); font-size: 13px; font-weight: 750; }
+.labelText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label em { color: var(--cf-danger); font-style: normal; }
+.label small { margin-left: auto; color: var(--cf-faint); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.label small + small { margin-left: 8px; }
+.label .counter { font-variant-numeric: tabular-nums; }
+.help { margin: 0; color: var(--cf-faint); font-size: 12.5px; line-height: 1.45; }
+.error { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--cf-danger); font-size: 13px; font-weight: 650; }
+
+.input {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 14px;
+  border: 1.5px solid var(--cf-line);
+  border-radius: 16px;
+  background: var(--cf-soft);
+  color: var(--cf-ink);
+  font-size: 16px; /* iOS yakınlaştırmasın */
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.input::placeholder { color: var(--cf-faint); font-weight: 500; }
+.input:focus { border-color: var(--cf-green-2); background: var(--cf-card); box-shadow: 0 0 0 4px rgb(31 122 74 / 0.12); }
+.textarea { min-height: 96px; padding-top: 14px; padding-bottom: 14px; line-height: 1.45; resize: none; }
+.invalid, .invalid:focus { border-color: var(--cf-danger); }
+.invalidGroup .pill { border-color: color-mix(in srgb, var(--cf-danger) 55%, var(--cf-line)); }
+
+.selectWrap { position: relative; display: flex; align-items: center; }
+.selectWrap > svg { position: absolute; right: 14px; color: var(--cf-faint); pointer-events: none; }
+.select { padding-right: 42px; appearance: none; -webkit-appearance: none; cursor: pointer; }
+
+/* Sayı: − değer + */
+.stepper {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  min-height: 54px;
+  overflow: hidden;
+  border: 1.5px solid var(--cf-line);
+  border-radius: 16px;
+  background: var(--cf-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.stepper:focus-within { border-color: var(--cf-green-2); box-shadow: 0 0 0 4px rgb(31 122 74 / 0.12); }
+.stepBtn {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 51px;
+  border: 0;
+  background: transparent;
+  color: var(--cf-green-ink);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.stepBtn:hover:not(:disabled) { background: var(--cf-selected); }
+.stepBtn:active:not(:disabled) { transform: scale(0.92); }
+.stepBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+.stepValue {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--cf-ink);
+  font-size: 20px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.stepValue::-webkit-outer-spin-button, .stepValue::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.stepValue::placeholder { color: var(--cf-faint); }
+
+/* Seçenek hapları (≤4 seçenek) */
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 72px;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1.5px solid var(--cf-line);
+  border-radius: 999px;
+  background: var(--cf-soft);
+  color: var(--cf-ink);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.pill:hover { border-color: color-mix(in srgb, var(--cf-green-2) 40%, var(--cf-line)); }
+.pill:active { transform: scale(0.97); }
+.pillOn { border-color: transparent; background: linear-gradient(150deg, var(--cf-green-2), var(--cf-green)); color: #fff; box-shadow: 0 8px 20px rgb(20 83 45 / 0.25); }
+.pillOn svg { color: var(--cf-lime); }
+
+/* Onay kutusu: büyük dokunma alanı */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 56px;
+  padding: 14px;
+  border: 1.5px solid var(--cf-line);
+  border-radius: 18px;
+  background: var(--cf-soft);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.checkOn { border-color: var(--cf-green-2); background: var(--cf-selected); }
+.check:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--cf-green-2) 55%, transparent); outline-offset: 2px; }
+.checkBox {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--cf-line-strong);
+  border-radius: 9px;
+  background: var(--cf-card);
+  color: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.checkOn .checkBox { border-color: var(--cf-green-2); background: var(--cf-green-2); color: #fff; }
+.checkText { display: grid; gap: 2px; min-width: 0; padding-top: 2px; }
+.checkText b { font-size: 14.5px; font-weight: 720; line-height: 1.3; }
+.checkText em { color: var(--cf-danger); font-style: normal; }
+.checkText small { color: var(--cf-muted); font-size: 12.5px; line-height: 1.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pill, .stepBtn, .check, .input, .stepper { transition: none; }
+}

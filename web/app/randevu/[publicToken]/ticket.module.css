@@ -272,3 +272,10 @@
   .ticket, .card, .saveCard { animation: none; }
 }
 .cancelConfirm { background: linear-gradient(150deg, #d14343, #9f1c1c); box-shadow: 0 10px 24px rgb(159 28 28 / 0.28); }
+
+/* Ek bilgiler (işletmenin onaylı ek randevu alanları) */
+.extraList { display: grid; gap: 0; margin: 0; overflow: hidden; border-radius: 16px; background: var(--soft); }
+.extraRow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.extraRow:first-child { border-top: 0; }
+.extraRow dt { min-width: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.extraRow dd { min-width: 0; margin: 0; color: var(--ink); font-size: 14px; font-weight: 750; overflow-wrap: anywhere; white-space: pre-wrap; }

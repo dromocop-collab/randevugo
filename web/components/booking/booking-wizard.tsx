@@ -32,8 +32,16 @@ import {
   type BookingFieldSettings,
 } from "@/features/booking/booking-field-settings-repository";
 import {
+  buildCustomFieldPayload,
+  fieldsForService,
+  summarizeFieldValues,
+  validateFieldValue,
+  type CustomFieldInputValues,
+} from "@/features/booking-fields/booking-fields-domain";
+import { CustomFieldInputs } from "@/features/booking-fields/custom-field-inputs";
+import {
   AlertCircle, ArrowLeft, ArrowRight, BellRing, Building2, CalendarDays, CalendarPlus, CalendarRange, Check, CheckCircle2,
-  CircleDollarSign, Clock3, Download, LoaderCircle, Mail, MessageSquareText, Navigation, Phone, Search,
+  CircleDollarSign, ClipboardList, Clock3, Download, LoaderCircle, Mail, MessageSquareText, Navigation, Phone, Search,
   Send, ShieldCheck, Smartphone, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
@@ -160,6 +168,9 @@ export function BookingWizard(props: Props) {
   const [customerEmail, setCustomerEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [bookingFields, setBookingFields] = useState<BookingFieldSettings>(DEFAULT_BOOKING_FIELD_SETTINGS);
+  // İşletmenin süper admin onaylı ek alanları (alan id → değer).
+  const [customValues, setCustomValues] = useState<CustomFieldInputValues>({});
+  const [customTouched, setCustomTouched] = useState<Record<string, boolean>>({});
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
@@ -268,7 +279,7 @@ export function BookingWizard(props: Props) {
 
   useEffect(() => {
     let active = true;
-    getBookingFieldSettings()
+    getBookingFieldSettings(props.businessId)
       .then((settings) => {
         if (!active) return;
         setBookingFields(settings);
@@ -280,7 +291,7 @@ export function BookingWizard(props: Props) {
         if (active) setBookingFields(DEFAULT_BOOKING_FIELD_SETTINGS);
       });
     return () => { active = false; };
-  }, []);
+  }, [props.businessId]);
 
   useEffect(() => {
     if (!serviceId) return;
@@ -366,7 +377,27 @@ export function BookingWizard(props: Props) {
   const phoneValid = isValidTurkishPhone(customerPhone);
   const emailValid = isValidOptionalEmail(customerEmail);
   const nameValid = !bookingFields.collectName || customerName.trim().length >= 2;
-  const infoValid = phoneValid && emailValid && privacyAccepted && nameValid;
+  const customFieldsForService = useMemo(
+    () => fieldsForService(bookingFields.customFields, serviceId),
+    [bookingFields.customFields, serviceId]
+  );
+  const customErrors = useMemo(() => {
+    const errors: Record<string, string | null> = {};
+    for (const field of customFieldsForService) errors[field.id] = validateFieldValue(field, customValues[field.id]);
+    return errors;
+  }, [customFieldsForService, customValues]);
+  const firstInvalidCustomField = customFieldsForService.find((field) => customErrors[field.id]);
+  const customValid = !firstInvalidCustomField;
+  const visibleCustomErrors = useMemo(() => {
+    const visible: Record<string, string | null> = {};
+    for (const field of customFieldsForService) visible[field.id] = customTouched[field.id] ? customErrors[field.id] : null;
+    return visible;
+  }, [customErrors, customFieldsForService, customTouched]);
+  const customSummary = useMemo(
+    () => summarizeFieldValues(bookingFields.customFields, serviceId, customValues),
+    [bookingFields.customFields, customValues, serviceId]
+  );
+  const infoValid = phoneValid && emailValid && privacyAccepted && nameValid && customValid;
   const availableDateCounts = dateAvailability.key === selectionKey ? dateAvailability.counts : {};
   const datesLoading = datesLoadingCount > 0;
 
@@ -593,6 +624,8 @@ export function BookingWizard(props: Props) {
         customerEmail: bookingFields.collectEmail ? customerEmail.trim() : undefined,
         notes: bookingFields.collectNotes ? notes.trim() : undefined,
         startAtMillis: selectedSlot.startAtMillis,
+        // Her zaman gönderilir (boş olsa da): sunucu zorunlu ek alanları ancak anahtar varsa denetler.
+        customFields: buildCustomFieldPayload(bookingFields.customFields, selectedService.id, customValues),
       });
 
       const isGuest = !user;
@@ -621,7 +654,17 @@ export function BookingWizard(props: Props) {
       window.scrollTo({ top: 0, behavior: "auto" });
       toast.success("Randevunuz başarıyla oluşturuldu!");
     } catch (error) {
-      toast.error(userFacingError(error, "Randevunuz oluşturulamadı. Lütfen tekrar deneyin."));
+      const failure = error as { code?: string; message?: string } | null;
+      const fieldMessage = String(failure?.message ?? "");
+      const customFieldError = String(failure?.code ?? "").endsWith("invalid-argument")
+        && customFieldsForService.some((field) => fieldMessage.includes(`"${field.label}"`));
+      if (customFieldError) {
+        // İşletme alanları bu arada değiştiyse müşteri bilgiler adımına döner ve sunucunun mesajını görür.
+        toast.error(fieldMessage);
+        jumpTo("info");
+      } else {
+        toast.error(userFacingError(error, "Randevunuz oluşturulamadı. Lütfen tekrar deneyin."));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -738,7 +781,8 @@ export function BookingWizard(props: Props) {
   else if (step === "staff" && !staffId && !anyStaff) blockReason = "Bir uzman seçin";
   else if (step === "datetime" && !slot) blockReason = slotsLoading ? "Saatler yükleniyor…" : "Uygun bir saat seçin";
   else if (step === "info" && !infoValid) {
-    blockReason = !nameValid ? "Adınızı girin" : !phoneValid ? "Geçerli bir telefon girin" : !emailValid ? "E-posta adresini kontrol edin" : "Aydınlatma metnini onaylayın";
+    blockReason = !nameValid ? "Adınızı girin" : !phoneValid ? "Geçerli bir telefon girin" : !emailValid ? "E-posta adresini kontrol edin"
+      : firstInvalidCustomField ? `${firstInvalidCustomField.label}: ${customErrors[firstInvalidCustomField.id]}` : "Aydınlatma metnini onaylayın";
   } else if (step === "verify" && !phoneVerified) blockReason = "SMS ile gelen kodu girin";
   const nextDisabled = Boolean(blockReason);
   const staffLabel = anyStaff
@@ -998,6 +1042,23 @@ export function BookingWizard(props: Props) {
                   {infoTouched && !emailValid && <p id="booking-email-error" className={s.error}><AlertCircle size={14} /> Geçerli bir e-posta adresi girin veya alanı boş bırakın.</p>}
                 </div>
               )}
+              {customFieldsForService.length > 0 && (
+                <CustomFieldInputs
+                  fields={customFieldsForService}
+                  values={customValues}
+                  errors={visibleCustomErrors}
+                  idPrefix="booking-custom"
+                  onChange={(id, value) => {
+                    setCustomValues((previous) => {
+                      const next = { ...previous };
+                      if (value === undefined) delete next[id];
+                      else next[id] = value;
+                      return next;
+                    });
+                    setCustomTouched((previous) => (previous[id] ? previous : { ...previous, [id]: true }));
+                  }}
+                />
+              )}
               {bookingFields.collectNotes && (
                 <div className={s.field}>
                   <label htmlFor="booking-notes" className={s.fieldLabel}>İşletmeye not <small>İsteğe bağlı</small></label>
@@ -1109,6 +1170,7 @@ export function BookingWizard(props: Props) {
                 {bookingFields.collectName && <SummaryRow icon={UserRound} label="Ad Soyad" value={customerName} index={3} onEdit={() => jumpTo("info")} />}
                 <SummaryRow icon={Phone} label="Telefon" value={customerPhone} index={4} verified />
                 {bookingFields.collectEmail && customerEmail && <SummaryRow icon={Mail} label="E-posta" value={customerEmail} index={5} />}
+                {customSummary.map((item) => <SummaryRow key={item.id} icon={ClipboardList} label={item.label} value={item.value} index={6} onEdit={() => jumpTo("info")} />)}
                 {bookingFields.collectNotes && notes && <SummaryRow icon={MessageSquareText} label="Not" value={notes} index={6} />}
                 <SummaryRow icon={Building2} label="Adres" value={props.businessAddress} index={7} />
               </div>
