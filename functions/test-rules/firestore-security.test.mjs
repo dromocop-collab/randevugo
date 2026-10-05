@@ -142,3 +142,25 @@ test("askı öncesi durum (statusBeforeSuspension) yalnızca yönetici tarafınd
   const { deleteField } = await import("firebase/firestore");
   await assertSucceeds(updateDoc(doc(admin, `businesses/${BIZ}`), { isSuspended: false, status: "active", statusBeforeSuspension: deleteField() }));
 });
+
+// ── Ek randevu alanları yalnızca süper admin onayıyla yayınlanır ───────────
+test("sahip ek randevu alanlarını onaysız yayınlayamaz", async () => {
+  await assertFails(updateDoc(doc(as("owner"), `businesses/${BIZ}`), { customBookingFields: [{ id: "x", label: "X", type: "text", required: false }] }));
+  await assertFails(updateDoc(doc(as("manager"), `businesses/${BIZ}`), { bookingFieldsRequest: { status: "approved" } }));
+});
+test("ek alan talepleri yalnızca işletme yöneticisi ve süper admin tarafından okunur", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), "bookingFieldRequests/r1"), { businessId: BIZ, status: "pending", fields: [] }));
+  await assertSucceeds(getDoc(doc(as("owner"), "bookingFieldRequests/r1")));
+  await assertFails(getDoc(doc(as("attacker"), "bookingFieldRequests/r1")));
+  await assertFails(setDoc(doc(as("owner"), "bookingFieldRequests/r2"), { businessId: BIZ, status: "approved", fields: [] }));
+});
+
+test("müşteri kendi yorumlarını collection group ile okuyabilir, başkasınınkini okuyamaz", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `businesses/${BIZ}/reviews/r1`), { customerId: "cust1", appointmentId: "a1", status: "pending", isVisible: false });
+    await setDoc(doc(ctx.firestore(), `businesses/${BIZ}/reviews/r2`), { customerId: "cust2", appointmentId: "a2", status: "pending", isVisible: false });
+  });
+  const { collectionGroup } = await import("firebase/firestore");
+  await assertSucceeds(getDocs(query(collectionGroup(as("cust1"), "reviews"), where("customerId", "==", "cust1"))));
+  await assertFails(getDocs(query(collectionGroup(as("cust1"), "reviews"), where("customerId", "==", "cust2"))));
+});

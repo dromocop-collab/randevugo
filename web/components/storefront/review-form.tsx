@@ -117,8 +117,18 @@ export function ReviewForm({
       setSubmitted(true);
       toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak!");
       onSuccess?.();
-    } catch {
-      toast.error("Yorum gönderilemedi. Lütfen tekrar deneyin.");
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code ?? "";
+      // Aynı randevu zaten değerlendirilmişse kullanıcıya hata değil, durum gösterilir.
+      if (code === "functions/already-exists") {
+        setSubmitted(true);
+        toast.info("Bu randevuyu daha önce değerlendirmişsiniz. Teşekkürler!");
+        onSuccess?.();
+        return;
+      }
+      const serverMessage = code.startsWith("functions/") && error instanceof Error && error.message && code !== "functions/internal"
+        ? error.message : "";
+      toast.error(serverMessage || "Yorum gönderilemedi. Lütfen tekrar deneyin.");
     } finally {
       setSubmitting(false);
     }

@@ -98,6 +98,15 @@ export default function CustomerAccountPage() {
   const [search,setSearch] = useState("");
   const [reviewing,setReviewing] = useState<CustomerAppointment|null>(null);
   const [reviewedIds,setReviewedIds] = useState<Set<string>>(() => new Set());
+  // Daha önce değerlendirilen randevularda "Değerlendir" yerine "Değerlendirildi" görünür.
+  useEffect(()=>{
+    if(!user)return;
+    let active=true;
+    getDocs(query(collectionGroup(getDb(),"reviews"),where("customerId","==",user.uid),limit(200)))
+      .then(snapshot=>{if(active)setReviewedIds(current=>{const next=new Set(current);snapshot.docs.forEach(item=>{const id=item.data().appointmentId;if(typeof id==="string")next.add(id)});return next})})
+      .catch(()=>{});
+    return()=>{active=false};
+  },[user]);
   const [cancelling,setCancelling] = useState<CustomerAppointment|null>(null);
   const [cancelBusy,setCancelBusy] = useState(false);
   const [rescheduling,setRescheduling] = useState<CustomerAppointment|null>(null);

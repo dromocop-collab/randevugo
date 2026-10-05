@@ -83,7 +83,9 @@ service cloud.firestore {
           // Askıdan çıkarılınca geri yüklenecek durum; işletme kendini "active"e döndüremesin.
           "statusBeforeSuspension",
           // Keşiften gizleme yalnızca süper admin kararıdır.
-          "hiddenFromDiscovery"]));
+          "hiddenFromDiscovery",
+          // Ek randevu alanları yalnızca süper admin onayıyla (sunucu) yazılır.
+          "customBookingFields", "bookingFieldsRequest"]));
     }
 
     // Public storefront identity is published only after platform moderation.
@@ -158,6 +160,13 @@ service cloud.firestore {
     match /businessOrganizations/{organizationId} {
       allow read: if isPlatformAdmin() ||
         (isAuthenticated() && resource.data.ownerUid == uid());
+      allow write: if false;
+    }
+
+    // İşletmelerin ek randevu alanı talepleri: yalnızca sunucu yazar.
+    match /bookingFieldRequests/{requestId} {
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && canManage(resource.data.businessId));
       allow write: if false;
     }
 
@@ -619,7 +628,9 @@ service cloud.firestore {
     }
 
     match /{path=**}/reviews/{reviewId} {
-      allow read: if isPlatformAdmin();
+      // Müşteri kendi yorumlarını (onay bekleyenler dahil) görebilir.
+      allow read: if isPlatformAdmin() ||
+        (isAuthenticated() && resource.data.customerId == uid());
     }
   }
 }
