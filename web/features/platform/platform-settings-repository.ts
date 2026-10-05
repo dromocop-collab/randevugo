@@ -15,7 +15,7 @@ const SETTINGS_DOC_ID = "global";
 
 const DEFAULT_SETTINGS: Omit<PlatformSettings, "id" | "createdAt" | "updatedAt"> = {
   platformName: "SeninRandevun",
-  supportEmail: "destek@seninrandevun.com",
+  supportEmail: "info@seninrandevun.com",
   supportPhone: "+90 530 478 8298",
   defaultTimezone: "Europe/Istanbul",
   defaultCurrency: "TRY",
