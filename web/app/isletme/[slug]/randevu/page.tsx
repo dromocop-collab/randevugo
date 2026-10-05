@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ErrorState, LoadingState } from "@/components/ui/states";
+import { ErrorState } from "@/components/ui/states";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import {
   getBusinessBySlug,
@@ -12,7 +12,8 @@ import {
 } from "@/features/businesses/business-repository";
 import { listBookableServices } from "@/features/services/service-repository";
 import type { Business, DaySchedule } from "@/types/business";
-import { ArrowLeft, Clock3, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Clock3, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
+import styles from "./randevu.module.css";
 
 export default function BookingPage() {
   const params = useParams<{ slug: string }>();
@@ -78,67 +79,82 @@ export default function BookingPage() {
     };
   }, [params.slug]);
 
+  const shellHeader = (
+    <header className={styles.header}>
+      <div className={styles.headerInner}>
+        <Link href="/" className={styles.brand}>
+          <Image src="/logo.png" alt="" width={30} height={30} />
+          SeninRandevun
+        </Link>
+        <Link href={`/isletme/${params.slug}`} className={styles.back}>
+          <ArrowLeft size={17} />
+          <span className={styles.backShort}>İşletme</span>
+          <span className={styles.backLong}>İşletme sayfasına dön</span>
+        </Link>
+      </div>
+    </header>
+  );
+
   if (loading) {
     return (
-      <LoadingState
-        title="Randevu sistemi yükleniyor"
-        description="İşletme bilgileri getiriliyor..."
-      />
+      <div className={styles.page}>
+        {shellHeader}
+        <main className={styles.main} aria-busy="true">
+          <p className="sr-only" role="status">Randevu sistemi yükleniyor…</p>
+          <div className={styles.skeleton} aria-hidden="true">
+            <i style={{ height: 132 }} />
+            <i style={{ height: 96 }} />
+            <i style={{ height: 300 }} />
+          </div>
+        </main>
+      </div>
     );
   }
 
   if (error || !business) {
     return (
-      <main className="mx-auto w-full max-w-4xl px-4 py-10">
-        <ErrorState
-          title="Randevu Oluşturulamıyor"
-          description={error ?? "İşletme kaydı bulunamadı."}
-        />
-        <div className="mt-6 text-center">
-          <Link
-            href="/kesfet"
-            className="text-sm text-[var(--accent)] hover:underline"
-          >
-            ← İşletmelere Göz At
+      <div className={styles.page}>
+        {shellHeader}
+        <main className={styles.state}>
+          <ErrorState
+            title="Randevu Oluşturulamıyor"
+            description={error ?? "İşletme kaydı bulunamadı."}
+          />
+          <Link href="/kesfet" className={styles.stateLink}>
+            ← İşletmelere göz at
           </Link>
-        </div>
-      </main>
+        </main>
+      </div>
     );
   }
 
-  return (
-    <div className="booking-page min-h-screen">
-      {/* Compact Header */}
-      <header className="booking-header sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg-1)]/80 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm font-semibold text-[var(--text-1)]"
-          >
-            <Image src="/logo.png" alt="SeninRandevun" width={28} height={28} className="rounded-lg" />
-            SeninRandevun
-          </Link>
-          <Link
-            href={`/isletme/${params.slug}`}
-            className="inline-flex items-center gap-1.5 text-sm text-[var(--text-3)] hover:text-[var(--text-1)] transition"
-          >
-            <ArrowLeft size={17} />
-            İşletme Sayfasına Dön
-          </Link>
-        </div>
-      </header>
+  const location = [business.district, business.city].filter(Boolean).join(", ");
 
-      <main className="booking-main mx-auto w-full max-w-5xl px-4 py-10">
-        <div className="booking-intro mx-auto mb-7 max-w-2xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/15 bg-[var(--accent)]/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.15em] text-[var(--accent)]"><Sparkles size={13} /> Kolay randevu</span>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-[var(--text-1)] sm:text-4xl">
-            {business.name}
-          </h1>
-          <p className="mt-2 text-sm text-[var(--text-3)]">
-            Hizmetinizi seçin, uygun saati bulun; kalanını biz kolaylaştıralım.
-          </p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2 text-[10px] font-semibold text-[var(--text-3)]"><span><Clock3 size={13} /> Yaklaşık 2 dakika</span><span><ShieldCheck size={13} /> Güvenli doğrulama</span></div>
-        </div>
+  return (
+    <div className={styles.page}>
+      {shellHeader}
+
+      <main className={styles.main}>
+        <section className={styles.hero}>
+          {business.coverUrl && <div className={styles.heroCover} aria-hidden="true"><Image src={business.coverUrl} alt="" fill sizes="680px" priority /></div>}
+          <div className={styles.heroGrid} aria-hidden="true" />
+          <div className={styles.heroRow}>
+            <div className={styles.logo}>
+              {business.logoUrl ? <Image src={business.logoUrl} alt={`${business.name} logosu`} fill sizes="68px" /> : business.name.charAt(0).toLocaleUpperCase("tr-TR")}
+            </div>
+            <div className={styles.heroText}>
+              <span className={styles.eyebrow}><Sparkles size={12} /> ONLINE RANDEVU</span>
+              <h1 className={styles.title}>{business.name}</h1>
+              {location && <span className={styles.location}><MapPin size={14} /> {location}</span>}
+            </div>
+          </div>
+          <div className={styles.chips}>
+            <span className={styles.chip}><Clock3 size={13} /> Yaklaşık 2 dakika</span>
+            <span className={styles.chip}><ShieldCheck size={13} /> SMS ile güvenli doğrulama</span>
+            <span className={styles.chip}><BadgeCheck size={13} /> Anında onay</span>
+            {business.rating > 0 && <span className={styles.chip}><Star size={13} /> {business.rating.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>}
+          </div>
+        </section>
 
         <BookingWizard
           businessId={business.id}

@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { doc, getDoc } from "firebase/firestore";
 import { toast } from "sonner";
-import { BellRing, LoaderCircle } from "lucide-react";
+import { BellOff, BellRing, CalendarSearch, Clock3, LoaderCircle, Sparkles, UserRound } from "lucide-react";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { getDb } from "@/lib/firebase/firestore";
 import { cancelAvailabilityAlert, listMyAvailabilityAlerts, type AvailabilityAlert } from "./availability-repository";
+import styles from "./availability-alerts-panel.module.css";
 
 type Row = AvailabilityAlert & { businessName: string; serviceName: string; staffName: string; slug: string };
 
@@ -52,24 +54,48 @@ export function AvailabilityAlertsPanel({ uid }: { uid: string }) {
     finally { setBusy(null); }
   }
 
-  return <section aria-label="Müsaitlik bildirimleri">
-    <div className="account-section-head"><div><span>MÜSAİTLİK BİLDİRİMLERİ</span><h2>Haber beklediğin saatler.</h2></div></div>
-    {loading ? <p className="p-5 text-sm text-[var(--text-3)]"><LoaderCircle className="inline animate-spin" size={17} /> Bildirimler yükleniyor…</p>
-      : error ? <p className="p-5 text-sm text-[var(--text-3)]">Bağlantı kurulamadı. Sayfayı yenileyip tekrar deneyin.</p>
-        : rows.length === 0 ? <div className="account-empty-premium"><BellRing size={28} /><h3>Açık müsaitlik bildirimin yok.</h3>
-          <p>İşletme randevu sayfasında istediğin tarih ve saat için haber alma talebi oluşturabilirsin.</p>
-          <Link href="/kesfet">İşletme keşfet</Link></div>
-          : <div className="space-y-3">{rows.map((row) => <article key={row.id}
-            className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5">
-            <div><strong className="text-[var(--text-1)]">{row.businessName} · {row.serviceName}</strong>
-              <p className="text-sm text-[var(--text-3)]">{row.staffName || "Uygun personel"} · {row.dateKey} ·
-                {` ${String(Math.floor(row.startMinute / 60)).padStart(2, "0")}:${String(row.startMinute % 60).padStart(2, "0")}–${String(Math.floor(row.endMinute / 60)).padStart(2, "0")}:${String(row.endMinute % 60).padStart(2, "0")}`}</p>
-              <small>{row.status === "matched" ? "Uygunluk bildirildi; saat rezerve edilmedi." : "Uygunluk bekleniyor."}</small></div>
-            <div className="flex gap-2">{row.slug && <Link href={`/isletme/${row.slug}/randevu?service=${row.serviceId}${row.staffId ? `&staff=${row.staffId}` : ""}&date=${row.dateKey}`}
-              className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-semibold">Saatleri gör</Link>}
-              <button type="button" onClick={() => void cancel(row.id)} disabled={busy !== null}
-                className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-semibold disabled:opacity-50">
-                {busy === row.id ? "Kapatılıyor…" : "Bildirimi kapat"}</button></div>
+  return <section aria-label="Müsaitlik bildirimleri" className={styles.root}>
+    <div className={styles.head}><div><span>Müsaitlik bildirimleri</span><h2>Haber beklediğin saatler.</h2></div>
+      {!loading && !error && rows.length > 0 && <em className={styles.count}>{rows.length} açık</em>}</div>
+    {loading ? <div className={styles.skeleton} aria-label="Bildirimler yükleniyor"><i /><i /></div>
+      : error ? <div className={styles.error} role="alert"><BellOff size={24} /><b>Bağlantı kurulamadı.</b><p>Sayfayı yenileyip tekrar deneyin.</p></div>
+        : rows.length === 0 ? <div className={styles.empty}><RoviMascot size={100} mood="thinking" alt="" />
+          <span className={styles.tag}><Sparkles size={12} /> AKILLI TAKİP</span>
+          <h3>Açık müsaitlik bildirimin yok.</h3>
+          <p>İşletme randevu sayfasında dolu bir saat için “Haber ver” dediğinde, yer açıldığı an sana bildiririz.</p>
+          <Link href="/kesfet" className={styles.primary}>İşletme keşfet</Link></div>
+          : <div className={styles.list}>{rows.map((row, index) => <article key={row.id} className={styles.card} style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
+            <div className={styles.top}>
+              <span className={styles.date} aria-hidden="true"><b>{dayOf(row.dateKey)}</b><small>{monthOf(row.dateKey)}</small></span>
+              <div className={styles.main}>
+                <span className={`${styles.status} ${row.status === "matched" ? styles.matched : ""}`}>
+                  {row.status === "matched" ? <><BellRing size={12} /> Yer açıldı</> : <><i /> Takipte</>}</span>
+                <strong>{row.businessName}</strong>
+                <p>{row.serviceName}</p>
+              </div>
+            </div>
+            <div className={styles.meta}>
+              <span><CalendarSearch size={14} /> {weekdayOf(row.dateKey)}</span>
+              <span><Clock3 size={14} /> {minuteLabel(row.startMinute)}–{minuteLabel(row.endMinute)}</span>
+              <span><UserRound size={14} /> {row.staffName || "Uygun personel"}</span>
+            </div>
+            <small className={styles.note}>{row.status === "matched" ? "Uygunluk bildirildi; saat rezerve edilmedi. Hemen bakmanı öneririz." : "Uygunluk bekleniyor. Yer açılınca haber vereceğiz."}</small>
+            <div className={styles.actions}>{row.slug && <Link href={`/isletme/${row.slug}/randevu?service=${row.serviceId}${row.staffId ? `&staff=${row.staffId}` : ""}&date=${row.dateKey}`}
+              className={styles.primary}>Saatleri gör</Link>}
+              <button type="button" onClick={() => void cancel(row.id)} disabled={busy !== null} className={styles.ghost}>
+                {busy === row.id ? <><LoaderCircle className="animate-spin" size={15} /> Kapatılıyor…</> : "Bildirimi kapat"}</button></div>
           </article>)}</div>}
   </section>;
 }
+
+function minuteLabel(value: number) {
+  return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+}
+function parseDateKey(key: string) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function dayOf(key: string) { return parseDateKey(key)?.toLocaleDateString("tr-TR", { day: "2-digit" }) ?? "–"; }
+function monthOf(key: string) { return parseDateKey(key)?.toLocaleDateString("tr-TR", { month: "short" }).toLocaleUpperCase("tr-TR") ?? ""; }
+function weekdayOf(key: string) { return parseDateKey(key)?.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" }) ?? key; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,12 +8,11 @@ import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, quer
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { updateProfile } from "firebase/auth";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, PackageCheck, RotateCcw, Search, Settings2, ShieldCheck, Sparkles, Star, Store, TicketCheck, Trash2, UserRound, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LifeBuoy, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, Navigation, PackageCheck, RotateCcw, Search, ShieldCheck, Star, Store, TicketCheck, Trash2, UserRound, X } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { forgotPassword, logout } from "@/features/auth/auth-service";
-import { LoadingState } from "@/components/ui/states";
 import { ReviewForm } from "@/components/storefront/review-form";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
@@ -28,8 +27,10 @@ import { appointmentChangeError, rescheduleCustomerAppointment } from "@/feature
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import { PushToggleCard } from "@/features/push";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
+import { downloadIcs, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import s from "./account.module.css";
 
-interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessPhone:string; serviceId:string; staffId:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number; rescheduleCount:number; allowReschedule:boolean; maximumBookingDaysAhead:number; timeZone:string; additionalServices?:Array<{serviceId:string;name:string;price:number;durationMinutes:number}> }
+interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessAddress?:string; businessPhone:string; serviceId:string; staffId:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number; rescheduleCount:number; allowReschedule:boolean; maximumBookingDaysAhead:number; timeZone:string; additionalServices?:Array<{serviceId:string;name:string;price:number;durationMinutes:number}> }
 interface SuspendedBusiness { id: string; name: string; adminNote?: string }
 interface CustomerBenefitPackage { id:string; businessId:string; businessName:string; businessSlug:string; packageName:string; serviceName:string; totalSessions:number; remainingSessions:number; status:string; expiresAt:string|null }
 interface LoyaltyBenefit { id:string; businessId:string; businessName:string; businessSlug:string; points:number; lifetimePoints:number; totalSpent:number }
@@ -39,18 +40,19 @@ type AppointmentFilter = "all" | "upcoming" | "history" | "cancelled";
 
 const APPOINTMENT_PAGE_SIZE = 50;
 const ACCOUNT_TABS = [
-  {key:"overview",label:"Genel bakış",icon:LayoutDashboard},
-  {key:"appointments",label:"Randevularım",icon:CalendarDays},
-  {key:"alerts",label:"Müsaitlik Bildirimleri",icon:BellRing},
-  {key:"messages",label:"Mesajlarım",icon:MessageCircleMore},
-  {key:"benefits",label:"Paketlerim & Puanlarım",icon:Gift},
-  {key:"favorites",label:"Favorilerim",icon:Heart},
-  {key:"profile",label:"Hesap ayarları",icon:CircleUserRound},
+  {key:"overview",label:"Genel bakış",short:"Genel",icon:LayoutDashboard},
+  {key:"appointments",label:"Randevularım",short:"Randevular",icon:CalendarDays},
+  {key:"alerts",label:"Müsaitlik Bildirimleri",short:"Müsaitlik",icon:BellRing},
+  {key:"messages",label:"Mesajlarım",short:"Mesajlar",icon:MessageCircleMore},
+  {key:"benefits",label:"Paketlerim & Puanlarım",short:"Avantajlar",icon:Gift},
+  {key:"favorites",label:"Favorilerim",short:"Favoriler",icon:Heart},
+  {key:"profile",label:"Hesap ayarları",short:"Hesap",icon:CircleUserRound},
 ] as const;
 
 const statuses: Record<string,{label:string;icon:typeof Clock3}> = {
   pending:{label:"Onay bekliyor",icon:Clock3}, confirmed:{label:"Onaylandı",icon:BadgeCheck}, completed:{label:"Tamamlandı",icon:Check}, cancelled:{label:"İptal edildi",icon:X}, no_show:{label:"Gerçekleşmedi",icon:History},
 };
+const STATUS_CLASS: Record<string,string> = { pending:s.st_pending, confirmed:s.st_confirmed, completed:s.st_completed, cancelled:s.st_cancelled, no_show:s.st_no_show };
 
 async function hydrateAppointments(items: QueryDocumentSnapshot<DocumentData>[]): Promise<CustomerAppointment[]> {
   const db=getDb();
@@ -64,7 +66,7 @@ async function hydrateAppointments(items: QueryDocumentSnapshot<DocumentData>[])
       const row=service as Record<string,unknown>;
       return [{serviceId:String(row.serviceId??""),name:String(row.name??"Ek hizmet"),price:Number(row.price??0),durationMinutes:Number(row.durationMinutes??0)}];
     }):undefined;
-    return {id:item.id,businessId,businessName:String(business.name??"İşletme"),businessSlug:String(business.slug??""),businessLogo:typeof business.logoUrl==="string"?business.logoUrl:undefined,businessCity:[business.district,business.city].filter(Boolean).join(", "),businessPhone:String(business.phone??""),serviceId:String(data.serviceId??""),staffId:String(data.staffId??""),serviceName:String(data.serviceName??"Hizmet"),staffName:String(data.staffName??"Farketmez"),startAt:data.startAt?.toDate?.()?data.startAt.toDate().toISOString():String(data.startAt??""),endAt:data.endAt?.toDate?.()?data.endAt.toDate().toISOString():String(data.endAt??""),status:String(data.status??"pending"),publicToken:data.publicToken?String(data.publicToken):undefined,price:Number.isFinite(Number(data.price??data.totalPrice))?Number(data.price??data.totalPrice):undefined,rescheduleCount:Number(data.rescheduleCount??0)||0,allowReschedule:business.allowReschedule!==false,maximumBookingDaysAhead:Math.max(1,Number(business.maximumBookingDaysAhead??30)||30),timeZone:typeof business.timeZone==="string"?business.timeZone:"Europe/Istanbul",additionalServices} satisfies CustomerAppointment;
+    return {id:item.id,businessId,businessName:String(business.name??"İşletme"),businessSlug:String(business.slug??""),businessLogo:typeof business.logoUrl==="string"?business.logoUrl:undefined,businessCity:[business.district,business.city].filter(Boolean).join(", "),businessAddress:typeof business.address==="string"?business.address.trim():undefined,businessPhone:String(business.phone??""),serviceId:String(data.serviceId??""),staffId:String(data.staffId??""),serviceName:String(data.serviceName??"Hizmet"),staffName:String(data.staffName??"Farketmez"),startAt:data.startAt?.toDate?.()?data.startAt.toDate().toISOString():String(data.startAt??""),endAt:data.endAt?.toDate?.()?data.endAt.toDate().toISOString():String(data.endAt??""),status:String(data.status??"pending"),publicToken:data.publicToken?String(data.publicToken):undefined,price:Number.isFinite(Number(data.price??data.totalPrice))?Number(data.price??data.totalPrice):undefined,rescheduleCount:Number(data.rescheduleCount??0)||0,allowReschedule:business.allowReschedule!==false,maximumBookingDaysAhead:Math.max(1,Number(business.maximumBookingDaysAhead??30)||30),timeZone:typeof business.timeZone==="string"?business.timeZone:"Europe/Istanbul",additionalServices} satisfies CustomerAppointment;
   });
 }
 
@@ -95,9 +97,11 @@ export default function CustomerAccountPage() {
   const [filter,setFilter] = useState<AppointmentFilter>("all");
   const [search,setSearch] = useState("");
   const [reviewing,setReviewing] = useState<CustomerAppointment|null>(null);
+  const [reviewedIds,setReviewedIds] = useState<Set<string>>(() => new Set());
   const [cancelling,setCancelling] = useState<CustomerAppointment|null>(null);
   const [cancelBusy,setCancelBusy] = useState(false);
   const [rescheduling,setRescheduling] = useState<CustomerAppointment|null>(null);
+  const [calendarFor,setCalendarFor] = useState<CustomerAppointment|null>(null);
   const closeReschedule = useCallback(()=>setRescheduling(null),[]);
   const [profileName,setProfileName] = useState("");
   const [profilePhone,setProfilePhone] = useState("");
@@ -112,6 +116,8 @@ export default function CustomerAccountPage() {
   const [deleteConfirm,setDeleteConfirm] = useState("");
   const [deleteBusy,setDeleteBusy] = useState(false);
   const [now,setNow] = useState(() => Date.now());
+  const tabsRef = useRef<HTMLElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   useGuestAppointmentClaim(() => setReloadKey((key) => key + 1));
 
@@ -180,19 +186,19 @@ export default function CustomerAccountPage() {
     return()=>{active=false;window.removeEventListener("focus",onFocus)};
   },[authStatus,benefitsReloadKey,tab,user]);
 
-  const modalOpen=Boolean(reviewing||cancelling||verifyOpen||deleteOpen);
+  const modalOpen=Boolean(reviewing||cancelling||verifyOpen||deleteOpen||calendarFor);
   useEffect(()=>{
     if(!modalOpen)return;
     const previousActive=document.activeElement instanceof HTMLElement?document.activeElement:null;
     const previousOverflow=document.body.style.overflow;
     document.body.style.overflow="hidden";
-    const overlay=document.querySelector<HTMLElement>(".account-overlay");
+    const overlay=document.querySelector<HTMLElement>("[data-account-overlay]");
     const focusable=()=>Array.from(overlay?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')??[]).filter(item=>item.offsetParent!==null);
     const frame=window.requestAnimationFrame(()=>focusable()[0]?.focus());
     const onKeyDown=(event:KeyboardEvent)=>{
       if(event.key==="Escape"){
         if(cancelBusy||verificationBusy||deleteBusy)return;
-        setReviewing(null);setCancelling(null);setVerifyOpen(false);setDeleteOpen(false);
+        setReviewing(null);setCancelling(null);setVerifyOpen(false);setDeleteOpen(false);setCalendarFor(null);
         return;
       }
       if(event.key!=="Tab")return;
@@ -206,6 +212,14 @@ export default function CustomerAccountPage() {
     return()=>{window.cancelAnimationFrame(frame);document.removeEventListener("keydown",onKeyDown);document.body.style.overflow=previousOverflow;previousActive?.focus()};
   },[modalOpen,cancelBusy,verificationBusy,deleteBusy]);
 
+  // Mobil sekme şeridinde aktif sekmeyi görünür alana kaydır (yalnız yatay).
+  useEffect(()=>{
+    const nav=tabsRef.current; const button=document.getElementById(`account-tab-${tab}`);
+    if(!nav||!button||nav.scrollWidth<=nav.clientWidth)return;
+    const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    nav.scrollTo({left:button.offsetLeft-(nav.clientWidth-button.offsetWidth)/2,behavior:reduce?"auto":"smooth"});
+  },[tab]);
+
   const upcoming = appointments.filter(item=>["pending","confirmed"].includes(item.status)&&new Date(item.startAt).getTime()>now).sort((a,b)=>+new Date(a.startAt)-+new Date(b.startAt));
   const completed = appointments.filter(item=>item.status==="completed"||(["pending","confirmed"].includes(item.status)&&new Date(item.startAt).getTime()<=now));
   const next = upcoming[0];
@@ -217,6 +231,12 @@ export default function CustomerAccountPage() {
     const needle=search.trim().toLocaleLowerCase("tr-TR");
     return !needle||`${item.businessName} ${item.serviceName} ${item.staffName}`.toLocaleLowerCase("tr-TR").includes(needle);
   }),[appointments,filter,search,now]);
+  const filterCounts = useMemo(()=>({
+    all:appointments.length,
+    upcoming:appointments.filter(item=>["pending","confirmed"].includes(item.status)&&new Date(item.startAt).getTime()>now).length,
+    history:appointments.filter(item=>item.status==="completed"||(new Date(item.startAt).getTime()<=now&&item.status!=="cancelled")).length,
+    cancelled:appointments.filter(item=>item.status==="cancelled").length,
+  }),[appointments,now]);
 
   async function cancelAppointment() {
     if(!cancelling)return; setCancelBusy(true);
@@ -252,10 +272,21 @@ export default function CustomerAccountPage() {
     }
   }
 
+  function selectTab(nextTab:AccountTab) {
+    setTab(nextTab);
+    // Sekme değişince içerik başına dön (yalnız kullanıcı aşağıdaysa).
+    const shell=shellRef.current;
+    if(!shell)return;
+    const offset=window.matchMedia("(min-width: 781px)").matches?77:67;
+    const top=shell.getBoundingClientRect().top+window.scrollY-offset-8;
+    if(window.scrollY>top+4)window.scrollTo({top,behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  }
+
   function handleTabKeyDown(event:ReactKeyboardEvent<HTMLButtonElement>,index:number) {
-    if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
+    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(event.key))return;
     event.preventDefault();
-    const nextIndex=event.key==="Home"?0:event.key==="End"?ACCOUNT_TABS.length-1:(index+(event.key==="ArrowRight"?1:-1)+ACCOUNT_TABS.length)%ACCOUNT_TABS.length;
+    const forward=event.key==="ArrowRight"||event.key==="ArrowDown";
+    const nextIndex=event.key==="Home"?0:event.key==="End"?ACCOUNT_TABS.length-1:(index+(forward?1:-1)+ACCOUNT_TABS.length)%ACCOUNT_TABS.length;
     const nextTab=ACCOUNT_TABS[nextIndex].key;
     setTab(nextTab);
     window.requestAnimationFrame(()=>document.getElementById(`account-tab-${nextTab}`)?.focus());
@@ -340,105 +371,341 @@ export default function CustomerAccountPage() {
 
   const profileSignals=[Boolean(profileName.trim()),Boolean(profilePhone.trim()),Boolean(user?.email),emailVerified];
   const profileScore=Math.round((profileSignals.filter(Boolean).length/profileSignals.length)*100);
-  const visitedBusinessCount=new Set(appointments.map(item=>item.businessId).filter(Boolean)).size;
   const completedValue=completed.reduce((total,item)=>total+(item.price??0)+(item.additionalServices??[]).reduce((sum,service)=>sum+service.price,0),0);
-  const lastCompleted=completed.sort((a,b)=>+new Date(b.startAt)-+new Date(a.startAt))[0];
+  const lastCompleted=[...completed].sort((a,b)=>+new Date(b.startAt)-+new Date(a.startAt))[0];
   const totalLoyaltyPoints=loyaltyBenefits.reduce((total,item)=>total+item.points,0);
   const activePackages=benefitPackages.filter(item=>item.status==="active"&&item.remainingSessions>0);
+  const displayName=profileName||user?.displayName||"";
+  const firstName=displayName.trim().split(/\s+/)[0]||"hoş geldiniz";
+  const initials=initialsOf(displayName||user?.email||"S");
+  const rowHandlers=(item:CustomerAppointment)=>({onCancel:()=>setCancelling(item),onReschedule:()=>setRescheduling(item),onReview:()=>setReviewing(item),onCalendar:()=>setCalendarFor(item)});
 
-  if(authStatus==="loading")return <LoadingState title="Hesabınız hazırlanıyor" description="Randevularınız güvenle getiriliyor…"/>;
+  if(authStatus==="loading")return <PageSkeleton/>;
 
-  return <div className="customer-account"><MarketingHeader/>
-    <main>
-      <section className="account-hero account-hero--compact">
-        <div className="account-hero-grid"/>
-        <div className="account-hero-copy">
-          <span><Sparkles size={15}/> KİŞİSEL HESABINIZ</span>
-          <h1>Merhaba, <em>{profileName?.split(" ")[0]||user?.displayName?.split(" ")[0]||"hoş geldiniz"}.</em></h1>
-          <p>Randevularınız, paketleriniz ve sevdiğiniz işletmeler tek yerde. İhtiyacınız olan işleme kolayca ulaşın.</p>
-          <div className="account-hero-actions">
-            <Link href="/kesfet"><CalendarPlus size={17}/> Yeni randevu al</Link>
-            {activeBusiness&&<Link href="/dashboard" className="account-dashboard-hero"><BriefcaseBusiness size={17}/> İşletme paneli</Link>}
-            <SupportRequestModal audience="customer" triggerLabel="Yardım" triggerClassName="account-support-trigger"/>
+  const tabBadge=(key:AccountTab)=>key==="appointments"?(upcoming.length||null):key==="benefits"?(activePackages.length||totalLoyaltyPoints||null):key==="favorites"?(favorites.length||null):null;
+
+  return <div className={`marketing-page ${s.page}`}><MarketingHeader/>
+    <main className={s.main}>
+      {/* ── Karşılama ── */}
+      <section className={s.hero}>
+        <div className={s.heroGrid} aria-hidden="true"/>
+        <div className={s.heroInner}>
+          <div className={s.heroTop}>
+            <span className={s.avatar} aria-hidden="true">{initials}</span>
+            <div>
+              <span className={s.heroDate} suppressHydrationWarning>{greetingOf(now)} · {new Date(now).toLocaleDateString("tr-TR",{weekday:"long",day:"numeric",month:"long"})}</span>
+              <h1 className={s.heroTitle}>Merhaba, <em>{firstName}</em></h1>
+            </div>
+          </div>
+          <p className={s.heroText}>{loading?"Randevularınız güvenle getiriliyor…":next?<>Sıradaki randevunuz <b>{dayLabel(next.startAt,now)} {timeOf(next.startAt)}</b>, {next.businessName}. {countdownOf(next.startAt,now)}.</>:"Takviminiz boş görünüyor. Size uygun işletmeyi keşfedip birkaç dokunuşla randevu alabilirsiniz."}</p>
+          <div className={s.heroActions}>
+            <Link href="/kesfet" className={s.heroBtn}><CalendarPlus size={17}/> Yeni randevu al</Link>
+            {activeBusiness&&<Link href="/dashboard" className={s.heroBtnGhost}><BriefcaseBusiness size={17}/> İşletme paneli</Link>}
+            <SupportRequestModal audience="customer" triggerLabel="Yardım" triggerClassName={s.helpBtn}/>
+          </div>
+          <div className={s.stats}>
+            <button type="button" className={s.stat} onClick={()=>{setFilter("upcoming");selectTab("appointments")}}><b>{loading?"–":upcoming.length}</b><small>Yaklaşan</small></button>
+            <button type="button" className={s.stat} onClick={()=>{setFilter("history");selectTab("appointments")}}><b>{loading?"–":completed.length}</b><small>Geçmiş</small></button>
+            <button type="button" className={s.stat} onClick={()=>selectTab("favorites")}><b>{loading?"–":favorites.length}</b><small>Favori</small></button>
+            <button type="button" className={s.stat} onClick={()=>selectTab("benefits")}><b>{loading?"–":totalLoyaltyPoints}</b><small>Puan</small></button>
           </div>
         </div>
-        <div className={`account-hero-summary ${next?"has-appointment":"is-empty"}`}>
-          <div className="account-hero-summary-icon">{next?<CalendarDays size={23}/>:<Compass size={23}/>}</div>
-          <div className="account-hero-summary-copy">
-            <span>{next?"SIRADAKİ RANDEVUNUZ":"BUGÜNÜN PLANI"}</span>
-            <h2>{next?next.businessName:"Yaklaşan randevunuz yok"}</h2>
-            <p>{next?`${formatDate(next.startAt)} · ${next.serviceName}`:"Yeni bir randevuyu birkaç adımda planlayabilirsiniz."}</p>
-          </div>
-          {next?.publicToken?<Link href={`/randevu/${next.publicToken}`}>Detayları aç <ArrowRight size={15}/></Link>:<Link href="/kesfet">Uygun yerleri gör <ArrowRight size={15}/></Link>}
-        </div>
+        <div className={s.heroMascot} aria-hidden="true"><RoviMascot size={132} mood={next?"happy":"wave"} alt=""/></div>
       </section>
 
-      {suspendedBusinesses.map((business)=><section key={business.id} className="mx-auto mt-5 flex w-[calc(100%_-_32px)] max-w-[1180px] flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950"><div><small className="font-bold tracking-wider">ASKIYA ALINAN İŞLETME</small><h2 className="text-lg font-extrabold">{business.name}</h2><p className="text-sm">{business.adminNote||"İşletmeniz inceleme nedeniyle geçici olarak panel listesinden kaldırıldı."}</p></div><SupportRequestModal audience="business" businessId={business.id} businessName={business.name} triggerLabel="İnceleme / itiraz talebi gönder" triggerClassName="account-support-trigger"/></section>)}
+      {suspendedBusinesses.map((business)=><section key={business.id} className={s.notice}><div><small>ASKIYA ALINAN İŞLETME</small><h2>{business.name}</h2><p>{business.adminNote||"İşletmeniz inceleme nedeniyle geçici olarak panel listesinden kaldırıldı."}</p></div><SupportRequestModal audience="business" businessId={business.id} businessName={business.name} triggerLabel="İnceleme / itiraz talebi gönder" triggerClassName={s.noticeBtn}/></section>)}
 
-      <section className="account-shell">
-        <aside className="account-sidebar"><div className="account-profile-mini"><div>{(profileName||user?.email||"U").charAt(0).toUpperCase()}</div><span><b>{profileName||user?.displayName||"Hoş geldiniz"}</b><small>{user?.email}</small></span></div><nav role="tablist" aria-label="Hesap bölümleri">{ACCOUNT_TABS.map(({key,label,icon:Icon},index)=><button key={key} id={`account-tab-${key}`} type="button" role="tab" aria-selected={tab===key} aria-controls="account-tab-panel" tabIndex={tab===key?0:-1} className={tab===key?"active":""} onKeyDown={event=>handleTabKeyDown(event,index)} onClick={()=>setTab(key)}><Icon size={18}/><span>{label}</span>{key==="appointments"&&<i>{appointments.length}</i>}{key==="benefits"&&(activePackages.length>0||totalLoyaltyPoints>0)&&<i>{activePackages.length||totalLoyaltyPoints}</i>}{key==="favorites"&&favorites.length>0&&<i>{favorites.length}</i>}</button>)}</nav>{activeBusiness&&<section className="account-business-access"><div><i><BriefcaseBusiness size={18}/></i><span><small>İŞLETME HESABI</small><b>{activeBusiness.name}</b></span></div>{businesses.length>1&&<label><span>Yönetilecek işletme</span><select value={activeBusiness.id} onChange={event=>setBusinessId(event.target.value)}>{businesses.map(business=><option value={business.id} key={business.id}>{business.name}</option>)}</select></label>}<Link href="/dashboard">Yönetim paneline geç <ExternalLink size={14}/></Link></section>}{businessesLoading&&!activeBusiness&&<div className="account-business-loading" aria-label="İşletme hesapları yükleniyor"/>}<div className="account-side-help"><MessageCircleMore size={22}/><b>Bir sorunuz mu var?</b><p>Destek merkezimiz her adımda yanınızda.</p><Link href="/yardim-merkezi">Yardım merkezini aç <ArrowRight size={13}/></Link></div><button className="account-logout" onClick={async()=>{await logout();router.push("/musteri/giris")}}><LogOut size={17}/> Güvenli çıkış</button></aside>
+      <section className={s.shell} ref={shellRef}>
+        <aside className={s.aside}>
+          <div className={s.asideProfile}><span aria-hidden="true">{initials}</span><span><b>{displayName||"Hoş geldiniz"}</b><small>{user?.email}</small></span></div>
+          <nav ref={tabsRef} className={s.tabs} role="tablist" aria-label="Hesap bölümleri">
+            {ACCOUNT_TABS.map(({key,label,short,icon:Icon},index)=>{const badge=tabBadge(key);return <button key={key} id={`account-tab-${key}`} type="button" role="tab" aria-selected={tab===key} aria-controls="account-tab-panel" tabIndex={tab===key?0:-1} className={`${s.tab} ${tab===key?s.tabActive:""}`} onKeyDown={event=>handleTabKeyDown(event,index)} onClick={()=>selectTab(key)}><Icon size={17} aria-hidden="true"/><span className={s.tabShort}>{short}</span><span className={s.tabLong}>{label}</span>{badge!==null&&<i className={s.tabBadge}>{badge}</i>}</button>})}
+          </nav>
+          <div className={s.asideExtras}>
+            {activeBusiness&&<BusinessAccess businesses={businesses} activeBusiness={activeBusiness} onSelect={setBusinessId}/>}
+            {businessesLoading&&!activeBusiness&&<div className={`${s.skelBlock} ${s.bizLoading}`} aria-label="İşletme hesapları yükleniyor"/>}
+            <Link href="/yardim-merkezi" className={s.sideLink}><LifeBuoy size={17}/> Yardım merkezi</Link>
+            <button type="button" className={s.sideLink} onClick={async()=>{await logout();router.push("/musteri/giris")}}><LogOut size={17}/> Güvenli çıkış</button>
+          </div>
+        </aside>
 
-        <div className="account-content" id="account-tab-panel" role="tabpanel" aria-labelledby={`account-tab-${tab}`} tabIndex={0}>
-          {tab==="overview"&&<>
-            <div className="account-section-head"><div><span>GENEL BAKIŞ</span><h2>Randevularınız bir bakışta.</h2></div><button onClick={()=>setTab("appointments")}>Tümünü gör <ChevronRight size={16}/></button></div>
-            <div className="account-metrics"><article><span><CalendarDays/></span><div><b>{upcoming.length}</b><small>Yaklaşan</small></div></article><article><span><Check/></span><div><b>{completed.length}</b><small>Tamamlanan</small></div></article><article><span><Store/></span><div><b>{visitedBusinessCount}</b><small>Deneyim noktası</small></div></article><article><span><Heart/></span><div><b>{favorites.length}</b><small>Favori işletme</small></div></article></div>
-            {next?<section className="account-next"><div className="account-next-date"><strong>{new Date(next.startAt).toLocaleDateString("tr-TR",{day:"2-digit"})}</strong><span>{new Date(next.startAt).toLocaleDateString("tr-TR",{month:"short"}).toUpperCase()}</span><small>{new Date(next.startAt).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</small></div><div className="account-next-info"><span>SIRADAKİ RANDEVUNUZ</span><h3>{next.businessName}</h3><p>{next.serviceName} · {next.staffName}</p><small><MapPin size={13}/>{next.businessCity||"Konum bilgisi işletmede"}</small></div><div className="account-next-actions">{next.publicToken&&<Link href={`/randevu/${next.publicToken}`}>Detayları aç <ArrowRight size={14}/></Link>}{next.allowReschedule&&<button onClick={()=>setRescheduling(next)}>Saati değiştir</button>}<button onClick={()=>setCancelling(next)}>Randevuyu iptal et</button></div></section>:<section className="account-empty-premium account-empty-rande"><div><RoviMascot size={104} alt="Rovi keşif yardımcısı" mood="wave" /></div><span>ROVİ ÖNERİYOR</span><h3>Takviminizde yaklaşan randevu yok.</h3><p>Aradığınız hizmeti söyleyin; Rovi size uygun işletmeleri keşfetmeniz için yolu açsın.</p><Link href="/kesfet">Rovi ile keşfet <ArrowRight size={15}/></Link></section>}
-            <section className="account-quick-grid"><button type="button" onClick={()=>setTab("alerts")}><i><BellRing/></i><span><small>AKILLI TAKİP</small><b>Müsait saat yakala</b><em>Dolu saat açıldığında haberdar olun.</em></span><ChevronRight/></button><button type="button" onClick={()=>setTab("favorites")}><i><Heart/></i><span><small>HIZLI ERİŞİM</small><b>Favorilerime git</b><em>Sevdiğiniz işletmeler tek ekranda.</em></span><ChevronRight/></button>{lastCompleted?<Link href={lastCompleted.businessSlug?`/isletme/${lastCompleted.businessSlug}/randevu?service=${encodeURIComponent(lastCompleted.serviceId)}`:"/kesfet"}><i><RotateCcw/></i><span><small>TEKRARLA</small><b>{lastCompleted.serviceName}</b><em>{lastCompleted.businessName} için yeniden planlayın.</em></span><ChevronRight/></Link>:<button type="button" onClick={()=>setTab("profile")}><i><Fingerprint/></i><span><small>HESAP GÜVENLİĞİ</small><b>Profilimi tamamla</b><em>İletişim bilgilerinizi güncel tutun.</em></span><ChevronRight/></button>}</section>
-            <div className="account-recent-head"><h3>Son hareketler</h3><button onClick={()=>setTab("appointments")}>Geçmişi görüntüle</button></div>{appointments.length?<div className="account-recent-list">{appointments.slice(0,3).map(item=><AppointmentRow key={item.id} item={item} now={now} onCancel={()=>setCancelling(item)} onReschedule={()=>setRescheduling(item)} onReview={()=>setReviewing(item)}/>)}</div>:<div className="account-recent-empty"><Sparkles/><div><b>İlk hareketiniz burada görünecek.</b><span>Bir işletme keşfedin ve size uygun saati ayırın.</span></div><Link href="/kesfet">Keşfet <ArrowRight/></Link></div>}
-          </>}
+        <div className={s.content} id="account-tab-panel" role="tabpanel" aria-labelledby={`account-tab-${tab}`} tabIndex={0}>
+          {tab==="overview"&&<div className={s.panel} key="overview">
+            <div className={s.head}><div><span className={s.eyebrow}>Sıradaki randevunuz</span><h2>{next?"Hazırlıklar tamam.":"Takviminiz sizi bekliyor."}</h2></div>{upcoming.length>1&&<button type="button" className={s.headLink} onClick={()=>{setFilter("upcoming");selectTab("appointments")}}>{upcoming.length} yaklaşan <ChevronRight size={15}/></button>}</div>
+            {loading?<i className={`${s.skelBlock} ${s.skelTicket}`}/>:loadError?<ErrorBox message={loadError} onRetry={()=>setReloadKey(value=>value+1)}/>:next?<NextTicket item={next} now={now} {...rowHandlers(next)}/>:<RoviEmpty tag="ROVİ ÖNERİYOR" title="Yaklaşan randevunuz yok." text="Aradığınız hizmeti söyleyin; Rovi size uygun işletmeleri keşfetmeniz için yolu açsın." mood="wave"><Link href="/kesfet" className={`${s.pill} ${s.pillPrimary}`}>Rovi ile keşfet <ArrowRight size={15}/></Link>{lastCompleted?.businessSlug&&<Link href={rebookHref(lastCompleted)} className={s.pill}><RotateCcw size={15}/> Son randevuyu tekrarla</Link>}</RoviEmpty>}
+            {!loading&&upcoming.length>1&&<><div className={s.sub}><h3>Sonraki randevular</h3><button type="button" onClick={()=>{setFilter("upcoming");selectTab("appointments")}}>Tümü</button></div><div className={s.miniList}>{upcoming.slice(1,4).map(item=>{const body=<><DateTile value={item.startAt} active/><div><b>{item.businessName}</b><span>{dayLabel(item.startAt,now)} {timeOf(item.startAt)} · {item.serviceName}</span></div><em>{shortCountdown(item.startAt,now)}</em></>;return item.publicToken?<Link key={item.id} href={`/randevu/${item.publicToken}`} className={s.mini}>{body}</Link>:<button key={item.id} type="button" className={s.mini} onClick={()=>{setFilter("upcoming");selectTab("appointments")}}>{body}</button>})}</div></>}
+            <div className={s.quickGrid}>
+              <button type="button" className={s.quick} onClick={()=>selectTab("alerts")}><i className={s.quickIcon}><BellRing size={20}/></i><span><small>AKILLI TAKİP</small><b>Müsait saat yakala</b><em>Dolu saat açılınca haber verelim.</em></span><ChevronRight size={18}/></button>
+              <button type="button" className={s.quick} onClick={()=>selectTab("favorites")}><i className={s.quickIcon}><Heart size={20}/></i><span><small>HIZLI ERİŞİM</small><b>Favorilerim</b><em>{favorites.length?`${favorites.length} kayıtlı işletme`:"Sevdiğiniz yerler tek ekranda."}</em></span><ChevronRight size={18}/></button>
+              {lastCompleted?<Link href={rebookHref(lastCompleted)} className={s.quick}><i className={s.quickIcon}><RotateCcw size={20}/></i><span><small>TEKRARLA</small><b>{lastCompleted.serviceName}</b><em>{lastCompleted.businessName}</em></span><ChevronRight size={18}/></Link>:<button type="button" className={s.quick} onClick={()=>selectTab("profile")}><i className={s.quickIcon}><Fingerprint size={20}/></i><span><small>HESAP</small><b>Profilimi tamamla</b><em>%{profileScore} tamamlandı</em></span><ChevronRight size={18}/></button>}
+            </div>
+            <div className={s.sub}><h3>Son hareketler</h3>{appointments.length>0&&<button type="button" onClick={()=>{setFilter("all");selectTab("appointments")}}>Geçmişi görüntüle</button>}</div>
+            {loading?<div className={s.skel}>{[1,2].map(x=><i key={x}/>)}</div>:appointments.length?<div className={s.list}>{appointments.slice(0,3).map((item,index)=><AppointmentRow key={item.id} index={index} item={item} now={now} reviewed={reviewedIds.has(item.id)} {...rowHandlers(item)}/>)}</div>:!loadError&&<div className={s.softEmpty}><CalendarDays size={22}/><span><b>İlk hareketiniz burada görünecek.</b>Bir işletme keşfedin ve size uygun saati ayırın.</span></div>}
+          </div>}
 
-          {tab==="appointments"&&<>
-            <div className="account-section-head"><div><span>RANDEVULARIM</span><h2>Tüm planınız, tek akışta.</h2></div><Link href="/kesfet">+ Yeni randevu</Link></div>
-            <div className="account-appointment-toolbar"><label><Search size={17}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="İşletme, hizmet veya çalışan ara…"/></label><div>{([['all','Tümü'],['upcoming','Yaklaşan'],['history','Geçmiş'],['cancelled','İptal']] as const).map(([key,label])=><button key={key} className={filter===key?"active":""} onClick={()=>setFilter(key)}>{label}</button>)}</div></div>
-            {loading?<div className="account-loading-list">{[1,2,3].map(x=><i key={x}/>)}</div>:loadError?<div className="account-error"><X/><h3>Randevular yüklenemedi.</h3><p>{loadError}</p><button type="button" onClick={()=>setReloadKey(value=>value+1)}>Yeniden dene</button></div>:<>{filtered.length?<div className="account-appointment-list">{filtered.map(item=><AppointmentRow key={item.id} item={item} now={now} onCancel={()=>setCancelling(item)} onReschedule={()=>setRescheduling(item)} onReview={()=>setReviewing(item)}/>)}</div>:<div className="account-empty-premium"><div><Search size={31}/></div><h3>Bu görünümde randevu bulunamadı.</h3><p>{hasMoreAppointments?"Aradığınız kayıt daha eski randevularınızda olabilir.":"Filtreyi temizleyebilir veya yeni bir işletme keşfedebilirsiniz."}</p><button type="button" onClick={()=>{setFilter("all");setSearch("")}}>Filtreleri temizle</button></div>}{hasMoreAppointments&&<button type="button" className="account-load-more" onClick={loadMoreAppointments} disabled={appointmentsLoadingMore}>{appointmentsLoadingMore?<><LoaderCircle className="animate-spin"/> Yükleniyor</>:<>Daha eski randevuları yükle <History/></>}</button>}</>}
-          </>}
+          {tab==="appointments"&&<div className={s.panel} key="appointments">
+            <div className={s.head}><div><span className={s.eyebrow}>Randevularım</span><h2>Tüm planınız tek akışta.</h2></div><Link href="/kesfet" className={s.headLink}><CalendarPlus size={15}/> Yeni</Link></div>
+            <div className={s.toolbar}>
+              <label className={s.search}><Search size={18} aria-hidden="true"/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="İşletme, hizmet veya çalışan ara…" aria-label="Randevularda ara" enterKeyHint="search"/>{search&&<button type="button" className={s.iconBtn} onClick={()=>setSearch("")} aria-label="Aramayı temizle"><X size={16}/></button>}</label>
+              <div className={s.segment} role="group" aria-label="Randevu filtresi">{([["all","Tümü"],["upcoming","Yaklaşan"],["history","Geçmiş"],["cancelled","İptal"]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={filter===key} className={`${s.seg} ${filter===key?s.segOn:""}`} onClick={()=>setFilter(key)}>{label}{!loading&&<small>{filterCounts[key]}</small>}</button>)}</div>
+            </div>
+            {loading?<div className={s.skel}>{[1,2,3].map(x=><i key={x}/>)}</div>:loadError?<ErrorBox message={loadError} onRetry={()=>setReloadKey(value=>value+1)}/>:<>
+              {filtered.length?<div className={s.list}>{filtered.map((item,index)=><AppointmentRow key={item.id} index={Math.min(index,10)} item={item} now={now} reviewed={reviewedIds.has(item.id)} {...rowHandlers(item)}/>)}</div>
+                :appointments.length?<RoviEmpty tag="SONUÇ YOK" title="Bu görünümde randevu bulunamadı." text={hasMoreAppointments?"Aradığınız kayıt daha eski randevularınızda olabilir.":"Filtreyi temizleyebilir veya yeni bir işletme keşfedebilirsiniz."} mood="thinking"><button type="button" className={s.pill} onClick={()=>{setFilter("all");setSearch("")}}>Filtreleri temizle</button></RoviEmpty>
+                :<RoviEmpty tag="İLK RANDEVU" title="Henüz randevunuz yok." text="Berberden spaya, güvenilir işletmeleri keşfedin; uygun saati saniyeler içinde ayırın." mood="wave"><Link href="/kesfet" className={`${s.pill} ${s.pillPrimary}`}>İşletmeleri keşfet <ArrowRight size={15}/></Link></RoviEmpty>}
+              {hasMoreAppointments&&<div className={s.more}><button type="button" className={s.pill} onClick={loadMoreAppointments} disabled={appointmentsLoadingMore}>{appointmentsLoadingMore?<><LoaderCircle className="animate-spin" size={16}/> Yükleniyor</>:<>Daha eski randevuları yükle <History size={16}/></>}</button></div>}
+            </>}
+          </div>}
 
-          {tab==="alerts"&&user&&<AvailabilityAlertsPanel uid={user.uid}/>}
-          {tab==="messages"&&user&&<CustomerMessagesPanel uid={user.uid}/>}
+          {tab==="alerts"&&user&&<div className={s.panel} key="alerts"><AvailabilityAlertsPanel uid={user.uid}/></div>}
+          {tab==="messages"&&user&&<div className={s.panel} key="messages"><CustomerMessagesPanel uid={user.uid}/></div>}
 
-          {tab==="benefits"&&<>
-            <div className="account-section-head"><div><span>PAKETLER VE AVANTAJLAR</span><h2>Kalan hakkınız, puanınız, tek yerde.</h2></div><Link href="/kesfet">Yeni deneyim keşfet <Compass size={15}/></Link></div>
-            <section className="account-benefit-hero"><div><span><Crown/> SENİNRANDEVUN AVANTAJLARI</span><h3>{totalLoyaltyPoints} kullanılabilir puan</h3><p>Her işletmenin puanı kendi mağazasında geçerlidir. Paket seanslarınız kullanıldıkça kalan haklarınız otomatik güncellenir.</p></div><div><strong>{activePackages.length}</strong><span>aktif paket</span></div></section>
-            {benefitsError&&<section className="account-benefit-notice"><AlertTriangle/><div><b>Paket bilgileriniz yüklenemedi.</b><span>{benefitsError}</span></div><button type="button" onClick={()=>setBenefitsReloadKey(value=>value+1)}>Yeniden dene</button></section>}
-            {benefitsPhoneRequired&&<section className="account-benefit-notice"><AlertTriangle/><div><b>Paketlerinizi eşleştirmek için telefon numaranızı tamamlayın.</b><span>İşletmenin paket satışında kullandığı telefon ile hesabınızdaki telefon aynı olmalıdır.</span></div><button type="button" onClick={()=>setTab("profile")}>Telefonu güncelle</button></section>}
-            <div className="account-benefit-title"><div><PackageCheck/><span><small>SEANS TAKİBİ</small><h3>Hizmet paketlerim</h3></span></div><b>{activePackages.length} aktif</b></div>
-            {benefitPackages.length?<div className="account-package-grid">{benefitPackages.map(item=>{const progress=item.totalSessions>0?Math.max(0,Math.min(100,(item.remainingSessions/item.totalSessions)*100)):0;const active=item.status==="active"&&item.remainingSessions>0;return <article key={`${item.businessId}-${item.id}`} className={active?"":"inactive"}><header><span><Gift/></span><div><small>{item.businessName}</small><h3>{item.packageName}</h3><p>{item.serviceName}</p></div><em>{packageStatusLabel(item.status)}</em></header><div className="account-package-progress"><div><span>Kalan seans</span><b>{item.remainingSessions} / {item.totalSessions}</b></div><i><span style={{width:`${progress}%`}}/></i></div><footer><span><CalendarDays/> {item.expiresAt?`${formatShortDate(item.expiresAt)} tarihine kadar`:"Süresiz"}</span>{item.businessSlug&&<Link href={`/isletme/${item.businessSlug}/randevu`}>Randevu al <ArrowRight/></Link>}</footer></article>})}</div>:!benefitsPhoneRequired&&<section className="account-empty-premium"><div><Gift size={31}/></div><h3>Henüz hesabınıza tanımlı paket yok.</h3><p>Bir işletme size hizmet paketi tanımladığında kalan seanslarınız burada otomatik görünür.</p><Link href="/kesfet">İşletmeleri keşfet <ArrowRight size={15}/></Link></section>}
-            <div className="account-benefit-title"><div><Coins/><span><small>PUAN & ÖDÜL CÜZDANI</small><h3>İşletme puanlarım</h3></span></div><b>{totalLoyaltyPoints} puan</b></div>
-            {loyaltyBenefits.length?<div className="account-loyalty-grid">{loyaltyBenefits.map(item=><article key={`${item.businessId}-${item.id}`}><div><span><Coins/></span><div><small>{item.businessName}</small><strong>{item.points}<em>puan</em></strong></div></div><footer><span>Toplam kazanılan <b>{item.lifetimePoints}</b></span>{item.businessSlug&&<Link href={`/isletme/${item.businessSlug}`}>Mağazayı aç <ChevronRight/></Link>}</footer></article>)}</div>:!benefitsPhoneRequired&&<div className="account-benefit-soft-empty"><Coins/><span><b>Henüz puan hareketi yok.</b><small>İşletmelerden yapılan uygun alışverişler sonrası puanınız burada görünür.</small></span></div>}
-          </>}
+          {tab==="benefits"&&<div className={s.panel} key="benefits">
+            <div className={s.head}><div><span className={s.eyebrow}>Paketler ve avantajlar</span><h2>Kalan hakkınız, puanınız.</h2></div><Link href="/kesfet" className={s.headLink}><Compass size={15}/> Keşfet</Link></div>
+            <section className={s.points}><div><small><Crown size={13}/> SENİNRANDEVUN CÜZDANI</small><strong>{totalLoyaltyPoints}<em>puan</em></strong><p>Her işletmenin puanı kendi mağazasında geçerlidir. Paket seanslarınız kullanıldıkça kalan haklarınız otomatik güncellenir.</p></div><div className={s.pointsSide}><div><b>{activePackages.length}</b><br/><span>aktif paket</span></div></div></section>
+            {benefitsError&&<section className={s.alert}><AlertTriangle size={20}/><div><b>Paket bilgileriniz yüklenemedi.</b><span>{benefitsError}</span></div><button type="button" className={s.chipBtn} onClick={()=>setBenefitsReloadKey(value=>value+1)}><RotateCcw size={14}/> Yeniden dene</button></section>}
+            {benefitsPhoneRequired&&<section className={s.alert}><AlertTriangle size={20}/><div><b>Paketlerinizi eşleştirmek için telefon numaranızı tamamlayın.</b><span>İşletmenin paket satışında kullandığı telefon ile hesabınızdaki telefon aynı olmalıdır.</span></div><button type="button" className={`${s.chipBtn} ${s.chipPrimary}`} onClick={()=>selectTab("profile")}>Telefonu güncelle</button></section>}
+            <div className={s.sub}><h3><PackageCheck size={17} style={{display:"inline",verticalAlign:"-3px",marginRight:6}}/>Hizmet paketlerim</h3><span className={s.eyebrow}>{activePackages.length} aktif</span></div>
+            {loading?<div className={s.skel}><i/></div>:benefitPackages.length?<div className={s.pkgGrid}>{benefitPackages.map(item=>{const progress=item.totalSessions>0?Math.max(0,Math.min(100,(item.remainingSessions/item.totalSessions)*100)):0;const active=item.status==="active"&&item.remainingSessions>0;return <article key={`${item.businessId}-${item.id}`} className={`${s.pkg} ${active?"":s.pkgOff}`}><div className={s.pkgHead}><Ring percent={progress} label={`${item.remainingSessions}`}/><div><small>{item.businessName}</small><h3>{item.packageName}</h3><p>{item.serviceName} · {item.remainingSessions}/{item.totalSessions} seans kaldı</p></div><span className={`${s.status} ${active?s.st_confirmed:s.st_other}`}>{packageStatusLabel(item.status)}</span></div><div className={s.pkgFoot}><span><CalendarDays size={14}/> {item.expiresAt?`${formatShortDate(item.expiresAt)} tarihine kadar`:"Süresiz"}</span>{item.businessSlug&&active&&<Link href={`/isletme/${item.businessSlug}/randevu`} className={`${s.chipBtn} ${s.chipPrimary}`}>Randevu al <ArrowRight size={14}/></Link>}</div></article>})}</div>:!benefitsPhoneRequired&&<RoviEmpty tag="PAKETLER" title="Henüz tanımlı paketiniz yok." text="Bir işletme size hizmet paketi tanımladığında kalan seanslarınız burada otomatik görünür." mood="idle"><Link href="/kesfet" className={s.pill}>İşletmeleri keşfet <ArrowRight size={15}/></Link></RoviEmpty>}
+            <div className={s.sub}><h3><Coins size={17} style={{display:"inline",verticalAlign:"-3px",marginRight:6}}/>İşletme puanlarım</h3><span className={s.eyebrow}>{totalLoyaltyPoints} puan</span></div>
+            {loyaltyBenefits.length?<div className={s.walletGrid}>{loyaltyBenefits.map(item=><article key={`${item.businessId}-${item.id}`} className={s.wallet}><span className={s.walletIcon}><Coins size={21}/></span><div><small>{item.businessName}</small><strong>{item.points}<em>puan</em></strong><small>Toplam kazanılan {item.lifetimePoints}</small></div>{item.businessSlug&&<Link href={`/isletme/${item.businessSlug}`} className={s.chipBtn}>Mağaza <ChevronRight size={14}/></Link>}</article>)}</div>:!benefitsPhoneRequired&&!loading&&<div className={s.softEmpty}><Coins size={22}/><span><b>Henüz puan hareketi yok.</b>İşletmelerden yapılan uygun alışverişler sonrası puanınız burada görünür.</span></div>}
+          </div>}
 
-          {tab==="favorites"&&<>
-            <div className="account-section-head"><div><span>FAVORİ MAĞAZALAR</span><h2>Sevdikleriniz bir dokunuş uzağınızda.</h2></div><Link href="/kesfet">Yeni yer keşfet <Compass size={15}/></Link></div>
-            {favorites.length?<div className="account-favorite-grid">{favorites.map((item)=><article key={item.businessId} className="account-favorite-card"><div className="account-favorite-logo">{item.logoUrl?<Image src={item.logoUrl} alt="" fill sizes="64px"/>:<Store size={25}/>}</div><div><small>{item.category||"İŞLETME"}</small><h3>{item.name}</h3><p><MapPin size={13}/>{[item.district,item.city].filter(Boolean).join(", ")||"Konum bilgisi işletmede"}</p></div><footer><Link href={item.slug?`/isletme/${item.slug}`:"/kesfet"}>Mağazayı aç <ArrowRight size={14}/></Link><Link href={item.slug?`/isletme/${item.slug}/randevu`:"/kesfet"}>Randevu al <CalendarPlus size={14}/></Link><button type="button" onClick={()=>removeFavorite(item)} aria-label={`${item.name} işletmesini favorilerden çıkar`}><Trash2 size={15}/></button></footer></article>)}</div>:<section className="account-empty-premium"><div><Heart size={31}/></div><h3>Henüz favori mağazanız yok.</h3><p>Beğendiğiniz işletmeleri favoriye ekleyin; tekrar randevu almak çok daha hızlı olsun.</p><Link href="/kesfet">Favori işletmeni keşfet <ArrowRight size={15}/></Link></section>}
-          </>}
+          {tab==="favorites"&&<div className={s.panel} key="favorites">
+            <div className={s.head}><div><span className={s.eyebrow}>Favori işletmeler</span><h2>Sevdikleriniz bir dokunuş uzakta.</h2></div><Link href="/kesfet" className={s.headLink}><Compass size={15}/> Keşfet</Link></div>
+            {loading?<div className={s.skel}>{[1,2].map(x=><i key={x}/>)}</div>:favorites.length?<div className={s.favGrid}>{favorites.map((item,index)=><article key={item.businessId} className={s.fav} style={{"--i":Math.min(index,8)} as CSSProperties}><div className={s.favCover}><button type="button" className={s.favHeart} onClick={()=>removeFavorite(item)} aria-label={`${item.name} işletmesini favorilerden çıkar`} title="Favorilerden çıkar"><Heart size={18}/></button></div><div className={s.favBody}><div className={s.favLogo}>{item.logoUrl?<Image src={item.logoUrl} alt="" fill sizes="58px"/>:initialsOf(item.name)}</div><div><small>{item.category||"İşletme"}</small><h3>{item.name}</h3><p><MapPin size={13}/>{[item.district,item.city].filter(Boolean).join(", ")||"Konum bilgisi işletmede"}</p></div></div><div className={s.favActions}><Link href={item.slug?`/isletme/${item.slug}/randevu`:"/kesfet"} className={`${s.action} ${s.actionPrimary}`}><CalendarPlus size={16}/> Randevu al</Link><Link href={item.slug?`/isletme/${item.slug}`:"/kesfet"} className={s.action} aria-label={`${item.name} mağazasını aç`} title="Mağazayı aç"><Store size={17}/></Link></div></article>)}</div>:<RoviEmpty tag="FAVORİLER" title="Henüz favori işletmeniz yok." text="Beğendiğiniz işletmelerde kalbe dokunun; tekrar randevu almak çok daha hızlı olsun." mood="happy"><Link href="/kesfet" className={`${s.pill} ${s.pillPrimary}`}>Favori işletmeni keşfet <ArrowRight size={15}/></Link></RoviEmpty>}
+          </div>}
 
-          {tab==="profile"&&<>
-            <PushToggleCard audience="customer" />
-            <div className="account-section-head"><div><span>HESAP AYARLARI</span><h2>Bilgileriniz hep güncel.</h2></div></div>
-            <section className="account-profile-card"><div className="account-profile-art"><Image src="/images/booking-flow-hero.png" alt="" fill sizes="(max-width:800px) 100vw, 34vw"/><span><UserRound size={26}/></span></div><div className="account-profile-form"><label><span>İsim soyisim</span><input value={profileName} onChange={event=>setProfileName(event.target.value)} maxLength={80} placeholder="Adınız ve soyadınız"/></label><label><span>Telefon</span><input value={profilePhone} onChange={event=>setProfilePhone(event.target.value)} maxLength={22} inputMode="tel" placeholder="05xx xxx xx xx"/></label><label><span>E-posta</span><input value={user?.email??""} disabled/></label><p><Settings2 size={15}/> Telefon bilginiz destek taleplerinde ve size ulaşılması gereken durumlarda kullanılır.</p><button onClick={saveProfile} disabled={profileBusy}>{profileBusy?<><LoaderCircle className="animate-spin" size={16}/> Kaydediliyor</>:<>Bilgileri kaydet <Check size={16}/></>}</button></div></section>
-            <section className="account-security-center"><header><span><ShieldCheck size={19}/></span><div><small>GÜVENLİK VE GİZLİLİK</small><h3>Hesabınızın kontrolü sizde.</h3></div><button type="button" className={emailVerified?"verified":""} onClick={()=>!emailVerified&&sendEmailVerification()} disabled={verificationBusy||emailVerified}>{verificationBusy?<LoaderCircle className="animate-spin"/>:emailVerified?<BadgeCheck/>:<AlertTriangle/>} {emailVerified?"E-posta doğrulandı":"Doğrulama bekliyor · Kodu gönder"}</button></header><div>{!emailVerified&&<article className="account-verification-entry"><i><BadgeCheck size={18}/></i><span><b>E-postanızı doğrulayın</b><small>Hesap güvenliği ve önemli bildirimler için 6 haneli kodla doğrulayın.</small></span><button type="button" onClick={sendEmailVerification} disabled={verificationBusy}>{verificationBusy?<LoaderCircle className="animate-spin"/>:<ArrowRight/>} Doğrulamayı başlat</button></article>}<article><i><KeyRound size={18}/></i><span><b>Şifrenizi yenileyin</b><small>Güvenli bağlantıyı kayıtlı e-posta adresinize göndeririz.</small></span><button type="button" onClick={sendPasswordLink} disabled={passwordBusy}>{passwordBusy?<LoaderCircle className="animate-spin" size={15}/>:<LockKeyhole size={15}/>} Bağlantı gönder</button></article><article><i><ShieldCheck size={18}/></i><span><b>Veri ve gizlilik merkezi</b><small>Verilerinizin nasıl işlendiğini ve KVKK haklarınızı inceleyin.</small></span><div><Link href="/gizlilik">Gizlilik</Link><Link href="/kvkk">KVKK</Link></div></article><article className="account-security-summary"><i><Fingerprint size={18}/></i><span><b>Güvenlik özeti</b><small>Son giriş: {formatLastSignIn(user?.metadata.lastSignInTime)}</small></span><strong>%{profileScore}</strong></article><article className="account-delete-entry"><i><Trash2 size={18}/></i><span><b>Hesabımı ve verilerimi sil</b><small>Bu işlem randevu geçmişiniz ve sahibi olduğunuz işletmeler dahil kalıcıdır.</small></span><button type="button" onClick={()=>setDeleteOpen(true)}>Silme seçenekleri</button></article></div></section>
-            {completedValue>0&&<p className="account-value-note"><TicketCheck size={15}/> Tamamlanan randevularınızdaki kayıtlı hizmet değeri: <b>{formatMoney(completedValue)}</b></p>}
-          </>}
+          {tab==="profile"&&<div className={s.panel} key="profile">
+            <div className={s.head}><div><span className={s.eyebrow}>Hesap ayarları</span><h2>Bilgileriniz hep güncel.</h2></div></div>
+            <section className={s.idCard}><span className={s.idAvatar} aria-hidden="true">{initials}</span><div><h3>{displayName||"İsimsiz kullanıcı"}</h3><p>{user?.email}</p><span className={`${s.verified} ${emailVerified?"":s.unverified}`}>{emailVerified?<><BadgeCheck size={13}/> E-posta doğrulandı</>:<><AlertTriangle size={13}/> Doğrulama bekliyor</>}</span></div><div className={s.score} aria-label={`Profil %${profileScore} tamamlandı`}><svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="25"/><circle cx="30" cy="30" r="25" strokeDasharray={157.08} strokeDashoffset={157.08*(1-profileScore/100)}/></svg><b>%{profileScore}</b><small>profil</small></div></section>
+
+            <div className={s.group}><span className={s.groupTitle}>Kişisel bilgiler</span>
+              <div className={s.settings}>
+                <label className={s.field}><span>İsim soyisim</span><input value={profileName} onChange={event=>setProfileName(event.target.value)} maxLength={80} placeholder="Adınız ve soyadınız" autoComplete="name"/></label>
+                <label className={s.field}><span>Telefon</span><input value={profilePhone} onChange={event=>setProfilePhone(event.target.value)} maxLength={22} inputMode="tel" placeholder="05xx xxx xx xx" autoComplete="tel"/></label>
+                <label className={s.field}><span>E-posta</span><input value={user?.email??""} disabled/></label>
+              </div>
+              <p className={s.groupNote}>Telefon bilginiz destek taleplerinde, paket eşleştirmede ve size ulaşılması gereken durumlarda kullanılır.</p>
+              <button type="button" className={s.saveBtn} onClick={saveProfile} disabled={profileBusy}>{profileBusy?<><LoaderCircle className="animate-spin" size={17}/> Kaydediliyor</>:<><Check size={17}/> Bilgileri kaydet</>}</button>
+            </div>
+
+            <div className={s.group}><span className={s.groupTitle}>Bildirimler</span><PushToggleCard audience="customer" appearance="account"/></div>
+
+            <div className={s.group}><span className={s.groupTitle}>Güvenlik</span>
+              <div className={s.settings}>
+                <button type="button" className={s.row} onClick={()=>!emailVerified&&sendEmailVerification()} disabled={verificationBusy||emailVerified}><i className={`${s.rowIcon} ${emailVerified?"":s.ic_amber}`}><BadgeCheck size={18}/></i><span className={s.rowText}><b>E-posta doğrulaması</b><small>{emailVerified?"Adresiniz doğrulandı.":"6 haneli kodla doğrulayın; önemli bildirimler kaçmasın."}</small></span><span className={`${s.rowEnd} ${emailVerified?s.rowEndOk:""}`}>{verificationBusy?<LoaderCircle className="animate-spin" size={16}/>:emailVerified?<Check size={17}/>:<>Kodu gönder <ChevronRight size={16}/></>}</span></button>
+                <button type="button" className={s.row} onClick={sendPasswordLink} disabled={passwordBusy}><i className={`${s.rowIcon} ${s.ic_blue}`}><KeyRound size={18}/></i><span className={s.rowText}><b>Şifreyi yenile</b><small>Güvenli bağlantıyı e-posta adresinize gönderelim.</small></span><span className={s.rowEnd}>{passwordBusy?<LoaderCircle className="animate-spin" size={16}/>:<><LockKeyhole size={15}/><ChevronRight size={16}/></>}</span></button>
+                <div className={s.row}><i className={`${s.rowIcon} ${s.ic_gray}`}><Fingerprint size={18}/></i><span className={s.rowText}><b>Son giriş</b><small>{formatLastSignIn(user?.metadata.lastSignInTime)}</small></span></div>
+              </div>
+            </div>
+
+            {(activeBusiness||businessesLoading)&&<div className={s.group}><span className={s.groupTitle}>İşletme hesabı</span>
+              {activeBusiness?<div className={s.settings}>
+                {businesses.length>1&&<label className={s.field}><span>Yönetilecek işletme</span><select value={activeBusiness.id} onChange={event=>setBusinessId(event.target.value)}>{businesses.map(business=><option value={business.id} key={business.id}>{business.name}</option>)}</select></label>}
+                <Link href="/dashboard" className={s.row}><i className={`${s.rowIcon} ${s.ic_lime}`}><BriefcaseBusiness size={18}/></i><span className={s.rowText}><b>{activeBusiness.name}</b><small>Yönetim paneline geçin</small></span><span className={s.rowEnd}><ExternalLink size={15}/></span></Link>
+              </div>:<div className={`${s.skelBlock} ${s.bizLoading}`} aria-label="İşletme hesapları yükleniyor"/>}
+            </div>}
+
+            <div className={s.group}><span className={s.groupTitle}>Destek ve gizlilik</span>
+              <div className={s.settings}>
+                <Link href="/yardim-merkezi" className={s.row}><i className={`${s.rowIcon} ${s.ic_violet}`}><LifeBuoy size={18}/></i><span className={s.rowText}><b>Yardım merkezi</b><small>Sık sorulan sorular ve rehberler</small></span><ChevronRight size={17} className={s.rowEnd}/></Link>
+                <Link href="/gizlilik" className={s.row}><i className={`${s.rowIcon} ${s.ic_gray}`}><ShieldCheck size={18}/></i><span className={s.rowText}><b>Gizlilik politikası</b></span><ChevronRight size={17} className={s.rowEnd}/></Link>
+                <Link href="/kvkk" className={s.row}><i className={`${s.rowIcon} ${s.ic_gray}`}><UserRound size={18}/></i><span className={s.rowText}><b>KVKK ve veri haklarım</b></span><ChevronRight size={17} className={s.rowEnd}/></Link>
+                <button type="button" className={s.row} onClick={async()=>{await logout();router.push("/musteri/giris")}}><i className={`${s.rowIcon} ${s.ic_gray}`}><LogOut size={18}/></i><span className={s.rowText}><b>Güvenli çıkış</b></span><ChevronRight size={17} className={s.rowEnd}/></button>
+              </div>
+            </div>
+
+            <div className={`${s.group} ${s.dangerZone}`}><span className={s.groupTitle}>Tehlikeli bölge</span>
+              <div className={s.settings}><button type="button" className={`${s.row} ${s.rowDanger}`} onClick={()=>setDeleteOpen(true)}><i className={`${s.rowIcon} ${s.ic_red}`}><Trash2 size={18}/></i><span className={s.rowText}><b>Hesabımı ve verilerimi sil</b><small>Randevu geçmişiniz ve sahibi olduğunuz işletmeler dahil kalıcıdır.</small></span><ChevronRight size={17} className={s.rowEnd}/></button></div>
+            </div>
+            {completedValue>0&&<p className={s.valueNote}><TicketCheck size={15}/> Tamamlanan randevularınızdaki kayıtlı hizmet değeri: <b>{formatMoney(completedValue)}</b></p>}
+          </div>}
         </div>
       </section>
     </main><MarketingFooter/>
 
-    {reviewing&&<div className="account-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)setReviewing(null)}}><div className="account-review-wrap" role="dialog" aria-modal="true" aria-labelledby="account-review-title"><button onClick={()=>setReviewing(null)} aria-label="Kapat"><X/></button><div><span>DEĞERLENDİRME</span><h3 id="account-review-title">{reviewing.businessName}</h3><p>{reviewing.serviceName} · {formatDate(reviewing.startAt)}</p></div><ReviewForm businessId={reviewing.businessId} appointmentId={reviewing.id} serviceName={reviewing.serviceName} staffName={reviewing.staffName} onSuccess={()=>setReviewing(null)}/></div></div>}
+    {reviewing&&<Sheet onDismiss={()=>setReviewing(null)} labelledBy="account-review-title">
+      <button type="button" className={s.sheetClose} onClick={()=>setReviewing(null)} aria-label="Kapat"><X size={18}/></button>
+      <div className={s.reviewHead}><span>DEĞERLENDİRME</span><h3 id="account-review-title">{reviewing.businessName}</h3><p>{reviewing.serviceName} · {formatDate(reviewing.startAt)}</p></div>
+      <ReviewForm businessId={reviewing.businessId} appointmentId={reviewing.id} serviceName={reviewing.serviceName} staffName={reviewing.staffName} onSuccess={()=>{const id=reviewing.id;setReviewedIds(current=>new Set(current).add(id));setReviewing(null)}}/>
+    </Sheet>}
     {rescheduling&&<RescheduleDialog businessId={rescheduling.businessId} serviceId={rescheduling.serviceId} staffId={rescheduling.staffId||undefined} currentStartAt={rescheduling.startAt} title={rescheduling.businessName} subtitle={`${rescheduling.serviceName} · Şu an: ${formatDate(rescheduling.startAt)}`} timeZone={rescheduling.timeZone} maximumBookingDaysAhead={rescheduling.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
-    {cancelling&&<div className="account-overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!cancelBusy)setCancelling(null)}}><section className="account-cancel-modal" role="dialog" aria-modal="true" aria-labelledby="account-cancel-title"><button className="account-modal-close" onClick={()=>setCancelling(null)} disabled={cancelBusy} aria-label="Kapat"><X/></button><div><CalendarDays size={27}/></div><span>RANDEVU İPTALİ</span><h2 id="account-cancel-title">Bu randevuyu iptal etmek istediğinize emin misiniz?</h2><p><b>{cancelling.businessName}</b><br/>{cancelling.serviceName} · {formatDate(cancelling.startAt)}</p><small>İptal bilgisi anında işletmeye iletilecek.</small><footer><button onClick={()=>setCancelling(null)} disabled={cancelBusy}>Vazgeç</button><button onClick={cancelAppointment} disabled={cancelBusy}>{cancelBusy?<LoaderCircle className="animate-spin"/>:"Evet, iptal et"}</button></footer></section></div>}
-    {verifyOpen&&<div className="account-overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!verificationBusy)setVerifyOpen(false)}}><section className="account-verify-modal" role="dialog" aria-modal="true" aria-labelledby="verify-email-title"><button className="account-modal-close" onClick={()=>setVerifyOpen(false)} disabled={verificationBusy} aria-label="Kapat"><X/></button><div><BadgeCheck size={29}/></div><span>E-POSTA GÜVENLİĞİ</span><h2 id="verify-email-title">6 haneli kodu girin.</h2><p><b>{user?.email}</b> adresine gönderdiğimiz kod 5 dakika geçerlidir.</p><label><span>Doğrulama kodu</span><input value={verificationCode} onChange={event=>setVerificationCode(event.target.value.replace(/\D/g,"").slice(0,6))} inputMode="numeric" autoComplete="one-time-code" placeholder="• • • • • •" aria-label="6 haneli doğrulama kodu" autoFocus/></label><button className="account-verify-submit" type="button" onClick={verifyEmail} disabled={verificationBusy||verificationCode.length!==6}>{verificationBusy?<><LoaderCircle className="animate-spin"/> Kontrol ediliyor</>:<>E-postamı doğrula <ArrowRight/></>}</button><footer><span>Kod gelmedi mi?</span><button type="button" onClick={sendEmailVerification} disabled={verificationBusy}>{verificationSent?"Yeni kod gönder":"Kodu gönder"}</button></footer></section></div>}
-    {deleteOpen&&<div className="account-overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!deleteBusy)setDeleteOpen(false)}}><section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title"><button className="account-modal-close" onClick={()=>setDeleteOpen(false)} disabled={deleteBusy} aria-label="Kapat"><X/></button><div><AlertTriangle size={28}/></div><span>GERİ ALINAMAZ İŞLEM</span><h2 id="delete-account-title">Hesabınızı kalıcı olarak silmek üzeresiniz.</h2><p>Randevu geçmişiniz, favorileriniz, profiliniz ve sahibi olduğunuz işletme hesapları kalıcı olarak silinir.</p><label><span>Onaylamak için e-posta adresinizi yazın</span><input type="email" value={deleteConfirm} onChange={event=>setDeleteConfirm(event.target.value)} placeholder={user?.email??"E-posta adresiniz"} autoComplete="off"/></label><footer><button type="button" onClick={()=>setDeleteOpen(false)} disabled={deleteBusy}>Vazgeç</button><button type="button" onClick={deleteAccount} disabled={deleteBusy||!user?.email||deleteConfirm.trim().toLocaleLowerCase("tr-TR")!==user.email.toLocaleLowerCase("tr-TR")}>{deleteBusy?<><LoaderCircle className="animate-spin"/> Siliniyor</>:"Hesabımı kalıcı olarak sil"}</button></footer></section></div>}
+    {cancelling&&<Sheet onDismiss={()=>{if(!cancelBusy)setCancelling(null)}} labelledBy="account-cancel-title">
+      <button type="button" className={s.sheetClose} onClick={()=>setCancelling(null)} disabled={cancelBusy} aria-label="Kapat"><X size={18}/></button>
+      <div className={`${s.sheetIcon} ${s.sheetIconDanger}`}><CalendarDays size={27}/></div>
+      <span className={s.sheetEyebrow}>RANDEVU İPTALİ</span>
+      <h2 id="account-cancel-title">Bu randevuyu iptal etmek istediğinize emin misiniz?</h2>
+      <div className={s.sheetCard}><b>{cancelling.businessName}</b><span>{cancelling.serviceName} · {formatDate(cancelling.startAt)}</span></div>
+      <p className={s.sheetHint}>İptal bilgisi anında işletmeye iletilecek. İşletmenin iptal kuralı buna izin vermiyorsa nedenini size hemen gösteririz.</p>
+      <div className={s.sheetFoot}><button type="button" className={s.btn} onClick={()=>setCancelling(null)} disabled={cancelBusy}>Vazgeç</button><button type="button" className={`${s.btn} ${s.btnDanger}`} onClick={cancelAppointment} disabled={cancelBusy}>{cancelBusy?<LoaderCircle className="animate-spin" size={18}/>:"Evet, iptal et"}</button></div>
+    </Sheet>}
+    {calendarFor&&<Sheet onDismiss={()=>setCalendarFor(null)} labelledBy="account-calendar-title">
+      <button type="button" className={s.sheetClose} onClick={()=>setCalendarFor(null)} aria-label="Kapat"><X size={18}/></button>
+      <div className={s.sheetIcon}><CalendarPlus size={27}/></div>
+      <span className={s.sheetEyebrow}>TAKVİME EKLE</span>
+      <h2 id="account-calendar-title">{calendarFor.businessName}</h2>
+      <p>{calendarFor.serviceName} · {formatDate(calendarFor.startAt)}. Randevudan 1 saat önce hatırlatma eklenir.</p>
+      <div className={s.sheetList}>
+        <a className={s.row} href={googleCalendarUrl(calendarEventOf(calendarFor))} target="_blank" rel="noopener noreferrer" onClick={()=>setCalendarFor(null)}><i className={`${s.rowIcon} ${s.ic_blue}`}><CalendarDays size={18}/></i><span className={s.rowText}><b>Google Takvim</b><small>Yeni sekmede açılır</small></span><ExternalLink size={16} className={s.rowEnd}/></a>
+        <button type="button" className={s.row} onClick={()=>{downloadIcs(calendarEventOf(calendarFor),`randevu-${calendarFor.id}.ics`);setCalendarFor(null)}}><i className={`${s.rowIcon} ${s.ic_gray}`}><CalendarClock size={18}/></i><span className={s.rowText}><b>Apple Takvim / Outlook</b><small>.ics dosyası olarak indirilir</small></span><ChevronRight size={17} className={s.rowEnd}/></button>
+      </div>
+    </Sheet>}
+    {verifyOpen&&<Sheet onDismiss={()=>{if(!verificationBusy)setVerifyOpen(false)}} labelledBy="verify-email-title">
+      <button type="button" className={s.sheetClose} onClick={()=>setVerifyOpen(false)} disabled={verificationBusy} aria-label="Kapat"><X size={18}/></button>
+      <div className={s.sheetIcon}><BadgeCheck size={29}/></div>
+      <span className={s.sheetEyebrow}>E-POSTA GÜVENLİĞİ</span>
+      <h2 id="verify-email-title">6 haneli kodu girin.</h2>
+      <p><b>{user?.email}</b> adresine gönderdiğimiz kod 5 dakika geçerlidir.</p>
+      <label className={s.sheetField}><span>Doğrulama kodu</span><input className={s.codeInput} value={verificationCode} onChange={event=>setVerificationCode(event.target.value.replace(/\D/g,"").slice(0,6))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" aria-label="6 haneli doğrulama kodu" autoFocus/></label>
+      <button type="button" className={`${s.btn} ${s.btnPrimary} ${s.btnWide}`} onClick={verifyEmail} disabled={verificationBusy||verificationCode.length!==6}>{verificationBusy?<><LoaderCircle className="animate-spin" size={18}/> Kontrol ediliyor</>:<>E-postamı doğrula <ArrowRight size={17}/></>}</button>
+      <div className={s.sheetLinks}><span>Kod gelmedi mi?</span><button type="button" onClick={sendEmailVerification} disabled={verificationBusy}>{verificationSent?"Yeni kod gönder":"Kodu gönder"}</button></div>
+    </Sheet>}
+    {deleteOpen&&<Sheet onDismiss={()=>{if(!deleteBusy)setDeleteOpen(false)}} labelledBy="delete-account-title">
+      <button type="button" className={s.sheetClose} onClick={()=>setDeleteOpen(false)} disabled={deleteBusy} aria-label="Kapat"><X size={18}/></button>
+      <div className={`${s.sheetIcon} ${s.sheetIconDanger}`}><AlertTriangle size={28}/></div>
+      <span className={s.sheetEyebrow}>GERİ ALINAMAZ İŞLEM</span>
+      <h2 id="delete-account-title">Hesabınızı kalıcı olarak silmek üzeresiniz.</h2>
+      <p>Randevu geçmişiniz, favorileriniz, profiliniz ve sahibi olduğunuz işletme hesapları kalıcı olarak silinir.</p>
+      <label className={s.sheetField}><span>Onaylamak için e-posta adresinizi yazın</span><input type="email" value={deleteConfirm} onChange={event=>setDeleteConfirm(event.target.value)} placeholder={user?.email??"E-posta adresiniz"} autoComplete="off"/></label>
+      <div className={s.sheetFoot}><button type="button" className={s.btn} onClick={()=>setDeleteOpen(false)} disabled={deleteBusy}>Vazgeç</button><button type="button" className={`${s.btn} ${s.btnDanger}`} onClick={deleteAccount} disabled={deleteBusy||!user?.email||deleteConfirm.trim().toLocaleLowerCase("tr-TR")!==user.email.toLocaleLowerCase("tr-TR")}>{deleteBusy?<><LoaderCircle className="animate-spin" size={18}/> Siliniyor</>:"Kalıcı olarak sil"}</button></div>
+    </Sheet>}
   </div>;
 }
 
-function AppointmentRow({item,now,onCancel,onReschedule,onReview}:{item:CustomerAppointment;now:number;onCancel:()=>void;onReschedule:()=>void;onReview:()=>void}) {
-  const status=statuses[item.status]??{label:item.status,icon:Clock3}; const StatusIcon=status.icon; const future=new Date(item.startAt).getTime()>now; const active=["pending","confirmed"].includes(item.status)&&future; const repeatParams=new URLSearchParams(); if(item.serviceId)repeatParams.set("service",item.serviceId);if(item.staffId)repeatParams.set("staff",item.staffId); const href=item.businessSlug?(active?`/isletme/${item.businessSlug}`:`/isletme/${item.businessSlug}/randevu${repeatParams.size?`?${repeatParams}`:""}`):"/kesfet";
-  return <article className="customer-appointment-card"><div className="appointment-business-logo">{item.businessLogo?<Image src={item.businessLogo} alt="" fill sizes="54px"/>:<Store size={23}/>}</div><div className="appointment-main"><div><span className={`appointment-status status-${item.status}`}><StatusIcon size={13}/>{status.label}</span><small>{formatDate(item.startAt)}</small></div><h3>{item.businessName}</h3><p>{item.serviceName}{(item.additionalServices?.length??0)>0?` + ${item.additionalServices?.map(service=>service.name).join(", ")}`:""}<i/> {item.staffName}</p><span><MapPin size={13}/>{item.businessCity||"İşletme konumu"}</span></div><div className="appointment-card-actions">{item.publicToken&&<Link href={`/randevu/${item.publicToken}`}>Detay <ChevronRight size={14}/></Link>}<Link href={href}>{active?"Mağazayı aç":"Tekrar randevu"}</Link>{active&&<button type="button" onClick={()=>downloadCalendarEvent(item)}><CalendarPlus size={13}/> Takvime ekle</button>}{active&&item.allowReschedule&&<button type="button" onClick={onReschedule}><CalendarClock size={13}/> Saati değiştir</button>}{active&&<button onClick={onCancel}>İptal et</button>}{item.status==="completed"&&<button className="review" onClick={onReview}><Star size={13}/> Yorum yap</button>}</div></article>;
+/* ── Alt bileşenler ── */
+
+function Sheet({children,onDismiss,labelledBy}:{children:ReactNode;onDismiss:()=>void;labelledBy:string}) {
+  return <div className={s.backdrop} data-account-overlay="" onMouseDown={event=>{if(event.target===event.currentTarget)onDismiss()}}>
+    <section className={s.sheet} role="dialog" aria-modal="true" aria-labelledby={labelledBy}><div className={s.grabber} aria-hidden="true"/>{children}</section>
+  </div>;
 }
 
+function RoviEmpty({tag,title,text,mood,children}:{tag:string;title:string;text:string;mood:"idle"|"happy"|"thinking"|"wave";children?:ReactNode}) {
+  return <section className={s.empty}><RoviMascot size={104} mood={mood} alt=""/><span className={s.emptyTag}>{tag}</span><h3>{title}</h3><p>{text}</p>{children&&<div className={s.emptyActions}>{children}</div>}</section>;
+}
+
+function ErrorBox({message,onRetry}:{message:string;onRetry:()=>void}) {
+  return <div className={s.error} role="alert"><AlertTriangle size={26}/><h3>Randevular yüklenemedi.</h3><p>{message}</p><button type="button" className={s.pill} onClick={onRetry}><RotateCcw size={15}/> Yeniden dene</button></div>;
+}
+
+function BusinessAccess({businesses,activeBusiness,onSelect}:{businesses:Array<{id:string;name:string}>;activeBusiness:{id:string;name:string};onSelect:(id:string)=>void}) {
+  return <section className={s.biz}><div><i className={`${s.rowIcon} ${s.ic_lime}`}><BriefcaseBusiness size={17}/></i><span><small>İŞLETME HESABI</small><b>{activeBusiness.name}</b></span></div>{businesses.length>1&&<select aria-label="Yönetilecek işletme" value={activeBusiness.id} onChange={event=>onSelect(event.target.value)}>{businesses.map(business=><option value={business.id} key={business.id}>{business.name}</option>)}</select>}<Link href="/dashboard">Yönetim paneline geç <ExternalLink size={13}/></Link></section>;
+}
+
+function Ring({percent,label}:{percent:number;label:string}) {
+  const c=2*Math.PI*24;
+  return <span className={s.ring} aria-hidden="true"><svg viewBox="0 0 58 58"><circle cx="29" cy="29" r="24"/><circle cx="29" cy="29" r="24" strokeDasharray={c} strokeDashoffset={c*(1-percent/100)}/></svg><b>{label}</b></span>;
+}
+
+function DateTile({value,active}:{value:string;active?:boolean}) {
+  const date=new Date(value); const valid=!Number.isNaN(date.getTime());
+  return <span className={`${s.dateTile} ${active?s.dateTileActive:""}`} aria-hidden="true"><b>{valid?date.toLocaleDateString("tr-TR",{day:"2-digit"}):"–"}</b><small>{valid?date.toLocaleDateString("tr-TR",{month:"short"}).toLocaleUpperCase("tr-TR"):""}</small></span>;
+}
+
+type RowHandlers = {onCancel:()=>void;onReschedule:()=>void;onReview:()=>void;onCalendar:()=>void};
+
+function NextTicket({item,now,onCancel,onReschedule,onCalendar}:{item:CustomerAppointment;now:number}&RowHandlers) {
+  const status=statuses[item.status]??{label:item.status,icon:Clock3};
+  const services=[item.serviceName,...(item.additionalServices??[]).map(service=>service.name)].filter(Boolean).join(" + ");
+  const total=item.price!==undefined?item.price+(item.additionalServices??[]).reduce((sum,service)=>sum+service.price,0):undefined;
+  const maps=mapsUrl(item);
+  return <article className={s.ticket} aria-label={`Sıradaki randevu: ${item.businessName}`}>
+    <div className={s.ticketTop}>
+      <div className={s.ticketMeta}><span className={s.ticketLabel}>{status.label.toLocaleUpperCase("tr-TR")}</span><span className={s.countdown}><i aria-hidden="true"/>{countdownOf(item.startAt,now)}</span></div>
+      <div className={s.ticketBiz}><span className={s.ticketLogo}>{item.businessLogo?<Image src={item.businessLogo} alt="" fill sizes="54px"/>:initialsOf(item.businessName)}</span><div><h3>{item.businessName}</h3><p>{services}</p></div></div>
+    </div>
+    <div className={s.perf} aria-hidden="true"/>
+    <div className={s.ticketInfo}>
+      <div className={s.info}><small>Tarih</small><b>{dayLabel(item.startAt,now)}</b><span>{formatShortDate(item.startAt)}</span></div>
+      <div className={s.info}><small>Saat</small><b>{timeOf(item.startAt)}</b><span>{item.endAt?`Bitiş ${timeOf(item.endAt)}`:" "}</span></div>
+      <div className={s.info}><small>Uzman</small><b>{item.staffName}</b><span>{item.businessCity||" "}</span></div>
+      <div className={s.info}><small>Tutar</small><b>{total!==undefined&&total>0?formatMoney(total):"İşletmede"}</b><span>Hizmet bedeli</span></div>
+    </div>
+    <div className={s.ticketActions}>
+      {item.publicToken&&<Link href={`/randevu/${item.publicToken}`} className={`${s.action} ${s.actionPrimary}`}>Detay <ArrowRight size={16}/></Link>}
+      {item.allowReschedule&&<button type="button" className={s.action} onClick={onReschedule}><CalendarClock size={16}/> Saati değiştir</button>}
+      <button type="button" className={s.action} onClick={onCalendar}><CalendarPlus size={16}/> Takvime ekle</button>
+      {maps&&<a href={maps} target="_blank" rel="noopener noreferrer" className={s.action}><Navigation size={16}/> Yol tarifi</a>}
+      <button type="button" className={`${s.action} ${s.actionDanger}`} onClick={onCancel}><X size={16}/> İptal et</button>
+    </div>
+  </article>;
+}
+
+function AppointmentRow({item,now,index,reviewed,onCancel,onReschedule,onReview,onCalendar}:{item:CustomerAppointment;now:number;index:number;reviewed:boolean}&RowHandlers) {
+  const status=statuses[item.status]??{label:item.status,icon:Clock3}; const StatusIcon=status.icon; const future=new Date(item.startAt).getTime()>now; const active=["pending","confirmed"].includes(item.status)&&future;
+  const extras=(item.additionalServices?.length??0)>0?` + ${item.additionalServices?.map(service=>service.name).join(", ")}`:"";
+  return <article className={`${s.appt} ${active?"":s.apptMuted}`} style={{"--i":index} as CSSProperties}>
+    <div className={s.apptRow}>
+      <DateTile value={item.startAt} active={active}/>
+      <div className={s.apptMain}>
+        <div className={s.apptTop}><span className={`${s.status} ${STATUS_CLASS[item.status]??s.st_other}`}><StatusIcon size={12}/>{status.label}</span><small>{timeOf(item.startAt)}{active?"":` · ${new Date(item.startAt).getFullYear()}`}</small>{active&&<span className={s.apptLeft}>{shortCountdown(item.startAt,now)}</span>}</div>
+        <h3>{item.businessSlug?<Link href={`/isletme/${item.businessSlug}`}>{item.businessName}</Link>:item.businessName}</h3>
+        <p>{item.serviceName}{extras} · {item.staffName}</p>
+      </div>
+    </div>
+    <div className={s.chips}>
+      {item.publicToken&&<Link href={`/randevu/${item.publicToken}`} className={`${s.chipBtn} ${active?s.chipPrimary:""}`}>Detay <ChevronRight size={14}/></Link>}
+      {active&&item.allowReschedule&&<button type="button" className={s.chipBtn} onClick={onReschedule}><CalendarClock size={14}/> Saati değiştir</button>}
+      {active&&<button type="button" className={s.chipBtn} onClick={onCalendar}><CalendarPlus size={14}/> Takvime ekle</button>}
+      {active&&<button type="button" className={`${s.chipBtn} ${s.chipDanger}`} onClick={onCancel}>İptal et</button>}
+      {!active&&item.status==="completed"&&!reviewed&&<button type="button" className={`${s.chipBtn} ${s.chipLime}`} onClick={onReview}><Star size={14}/> Değerlendir</button>}
+      {!active&&<Link href={rebookHref(item)} className={s.chipBtn}><RotateCcw size={14}/> Tekrar randevu al</Link>}
+    </div>
+  </article>;
+}
+
+function PageSkeleton() {
+  return <div className={`marketing-page ${s.page}`}><MarketingHeader/><main className={s.main} aria-busy="true" aria-label="Hesabınız hazırlanıyor"><i className={`${s.skelBlock} ${s.skelHero}`}/><div className={`${s.skel} ${s.skelTabs}`}>{[1,2,3,4].map(x=><i key={x}/>)}</div><div style={{marginTop:18}}><i className={`${s.skelBlock} ${s.skelTicket}`}/></div></main></div>;
+}
+
+/* ── Yardımcılar ── */
+
+function rebookHref(item:CustomerAppointment){
+  if(!item.businessSlug)return "/kesfet";
+  const params=new URLSearchParams(); if(item.serviceId)params.set("service",item.serviceId); if(item.staffId)params.set("staff",item.staffId);
+  return `/isletme/${item.businessSlug}/randevu${params.size?`?${params}`:""}`;
+}
+function mapsUrl(item:CustomerAppointment){
+  if(!item.businessAddress&&!item.businessCity)return null;
+  const destination=[item.businessName,item.businessAddress,item.businessCity].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+function calendarEventOf(item:CustomerAppointment):CalendarEventInput{
+  const start=new Date(item.startAt); const parsedEnd=new Date(item.endAt);
+  const end=Number.isNaN(parsedEnd.getTime())||parsedEnd<=start?new Date(start.getTime()+30*60_000):parsedEnd;
+  const services=[item.serviceName,...(item.additionalServices??[]).map(service=>service.name)].filter(Boolean).join(" + ");
+  return {uid:item.id,title:`${services} · ${item.businessName}`,start,end,description:`Çalışan: ${item.staffName}`,location:[item.businessAddress,item.businessCity].filter(Boolean).join(", ")||undefined,url:item.publicToken?`${window.location.origin}/randevu/${item.publicToken}`:undefined};
+}
+function initialsOf(value:string){
+  const source=value.includes("@")?value.split("@")[0]:value;
+  const parts=source.trim().split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.charAt(0)??"S")+(parts.length>1?parts[parts.length-1].charAt(0):"")).toLocaleUpperCase("tr-TR");
+}
+function greetingOf(now:number){const hour=new Date(now).getHours();return hour<5?"İyi geceler":hour<12?"Günaydın":hour<18?"İyi günler":hour<23?"İyi akşamlar":"İyi geceler"}
+function timeOf(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"--:--":date.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
+function dayLabel(value:string,now:number){
+  const date=new Date(value); if(Number.isNaN(date.getTime()))return "Tarih yok";
+  const startOf=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  const days=Math.round((startOf(date)-startOf(new Date(now)))/86_400_000);
+  if(days===0)return "Bugün"; if(days===1)return "Yarın";
+  return date.toLocaleDateString("tr-TR",{weekday:"long"}).replace(/^./,char=>char.toLocaleUpperCase("tr-TR"));
+}
+function countdownOf(value:string,now:number){
+  const ms=new Date(value).getTime()-now; if(!Number.isFinite(ms))return "";
+  if(ms<=0)return "Başlamak üzere";
+  const minutes=Math.floor(ms/60_000); const days=Math.floor(minutes/1440); const hours=Math.floor((minutes%1440)/60); const mins=minutes%60;
+  if(days>0)return `${days} gün${hours?` ${hours} saat`:""} kaldı`;
+  if(hours>0)return `${hours} saat${mins?` ${mins} dk`:""} kaldı`;
+  return `${Math.max(1,mins)} dk kaldı`;
+}
+function shortCountdown(value:string,now:number){
+  const ms=new Date(value).getTime()-now; if(!Number.isFinite(ms)||ms<=0)return "Şimdi";
+  const minutes=Math.floor(ms/60_000); const days=Math.floor(minutes/1440); const hours=Math.floor(minutes/60);
+  return days>0?`${days} gün`:hours>0?`${hours} sa`:`${Math.max(1,minutes)} dk`;
+}
 function formatDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"Tarih bilgisi yok":date.toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric"})+" · "+date.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
 function formatLastSignIn(value?:string|null){if(!value)return"Bilgi yok";const date=new Date(value);return Number.isNaN(date.getTime())?"Bilgi yok":date.toLocaleString("tr-TR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
 function formatMoney(value:number){return new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:0}).format(value)}
 function formatShortDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?"Tarih bilgisi yok":date.toLocaleDateString("tr-TR",{day:"2-digit",month:"short",year:"numeric"})}
 function packageStatusLabel(value:string){return value==="active"?"Aktif":value==="used"?"Tamamlandı":value==="expired"?"Süresi doldu":value==="cancelled"?"İptal":"Beklemede"}
-function downloadCalendarEvent(item:CustomerAppointment){const stamp=(value:string)=>new Date(value).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");const escape=(value:string)=>value.replace(/\\/g,"\\\\").replace(/,/g,"\\,").replace(/;/g,"\\;").replace(/\n/g,"\\n");const services=[item.serviceName,...(item.additionalServices??[]).map(service=>service.name)].filter(Boolean).join(" + ");const content=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//SeninRandevun//TR","BEGIN:VEVENT",`UID:${item.id}@seninrandevun.com`,`DTSTAMP:${stamp(new Date().toISOString())}`,`DTSTART:${stamp(item.startAt)}`,`DTEND:${stamp(item.endAt)}`,`SUMMARY:${escape(`${services} · ${item.businessName}`)}`,`DESCRIPTION:${escape(`Çalışan: ${item.staffName}`)}`,`LOCATION:${escape(item.businessCity)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");const url=URL.createObjectURL(new Blob([content],{type:"text/calendar;charset=utf-8"}));const anchor=document.createElement("a");anchor.href=url;anchor.download=`randevu-${item.id}.ics`;anchor.click();URL.revokeObjectURL(url)}

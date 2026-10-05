@@ -5,6 +5,7 @@ import { Bell, BellOff, BellRing, LoaderCircle, ShieldAlert, Volume2, VolumeX } 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePushRegistration, type PushStatus } from "@/features/push/use-push-registration";
+import styles from "./push-toggle-card.module.css";
 import {
   isChimeEnabled,
   playNotificationChime,
@@ -61,12 +62,74 @@ function statusNote(status: PushStatus, audience: PushAudience, signedIn: boolea
   return "Bildirimler bu tarayıcıda kapalı. Açtığınızda tarayıcı izin isteyecek.";
 }
 
-/** Web push aç/kapat kartı. Müşteri hesabında audience="customer", işletme panelinde audience="business". */
-export function PushToggleCard({ audience, className }: { audience: PushAudience; className?: string }) {
+/**
+ * Web push aç/kapat kartı. Müşteri hesabında audience="customer", işletme panelinde audience="business".
+ * appearance="account": müşteri hesabındaki iOS tarzı gruplu ayar listesi görünümü (yalnız görsel).
+ */
+export function PushToggleCard({ audience, className, appearance = "card" }: { audience: PushAudience; className?: string; appearance?: "card" | "account" }) {
   const { status, busy, signedIn, enable, disable } = usePushRegistration();
   const copy = COPY[audience];
   const soundOn = useChimeEnabled();
   const showSound = status === "on" || status === "off";
+
+  if (appearance === "account") {
+    const toggleable = status === "on" || status === "off";
+    const checked = status === "on";
+    return (
+      <div className={`${styles.list} ${className ?? ""}`}>
+        <div className={styles.row}>
+          <span className={`${styles.icon} ${checked ? styles.iconOn : status === "blocked" ? styles.iconWarn : ""}`}>
+            <StatusIcon status={status} />
+          </span>
+          <span className={styles.text} aria-live="polite">
+            <b>{copy.title}</b>
+            <small>{status === "off" ? copy.description : statusNote(status, audience, signedIn)}</small>
+          </span>
+          {toggleable ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={checked}
+              aria-label={checked ? "Bildirimleri kapat" : "Bildirimleri aç"}
+              className={`${styles.switch} ${checked ? styles.switchOn : ""}`}
+              disabled={busy || (!checked && !signedIn)}
+              onClick={() => void (checked ? disable() : enable())}
+            >
+              {busy && <LoaderCircle className={`animate-spin ${styles.switchSpin}`} size={13} aria-hidden="true" />}
+            </button>
+          ) : (
+            <span className={styles.badge}>{STATUS_LABEL[status]}</span>
+          )}
+        </div>
+        {showSound && (
+          <div className={styles.row}>
+            <span className={`${styles.icon} ${soundOn ? styles.iconSound : ""}`}>
+              {soundOn ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
+            </span>
+            <span className={styles.text}>
+              <b>Bildirim sesi</b>
+              <small>Sayfa açıkken gelen bildirimlerde kısa bir zil çalar (bu cihaz için).</small>
+              <button type="button" className={styles.try} onClick={() => {
+                unlockNotificationAudio();
+                playNotificationChime({ force: true });
+              }}>Sesi dene</button>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={soundOn}
+              aria-label="Bildirim sesi"
+              className={`${styles.switch} ${soundOn ? styles.switchOn : ""}`}
+              onClick={() => {
+                unlockNotificationAudio();
+                setChimeEnabled(!soundOn);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card title={copy.title} description={copy.description} className={className}>
