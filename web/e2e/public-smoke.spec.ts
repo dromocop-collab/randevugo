@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const publicRoutes = ["/", "/isletmeler", "/fiyatlar", "/isletmeler/giris"];
+const publicRoutes = ["/", "/isletmeler", "/fiyatlar", "/isletmeler/giris", "/musteri/giris", "/musteri/kayit", "/sifremi-unuttum", "/kesfet"];
 
 for (const route of publicRoutes) {
   test(`${route} loads without viewport overflow`, async ({ page }) => {
