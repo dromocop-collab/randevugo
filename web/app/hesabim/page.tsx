@@ -22,6 +22,7 @@ import { listFavoriteBusinesses, removeFavoriteBusiness, type FavoriteBusiness }
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { AvailabilityAlertsPanel } from "@/features/availability/availability-alerts-panel";
 import { CustomerMessagesPanel } from "@/features/support/customer-messages-panel";
+import { useGuestAppointmentClaim } from "@/features/appointments/use-guest-appointment-claim";
 
 interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessPhone:string; serviceId:string; staffId:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number; additionalServices?:Array<{serviceId:string;name:string;price:number;durationMinutes:number}> }
 interface SuspendedBusiness { id: string; name: string; adminNote?: string }
@@ -100,6 +101,7 @@ export default function CustomerAccountPage() {
   const [deleteBusy,setDeleteBusy] = useState(false);
   const [now,setNow] = useState(() => Date.now());
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
+  useGuestAppointmentClaim(() => setReloadKey((key) => key + 1));
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !user) return;

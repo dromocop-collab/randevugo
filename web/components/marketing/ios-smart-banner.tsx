@@ -7,12 +7,19 @@ import { Apple, ArrowUpRight, X } from "lucide-react";
 import { APP_STORE_URL } from "@/lib/app-store";
 
 const HIDDEN_KEY = "sr_ios_banner_hidden_until";
-const PRIVATE_ROUTES = ["/dashboard", "/super-admin", "/admin", "/onboarding"];
+// Sabit alt çubuğu olan (randevu al, sihirbaz) ve odak gerektiren sayfalarda banner gösterilmez.
+const PRIVATE_ROUTES = ["/dashboard", "/super-admin", "/admin", "/onboarding", "/isletme", "/randevu", "/giris", "/kayit", "/sifremi-unuttum", "/siram"];
 
 function isAppleMobile() {
   const classic = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const modernIpad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
   return classic || modernIpad;
+}
+
+// iOS Safari zaten Apple'ın yerel Smart App Banner'ını (layout'taki apple-itunes-app) gösterir; ikinci banner gereksiz.
+function isMobileSafari() {
+  const ua = navigator.userAgent;
+  return /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA|Instagram|FBAN|FBAV/i.test(ua);
 }
 
 export function IosSmartBanner() {
@@ -21,15 +28,16 @@ export function IosSmartBanner() {
   const hiddenOnRoute = PRIVATE_ROUTES.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
-    if (hiddenOnRoute || !isAppleMobile()) return;
-    const hiddenUntil = Number(window.localStorage.getItem(HIDDEN_KEY) ?? 0);
+    if (hiddenOnRoute || !isAppleMobile() || isMobileSafari()) return;
+    let hiddenUntil = 0;
+    try { hiddenUntil = Number(window.localStorage.getItem(HIDDEN_KEY) ?? 0); } catch { /* depolama kapalı olabilir */ }
     if (hiddenUntil > Date.now()) return;
     const timer = window.setTimeout(() => setVisible(true), 1200);
     return () => window.clearTimeout(timer);
   }, [hiddenOnRoute, pathname]);
 
   function dismiss() {
-    window.localStorage.setItem(HIDDEN_KEY, String(Date.now() + 7 * 86_400_000));
+    try { window.localStorage.setItem(HIDDEN_KEY, String(Date.now() + 7 * 86_400_000)); } catch { /* depolama kapalı olabilir */ }
     setVisible(false);
   }
 

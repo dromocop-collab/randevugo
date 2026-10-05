@@ -227,7 +227,14 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
 function getSafeNextPath(fallback: string): string {
   if (typeof window === "undefined") return fallback;
   const next = new URLSearchParams(window.location.search).get("next");
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : fallback;
+  // "/\\evil.com" gibi tarayıcının başka siteye çevirdiği yollar reddedilir.
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\") || /[\u0000-\u001f]/.test(next)) return fallback;
+  try {
+    const resolved = new URL(next, window.location.origin);
+    return resolved.origin === window.location.origin ? `${resolved.pathname}${resolved.search}${resolved.hash}` : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 /* ─────────────────── REGISTER ─────────────────── */

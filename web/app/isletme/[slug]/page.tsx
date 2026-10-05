@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import BusinessProfileClient from "./business-profile-client";
-import { getBusinessBySlug, listBusinessWorkingHours } from "@/features/businesses/business-repository";
+import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
+import { getBusinessBySlugCached } from "@/features/businesses/business-slug-cache";
 import { listBookableServices } from "@/features/services/service-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessReviews } from "@/features/reviews/review-repository";
@@ -14,7 +15,7 @@ function serializable<T>(value: T): T {
 
 export default async function BusinessProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const business = await getBusinessBySlug(slug).catch(() => null);
+  const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || business.status !== "active" || !business.isPublished) notFound();
   const [workingHours, services, staff, reviews, serviceCategories] = await Promise.all([
     listBusinessWorkingHours(business.id),
@@ -23,6 +24,5 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
     listBusinessReviews(business.id).catch(() => []),
     listServiceCategories(business.id).catch(() => []),
   ]);
-  if (services.length === 0) notFound();
   return <BusinessProfileClient initialBusiness={serializable(business)} initialWorkingHours={serializable(workingHours)} initialServices={serializable(services)} initialStaff={serializable(staff)} initialReviews={serializable(reviews)} initialServiceCategories={serializable(serviceCategories)} />;
 }

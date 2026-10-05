@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { getBusinessBySlug, listBusinessWorkingHours } from "@/features/businesses/business-repository";
+import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
+import { getBusinessBySlugCached } from "@/features/businesses/business-slug-cache";
 import { listBookableServices } from "@/features/services/service-repository";
 
 const SITE_URL = "https://seninrandevun.com";
@@ -21,7 +22,7 @@ function labelFromSlug(slug: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const business = await getBusinessBySlug(slug).catch(() => null);
+  const business = await getBusinessBySlugCached(slug).catch(() => null);
   const label = business?.name ?? labelFromSlug(slug);
   const canonical = `${SITE_URL}/isletme/${encodeURIComponent(slug)}`;
   const location = business ? `${business.district}, ${business.city}` : "";
@@ -57,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BusinessProfileLayout({ children, params }: { children: ReactNode; params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const business = await getBusinessBySlug(slug).catch(() => null);
+  const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || !business.isPublished || business.status !== "active") return <>{children}</>;
 
   // Fetch working hours and services for rich schema

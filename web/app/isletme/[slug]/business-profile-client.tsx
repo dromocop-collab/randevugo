@@ -358,7 +358,8 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
           </aside>
         </div>
       </main>
-      <MarketingFooter />
+      {/* Mobilde sabit randevu çubuğu footer'ın altını kapatmasın. */}
+      <div className="pb-24 lg:pb-0"><MarketingFooter /></div>
 
       {/* ━━━ MOBILE BOTTOM BAR ━━━ */}
       <div className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-[auto_1fr] gap-2 border-t border-[var(--border)] bg-[var(--bg-1)]/90 p-3 backdrop-blur-2xl lg:hidden">

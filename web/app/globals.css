@@ -30625,3 +30625,11 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
   .dashboard-skin-accordion__content { padding: 8px }
   .dashboard-skin-accordion__content .dashboard-skin-grid>button { min-height: 52px }
 }
+
+/* Kaydırılabilir şerit kenarları: devamı olan tarafta yumuşak solma (sert kesik görünmesin). */
+.customer-rail-fade { --rail-fade-left: 56px; --rail-fade-right: 88px; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--rail-fade-left), #000 calc(100% - var(--rail-fade-right)), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 var(--rail-fade-left), #000 calc(100% - var(--rail-fade-right)), transparent 100%) }
+.customer-rail-fade[data-at-start="true"] { --rail-fade-left: 0px }
+.customer-rail-fade[data-at-end="true"] { --rail-fade-right: 0px }
+@media (max-width: 760px) { .customer-rail-fade { --rail-fade-left: 24px; --rail-fade-right: 36px } }
+/* Şeridin son kartı ve gölgesi kenarda kesilmesin; yapışma sonda takılmasın. */
+.customer-category-carousel.customer-rail-fade, .customer-business-carousel.customer-rail-fade { scroll-snap-type: inline proximity; scroll-padding-inline: 4px; padding-inline-end: 28px }

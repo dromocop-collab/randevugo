@@ -22,6 +22,10 @@ import type { Service } from "@/types/service";
 import type { Staff } from "@/types/staff";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { AvailabilityAlertAction } from "@/features/availability/availability-alert-action";
+import { useAuth } from "@/hooks/use-auth";
+import { getDb } from "@/lib/firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+import { addGuestBooking } from "@/features/appointments/guest-booking-store";
 import {
   DEFAULT_BOOKING_FIELD_SETTINGS,
   getBookingFieldSettings,
@@ -138,6 +142,7 @@ function isValidOptionalEmail(value: string) {
 }
 
 export function BookingWizard(props: Props) {
+  const { user, status: authStatus } = useAuth();
   const [step, setStep] = useState<WizardStep>("service");
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -201,10 +206,34 @@ export function BookingWizard(props: Props) {
     };
   }, [privacyModalOpen]);
 
+  // Giriş yapmış kullanıcının bilgilerini (users/{uid}: displayName, phone; Auth: e-posta) boş alanlara doldur.
+  // Kullanıcının yazdığı değerin üzerine asla yazılmaz.
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !user) return;
+    let active = true;
+    const fill = (setter: (update: (previous: string) => string) => void, value: unknown) => {
+      const next = typeof value === "string" ? value.trim() : "";
+      if (next) setter((previous) => (previous.trim() ? previous : next));
+    };
+    fill(setCustomerName, user.displayName);
+    fill(setCustomerEmail, user.email);
+    getDoc(doc(getDb(), "users", user.uid))
+      .then((snapshot) => {
+        if (!active || !snapshot.exists()) return;
+        const data = snapshot.data();
+        fill(setCustomerName, data.displayName);
+        fill(setCustomerPhone, data.phone);
+        fill(setCustomerEmail, data.email);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [authStatus, user]);
+
   // Success data
   const [successData, setSuccessData] = useState<{
     appointmentId: string;
     publicToken: string;
+    isGuest: boolean;
     serviceName: string;
     staffName: string;
     date: string;
@@ -492,9 +521,18 @@ export function BookingWizard(props: Props) {
         startAtMillis: selectedSlot.startAtMillis,
       });
 
+      const isGuest = !user;
+      if (isGuest && createdAppointment.publicToken) {
+        addGuestBooking({
+          businessId: props.businessId,
+          appointmentId: createdAppointment.appointmentId,
+          publicToken: createdAppointment.publicToken,
+        });
+      }
       setSuccessData({
         appointmentId: createdAppointment.appointmentId,
         publicToken: createdAppointment.publicToken,
+        isGuest,
         serviceName: selectedService.name,
         staffName: selectedStaff?.fullName ?? "İşletme",
         date: format(dateBase, "dd.MM.yyyy"),
@@ -565,7 +603,17 @@ export function BookingWizard(props: Props) {
             href={`/randevu/${encodeURIComponent(successData.publicToken)}`}
             className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-100"
           >
-            <span><small className="block font-semibold text-emerald-600">GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle, iptal et veya yönet</span>
+            <span><small className="block font-semibold text-emerald-600">GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle ve takvime ekle</span>
+            <ArrowRight size={18} />
+          </a>
+        )}
+
+        {successData.isGuest && successData.publicToken && authStatus !== "authenticated" && (
+          <a
+            href={`/musteri/giris?next=${encodeURIComponent("/hesabim")}`}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3 text-sm font-bold text-[var(--text-1)] transition hover:border-[var(--accent)]"
+          >
+            <span><small className="block font-semibold text-[var(--accent)]">HESABIMA KAYDET</small>Giriş yapın, bu randevu Randevularım listenize eklensin</span>
             <ArrowRight size={18} />
           </a>
         )}

@@ -38,6 +38,13 @@ export function HomeInteractive() {
   const categoryRailRef = useRef<HTMLDivElement>(null);
   const businessRailRef = useRef<HTMLDivElement>(null);
 
+  // Kaydırılabilir şeritlerin kenarı sert kesilmesin: devamı olan tarafta yumuşak solma gösterilir.
+  function updateRailEdges(rail: HTMLElement | null) {
+    if (!rail) return;
+    rail.dataset.atStart = String(rail.scrollLeft <= 8);
+    rail.dataset.atEnd = String(rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 8);
+  }
+
   function scrollCategories(direction: -1 | 1) {
     categoryRailRef.current?.scrollBy({ left: direction * Math.min(620, window.innerWidth * 0.86), behavior: "smooth" });
   }
@@ -90,6 +97,13 @@ export function HomeInteractive() {
 
   const visibleBusinesses = useMemo(() => searched ? results : popular, [searched, results, popular]);
 
+  useEffect(() => {
+    const sync = () => { updateRailEdges(categoryRailRef.current); updateRailEdges(businessRailRef.current); };
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [categories, visibleBusinesses, loading]);
+
   return <>
     {/* ─── Search Area ─── */}
     <div className="customer-search-wrap">
@@ -101,7 +115,7 @@ export function HomeInteractive() {
     {/* ─── Category Grid ─── */}
     <section className="customer-category-section" id="kategoriler">
       <div className="customer-section-heading"><div><span>KATEGORİLER</span><h2>Bugün neye ihtiyacın var?</h2></div><div className="customer-business-heading-actions"><div className="customer-business-arrows"><button type="button" onClick={() => scrollCategories(-1)} aria-label="Önceki kategoriler"><ChevronLeft size={17} /></button><button type="button" onClick={() => scrollCategories(1)} aria-label="Sonraki kategoriler"><ChevronRight size={17} /></button></div><Link href="/kesfet">Tümünü keşfet <ArrowRight size={15} /></Link></div></div>
-      <div ref={categoryRailRef} className="customer-category-grid customer-category-carousel">{categories.slice(0, 10).map((category, index) => <button key={category.slug} className={`customer-category-card tone-${category.tone} ${activeCategory === category.slug ? "active" : ""}`} onClick={() => selectCategory(category.slug)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}>
+      <div ref={categoryRailRef} onScroll={(event) => updateRailEdges(event.currentTarget)} className="customer-category-grid customer-category-carousel customer-rail-fade">{categories.slice(0, 16).map((category, index) => <button key={category.slug} className={`customer-category-card tone-${category.tone} ${activeCategory === category.slug ? "active" : ""}`} onClick={() => selectCategory(category.slug)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}>
         <span className="customer-category-media">{category.image ? <Image src={category.image} alt={`${category.label} hizmetleri`} fill sizes="(max-width: 760px) 100vw, (max-width: 1050px) 50vw, 33vw" /> : <b>{category.emoji}</b>}<i>{String(index + 1).padStart(2, "0")}</i></span>
         <span className="customer-category-body"><small><b>{category.emoji}</b> HEMEN KEŞFET</small><strong>{category.label}</strong><em>{category.description || "Yakınındaki uzmanları keşfet"}</em></span>
         <span className="customer-category-action" aria-hidden="true"><span>İncele</span><ArrowUpRight size={18} /></span>
@@ -111,7 +125,7 @@ export function HomeInteractive() {
     {/* ─── Business Results / Popular ─── */}
     <section className="customer-business-section" id="magazalar">
       <div className="customer-section-heading"><div><span>{searched ? "ARAMA SONUÇLARI" : "ÖNE ÇIKAN MAĞAZALAR"}</span><h2>{searched ? `${visibleBusinesses.length} eşleşme bulundu` : "Sevilen yerleri keşfet."}</h2></div><div className="customer-business-heading-actions">{visibleBusinesses.length > 1 && <div className="customer-business-arrows"><button type="button" onClick={() => scrollBusinesses(-1)} aria-label="Önceki işletmeler"><ChevronLeft size={17} /></button><button type="button" onClick={() => scrollBusinesses(1)} aria-label="Sonraki işletmeler"><ChevronRight size={17} /></button></div>}{searched ? <button className="clear-home-search" onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Aramayı temizle</button> : <Link href="/kesfet">Tüm mağazalar <ArrowRight size={15} /></Link>}</div></div>
-      {loading ? <div className="business-skeletons" role="status" aria-label="İşletmeler yükleniyor">{[1,2,3,4].map(item => <div key={item} />)}</div> : errorMessage ? <div className="customer-empty customer-empty-error"><WifiOff size={28} /><h3>Bağlantı kurulamadı.</h3><p>{errorMessage}</p><button onClick={() => searched ? runSearch({ searchText: "", category: activeCategory, city: "" }) : loadHomepage()}><RefreshCw size={13} /> Yeniden dene</button></div> : visibleBusinesses.length > 0 ? <div ref={businessRailRef} className="customer-business-carousel business-grid">{visibleBusinesses.slice(0,8).map((business,index) => <div key={business.id} className="customer-business-slide" style={{ "--slide-delay": `${index * 70}ms` } as React.CSSProperties}><BusinessCard business={business} /></div>)}</div> : <div className="customer-empty"><Search size={28} /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Popüler mağazalara dön</button></div>}
+      {loading ? <div className="business-skeletons" role="status" aria-label="İşletmeler yükleniyor">{[1,2,3,4].map(item => <div key={item} />)}</div> : errorMessage ? <div className="customer-empty customer-empty-error"><WifiOff size={28} /><h3>Bağlantı kurulamadı.</h3><p>{errorMessage}</p><button onClick={() => searched ? runSearch({ searchText: "", category: activeCategory, city: "" }) : loadHomepage()}><RefreshCw size={13} /> Yeniden dene</button></div> : visibleBusinesses.length > 0 ? <div ref={businessRailRef} onScroll={(event) => updateRailEdges(event.currentTarget)} className="customer-business-carousel business-grid customer-rail-fade">{visibleBusinesses.slice(0,8).map((business,index) => <div key={business.id} className="customer-business-slide" style={{ "--slide-delay": `${index * 70}ms` } as React.CSSProperties}><BusinessCard business={business} /></div>)}</div> : <div className="customer-empty"><Search size={28} /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button onClick={() => { setSearched(false); setResults([]); setActiveCategory(""); }}>Popüler mağazalara dön</button></div>}
     </section>
   </>;
 }
