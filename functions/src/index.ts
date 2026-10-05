@@ -23,7 +23,7 @@ import { LAST_MINUTE_WINDOW_HOURS, alertCoversSlot, isNewAlertMatch, liveModuleE
 import { evaluateSubscriptionAccess, legacyTrialWindow } from "./subscription-domain.js";
 import { FieldValidationError, sanitizeCustomFields, validateCustomFieldValues, type CustomBookingField } from "./booking-fields-domain.js";
 import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppointment } from "./appointment-pass-domain.js";
-import { PKPass } from "passkit-generator";
+import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
@@ -4359,13 +4359,13 @@ export const appointmentPass = onRequest(
       const config = await loadAppleWalletConfig();
       if (!config) { res.status(503).type("text/plain; charset=utf-8").send("Apple Cüzdan henüz etkin değil."); return; }
       const passJson = buildWalletPassJson(item, config);
-      const pass = new PKPass(
-        { ...walletImageBuffers(), "pass.json": Buffer.from(JSON.stringify(passJson)) },
-        { wwdr: await appleWwdrPem(config), signerCert: config.signerCertPem, signerKey: config.signerKeyPem, signerKeyPassphrase: config.signerKeyPassphrase }
+      const pass = await buildPkpass(
+        { "pass.json": Buffer.from(JSON.stringify(passJson)), ...walletImageBuffers() },
+        { wwdrPem: await appleWwdrPem(config), signerCertPem: config.signerCertPem, signerKeyPem: config.signerKeyPem, signerKeyPassphrase: config.signerKeyPassphrase }
       );
       res.set("Content-Type", "application/vnd.apple.pkpass");
       res.set("Content-Disposition", `attachment; filename="randevu-${fileDate}.pkpass"`);
-      res.status(200).send(pass.getAsBuffer());
+      res.status(200).send(pass);
     } catch (error) {
       if (error instanceof HttpsError) {
         res.status(error.code === "not-found" ? 404 : 400).type("text/plain; charset=utf-8").send(error.message);
