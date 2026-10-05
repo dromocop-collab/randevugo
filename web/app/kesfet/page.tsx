@@ -1,34 +1,45 @@
 import Link from "next/link";
-import { ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ShieldCheck, Sparkles, Star } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, BriefcaseBusiness, CalendarCheck2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
+import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { DiscoverInteractive } from "./kesfet-client";
+import styles from "./discover.module.css";
 
 export default function DiscoverPage() {
   return (
-    <div className="marketing-page discover-v2 min-h-screen">
+    <div className="marketing-page min-h-screen">
       <MarketingHeader />
 
-      <main className="discover-main mx-auto w-full max-w-7xl px-4 py-12 lg:px-8">
-        {/* Hero — server-rendered for SEO */}
-        <div className="discover-hero mb-10">
-          <div className="discover-hero-copy">
-            <div className="discover-eyebrow"><Sparkles size={14} /> Sana özel keşif</div>
-            <h1>İyi hissettiren<br /><em>hizmeti keşfet.</em></h1>
-            <p>Yakınındaki güvenilir işletmeleri, gerçek müşteri puanlarını ve sana uygun hizmetleri tek yerde bul. Kararını ver, randevunu saniyeler içinde al.</p>
-            <div className="discover-trust-row"><span><ShieldCheck size={15} /> Güvenilir işletmeler</span><span><Star size={15} /> Gerçek yorumlar</span><span><CalendarCheck2 size={15} /> 7/24 randevu</span></div>
+      <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-0 sm:pt-8 lg:px-8">
+        {/* Hero — sunucuda çizilir (SEO) */}
+        <section className={`${styles.page} ${styles.hero}`}>
+          <div className={styles.heroGrid} aria-hidden="true" />
+          <div className={styles.heroInner}>
+            <div>
+              <span className={styles.eyebrow}><Sparkles size={13} /> KEŞFET</span>
+              <h1 className={styles.heroTitle}>İyi hissettiren<br /><em>hizmeti bul.</em></h1>
+              <p className={styles.heroText}>Yakınındaki güvenilir işletmeleri karşılaştır, gerçek yorumları incele ve uygun saatten saniyeler içinde randevunu al.</p>
+              <div className={styles.heroStats}>
+                <span className={styles.heroStat}><ShieldCheck size={15} /> Güvenli randevu</span>
+                <span className={styles.heroStat}><BadgeCheck size={15} /> Gerçek yorumlar</span>
+                <span className={styles.heroStat}><CalendarCheck2 size={15} /> 7/24 açık</span>
+              </div>
+            </div>
+            <div className={styles.heroMascot}><RoviMascot size={118} mood="wave" alt="Rovi keşif rehberi" priority /></div>
           </div>
-          <aside className="discover-business-portal">
-            <div className="business-portal-icon"><BriefcaseBusiness size={23} /></div>
-            <span>İŞLETME SAHİPLERİ İÇİN</span>
-            <h2>Takviminizi değil,<br />işletmenizi yönetin.</h2>
-            <p>Randevu, ekip, müşteri ve gelirinizi tek profesyonel çalışma alanında yönetin.</p>
-            <Link href="/ozellikler">İşletme çözümlerini keşfet <ArrowUpRight size={16} /></Link>
-            <small><BadgeCheck size={13} /> Lansmana özel ilk 3 ay ücretsiz</small>
-          </aside>
-        </div>
+        </section>
 
-        {/* Interactive search, filters, results — client component */}
         <DiscoverInteractive />
+
+        {/* İşletme sahipleri için sade çağrı */}
+        <section className={`${styles.page} ${styles.empty}`} style={{ marginTop: 36, borderStyle: "solid", justifyItems: "start", textAlign: "left" }}>
+          <span className={styles.eyebrow} style={{ color: "var(--green-2)", borderColor: "var(--line)", background: "var(--soft)" }}><BriefcaseBusiness size={13} /> İŞLETME SAHİPLERİ İÇİN</span>
+          <h3>İşletmeni burada listele, randevularını tek yerden yönet.</h3>
+          <p>Takvim, ekip, müşteri ve kasa yönetimi tek profesyonel çalışma alanında. Lansmana özel ilk 3 ay ücretsiz.</p>
+          <div className={styles.emptyActions} style={{ justifyContent: "flex-start" }}>
+            <Link href="/isletmeler" className={`${styles.pill} ${styles.pillPrimary}`}>İşletme çözümleri <ArrowUpRight size={15} /></Link>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
