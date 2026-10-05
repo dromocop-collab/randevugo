@@ -46,6 +46,7 @@ const STATIC_PAGES: [string, number, MetadataRoute.Sitemap[number]["changeFreque
   ["/fiyatlar", 0.7, "monthly"],
   ["/ozellikler", 0.7, "monthly"],
   ["/mobil-uygulama", 0.7, "monthly"],
+  ["/anket", 0.6, "monthly"],
   ["/yardim-merkezi", 0.5, "monthly"],
   ["/isletmeler/yardim", 0.5, "monthly"],
   ["/hakkimizda", 0.4, "yearly"],

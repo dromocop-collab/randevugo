@@ -15,11 +15,11 @@ import { useAuthContext } from "@/features/auth/auth-context";
 import { SUPPORT_ACTIVE_STATUSES, SUPPORT_NEEDS_ADMIN_STATUSES, isStaleSupportTicket } from "@/features/platform/admin-ops";
 import {
   AdminPage, Avatar, Btn, EmptyState, HeroStat, IconBtn, PageHeader, Pill, SearchField, Segmented, SkeletonList, StatCard, StatGrid,
-  Toolbar, cx, fullDate, relativeTime, timeOf, ui, useHotkeys, useIsClient, useMediaQuery, useNow, type Tone,
+  Toolbar, cx, fullDate, relativeTime, ui, useHotkeys, useIsClient, useMediaQuery, useNow, type Tone,
 } from "../_pages-ui";
 import s from "./support.module.css";
 
-type SupportRow = { id:string; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string; createdMillis:number|null; sortMillis:number };
+type SupportRow = { id:string; userId:string|null; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string; createdMillis:number|null; sortMillis:number };
 type Filter = "needs_admin"|"active"|"business"|"all";
 type Counts = { needsAdmin:number; business:number; resolved:number };
 
@@ -55,7 +55,7 @@ function toRow(item:QueryDocumentSnapshot): SupportRow {
   const data = item.data();
   const created = data.createdAt as Timestamp | undefined;
   const updated = data.updatedAt as Timestamp | undefined;
-  return { id:item.id, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:created?.toDate ? created.toDate().toLocaleString("tr-TR") : "Şimdi", createdMillis:created?.toMillis?.() ?? null, sortMillis:(updated?.toMillis?.() ?? created?.toMillis?.() ?? Date.now()) };
+  return { id:item.id, userId:typeof data.userId==="string"&&data.userId?data.userId:null, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:created?.toDate ? created.toDate().toLocaleString("tr-TR") : "Şimdi", createdMillis:created?.toMillis?.() ?? null, sortMillis:(updated?.toMillis?.() ?? created?.toMillis?.() ?? Date.now()) };
 }
 
 function sourceLabel(row:SupportRow) {
@@ -268,13 +268,7 @@ function TicketPane({ row, userId, stale, now, busy, mobile, onBack, onStatus }:
           {row.businessName && <a className={s.contact} href={row.businessId ? `/super-admin/isletmeler?q=${encodeURIComponent(row.businessId)}` : undefined}><Building2 size={13}/>{row.businessName}</a>}
         </div>
       </header>
-      {row.target!=="business"
-        ? <AdminThread ticketId={row.id} userId={userId} row={row} />
-        : <div className={s.thread}>
-            <span className={s.threadNote}>{row.createdAt}</span>
-            <div className={s.bubbleRow}><div className={cx(s.bubble, s.bubbleFirst)}>{row.message || "Mesaj içeriği yok."}<span className={s.bubbleMeta}>{row.requesterName} · {timeOf(row.createdMillis)}</span></div></div>
-            <p className={s.readonlyNote}>Bu mesaj mağazaya iletildi; yanıtı işletme verir. Durumu buradan yönetebilirsiniz.</p>
-          </div>}
+      <AdminThread ticketId={row.id} userId={userId} row={row} />
     </>
   );
 
@@ -298,6 +292,10 @@ function AdminThread({ticketId,userId,row}:{ticketId:string;userId:string;row:Su
     const frame = window.requestAnimationFrame(() => viewport.scrollTo({ top: viewport.scrollHeight }));
     return () => window.cancelAnimationFrame(frame);
   }, [messages.length]);
+  const store = row.target==="business";
+  const digits = row.requesterPhone.replace(/\D/g,"");
+  const whatsapp = digits.length>=10 ? `https://wa.me/${digits.startsWith("90")?digits:`90${digits.replace(/^0/,"")}`}` : "";
+  function senderLabel(role:string){ return role==="admin" ? "SeninRandevun Ekibi" : role==="business" ? (store ? row.businessName ?? "İşletme" : row.requesterName) : role==="customer" ? row.requesterName : row.requesterName; }
   async function send(){if(!body.trim()||!userId)return;setSending(true);try{await addDoc(collection(getDb(),"supportTickets",ticketId,"messages"),{body:body.trim(),senderId:userId,senderRole:"admin",createdAt:serverTimestamp()});await updateDoc(doc(getDb(),"supportTickets",ticketId),{status:"waiting_user",updatedAt:serverTimestamp()});setBody("");toast.success("Yanıt gönderildi.")}catch(error){toast.error((error as Error).message)}finally{setSending(false)}}
   function insertQuick(text:string){ setBody((current) => current.trim() ? `${current.trimEnd()}\n${text}` : text); inputRef.current?.focus(); }
   return <>
@@ -305,16 +303,19 @@ function AdminThread({ticketId,userId,row}:{ticketId:string;userId:string;row:Su
       <span className={s.threadNote}>{row.createdAt}</span>
       <div className={s.bubbleRow}><div className={cx(s.bubble, s.bubbleFirst)}>{row.message || "Mesaj içeriği yok."}<span className={s.bubbleMeta}>{row.requesterName} · ilk mesaj</span></div></div>
       {messages.length===0 && <span className={s.threadNote}>Henüz karşılıklı yanıt yok</span>}
-      {messages.map(item=><div key={item.id} className={cx(s.bubbleRow, item.role==="admin" && s.bubbleRowAdmin)}><div className={cx(s.bubble, item.role==="admin" && s.bubbleAdmin)}>{item.body}<span className={s.bubbleMeta}>{item.role==="admin"?"Ekip":row.requesterName} · {item.time}</span></div></div>)}
+      {messages.map(item=><div key={item.id} className={cx(s.bubbleRow, item.role==="admin" && s.bubbleRowAdmin)}><div className={cx(s.bubble, item.role==="admin" && s.bubbleAdmin)}>{item.body}<span className={s.bubbleMeta}>{senderLabel(item.role)} · {item.time}</span></div></div>)}
+      {store && <p className={s.readonlyNote}>{row.userId
+        ? <>Mağaza mesajı: işletme de yanıtlayabilir. Yazdığın yanıt müşterinin <b>Hesabım → Mesajlar</b> bölümünde “SeninRandevun Ekibi” olarak görünür.</>
+        : <>Müşterinin hesabı yok; yanıtı yalnızca işletme görür. Müşteriye ulaşmak için {whatsapp ? <a href={whatsapp} target="_blank" rel="noopener noreferrer">WhatsApp</a> : null}{whatsapp && row.requesterPhone ? " veya " : ""}{row.requesterPhone ? <a href={`tel:${row.requesterPhone}`}>telefon</a> : null} kullan.</>}</p>}
     </div>
     <div className={s.composer}>
       <div className={s.quick} aria-label="Hazır yanıtlar">{QUICK_REPLIES.map((text)=><button key={text} type="button" onClick={()=>insertQuick(text)} title={text}>{text.split(/[,.]/)[0]}</button>)}</div>
       <div className={s.composeRow}>
-        <textarea ref={inputRef} rows={1} value={body} onChange={event=>setBody(event.target.value)} placeholder="Yanıt yazın…" aria-label="Yanıt"
+        <textarea ref={inputRef} rows={1} value={body} onChange={event=>setBody(event.target.value)} placeholder={store ? (row.userId ? "Müşteriye ekip olarak yanıt yazın…" : "İşletmeye not / yanıt yazın…") : "Yanıt yazın…"} aria-label="Yanıt"
           onKeyDown={(event)=>{ if (event.key==="Enter" && (event.metaKey||event.ctrlKey)) { event.preventDefault(); void send(); } }}/>
         <button type="button" className={s.sendBtn} onClick={()=>void send()} disabled={sending||!body.trim()} aria-label="Yanıtı gönder">{sending?<LoaderCircle size={18} className={ui.spin}/>:<Send size={18}/>}</button>
       </div>
-      <span className={s.composeHint}>⌘/Ctrl + Enter ile gönder · yanıt sonrası durum “İşletme yanıtı bekleniyor” olur</span>
+      <span className={s.composeHint}>⌘/Ctrl + Enter ile gönder · yanıt sonrası durum “{store ? "Müşteri yanıtı bekleniyor" : "İşletme yanıtı bekleniyor"}” olur</span>
     </div>
   </>;
 }

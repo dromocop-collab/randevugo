@@ -45,6 +45,14 @@ const nextConfig: NextConfig = {
     };
     return Object.entries(aliases).map(([source, destination]) => ({ source, destination, permanent: true }));
   },
+  // Takvim/Cüzdan dosyaları aynı alan adından sunulur (iOS Safari "Takvime ekle" sayfasını doğrudan açar).
+  async rewrites() {
+    const fn = "https://europe-west1-randevugo-d1d2e.cloudfunctions.net/appointmentPass";
+    return [
+      { source: "/api/randevu/:token/takvim.ics", destination: `${fn}?token=:token&kind=ics` },
+      { source: "/api/randevu/:token/cuzdan.pkpass", destination: `${fn}?token=:token&kind=pkpass` },
+    ];
+  },
   async headers() {
     return [
       {

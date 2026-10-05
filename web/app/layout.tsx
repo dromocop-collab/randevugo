@@ -72,9 +72,9 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     images: [
       {
-        url: "/og.png",
-        width: 1729,
-        height: 910,
+        url: "/og-v2.png",
+        width: 1200,
+        height: 630,
         alt: "SeninRandevun ile yakındaki işletmeleri keşfedin",
         type: "image/png",
       },
@@ -85,7 +85,7 @@ export const metadata: Metadata = {
     title: "SeninRandevun — İşletme Keşfet ve Randevu Al",
     description:
       "Yakınınızdaki en iyi işletmeleri keşfedin, uygun saati seçin ve online randevunuzu anında oluşturun.",
-    images: ["/og.png"],
+    images: ["/og-v2.png"],
     creator: "@seninrandevun",
     site: "@seninrandevun",
   },

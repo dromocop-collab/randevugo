@@ -20,7 +20,8 @@ export function SubscriptionStatusBanner() {
     return () => { mounted = false; };
   }, [access?.role, businessId]);
 
-  if (access?.role === "staff") return null;
+  // İşletmesi olmayan hesapta (kurulum ekranı) abonelik uyarısı anlamsız.
+  if (!businessId || access?.role === "staff") return null;
   // Kontrol sürerken yer tutmaz; sonuç gelince yalnızca gerekirse uyarı görünür (sayfa zıplamaz).
   const loading = Boolean(businessId && result?.businessId !== businessId);
   if (loading) return null;

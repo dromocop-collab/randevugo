@@ -1,0 +1,114 @@
+/* Süper admin → Anket. Tokenlar _pages-ui/ui.module.css (.page) üzerinden gelir; koyu tema otomatik. */
+
+.rangeRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.grid { display: grid; gap: 16px; }
+@media (min-width: 1100px) { .grid { grid-template-columns: 1.45fr 1fr; } }
+.grid2 { display: grid; gap: 16px; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: 1.2fr 1fr; } }
+.rank { display: flex; flex-direction: column; gap: 12px; }
+.note { margin: 14px 0 0; color: var(--faint); font-size: 11.5px; line-height: 1.5; }
+
+/* ── Trend ── */
+.chart { margin: 0; }
+.plot { position: relative; height: 220px; margin-left: 28px; }
+.gridLine { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--line); }
+.gridLine span { position: absolute; left: -28px; top: -7px; width: 22px; color: var(--faint); font-size: 10px; font-weight: 600; text-align: right; }
+.bars { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.barCol { position: relative; display: flex; flex: 1; height: 100%; min-width: 0; align-items: flex-end; justify-content: center; }
+.bar { display: block; width: min(100%, 26px); border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, #3fae74, var(--green-2)); transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.barCol:hover .bar { background: #8bd16a; }
+:global(:root[data-theme="dark"]) .barCol:hover .bar { background: var(--lime); }
+.barTip { position: absolute; top: -2px; left: 50%; z-index: 2; padding: 2px 6px; border-radius: 6px; background: var(--ink); color: var(--card); font-size: 10.5px; font-weight: 750; opacity: 0; pointer-events: none; transform: translate(-50%, -100%); transition: opacity 0.12s ease; white-space: nowrap; }
+.barCol:hover .barTip { opacity: 1; }
+.line { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.line polyline { stroke: var(--violet); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.xAxis { display: flex; gap: 3px; margin: 6px 0 0 28px; }
+.xAxis span { flex: 1; min-width: 0; overflow: visible; color: var(--faint); font-size: 10px; font-weight: 600; text-align: center; white-space: nowrap; }
+.legendRow { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.legendRow span { display: inline-flex; align-items: center; gap: 6px; }
+.swatchBar { width: 12px; height: 12px; border-radius: 4px; background: var(--green-2); }
+.swatchLine { width: 16px; height: 3px; border-radius: 3px; background: var(--violet); }
+
+/* ── Huni ── */
+.funnel { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.funnel li { display: flex; flex-direction: column; gap: 6px; }
+.funnelDrop { align-self: flex-start; margin: 2px 0 2px 6px; color: var(--muted); font-size: 11.5px; font-weight: 700; }
+.funnelDrop small { color: var(--faint); font-weight: 600; }
+.funnelStep { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+.funnelLabel { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 650; }
+.funnelStep b { font-size: 16px; font-weight: 800; }
+.funnelTrack { height: 14px; overflow: hidden; border-radius: 999px; background: var(--soft); }
+.funnelFill {
+  display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--green-2), color-mix(in srgb, var(--green-2) calc(100% - var(--step, 0) * 18%), var(--lime)));
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Karakter dağılımı ── */
+.results { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.results li { display: flex; align-items: center; gap: 12px; }
+.resultEmoji { display: grid; flex-shrink: 0; width: 38px; height: 38px; place-items: center; border-radius: 12px; font-size: 19px; }
+.resultBody { flex: 1; min-width: 0; }
+.resultHead { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+.resultHead span { overflow: hidden; color: var(--ink-2); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.resultHead b { flex-shrink: 0; font-weight: 800; }
+.resultHead small { margin-left: 4px; color: var(--faint); font-size: 11.5px; font-weight: 650; }
+.resultTrack { height: 9px; overflow: hidden; border-radius: 999px; background: var(--soft); }
+.resultTrack i { display: block; height: 100%; border-radius: inherit; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ── Cihaz ── */
+.deviceBlocks { display: flex; flex-direction: column; gap: 22px; }
+.device { display: flex; flex-direction: column; gap: 8px; }
+.deviceHead { display: flex; justify-content: space-between; font-size: 13px; }
+.deviceHead span { color: var(--ink-2); font-weight: 650; }
+.deviceHead b { font-weight: 800; }
+.stack { display: flex; height: 16px; overflow: hidden; gap: 2px; border-radius: 999px; background: var(--soft); }
+.stack i { display: block; height: 100%; }
+.stackEmpty { flex: 1; }
+.dev-mobile { background: var(--green-2); }
+.dev-tablet { background: #a3d94a; }
+.dev-desktop { background: #5b8def; }
+:global(:root[data-theme="dark"]) .dev-mobile { background: #6ee7a0; }
+.deviceLegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; color: var(--muted); font-size: 12px; list-style: none; }
+.deviceLegend li { display: inline-flex; align-items: center; gap: 6px; }
+.deviceLegend i { width: 10px; height: 10px; border-radius: 3px; }
+.deviceLegend b { color: var(--ink); font-weight: 750; }
+
+/* ── Sektör × karakter ── */
+.insights { display: grid; gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; }
+@media (min-width: 900px) { .insights { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.insights li { display: flex; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-2); font-size: 13px; }
+.insights p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.insights p b { color: var(--ink); }
+.insightRank { display: grid; flex-shrink: 0; width: 24px; height: 24px; place-items: center; border-radius: 8px; background: var(--lime); color: #1d3305; font-size: 12px; font-weight: 800; }
+.matrixWrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; -webkit-overflow-scrolling: touch; }
+.matrix { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0 4px; font-size: 13px; }
+.matrix th, .matrix td { padding: 4px 6px; white-space: nowrap; }
+.matrix thead th { color: var(--faint); font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: 0.04em; }
+.matrix thead th.center { font-size: 18px; text-transform: none; }
+.matrix tbody th { color: var(--ink-2); font-weight: 650; text-align: left; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.matrix thead th.num { text-align: right; }
+.center { text-align: center; }
+.dimRow { opacity: 0.45; }
+.heat {
+  display: inline-grid; min-width: 38px; height: 30px; place-items: center; padding: 0 6px; border-radius: 9px;
+  background: color-mix(in srgb, var(--green-2) calc(var(--heat, 0) * 85%), var(--soft));
+  color: var(--ink); font-size: 12px; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.heatStrong { color: #fff; }
+:global(:root[data-theme="dark"]) .heatStrong { color: #0b1a12; }
+.heatTop { outline: 2px solid var(--lime); outline-offset: -2px; }
+
+/* ── Sorular ── */
+.questions { display: grid; gap: 16px; }
+@media (min-width: 900px) { .questions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.qIndex { display: inline-grid; width: 22px; height: 22px; margin-right: 8px; place-items: center; border-radius: 7px; background: var(--soft); color: var(--green-2); font-size: 12px; font-weight: 800; vertical-align: 2px; }
+
+/* ── Mobil kart ── */
+.mobileRow { display: flex; flex-direction: column; gap: 4px; font-size: 13px; text-align: left; }
+.mobileTop { display: flex; justify-content: space-between; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar, .funnelFill, .resultTrack i { transition: none; }
+}

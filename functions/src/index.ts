@@ -10,10 +10,10 @@ import {
   getFirestore,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { createHash, randomUUID, randomInt } from "crypto";
+import { X509Certificate, createHash, randomUUID, randomInt } from "crypto";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import { ACTIVE_QUEUE_STATUSES, canTransitionQueue, isActiveQueueStatus, isQueueStatus, isSameActiveJoin, liveOperationsGate, liveQueueGate, operatorQueueTransitions, queueIntakeOpen, validateQueueSelection, type QueueStatus } from "./live-queue-domain.js";
@@ -22,6 +22,10 @@ import { CALLED_GRACE_MINUTES, isCalledOverdue, isDeclaredEta, noticeCopy, shoul
 import { LAST_MINUTE_WINDOW_HOURS, alertCoversSlot, isNewAlertMatch, liveModuleEnabled } from "./availability-alert-domain.js";
 import { evaluateSubscriptionAccess, legacyTrialWindow } from "./subscription-domain.js";
 import { FieldValidationError, sanitizeCustomFields, validateCustomFieldValues, type CustomBookingField } from "./booking-fields-domain.js";
+import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppointment } from "./appointment-pass-domain.js";
+import { PKPass } from "passkit-generator";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
 
@@ -4239,6 +4243,7 @@ export const getAppointmentByPublicToken = onCall(
         maximumBookingDaysAhead: Math.max(1, numberOr(business.maximumBookingDaysAhead, 30)),
         timeZone: typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul",
       },
+      wallet: { apple: (await loadAppleWalletConfig()) !== null },
       business: {
         name: String(business.name ?? "İşletme"),
         address: [business.address, business.district, business.city].filter(Boolean).join(", "),
@@ -4247,6 +4252,128 @@ export const getAppointmentByPublicToken = onCall(
         logoUrl: String(business.logoUrl ?? ""),
       },
     };
+  }
+);
+
+// ── Takvim (.ics) ve Apple Cüzdan kartı ──
+// Sertifikalar platformPrivateSettings/appleWallet belgesinde tutulur (istemci kurallarıyla okunamaz).
+// Belge yoksa Cüzdan butonu gösterilmez; takvim dosyası her zaman çalışır.
+const APPLE_WALLET_SETTINGS_PATH = "platformPrivateSettings/appleWallet";
+const APPLE_WWDR_G4_URL = "https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer";
+type AppleWalletConfig = { passTypeIdentifier: string; teamIdentifier: string; signerCertPem: string; signerKeyPem: string; signerKeyPassphrase?: string; wwdrPem?: string };
+let appleWalletCache: { at: number; value: AppleWalletConfig | null } | null = null;
+let wwdrPemCache: string | null = null;
+
+async function loadAppleWalletConfig(): Promise<AppleWalletConfig | null> {
+  if (appleWalletCache && Date.now() - appleWalletCache.at < 10 * 60 * 1000) return appleWalletCache.value;
+  let value: AppleWalletConfig | null = null;
+  try {
+    const data = (await db.doc(APPLE_WALLET_SETTINGS_PATH).get()).data();
+    if (data?.enabled !== false && typeof data?.passTypeIdentifier === "string" && typeof data?.signerCertPem === "string" && typeof data?.signerKeyPem === "string") {
+      value = {
+        passTypeIdentifier: data.passTypeIdentifier,
+        teamIdentifier: typeof data.teamIdentifier === "string" ? data.teamIdentifier : "G4KKMJ85R7",
+        signerCertPem: data.signerCertPem,
+        signerKeyPem: data.signerKeyPem,
+        signerKeyPassphrase: typeof data.signerKeyPassphrase === "string" ? data.signerKeyPassphrase : undefined,
+        wwdrPem: typeof data.wwdrPem === "string" ? data.wwdrPem : undefined,
+      };
+    }
+  } catch (error) {
+    logger.warn("Apple Cüzdan ayarı okunamadı.", { error: error instanceof Error ? error.message : String(error) });
+  }
+  appleWalletCache = { at: Date.now(), value };
+  return value;
+}
+
+async function appleWwdrPem(config: AppleWalletConfig): Promise<string> {
+  if (config.wwdrPem) return config.wwdrPem;
+  if (wwdrPemCache) return wwdrPemCache;
+  const response = await fetch(APPLE_WWDR_G4_URL, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`WWDR indirilemedi (${response.status})`);
+  wwdrPemCache = new X509Certificate(Buffer.from(await response.arrayBuffer())).toString();
+  return wwdrPemCache;
+}
+
+let walletImages: Record<string, Buffer> | null = null;
+function walletImageBuffers() {
+  if (!walletImages) {
+    const dir = join(__dirname, "..", "assets", "wallet");
+    walletImages = Object.fromEntries(
+      ["icon.png", "icon@2x.png", "icon@3x.png", "logo.png", "logo@2x.png", "logo@3x.png"].map((name) => [name, readFileSync(join(dir, name))])
+    );
+  }
+  return walletImages;
+}
+
+async function loadPassAppointment(token: unknown): Promise<PassAppointment> {
+  const { businessId, appointmentId, token: publicToken } = await resolvePublicAppointmentToken(token);
+  const [appointmentSnapshot, businessSnapshot] = await Promise.all([
+    db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get(),
+    db.doc(`businesses/${businessId}`).get(),
+  ]);
+  if (!appointmentSnapshot.exists) throw new HttpsError("not-found", "Randevu kaydı bulunamadı.");
+  const appointment = appointmentSnapshot.data()!;
+  const business = businessSnapshot.data() ?? {};
+  const start = (appointment.startAt as Timestamp | undefined)?.toDate();
+  if (!start) throw new HttpsError("failed-precondition", "Randevu saati bulunamadı.");
+  const extras = Array.isArray(appointment.additionalServices) ? appointment.additionalServices as Record<string, unknown>[] : [];
+  const duration = normalizedBookingDuration(appointment.serviceDurationMinutes)
+    + extras.reduce((sum, item) => sum + (item && typeof item === "object" ? normalizedBookingDuration(item.durationMinutes) : 0), 0);
+  const end = (appointment.endAt as Timestamp | undefined)?.toDate() ?? new Date(start.getTime() + duration * 60000);
+  const price = numberOr(appointment.servicePrice, 0) + extras.reduce((sum, item) => sum + (item && typeof item === "object" ? Math.max(0, numberOr(item.price, 0)) : 0), 0);
+  return {
+    token: publicToken,
+    appointmentId,
+    status: String(appointment.status ?? "pending"),
+    businessName: String(business.name ?? "İşletme").slice(0, 80),
+    serviceName: [String(appointment.serviceName ?? ""), ...extras.map((item) => String(item?.name ?? ""))].filter(Boolean).join(" + ").slice(0, 120),
+    staffName: String(appointment.staffName ?? "").slice(0, 60),
+    address: [business.address, business.district, business.city].filter(Boolean).join(", ").slice(0, 200),
+    phone: String(business.phone ?? "").slice(0, 30),
+    start,
+    end,
+    totalPrice: price > 0 ? price : null,
+    timeZone: typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul",
+    manageUrl: `${SITE_ORIGIN}/randevu/${publicToken}`,
+  };
+}
+
+/** GET ?token=<publicToken>&kind=ics|pkpass — site bunu /api/randevu/<token>/... adresinden proxy'ler. */
+export const appointmentPass = onRequest(
+  { region: "europe-west1", memory: "256MiB", maxInstances: 10, concurrency: 40 },
+  async (req, res) => {
+    if (req.method !== "GET" && req.method !== "HEAD") { res.status(405).send("Method not allowed"); return; }
+    const kind = req.query.kind === "pkpass" ? "pkpass" : "ics";
+    res.set("Cache-Control", "private, no-store");
+    res.set("X-Robots-Tag", "noindex");
+    try {
+      const item = await loadPassAppointment(req.query.token);
+      const fileDate = item.start.toISOString().slice(0, 10);
+      if (kind === "ics") {
+        res.set("Content-Type", "text/calendar; charset=utf-8");
+        res.set("Content-Disposition", `inline; filename="randevu-${fileDate}.ics"`);
+        res.status(200).send(buildAppointmentIcs(item));
+        return;
+      }
+      const config = await loadAppleWalletConfig();
+      if (!config) { res.status(503).type("text/plain; charset=utf-8").send("Apple Cüzdan henüz etkin değil."); return; }
+      const passJson = buildWalletPassJson(item, config);
+      const pass = new PKPass(
+        { ...walletImageBuffers(), "pass.json": Buffer.from(JSON.stringify(passJson)) },
+        { wwdr: await appleWwdrPem(config), signerCert: config.signerCertPem, signerKey: config.signerKeyPem, signerKeyPassphrase: config.signerKeyPassphrase }
+      );
+      res.set("Content-Type", "application/vnd.apple.pkpass");
+      res.set("Content-Disposition", `attachment; filename="randevu-${fileDate}.pkpass"`);
+      res.status(200).send(pass.getAsBuffer());
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        res.status(error.code === "not-found" ? 404 : 400).type("text/plain; charset=utf-8").send(error.message);
+        return;
+      }
+      logger.error("Randevu kartı oluşturulamadı.", { kind, error: error instanceof Error ? error.message : String(error) });
+      res.status(500).type("text/plain; charset=utf-8").send("Dosya şu anda oluşturulamadı.");
+    }
   }
 );
 

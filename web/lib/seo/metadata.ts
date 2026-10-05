@@ -7,7 +7,7 @@ export const SEO_SITE_URL = SITE_URL;
 export const SEO_SITE_NAME = SITE_NAME;
 
 /** Varsayılan paylaşım görseli (işletme tarafı tanıtım görseli). */
-export const DEFAULT_OG_IMAGE = { url: "/og.png", width: 1729, height: 910 } as const;
+export const DEFAULT_OG_IMAGE = { url: "/og-v2.png", width: 1200, height: 630 } as const;
 
 type PublicMetadataInput = {
   /** Şablon "%s | SeninRandevun" eklenir; marka adını başlığa yazmayın. */

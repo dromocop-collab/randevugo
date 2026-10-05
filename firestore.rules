@@ -197,6 +197,71 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Anonymous "randevu karakter testi" answers (/anket). Create-only for
+    // anyone; values are short option slugs so no free text / PII can be
+    // stored. Readable only by platform admins (super admin → Anket).
+    match /surveyResponses/{responseId} {
+      function isSurveySlug(value) {
+        return value is string && value.matches('^[a-z0-9-]{1,24}$');
+      }
+
+      allow read: if isPlatformAdmin();
+      allow update, delete: if false;
+      allow create: if request.resource.data.keys().hasOnly([
+          "surveyId", "answers", "resultType", "hoursSaved", "device", "createdAt"
+        ]) &&
+        request.resource.data.keys().hasAll([
+          "surveyId", "answers", "resultType", "hoursSaved", "device", "createdAt"
+        ]) &&
+        request.resource.data.surveyId == "isletme-anketi-v1" &&
+        request.resource.data.answers is map &&
+        request.resource.data.answers.keys().hasOnly([
+          "tur", "kanal", "mesaj", "dert", "unutan", "gece", "saat", "hayal"
+        ]) &&
+        request.resource.data.answers.keys().hasAll([
+          "tur", "kanal", "mesaj", "dert", "unutan", "gece", "saat", "hayal"
+        ]) &&
+        isSurveySlug(request.resource.data.answers.tur) &&
+        isSurveySlug(request.resource.data.answers.kanal) &&
+        isSurveySlug(request.resource.data.answers.mesaj) &&
+        isSurveySlug(request.resource.data.answers.dert) &&
+        isSurveySlug(request.resource.data.answers.unutan) &&
+        isSurveySlug(request.resource.data.answers.gece) &&
+        isSurveySlug(request.resource.data.answers.saat) &&
+        isSurveySlug(request.resource.data.answers.hayal) &&
+        request.resource.data.resultType in [
+          "telefon-ninjasi", "mesaj-sampiyonu", "defter-ustasi",
+          "gece-kusu", "takvim-cambazi", "dijital-kasif"
+        ] &&
+        request.resource.data.hoursSaved is int &&
+        request.resource.data.hoursSaved >= 0 && request.resource.data.hoursSaved <= 40 &&
+        request.resource.data.device in ["mobile", "tablet", "desktop"] &&
+        request.resource.data.createdAt == request.time;
+    }
+
+    // Anonymous /anket funnel events (view → start → CTA). Create-only for
+    // anyone with a strict schema (no free text / PII); readable only by
+    // platform admins. "complete" is allowed but the web counts completions
+    // from surveyResponses instead of logging it.
+    match /surveyEvents/{eventId} {
+      allow read: if isPlatformAdmin();
+      allow update, delete: if false;
+      allow create: if request.resource.data.keys().hasOnly([
+          "surveyId", "type", "resultType", "device", "createdAt"
+        ]) &&
+        request.resource.data.keys().hasAll(["surveyId", "type", "device", "createdAt"]) &&
+        request.resource.data.surveyId == "isletme-anketi-v1" &&
+        request.resource.data.type in [
+          "view", "start", "complete", "cta_signup", "cta_customer", "share", "restart"
+        ] &&
+        (!("resultType" in request.resource.data) || request.resource.data.resultType in [
+          "telefon-ninjasi", "mesaj-sampiyonu", "defter-ustasi",
+          "gece-kusu", "takvim-cambazi", "dijital-kasif"
+        ]) &&
+        request.resource.data.device in ["mobile", "tablet", "desktop"] &&
+        request.resource.data.createdAt == request.time;
+    }
+
     // ────────────────────────────────────────────────
     // Categories (platform-managed)
     // ────────────────────────────────────────────────

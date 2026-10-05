@@ -23,6 +23,8 @@ import {
   loginWithEmailPassword,
   registerWithEmailPassword,
   signInWithSocial,
+  AccountExistsError,
+  PROVIDER_LABEL,
   type SocialProvider,
 } from "@/features/auth/auth-service";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
@@ -65,8 +67,9 @@ const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
 
 type AccountType = "business" | "customer";
 
-// Apple web girişi için Firebase'de Services ID / Key gerekir; tanımlanınca NEXT_PUBLIC_APPLE_SIGNIN_ENABLED=1 yapılır.
-const APPLE_WEB_SIGNIN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGNIN_ENABLED === "1";
+// Apple web girişi Firebase'de Services ID (com.cihat.seninrandevun.web) ile yapılandırıldı.
+// Acil durumda NEXT_PUBLIC_APPLE_SIGNIN_ENABLED=0 ile kapatılabilir.
+const APPLE_WEB_SIGNIN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGNIN_ENABLED !== "0";
 type ScreenMode = "login" | "register" | "forgot";
 
 function getCloudFunctions() {
@@ -564,8 +567,8 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
     setLoading(true);
 
     try {
-      await loginWithEmailPassword(email, password);
-      toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
+      const { linked } = await loginWithEmailPassword(email, password);
+      toast.success(linked ? `Giriş başarılı! ${PROVIDER_LABEL[linked]} girişin de bu hesaba bağlandı.` : "Giriş başarılı! Yönlendiriliyorsunuz...");
       const normalizedEmail = email.trim().toLowerCase();
       const fallback = normalizedEmail === PRIMARY_ADMIN_EMAIL ? "/admin" : accountType === "customer" ? "/hesabim" : "/dashboard";
       router.push(getSafeNextPath(fallback));
@@ -1163,13 +1166,20 @@ function SocialSignIn({ accountType, mode }: { accountType: AccountType; mode: "
     try {
       const result = await signInWithSocial(provider);
       if (result.redirected) return;
-      toast.success("Giriş başarılı! Yönlendiriliyorsunuz...");
+      toast.success(result.linked ? `Giriş başarılı! ${PROVIDER_LABEL[result.linked]} girişin de bu hesaba bağlandı.` : "Giriş başarılı! Yönlendiriliyorsunuz...");
       // Yeni işletme hesabı kurulum sihirbazına, diğerleri panele / hesaba gider.
-      const fallback = customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";
+      const fallback = result.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL ? "/admin" : customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";
       router.push(getSafeNextPath(fallback));
     } catch (err) {
       const code = (err as FirebaseError | undefined)?.code;
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
+      if (err instanceof AccountExistsError) {
+        const other = err.provider === "apple" ? "Google veya e-posta/şifre" : "e-posta/şifre veya Apple";
+        const message = `${err.email} zaten kayıtlı. Bu hesaba daha önce girdiğin yöntemle (${other}) giriş yap; ${PROVIDER_LABEL[err.provider]} girişin otomatik olarak aynı hesaba bağlanacak.`;
+        setError(message);
+        toast.info(message, { duration: 9000 });
+        return;
+      }
       const message = mapAuthError(err);
       setError(message);
       toast.error(message);

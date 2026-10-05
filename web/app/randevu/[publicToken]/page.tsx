@@ -8,13 +8,14 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, CheckCircle2, Clock3, Download, Hourglass, Info, MapPin, Navigation, Phone, ShieldCheck, Store, LoaderCircle, UserRound, WalletCards, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarClock, CalendarDays, CheckCircle2, Clock3, Hourglass, Info, MapPin, Navigation, Phone, ShieldCheck, Store, LoaderCircle, UserRound, WalletCards, XCircle } from "lucide-react";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { LoadingState, ErrorState } from "@/components/ui/states";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { addGuestBooking } from "@/features/appointments/guest-booking-store";
-import { downloadIcs, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import { type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import { CalendarActions } from "./calendar-actions";
 import { RescheduleDialog } from "@/features/appointments/reschedule-dialog";
 import { appointmentChangeError, manageAppointmentByToken } from "@/features/appointments/appointment-change";
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
@@ -30,6 +31,7 @@ type PublicAppointmentResponse = {
   appointment: Appointment;
   business: BusinessInfo;
   policy?: PublicAppointmentPolicy;
+  wallet?: { apple?: boolean };
 };
 
 const statusMap: Record<string,{label:string;className:string}> = {
@@ -54,6 +56,7 @@ export default function AppointmentDetailPage() {
   const [now,setNow] = useState(() => Date.now());
   const [policy,setPolicy] = useState<PublicAppointmentPolicy|null>(null);
   const [reloadKey,setReloadKey] = useState(0);
+  const [walletApple,setWalletApple] = useState(false);
   const [rescheduleOpen,setRescheduleOpen] = useState(false);
   const [cancelOpen,setCancelOpen] = useState(false);
   const [cancelReason,setCancelReason] = useState("");
@@ -69,6 +72,7 @@ export default function AppointmentDetailPage() {
       setAppointment(result.data.appointment);
       setBusiness(result.data.business);
       setPolicy(result.data.policy??null);
+      setWalletApple(result.data.wallet?.apple===true);
       setNow(Date.now());
     }catch(reason){
       if(!cancelled){
@@ -193,10 +197,7 @@ export default function AppointmentDetailPage() {
           <div className={styles.cardHead}><i><CalendarClock size={20}/></i><div><small>RANDEVUYU YÖNET</small><h2>{upcomingActive?"Planınız hazır":"Randevu işlemleri"}</h2></div></div>
           <div className={styles.actions}>
             {upcomingActive&&policy?.canReschedule&&<button type="button" onClick={()=>setRescheduleOpen(true)} className={`${styles.btn} ${styles.btnPrimary}`}><CalendarClock size={18}/> Saati değiştir</button>}
-            {calendarEvent&&<div className={styles.actionsRow}>
-              <button type="button" onClick={()=>downloadIcs(calendarEvent,`randevu-${start.toISOString().slice(0,10)}.ics`)} className={styles.btn}><Download size={17}/> Takvime ekle</button>
-              <a href={googleCalendarUrl(calendarEvent)} target="_blank" rel="noopener noreferrer" className={styles.btn}><CalendarPlus size={17}/> Google</a>
-            </div>}
+            {calendarEvent&&<CalendarActions event={calendarEvent} publicToken={params.publicToken} appleWalletEnabled={walletApple}/>}
             {upcomingActive&&policy?.canCancel&&<button type="button" onClick={()=>setCancelOpen(true)} className={`${styles.btn} ${styles.btnDanger}`}><XCircle size={18}/> Randevuyu iptal et</button>}
           </div>
           {upcomingActive&&policy&&<ul className={styles.policy}>

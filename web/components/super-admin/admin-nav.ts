@@ -1,6 +1,6 @@
 import {
   BarChart3, BellRing, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
-  MessageSquareText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
+  MessageSquareText, PartyPopper, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 export type AdminNavItem = { href: string; label: string; short?: string; icon: LucideIcon; keywords?: string };
@@ -13,6 +13,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/super-admin", label: "Platform Özeti", short: "Özet", icon: CircleGauge, keywords: "dashboard panel ana sayfa kpi" },
       { href: "/super-admin/asistan", label: "Akıllı Asistan", short: "Asistan", icon: Bot, keywords: "ai yapay zeka rovi" },
       { href: "/super-admin/analitik", label: "Ziyaretçi Analitiği", short: "Analitik", icon: BarChart3, keywords: "trafik ziyaret" },
+      { href: "/super-admin/anket", label: "Anket", icon: PartyPopper, keywords: "test karakter huni quiz dönüşüm" },
     ],
   },
   {

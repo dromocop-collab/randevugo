@@ -25,7 +25,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getDb } from "@/lib/firebase/firestore";
 import { doc, getDoc } from "firebase/firestore";
 import { addGuestBooking } from "@/features/appointments/guest-booking-store";
-import { downloadIcs, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import { addToDeviceCalendar, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
 import {
   DEFAULT_BOOKING_FIELD_SETTINGS,
   getBookingFieldSettings,
@@ -756,7 +756,7 @@ export function BookingWizard(props: Props) {
           )}
 
           <div className={s.actionsGrid}>
-            <button type="button" className={s.linkCard} style={{ "--i": 4 } as React.CSSProperties} onClick={() => downloadIcs(calendarEvent, `randevu-${appointmentsDate}.ics`)}>
+            <button type="button" className={s.linkCard} style={{ "--i": 4 } as React.CSSProperties} onClick={() => addToDeviceCalendar(calendarEvent, { publicToken: successData.publicToken || undefined, fileName: `randevu-${appointmentsDate}.ics` })}>
               <i><Download size={19} /></i><span>Takvime ekle</span>
             </button>
             <a className={s.linkCard} style={{ "--i": 5 } as React.CSSProperties} href={googleCalendarUrl(calendarEvent)} target="_blank" rel="noopener noreferrer">

@@ -43,6 +43,7 @@ const STATIC_ROUTES = [
   "/isletmeler/kayit",
   "/isletmeler/yardim",
   "/kategoriler",
+  "/anket",
   "/kayit",
   "/kesfet",
   "/kuafor-randevu",

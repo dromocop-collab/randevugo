@@ -27,7 +27,8 @@ import { appointmentChangeError, rescheduleCustomerAppointment } from "@/feature
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import { PushToggleCard } from "@/features/push";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
-import { downloadIcs, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
+import { LinkedSignInMethods } from "@/features/auth/linked-sign-in-methods";
+import { addToDeviceCalendar, googleCalendarUrl, type CalendarEventInput } from "@/lib/calendar/appointment-calendar";
 import s from "./account.module.css";
 
 interface CustomerAppointment { id:string; businessId:string; businessName:string; businessSlug:string; businessLogo?:string; businessCity:string; businessAddress?:string; businessPhone:string; serviceId:string; staffId:string; serviceName:string; staffName:string; startAt:string; endAt:string; status:string; publicToken?:string; price?:number; rescheduleCount:number; allowReschedule:boolean; maximumBookingDaysAhead:number; timeZone:string; additionalServices?:Array<{serviceId:string;name:string;price:number;durationMinutes:number}> }
@@ -501,6 +502,8 @@ export default function CustomerAccountPage() {
 
             <div className={s.group}><span className={s.groupTitle}>Bildirimler</span><PushToggleCard audience="customer" appearance="account"/></div>
 
+            <div className={s.group}><span className={s.groupTitle}>Giriş yöntemleri</span><LinkedSignInMethods/></div>
+
             <div className={s.group}><span className={s.groupTitle}>Güvenlik</span>
               <div className={s.settings}>
                 <button type="button" className={s.row} onClick={()=>!emailVerified&&sendEmailVerification()} disabled={verificationBusy||emailVerified}><i className={`${s.rowIcon} ${emailVerified?"":s.ic_amber}`}><BadgeCheck size={18}/></i><span className={s.rowText}><b>E-posta doğrulaması</b><small>{emailVerified?"Adresiniz doğrulandı.":"6 haneli kodla doğrulayın; önemli bildirimler kaçmasın."}</small></span><span className={`${s.rowEnd} ${emailVerified?s.rowEndOk:""}`}>{verificationBusy?<LoaderCircle className="animate-spin" size={16}/>:emailVerified?<Check size={17}/>:<>Kodu gönder <ChevronRight size={16}/></>}</span></button>
@@ -557,7 +560,7 @@ export default function CustomerAccountPage() {
       <p>{calendarFor.serviceName} · {formatDate(calendarFor.startAt)}. Randevudan 1 saat önce hatırlatma eklenir.</p>
       <div className={s.sheetList}>
         <a className={s.row} href={googleCalendarUrl(calendarEventOf(calendarFor))} target="_blank" rel="noopener noreferrer" onClick={()=>setCalendarFor(null)}><i className={`${s.rowIcon} ${s.ic_blue}`}><CalendarDays size={18}/></i><span className={s.rowText}><b>Google Takvim</b><small>Yeni sekmede açılır</small></span><ExternalLink size={16} className={s.rowEnd}/></a>
-        <button type="button" className={s.row} onClick={()=>{downloadIcs(calendarEventOf(calendarFor),`randevu-${calendarFor.id}.ics`);setCalendarFor(null)}}><i className={`${s.rowIcon} ${s.ic_gray}`}><CalendarClock size={18}/></i><span className={s.rowText}><b>Apple Takvim / Outlook</b><small>.ics dosyası olarak indirilir</small></span><ChevronRight size={17} className={s.rowEnd}/></button>
+        <button type="button" className={s.row} onClick={()=>{addToDeviceCalendar(calendarEventOf(calendarFor),{publicToken:calendarFor.publicToken,fileName:`randevu-${calendarFor.id}.ics`});setCalendarFor(null)}}><i className={`${s.rowIcon} ${s.ic_gray}`}><CalendarClock size={18}/></i><span className={s.rowText}><b>Telefon takvimine ekle</b><small>iPhone: Apple Takvim · Android: telefon takvimi</small></span><ChevronRight size={17} className={s.rowEnd}/></button>
       </div>
     </Sheet>}
     {verifyOpen&&<Sheet onDismiss={()=>{if(!verificationBusy)setVerifyOpen(false)}} labelledBy="verify-email-title">
