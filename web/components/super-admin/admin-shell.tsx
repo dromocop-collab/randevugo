@@ -1,22 +1,27 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { ReactNode, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
+import { BellRing, Moon, Search, ShieldCheck, Sun } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
-import { AdminMobileNav, AdminSidebar } from "@/components/super-admin/admin-sidebar";
-import { EmptyState } from "@/components/ui/states";
+import { AdminMobileNav, AdminSidebar, useUnreadAlertCount } from "@/components/super-admin/admin-sidebar";
+import { AdminCommandPalette } from "@/components/super-admin/admin-command-palette";
+import { ALERTS_HREF, currentNavItem, ADMIN_NAV_GROUPS } from "@/components/super-admin/admin-nav";
+import { adminTokensClassName, EmptyState } from "@/components/super-admin/ui";
 import { BrandPageLoader } from "@/components/ui/brand-page-loader";
-import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/auth-service";
+import { cn } from "@/lib/utils/cn";
+import styles from "./admin-shell.module.css";
 
 const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
+const COLLAPSE_KEY = "superAdmin.sidebarCollapsed";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const { user, status } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const isPrimaryAdmin = user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
   const [adminCheck, setAdminCheck] = useState<{ uid: string; allowed: boolean } | null>(null);
@@ -27,18 +32,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status !== "authenticated" || !user || isPrimaryAdmin) return;
-
-    const db = getDb();
-    getDoc(doc(db, "platformAdmins", user.uid))
-      .then((snap) => {
-        setAdminCheck({ uid: user.uid, allowed: snap.exists() });
-      })
-      .catch(() => {
-        setAdminCheck({ uid: user.uid, allowed: false });
-      });
+    getDoc(doc(getDb(), "platformAdmins", user.uid))
+      .then((snap) => setAdminCheck({ uid: user.uid, allowed: snap.exists() }))
+      .catch(() => setAdminCheck({ uid: user.uid, allowed: false }));
   }, [isPrimaryAdmin, status, user]);
 
-  // Derived: primary admin is always allowed, otherwise wait for Firestore check
+  // Birincil yönetici her zaman yetkili; diğerleri için Firestore kontrolü beklenir.
   const allowed = isPrimaryAdmin ? true : user && adminCheck?.uid === user.uid ? adminCheck.allowed : null;
 
   if (status === "loading" || status === "unauthenticated" || allowed === null) {
@@ -54,52 +53,88 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   if (!allowed) {
     return (
-      <main className="mx-auto max-w-lg px-4 py-20">
-        <EmptyState
-          title="Yetkisiz Erişim"
-          description="Bu alan yalnızca platform yöneticilerine açıktır."
-        />
+      <main className={cn(adminTokensClassName, "mx-auto max-w-lg px-4 py-20")}>
+        <EmptyState icon={ShieldCheck} title="Yetkisiz erişim" description="Bu alan yalnızca platform yöneticilerine açıktır." />
       </main>
     );
   }
 
+  return <AdminFrame email={user?.email}>{children}</AdminFrame>;
+}
+
+/** Yetki doğrulandıktan sonraki kabuk; mock/önizleme için ayrı dışa aktarılır. */
+export function AdminFrame({ children, email }: { children: ReactNode; email?: string | null }) {
+  const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
+  const unreadAlerts = useUnreadAlertCount(pathname);
+  const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      try { setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1"); } catch { /* depolama kapalı */ }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((value) => {
+      try { window.localStorage.setItem(COLLAPSE_KEY, value ? "0" : "1"); } catch { /* depolama kapalı */ }
+      return !value;
+    });
+  }, []);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    router.push("/isletmeler/giris");
+  }, [router]);
+
+  const current = currentNavItem(pathname);
+  const group = current ? ADMIN_NAV_GROUPS.find((item) => item.items.includes(current))?.label : undefined;
+  const isAssistant = pathname.startsWith("/super-admin/asistan");
+
   return (
-    <div className="admin-v2 flex w-full max-w-none gap-5 px-2 py-2 sm:px-4 sm:py-4 xl:px-6">
-      <AdminSidebar />
-      <div className="min-w-0 flex-1 pb-28 lg:pb-6">
-        {/* Admin Topbar */}
-        <header className="admin-topbar admin-command-topbar mb-5 rounded-[24px] p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-600">
-                Platform komuta katmanı
-              </p>
-              <h1 className="mt-0.5 text-lg font-semibold text-[var(--text-1)]">
-                Platformun nabzı tek ekranda
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="hidden rounded-xl border border-[var(--border)] bg-[var(--surface-3)] px-3 py-1.5 text-xs text-[var(--text-3)] sm:inline">
-                {user?.email ?? ""}
-              </span>
-              <Button variant="secondary" onClick={toggleTheme}>
-                {theme === "light" ? "◐ Koyu" : "☀ Açık"}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={async () => {
-                  await logout();
-                  router.push("/isletmeler/giris");
-                }}
-              >
-                Çıkış
-              </Button>
-            </div>
+    // "admin-v2": asistan sayfasının global tam ekran kuralları bu sınıfa bağlı.
+    <div data-admin-root className={cn("admin-v2", adminTokensClassName, styles.root, collapsed && styles.collapsed, isAssistant && styles.assistantRoute)}>
+      <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} unreadAlerts={unreadAlerts} onOpenSearch={() => setPaletteOpen(true)} onLogout={() => void handleLogout()} />
+      <div className={cn("min-w-0", styles.main)}>
+        <header className={styles.topbar}>
+          <Link href="/super-admin" className={styles.mobileBrand} aria-label="Platform özeti"><ShieldCheck size={19} /></Link>
+          <div className={styles.crumb}>
+            <small>{group ?? "Süper admin"}</small>
+            <b>{current?.label ?? "Platform"}</b>
+          </div>
+          <div className={styles.topActions}>
+            <button type="button" className={styles.topSearch} onClick={() => setPaletteOpen(true)}>
+              <Search size={15} aria-hidden /><span>Ara veya git…</span><kbd className={styles.kbd}>⌘K</kbd>
+            </button>
+            <button type="button" className={cn(styles.iconBtn, styles.searchIconBtn)} onClick={() => setPaletteOpen(true)} aria-label="Ara veya git"><Search size={17} /></button>
+            <Link href={ALERTS_HREF} className={cn(styles.iconBtn, styles.desktopOnly)} aria-label={unreadAlerts ? `${unreadAlerts} okunmamış uyarı` : "Uyarılar"}>
+              <BellRing size={17} />
+              {unreadAlerts > 0 && <b className={styles.dotBadge}>{unreadAlerts > 99 ? "99+" : unreadAlerts}</b>}
+            </Link>
+            <button type="button" className={styles.iconBtn} onClick={toggleTheme} aria-label={theme === "light" ? "Koyu temaya geç" : "Açık temaya geç"}>
+              {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
+            {email && <span className={styles.accountChip} title={email}>{email}</span>}
           </div>
         </header>
-        {children}
+        <div className={styles.content}>{children}</div>
       </div>
-      <AdminMobileNav />
+      <AdminMobileNav unreadAlerts={unreadAlerts} email={email} theme={theme} onToggleTheme={toggleTheme} onLogout={() => void handleLogout()} onOpenSearch={() => setPaletteOpen(true)} />
+      <AdminCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

@@ -1,0 +1,281 @@
+/* Süper admin kabuğu: masaüstünde daraltılabilir yan menü, mobilde 5 öğeli alt çubuk. */
+.root {
+  --nav-h: 66px;
+  --nav-gap: 10px;
+  position: relative;
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  padding: 0 12px;
+  background:
+    radial-gradient(760px 420px at 100% -10%, rgb(215 255 112 / 0.12), transparent 70%),
+    radial-gradient(700px 420px at -10% 0%, rgb(47 138 87 / 0.08), transparent 70%),
+    var(--sa-bg);
+  color: var(--sa-ink);
+}
+/* Eski global admin-v2 süslemeleri kapatılır. */
+.root:global(.admin-v2) { background: radial-gradient(760px 420px at 100% -10%, rgb(215 255 112 / 0.12), transparent 70%), radial-gradient(700px 420px at -10% 0%, rgb(47 138 87 / 0.08), transparent 70%), var(--sa-bg); }
+.root:global(.admin-v2)::before,
+.root:global(.admin-v2)::after { display: none; }
+:global(:root[data-theme="dark"]) .root:global(.admin-v2) {
+  background: radial-gradient(760px 420px at 100% -10%, rgb(215 255 112 / 0.05), transparent 70%), var(--sa-bg);
+}
+
+/* ── Yan menü ── */
+.sidebar {
+  position: sticky;
+  top: 12px;
+  display: none;
+  flex-direction: column;
+  flex: none;
+  width: 260px;
+  height: calc(100dvh - 24px);
+  margin-top: 12px;
+  padding: 14px 12px 12px;
+  border-radius: 26px;
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgb(215 255 112 / 0.16), transparent 55%),
+    linear-gradient(170deg, #134a2c, #0c2a1b 60%, #0a2216);
+  color: #e8f3ec;
+  box-shadow: 0 24px 60px rgb(9 45 29 / 0.22);
+  transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
+}
+@media (min-width: 1024px) { .sidebar { display: flex; } }
+.collapsed .sidebar { width: 76px; }
+
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 14px; color: #fff; text-decoration: none; min-width: 0; }
+.brandMark { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 13px; background: var(--sa-lime); color: #14361f; box-shadow: 0 8px 20px rgb(215 255 112 / 0.25); }
+.brandText { min-width: 0; line-height: 1.15; }
+.brandText small { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.16em; color: var(--sa-lime); }
+.brandText b { display: block; font-size: 14.5px; font-weight: 750; white-space: nowrap; }
+
+.sideSearch {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; height: 40px; margin-bottom: 10px; padding: 0 10px;
+  border: 1px solid rgb(255 255 255 / 0.1); border-radius: 13px;
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(255 255 255 / 0.62);
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.sideSearch:hover { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.18); }
+.sideSearch:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(215 255 112 / 0.4); }
+.sideSearch span { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; }
+.kbd { padding: 1px 6px; border-radius: 6px; background: rgb(255 255 255 / 0.1); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; }
+
+.navScroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 -4px; padding: 0 4px; scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.15) transparent; }
+.group + .group { margin-top: 14px; }
+.groupLabel { display: block; padding: 0 10px 6px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgb(255 255 255 / 0.4); white-space: nowrap; }
+.collapsed .groupLabel { visibility: hidden; height: 6px; padding: 0; }
+.navLink {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  height: 40px; padding: 0 10px;
+  border-radius: 12px;
+  color: rgb(255 255 255 / 0.74);
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s;
+}
+.navLink:hover { background: rgb(255 255 255 / 0.07); color: #fff; }
+.navLink:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(215 255 112 / 0.55); }
+.navLink svg { flex: none; }
+.navActive { background: rgb(215 255 112 / 0.14); color: #fff; }
+.navActive::before { content: ""; position: absolute; left: -4px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--sa-lime); }
+.navActive svg { color: var(--sa-lime); }
+.navLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.collapsed .navLabel, .collapsed .brandText, .collapsed .sideSearch span, .collapsed .sideSearch .kbd, .collapsed .footLabel { display: none; }
+.collapsed .navLink, .collapsed .sideSearch, .collapsed .footBtn { justify-content: center; padding: 0; }
+.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #f43f5e; color: #fff; font-size: 10.5px; font-weight: 800; line-height: 20px; text-align: center; }
+.collapsed .count { position: absolute; top: 3px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9px; line-height: 16px; }
+
+.sideFoot { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; margin-top: 8px; border-top: 1px solid rgb(255 255 255 / 0.08); }
+.footBtn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; height: 38px; padding: 0 10px;
+  border: 0; border-radius: 12px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.66);
+  font-size: 12.5px; font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.footBtn:hover { background: rgb(255 255 255 / 0.07); color: #fff; }
+.footBtn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(215 255 112 / 0.55); }
+
+/* ── Ana sütun ── */
+.main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 -12px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background: color-mix(in srgb, var(--sa-bg) 84%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid var(--sa-line);
+}
+@media (min-width: 1024px) {
+  .topbar { top: 12px; margin: 12px 0 0; padding: 8px 8px 8px 16px; border: 1px solid var(--sa-line); border-radius: 20px; background: color-mix(in srgb, var(--sa-card) 82%, transparent); box-shadow: var(--sa-shadow); }
+}
+.mobileBrand { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--sa-brand); color: var(--sa-lime); }
+@media (min-width: 1024px) { .mobileBrand { display: none; } }
+.crumb { flex: 1; min-width: 0; line-height: 1.2; }
+.crumb small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sa-faint); white-space: nowrap; }
+.crumb b { display: block; font-size: 15px; font-weight: 750; letter-spacing: -0.01em; color: var(--sa-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topActions { display: flex; align-items: center; gap: 6px; flex: none; }
+.topSearch {
+  display: none; align-items: center; gap: 8px;
+  width: 260px; height: 40px; padding: 0 8px 0 12px;
+  border: 1px solid var(--sa-line-strong); border-radius: 13px;
+  background: var(--sa-card);
+  color: var(--sa-faint);
+  font-size: 13px; cursor: pointer;
+}
+.topSearch:hover { border-color: var(--sa-brand-2); }
+.topSearch:focus-visible { outline: none; box-shadow: var(--sa-focus); }
+.topSearch span { flex: 1; text-align: left; }
+.topSearch .kbd { background: var(--sa-neutral-bg); color: var(--sa-muted); }
+@media (min-width: 1024px) { .topSearch { display: flex; } .searchIconBtn { display: none !important; } }
+.iconBtn {
+  position: relative;
+  display: grid; place-items: center; flex: none;
+  width: 40px; height: 40px;
+  border: 1px solid var(--sa-line); border-radius: 13px;
+  background: var(--sa-card);
+  color: var(--sa-ink-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.iconBtn:hover { border-color: var(--sa-line-strong); background: var(--sa-card-2); }
+.iconBtn:focus-visible { outline: none; box-shadow: var(--sa-focus); }
+.dotBadge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border: 2px solid var(--sa-bg); border-radius: 999px; background: #f43f5e; color: #fff; font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center; }
+.accountChip { display: none; max-width: 210px; padding: 0 12px; height: 40px; align-items: center; border-radius: 13px; background: var(--sa-neutral-bg); color: var(--sa-muted); font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1280px) { .accountChip { display: flex; } }
+.desktopOnly { display: none !important; }
+@media (min-width: 1024px) { .desktopOnly { display: grid !important; } }
+
+.content { flex: 1; min-width: 0; padding: 14px 0 calc(var(--nav-h) + var(--nav-gap) + 28px + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .content { padding: 18px 4px 36px; } }
+
+/* Asistan sayfası kendi tam ekran düzenini kullanır. */
+.assistantRoute .content { display: flex; flex-direction: column; min-height: 0; }
+@media (max-width: 700px) {
+  .assistantRoute .topbar { display: none; }
+  .assistantRoute .content { padding: 0; }
+}
+
+/* ── Mobil alt çubuk ── */
+.dock {
+  position: fixed;
+  left: 10px; right: 10px;
+  bottom: calc(var(--nav-gap) + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  height: var(--nav-h);
+  padding: 6px;
+  border: 1px solid var(--sa-line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--sa-card) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: 0 16px 40px rgb(9 45 29 / 0.18);
+  max-width: 520px;
+  margin: 0 auto;
+}
+@media (min-width: 1024px) { .dock { display: none; } }
+.dockItem {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 0;
+  border: 0; border-radius: 18px;
+  background: transparent;
+  color: var(--sa-muted);
+  font-size: 10.5px; font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.dockItem:focus-visible { outline: none; box-shadow: var(--sa-focus); }
+.dockIcon { position: relative; display: grid; place-items: center; width: 44px; height: 28px; border-radius: 999px; transition: background 0.2s, color 0.2s; }
+.dockLabel { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dockActive { color: var(--sa-ink); }
+.dockActive .dockIcon { background: var(--sa-brand); color: var(--sa-lime); }
+.dockBadge { position: absolute; top: -5px; right: 1px; min-width: 17px; height: 17px; padding: 0 4px; border: 2px solid var(--sa-card); border-radius: 999px; background: #f43f5e; color: #fff; font-size: 9px; font-weight: 800; line-height: 13px; text-align: center; }
+
+/* ── Daha fazla sayfası ── */
+.moreGroup + .moreGroup { margin-top: 16px; }
+.moreLabel { display: block; margin-bottom: 8px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sa-faint); }
+.moreGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.moreTile {
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  min-width: 0; padding: 12px 10px;
+  border: 1px solid var(--sa-line); border-radius: 16px;
+  background: var(--sa-card-2);
+  color: var(--sa-ink);
+  font-size: 12px; font-weight: 700; line-height: 1.25;
+  text-decoration: none;
+}
+.moreTile svg { color: var(--sa-brand-ink); }
+.moreTileActive { border-color: var(--sa-brand-2); background: var(--sa-green-bg); }
+.moreTile:focus-visible { outline: none; box-shadow: var(--sa-focus); }
+.moreAccount { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--sa-line); }
+.moreEmail { font-size: 12px; color: var(--sa-muted); overflow-wrap: anywhere; }
+.moreActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.moreActions > * { width: 100%; }
+
+/* ── Komut paleti ── */
+.paletteOverlay {
+  position: fixed; inset: 0; z-index: 320;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
+  background: rgb(6 20 13 / 0.5);
+  backdrop-filter: blur(6px);
+}
+@media (min-width: 768px) { .paletteOverlay { padding-top: 12vh; } }
+.palette {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 620px;
+  max-height: min(70dvh, 560px);
+  border: 1px solid var(--sa-line);
+  border-radius: 22px;
+  background: var(--sa-card);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.3);
+  overflow: hidden;
+  animation: palIn 0.18s ease both;
+}
+@keyframes palIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+.paletteInput { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 58px; border-bottom: 1px solid var(--sa-line); color: var(--sa-faint); }
+.paletteInput input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--sa-ink); font-size: 16px; }
+.paletteList { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; overscroll-behavior: contain; }
+.paletteSection { padding: 8px 10px 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sa-faint); }
+.paletteItem {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 46px; padding: 6px 10px;
+  border: 0; border-radius: 12px;
+  background: transparent;
+  color: var(--sa-ink);
+  font-size: 13.5px; font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.paletteItemActive { background: var(--sa-green-bg); }
+.paletteIcon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px; background: var(--sa-neutral-bg); color: var(--sa-brand-ink); }
+.paletteMeta { display: block; font-size: 11.5px; font-weight: 500; color: var(--sa-muted); }
+.paletteHint { display: flex; gap: 14px; padding: 9px 14px; border-top: 1px solid var(--sa-line); font-size: 11px; color: var(--sa-faint); }
+.paletteEmpty { padding: 26px 14px; text-align: center; font-size: 13px; color: var(--sa-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .palette, .dockIcon { transition: none; animation: none; }
+}

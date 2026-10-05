@@ -1,0 +1,38 @@
+.feed { display: flex; flex-direction: column; gap: 8px; }
+.section { display: flex; flex-direction: column; gap: 8px; }
+.sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 2px 0; font-size: 13px; font-weight: 750; color: var(--ink-2); }
+.alert {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 12px;
+  padding: 14px 14px 14px 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  transition: opacity 0.2s ease;
+}
+.alert::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--bar, var(--line-strong)); }
+.critical { --bar: var(--red); }
+.warning { --bar: #f59e0b; }
+.critical.unread { background: linear-gradient(90deg, var(--red-soft), transparent 55%), var(--card); }
+.warning.unread { background: linear-gradient(90deg, var(--amber-soft), transparent 55%), var(--card); }
+.read { opacity: 0.72; box-shadow: none; }
+.read::before { opacity: 0.35; }
+.icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; }
+.critical .icon { background: var(--red-soft); color: var(--red); }
+.warning .icon { background: var(--amber-soft); color: var(--amber); }
+.body { min-width: 0; }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.title { margin: 0; font-size: 14.5px; font-weight: 650; line-height: 1.35; }
+.unread .title { font-weight: 780; }
+.unreadDot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-2); flex-shrink: 0; }
+.message { margin: 4px 0 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; color: var(--faint); font-size: 12px; }
+.actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+@media (min-width: 900px) {
+  .alert { grid-template-columns: 40px 1fr auto; align-items: start; }
+  .actions { grid-column: auto; justify-content: flex-end; }
+}

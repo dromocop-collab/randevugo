@@ -1,0 +1,39 @@
+/* İşletmeler sayfasına özel düzen; ortak bileşenler components/super-admin/ui içinde. */
+.filters { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 12px; }
+.selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 900px) { .selects { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.resultLine { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; font-size: 12px; font-weight: 600; color: var(--sa-faint); }
+.reset { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--sa-brand-ink); font-size: 12px; font-weight: 700; cursor: pointer; }
+
+.nameCell { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.avatar { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 12px; background: var(--sa-brand); color: var(--sa-lime); font-size: 14px; font-weight: 800; }
+.name { display: block; font-size: 13.5px; font-weight: 720; color: var(--sa-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 3px; margin-top: 1px; font-size: 11.5px; color: var(--sa-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted { color: var(--sa-muted); font-size: 12.5px; white-space: nowrap; }
+.chev { color: var(--sa-faint); flex: none; }
+
+.mCard { display: flex; flex-direction: column; gap: 10px; }
+.mTop { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.mBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.mDate { margin-left: auto; font-size: 11px; color: var(--sa-faint); }
+
+.detail { display: flex; flex-direction: column; gap: 10px; }
+.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.actions > :nth-child(3) { grid-column: 1 / -1; }
+@media (min-width: 768px) { .actions { display: flex; flex-wrap: wrap; } .actions > :nth-child(3) { margin-left: auto; } }
+.sectionTitle { margin: 10px 0 0; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sa-faint); }
+.sectionTitle small { font-weight: 600; letter-spacing: 0; }
+.planRow { display: flex; gap: 8px; }
+.planRow select { flex: 1; width: 100%; }
+.hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sa-muted); }
+.link { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 0; background: none; color: var(--sa-brand-ink); font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.copy { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border: 0; padding: 0; background: none; color: var(--sa-ink); font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: left; overflow-wrap: anywhere; cursor: copy; }
+.copy svg { flex: none; color: var(--sa-faint); }
+.branches { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.branch { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 46px; padding: 8px 12px; border: 1px solid var(--sa-line); border-radius: 14px; background: var(--sa-card-2); color: var(--sa-ink); font-size: 13px; font-weight: 650; text-align: left; cursor: pointer; }
+.branch small { flex: none; font-size: 11px; color: var(--sa-faint); }
+.branch:hover:not(:disabled) { border-color: var(--sa-brand-2); }
+.branch:disabled { cursor: default; background: var(--sa-green-bg); }
+.branch:focus-visible { outline: none; box-shadow: var(--sa-focus); }

@@ -46,3 +46,42 @@ export function emailSearchPrefix(input: string): string | null {
   if (value.includes("@") || /^[a-z0-9._%+-]+$/.test(value)) return value;
   return null;
 }
+
+export type RevenueSubscriptionInput = {
+  businessId: string;
+  /** Aynı firmanın şubeleri tek abonelik sayılır. */
+  organizationId?: string | null;
+  plan: string;
+  status: string;
+  isLifetime: boolean;
+  ownerUid?: string;
+  billingCycle?: "monthly" | "yearly";
+};
+export type RevenuePlanPrice = { id: string; monthlyPrice: number; yearlyPrice: number };
+
+/**
+ * Tahmini MRR/ARR: yalnızca aktif, süresiz olmayan ve yönetici hesabına ait olmayan abonelikler;
+ * fiyat gerçek paketten (yoksa fallback), yıllık ödemede yıllık/12. Firma başına bir kez sayılır.
+ */
+export function estimateRecurringRevenue(
+  subscriptions: RevenueSubscriptionInput[],
+  plans: RevenuePlanPrice[],
+  fallback: RevenuePlanPrice,
+  adminUids: ReadonlySet<string> = new Set(),
+): { mrr: number; arr: number; payingAccounts: number; skippedLifetime: number; skippedAdmin: number } {
+  const seen = new Set<string>();
+  let monthly = 0, payingAccounts = 0, skippedLifetime = 0, skippedAdmin = 0;
+  for (const item of subscriptions) {
+    if (item.status !== "active") continue;
+    if (item.isLifetime) { skippedLifetime++; continue; }
+    if (item.ownerUid && adminUids.has(item.ownerUid)) { skippedAdmin++; continue; }
+    const accountKey = item.organizationId ? `org:${item.organizationId}` : `biz:${item.businessId}`;
+    if (seen.has(accountKey)) continue;
+    seen.add(accountKey);
+    const plan = plans.find((candidate) => candidate.id === item.plan.toUpperCase()) ?? fallback;
+    monthly += item.billingCycle === "yearly" ? plan.yearlyPrice / 12 : plan.monthlyPrice;
+    payingAccounts++;
+  }
+  const mrr = Math.round(monthly);
+  return { mrr, arr: Math.round(monthly * 12), payingAccounts, skippedLifetime, skippedAdmin };
+}

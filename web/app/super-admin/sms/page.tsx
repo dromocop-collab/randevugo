@@ -2,15 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, BadgeCheck, CircleAlert, Eye, EyeOff, KeyRound,
-  LoaderCircle, MessageSquareText, PhoneCall, RadioTower, Save, Send,
-  ShieldCheck, Type,
+  Activity, BadgeCheck, CircleAlert, Clock3, Coins, Eye, EyeOff, KeyRound, ListChecks, MessageSquareText, RadioTower, RefreshCw, Save, Send,
+  ShieldCheck, XCircle,
 } from "lucide-react";
 import { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { LoadingState } from "@/components/ui/states";
 import {
   getMutlucellSettings,
   getSmsOperations,
@@ -19,6 +15,15 @@ import {
   type MutlucellSettings,
   type SmsOperationsResult,
 } from "@/features/mutlucell/mutlucell-repository";
+import {
+  AdminPage, Btn, Card, Chips, EmptyState, HeroStat, IconBtn, PageHeader, Pill, SearchField, Segmented, SkeletonList, StatCard, StatGrid,
+  cx, groupByDay, timeOf, ui, useNow, type Tone,
+} from "../_pages-ui";
+import s from "./sms.module.css";
+
+type StatusFilter = "all" | "delivered" | "pending" | "failed";
+
+const TYPE_LABEL: Record<string, string> = { confirmation: "Onay", reminder: "Hatırlatma", cancellation: "İptal", reschedule: "Saat değişikliği" };
 
 function errorMessage(error: unknown) {
   if (error instanceof FirebaseError) return error.message.replace(/^Firebase:\s*/i, "");
@@ -26,22 +31,16 @@ function errorMessage(error: unknown) {
   return "İşlem tamamlanamadı.";
 }
 
+function statusTone(status: string): Tone {
+  return status === "delivered" ? "green" : status === "failed" ? "red" : "amber";
+}
+
 function Switch({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? "bg-emerald-500" : "bg-slate-300"}`}
-    >
-      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
-    </button>
-  );
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} className={s.switch} />;
 }
 
 export default function SmsCenterPage() {
+  const now = useNow();
   const [settings, setSettings] = useState<MutlucellSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [testPhone, setTestPhone] = useState("");
@@ -49,11 +48,20 @@ export default function SmsCenterPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [operations, setOperations] = useState<SmsOperationsResult>({ rows: [], summary: { total: 0, delivered: 0, pending: 0, failed: 0, credits: 0 } });
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [logSearch, setLogSearch] = useState("");
 
   async function refresh() {
     const [current, currentOperations] = await Promise.all([getMutlucellSettings(), getSmsOperations()]);
     setSettings(current); setOperations(currentOperations);
+  }
+
+  async function manualRefresh() {
+    setRefreshing(true);
+    try { await refresh(); } catch (error) { toast.error(errorMessage(error)); } finally { setRefreshing(false); }
   }
 
   useEffect(() => {
@@ -81,6 +89,22 @@ export default function SmsCenterPage() {
     { label: "OTP güvenliği", ok: settings?.fallbackEnabled === false, detail: settings?.fallbackEnabled ? "Güvensiz fallback açık" : "Kod yalnızca SMS ile teslim edilir" },
     { label: "Son uçtan uca test", ok: settings?.lastTest?.success === true, detail: !settings?.lastTest ? "Henüz gerçek test yapılmadı" : settings.lastTest.success ? `Başarılı · ${settings.lastTest.providerMessageId ?? "paket alındı"}` : settings.lastTest.error || "Mutlucell testi başarısız" },
   ], [settings]);
+
+  const logRows = useMemo(() => {
+    const needle = logSearch.replace(/\s/g, "");
+    return operations.rows
+      .filter((row) => statusFilter === "all" || (statusFilter === "pending" ? row.status === "pending" || row.status === "accepted" : row.status === statusFilter))
+      .filter((row) => typeFilter === "all" || row.type === typeFilter)
+      .filter((row) => !needle || row.phoneMasked.replace(/\s/g, "").includes(needle))
+      .map((row) => ({ ...row, sentMillis: row.sentAt ? new Date(row.sentAt).getTime() : null }))
+      .sort((x, y) => (y.sentMillis ?? 0) - (x.sentMillis ?? 0));
+  }, [logSearch, operations.rows, statusFilter, typeFilter]);
+
+  const typeOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    operations.rows.forEach((row) => counts.set(row.type, (counts.get(row.type) ?? 0) + 1));
+    return [{ value: "all", label: "Tüm türler" }, ...[...counts.entries()].map(([value, count]) => ({ value, label: TYPE_LABEL[value] ?? value, count }))];
+  }, [operations.rows]);
 
   async function save() {
     if (!settings) return;
@@ -118,82 +142,126 @@ export default function SmsCenterPage() {
     }
   }
 
-  if (loading || !settings) return <LoadingState title="SMS Merkezi hazırlanıyor" description="Mutlucell bağlantısı kontrol ediliyor..." />;
+  if (loading || !settings) {
+    return <AdminPage><PageHeader eyebrow="Mutlucell operasyon merkezi" icon={RadioTower} title="SMS altyapısı" description="Mutlucell bağlantısı kontrol ediliyor…" /><SkeletonList rows={4} height={90} /></AdminPage>;
+  }
 
-  const toneClass = readiness.tone === "success"
-    ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-    : readiness.tone === "danger"
-      ? "border-rose-300 bg-rose-50 text-rose-900"
-      : "border-amber-300 bg-amber-50 text-amber-900";
+  const summary = operations.summary;
+  const deliveryRate = summary.total ? Math.round((summary.delivered / summary.total) * 100) : 0;
+  const ReadyIcon = readiness.tone === "success" ? BadgeCheck : CircleAlert;
 
   return (
-    <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(125deg,#082f24,#0c6847_58%,#21a66d)] px-6 py-7 text-white shadow-xl shadow-emerald-950/15 sm:px-8">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/15 bg-white/5" />
-        <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
-          <div className="max-w-2xl">
-            <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-lime-200/25 bg-lime-300/10 px-3 py-1 text-[11px] font-semibold tracking-[.18em] text-lime-200">
-              <RadioTower size={14} /> MUTLUCELL OPERASYON MERKEZİ
-            </span>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">SMS altyapısını tek ekrandan yönet.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-emerald-50/75">Kimlik bilgilerini güncelle, onaylı başlığı bağla ve canlı gönderimi müşteriye gitmeden önce test et.</p>
-          </div>
-          <div className="grid min-w-64 grid-cols-2 gap-2 text-xs">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-3"><small className="text-white/60">SAĞLAYICI</small><b className="mt-1 block text-base">Mutlucell</b></div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-3"><small className="text-white/60">KAYNAK</small><b className="mt-1 block text-base">{settings.source === "admin" ? "Admin" : settings.source === "secret" ? "Secret" : "Eksik"}</b></div>
-          </div>
+    <AdminPage>
+      <PageHeader
+        eyebrow="Mutlucell operasyon merkezi"
+        icon={RadioTower}
+        title="SMS altyapısı"
+        description="Kimlik bilgilerini güncelleyin, onaylı başlığı bağlayın ve canlı gönderimi müşteriye gitmeden önce test edin."
+        meta={<>
+          <HeroStat label="sağlayıcı" value="Mutlucell" />
+          <HeroStat label="kaynak" value={settings.source === "admin" ? "Admin" : settings.source === "secret" ? "Secret" : "Eksik"} />
+          <HeroStat label="teslim oranı" value={`%${deliveryRate}`} />
+        </>}
+        actions={<Btn variant="lime" icon={RefreshCw} loading={refreshing} onClick={() => void manualRefresh()}>Yenile</Btn>}
+      />
+
+      <div className={cx(s.readiness, readiness.tone === "success" ? s.success : readiness.tone === "danger" ? s.danger : s.warn)} role="status">
+        <ReadyIcon size={20} style={{ flexShrink: 0, marginTop: 1 }} />
+        <div><b>{readiness.title}</b><p>{readiness.detail}</p></div>
+      </div>
+
+      <StatGrid cols={5}>
+        <StatCard label="Gönderim" value={summary.total.toLocaleString("tr-TR")} hint="son kayıtlar" icon={MessageSquareText} tone="green" onClick={() => setStatusFilter("all")} active={statusFilter === "all"} />
+        <StatCard label="Teslim" value={summary.delivered.toLocaleString("tr-TR")} hint={`%${deliveryRate} teslim oranı`} icon={BadgeCheck} tone="lime" onClick={() => setStatusFilter("delivered")} active={statusFilter === "delivered"} />
+        <StatCard label="Bekleyen" value={summary.pending.toLocaleString("tr-TR")} hint="rapor bekleniyor" icon={Clock3} tone="amber" onClick={() => setStatusFilter("pending")} active={statusFilter === "pending"} />
+        <StatCard label="Başarısız" value={summary.failed.toLocaleString("tr-TR")} hint="kontrol gerekli" icon={XCircle} tone={summary.failed ? "red" : "neutral"} onClick={() => setStatusFilter("failed")} active={statusFilter === "failed"} />
+        <StatCard label="Kredi" value={summary.credits.toLocaleString("tr-TR")} hint="harcanan" icon={Coins} tone="blue" />
+      </StatGrid>
+
+      <Card title="Sağlık kontrolü" description={`${healthChecks.filter((check) => check.ok).length}/${healthChecks.length} kontrol başarılı`} icon={ListChecks}>
+        <div className={s.checks}>
+          {healthChecks.map((check) => (
+            <div key={check.label} className={cx(s.check, check.ok ? s.ok : s.bad)}>
+              <span className={s.checkIcon}>{check.ok ? <BadgeCheck size={15} /> : <CircleAlert size={15} />}</span>
+              <div style={{ minWidth: 0 }}><b>{check.label}</b><small>{check.detail}</small></div>
+            </div>
+          ))}
         </div>
-      </section>
+      </Card>
 
-      <div className={`flex items-start gap-3 rounded-2xl border p-4 ${toneClass}`}>
-        {readiness.tone === "success" ? <BadgeCheck className="mt-0.5" /> : <CircleAlert className="mt-0.5" />}
-        <div><p className="font-semibold">{readiness.title}</p><p className="text-sm opacity-75">{readiness.detail}</p></div>
+      <div className={s.grid}>
+        <Card title="Bağlantı bilgileri" description="API anahtarı kaydedildikten sonra tekrar görüntülenmez." icon={ShieldCheck}>
+          <div className={s.formGrid}>
+            <label className={ui.field}>
+              <span className={ui.fieldLabel}>Mutlucell kullanıcı adı</span>
+              <input className={ui.input} value={settings.username} autoComplete="off" onChange={(event) => setSettings({ ...settings, username: event.target.value })} />
+            </label>
+            <label className={ui.field}>
+              <span className={ui.fieldLabel}>Onaylı gönderici başlığı</span>
+              <input className={ui.input} placeholder="Örn. Senin Ran." value={settings.senderTitle} onChange={(event) => setSettings({ ...settings, senderTitle: event.target.value })} />
+              <span className={s.hint}>Mutlucell onayındaki yazımı, boşluğu ve noktalamayı aynen kullanın. Başlık otomatik değiştirilmez.</span>
+            </label>
+            <label className={cx(ui.field, s.span2)}>
+              <span className={ui.fieldLabel}>API anahtarı {settings.hasApiKey && <small>{settings.apiKeyMasked}</small>}</span>
+              <span className={s.withAction}>
+                <input className={ui.input} type={showApiKey ? "text" : "password"} autoComplete="new-password" placeholder={settings.hasApiKey ? "Değiştirmek istemiyorsanız boş bırakın" : "Mutlucell API anahtarını girin"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
+                <button type="button" className={s.inlineAction} aria-label={showApiKey ? "API anahtarını gizle" : "API anahtarını göster"} onClick={() => setShowApiKey(!showApiKey)}>{showApiKey ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+              </span>
+            </label>
+          </div>
+          <div className={s.toggles}>
+            <div className={s.toggle}><div><b>SMS gönderimi</b><small>Canlı Mutlucell gönderimini açar.</small></div><Switch label="SMS gönderimi" checked={settings.enabled} onChange={(enabled) => setSettings({ ...settings, enabled })} /></div>
+            <div className={cx(s.toggle, s.secure)}><div><b>Güvenli OTP modu</b><small>Kod ekranda gösterilmez; SMS başarısızsa işlem güvenle durur.</small></div><ShieldCheck size={20} style={{ color: "var(--green-2)", flexShrink: 0 }} /></div>
+          </div>
+          <div className={s.formFoot}><Btn variant="primary" icon={Save} loading={saving} onClick={() => void save()}>{saving ? "Kaydediliyor" : "Ayarları kaydet"}</Btn></div>
+        </Card>
+
+        <Card title="Canlı bağlantı testi" description="Gerçek bir test SMS'i gönderir." icon={Activity}>
+          <label className={ui.field}>
+            <span className={ui.fieldLabel}>Test telefonu</span>
+            <input className={ui.input} type="tel" inputMode="tel" autoComplete="tel" placeholder="05xx xxx xx xx" value={testPhone} onChange={(event) => setTestPhone(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void sendTest(); } }} />
+          </label>
+          <Btn variant="primary" block icon={Send} loading={testing} disabled={!settings.enabled} onClick={() => void sendTest()} style={{ marginTop: 12 }}>{testing ? "Gönderiliyor" : "Test SMS'i gönder"}</Btn>
+          {!settings.enabled && <p className={s.hint} style={{ marginTop: 8 }}>Test için önce SMS gönderimini açıp kaydedin.</p>}
+          <div className={s.lastTest}>
+            <small><KeyRound size={13} /> Son test</small>
+            {!settings.lastTest ? <p className={ui.muted} style={{ margin: "8px 0 0" }}>Henüz bağlantı testi yapılmadı.</p>
+              : settings.lastTest.success ? <div style={{ marginTop: 8 }}><Pill tone="green" dot>Başarılı gönderim</Pill><p className={ui.muted} style={{ margin: "6px 0 0", overflowWrap: "anywhere", fontSize: 12 }}>Paket: {settings.lastTest.providerMessageId}</p></div>
+              : <div style={{ marginTop: 8 }}><Pill tone="red" dot>Test başarısız</Pill><p className={ui.muted} style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.5 }}>{settings.lastTest.error}</p></div>}
+          </div>
+        </Card>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {healthChecks.map((check) => (
-          <article key={check.label} className={`rounded-2xl border p-4 transition hover:-translate-y-0.5 ${check.ok ? "border-emerald-200 bg-emerald-50/75" : "border-amber-200 bg-amber-50/80"}`}>
-            <div className="flex items-start gap-3">
-              <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${check.ok ? "bg-emerald-500 text-white" : "bg-amber-400 text-amber-950"}`}>{check.ok ? <BadgeCheck size={17} /> : <CircleAlert size={17} />}</span>
-              <div className="min-w-0"><p className="text-sm font-semibold text-slate-900">{check.label}</p><p className={`mt-1 break-words text-xs leading-5 ${check.ok ? "text-emerald-800/70" : "text-amber-900/70"}`}>{check.detail}</p></div>
+      <Card title="SMS teslim operasyonu" description="Mutlucell teslim raporları 15 dakikalık güvenli aralıklarla güncellenir." icon={MessageSquareText}
+        action={<IconBtn label="Kayıtları yenile" icon={RefreshCw} spinning={refreshing} onClick={() => void manualRefresh()} disabled={refreshing} />}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <SearchField value={logSearch} onChange={setLogSearch} placeholder="Telefonda ara (maskeli)…" label="SMS kayıtlarında ara" shortcut={false} />
+            <Segmented label="Teslim durumu" value={statusFilter} onChange={setStatusFilter} options={[
+              { value: "all", label: "Tümü" },
+              { value: "delivered", label: "Teslim", count: summary.delivered },
+              { value: "pending", label: "Bekleyen", count: summary.pending },
+              { value: "failed", label: "Başarısız", count: summary.failed, alert: summary.failed > 0 },
+            ]} />
+          </div>
+          {typeOptions.length > 2 && <Chips label="SMS türü" value={typeFilter} onChange={setTypeFilter} options={typeOptions} />}
+        </div>
+        {logRows.length === 0
+          ? <EmptyState icon={MessageSquareText} title={operations.rows.length ? "Bu filtrede kayıt yok" : "Henüz SMS kaydı yok"} description={operations.rows.length ? "Filtreleri değiştirerek tekrar deneyin." : "Yeni SMS gönderimleri burada teslim durumlarıyla görünecek."} />
+          : groupByDay(logRows, (row) => row.sentMillis, now).map((group) => (
+            <div key={group.key}>
+              <div className={ui.groupLabel}>{group.label}<span>{group.items.length}</span></div>
+              {group.items.map((row) => (
+                <div key={row.id} className={s.logRow}>
+                  <span className={s.logTime}>{timeOf(row.sentMillis)}</span>
+                  <span className={s.logMain}><b>{TYPE_LABEL[row.type] ?? row.type}</b><small className={ui.mono}>{row.phoneMasked}</small></span>
+                  <span className={s.logEnd}><span className={s.credits}>{row.credits} kredi</span><Pill tone={statusTone(row.status)} dot>{row.statusLabel}</Pill></span>
+                </div>
+              ))}
             </div>
-          </article>
-        ))}
-      </section>
-
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
-        <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
-          <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><ShieldCheck /></span><div><h2 className="font-semibold text-[var(--text-1)]">Bağlantı bilgileri</h2><p className="text-xs text-[var(--text-3)]">API anahtarı kaydedildikten sonra tekrar görüntülenmez.</p></div></div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="relative"><Input label="Mutlucell kullanıcı adı" value={settings.username} onChange={(event) => setSettings({ ...settings, username: event.target.value })} /><MessageSquareText className="pointer-events-none absolute right-3 top-9 text-[var(--text-3)]" size={17} /></div>
-            <div className="relative"><Input label="Onaylı gönderici başlığı" placeholder="Örn. Senin Ran." value={settings.senderTitle} onChange={(event) => setSettings({ ...settings, senderTitle: event.target.value })} /><Type className="pointer-events-none absolute right-3 top-9 text-[var(--text-3)]" size={17} /><p className="mt-2 text-xs text-[var(--text-3)]">Mutlucell onayındaki yazımı, boşluğu ve noktalamayı aynen kullanın. Başlık otomatik değiştirilmez.</p></div>
-            <div className="relative sm:col-span-2">
-              <Input label={`API anahtarı ${settings.hasApiKey ? `(${settings.apiKeyMasked})` : ""}`} type={showApiKey ? "text" : "password"} placeholder={settings.hasApiKey ? "Değiştirmek istemiyorsanız boş bırakın" : "Mutlucell API anahtarını girin"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
-              <button type="button" aria-label={showApiKey ? "API anahtarını gizle" : "API anahtarını göster"} onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-8 rounded-lg p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-2)]">{showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"><div><p className="text-sm font-medium text-[var(--text-1)]">SMS gönderimi</p><p className="text-xs text-[var(--text-3)]">Canlı Mutlucell gönderimini açar.</p></div><Switch label="SMS gönderimi" checked={settings.enabled} onChange={(enabled) => setSettings({ ...settings, enabled })} /></div>
-            <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="text-sm font-medium text-emerald-950">Güvenli OTP modu</p><p className="text-xs text-emerald-800/70">Kod ekranda gösterilmez; SMS başarısızsa işlem güvenle durur.</p></div><ShieldCheck className="text-emerald-600" /></div>
-          </div>
-          <div className="mt-5 flex justify-end"><Button onClick={save} disabled={saving}>{saving ? <LoaderCircle className="animate-spin" size={17} /> : <Save size={17} />}{saving ? "Kaydediliyor" : "Ayarları kaydet"}</Button></div>
-        </section>
-
-        <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
-          <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-sky-100 p-3 text-sky-700"><Activity /></span><div><h2 className="font-semibold text-[var(--text-1)]">Canlı bağlantı testi</h2><p className="text-xs text-[var(--text-3)]">Gerçek bir test SMS&apos;i gönderir.</p></div></div>
-          <div className="relative"><Input label="Test telefonu" placeholder="05xx xxx xx xx" value={testPhone} onChange={(event) => setTestPhone(event.target.value)} /><PhoneCall className="pointer-events-none absolute right-3 top-9 text-[var(--text-3)]" size={17} /></div>
-          <Button className="mt-4 w-full" onClick={sendTest} disabled={testing || !settings.enabled}>{testing ? <LoaderCircle className="animate-spin" size={17} /> : <Send size={17} />}{testing ? "Gönderiliyor" : "Test SMS'i gönder"}</Button>
-          <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]"><KeyRound size={14} /> Son test</div>
-            {!settings.lastTest ? <p className="mt-3 text-sm text-[var(--text-3)]">Henüz bağlantı testi yapılmadı.</p> : settings.lastTest.success ? <div className="mt-3"><p className="font-medium text-emerald-600">Başarılı gönderim</p><p className="mt-1 break-all text-xs text-[var(--text-3)]">Paket: {settings.lastTest.providerMessageId}</p></div> : <div className="mt-3"><p className="font-medium text-rose-600">Test başarısız</p><p className="mt-1 text-xs leading-5 text-[var(--text-3)]">{settings.lastTest.error}</p></div>}
-          </div>
-        </section>
-      </div>
-
-      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-1)] p-5 shadow-lg shadow-[var(--shadow-hard)] sm:p-6">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-semibold text-[var(--text-1)]">SMS teslim operasyonu</h2><p className="text-xs text-[var(--text-3)]">Mutlucell teslim raporları 15 dakikalık güvenli aralıklarla güncellenir.</p></div><div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{operations.summary.delivered} teslim</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{operations.summary.pending} bekliyor</span><span className="rounded-full bg-rose-100 px-3 py-1.5 text-rose-800">{operations.summary.failed} başarısız</span><span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">{operations.summary.credits} kredi</span></div></div>
-        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-3)]"><tr><th className="py-3">Tür</th><th>Telefon</th><th>Durum</th><th>Kredi</th><th>Tarih</th></tr></thead><tbody>{operations.rows.map((row) => <tr key={row.id} className="border-b border-[var(--border)]/70"><td className="py-3 font-medium text-[var(--text-1)]">{{confirmation:"Onay",reminder:"Hatırlatma",cancellation:"İptal",reschedule:"Saat değişikliği"}[row.type] ?? row.type}</td><td className="text-[var(--text-2)]">{row.phoneMasked}</td><td><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${row.status === "delivered" ? "bg-emerald-100 text-emerald-800" : row.status === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{row.statusLabel}</span></td><td>{row.credits}</td><td className="text-xs text-[var(--text-3)]">{row.sentAt ? new Date(row.sentAt).toLocaleString("tr-TR") : "—"}</td></tr>)}</tbody></table>{!operations.rows.length && <p className="py-8 text-center text-sm text-[var(--text-3)]">Yeni SMS gönderimleri burada teslim durumlarıyla görünecek.</p>}</div>
-      </section>
-    </div>
+          ))}
+      </Card>
+    </AdminPage>
   );
 }

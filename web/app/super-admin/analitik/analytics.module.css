@@ -1,0 +1,41 @@
+.rangeRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.grid { display: grid; gap: 16px; }
+@media (min-width: 1100px) { .grid { grid-template-columns: 1.5fr 0.8fr; } }
+.grid2 { display: grid; gap: 16px; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.rank { display: flex; flex-direction: column; gap: 14px; }
+.up { display: inline-flex; align-items: center; gap: 3px; color: var(--green-2); font-weight: 700; }
+.down { display: inline-flex; align-items: center; gap: 3px; color: var(--red); font-weight: 700; }
+:global(:root[data-theme="dark"]) .up { color: #8fe0b2; }
+
+.chart { margin: 0; }
+.plot { position: relative; height: 220px; margin-left: 28px; }
+.gridLine { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--line); }
+.gridLine span { position: absolute; left: -28px; top: -7px; width: 22px; color: var(--faint); font-size: 10px; font-weight: 600; text-align: right; }
+.bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 3px; }
+.barCol { position: relative; display: flex; flex: 1; height: 100%; min-width: 0; align-items: flex-end; justify-content: center; }
+.bar { display: block; width: min(100%, 26px); min-height: 0; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, #3fae74, var(--green-2)); transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s ease; }
+.barCol:hover .bar { background: #8bd16a; }
+:global(:root[data-theme="dark"]) .barCol:hover .bar { background: var(--lime); }
+.barTip { position: absolute; top: -2px; left: 50%; z-index: 1; padding: 2px 6px; border-radius: 6px; background: var(--ink); color: var(--card); font-size: 10.5px; font-weight: 750; opacity: 0; pointer-events: none; transform: translate(-50%, -100%); transition: opacity 0.12s ease; white-space: nowrap; }
+.barCol:hover .barTip { opacity: 1; }
+.xAxis { display: flex; gap: 3px; margin: 6px 0 0 28px; }
+.xAxis span { flex: 1; min-width: 0; overflow: visible; color: var(--faint); font-size: 10px; font-weight: 600; text-align: center; white-space: nowrap; }
+.axis { fill: var(--faint); font-size: 10px; font-weight: 600; }
+
+.donutWrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 18px; }
+.donut { width: 160px; height: 160px; flex-shrink: 0; }
+.donutTrack { fill: none; stroke: var(--soft); stroke-width: 16; }
+.donutValue { fill: var(--ink); font-size: 20px; font-weight: 800; }
+.legend { display: flex; flex: 1; min-width: 180px; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.legend li { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; }
+.legend i { width: 12px; height: 12px; border-radius: 4px; }
+.legend span { font-weight: 650; }
+.legend small { color: var(--faint); font-size: 12px; }
+
+.hours { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; }
+.hourCell { display: flex; flex-direction: column; gap: 4px; }
+.hourCell span { display: block; height: 40px; border-radius: 6px; background: var(--green-2); }
+:global(:root[data-theme="dark"]) .hourCell span { background: var(--lime); }
+.hourCell small { color: var(--faint); font-size: 10px; font-weight: 650; }
+@media (min-width: 768px) { .hourCell span { height: 52px; } }

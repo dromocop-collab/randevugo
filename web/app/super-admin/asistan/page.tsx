@@ -1,7 +1,7 @@
 "use client";
 
-import { AdminAssistant } from "@/components/super-admin/admin-assistant";
+import { PlatformAssistant } from "./platform-assistant";
 
 export default function SuperAdminAssistantPage() {
-  return <AdminAssistant />;
+  return <PlatformAssistant />;
 }

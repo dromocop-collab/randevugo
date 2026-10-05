@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
-import { EmptyState, LoadingState } from "@/components/ui/states";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import {
   listCategoryRequests,
@@ -25,293 +22,27 @@ import {
   reviewBusinessProfileChange,
   type BusinessProfileChangeRequest,
 } from "@/features/businesses/business-profile-review-repository";
-import { ArrowRight, Building2, CheckCircle2, Clock3, FolderPlus, ShieldAlert, XCircle, type LucideIcon } from "lucide-react";
+import {
+  ArrowRight, ArrowUpRight, Building2, CheckCircle2, EyeOff, FolderPlus, Images, MessageSquareWarning, ShieldAlert, ShieldCheck, Tags, UserPen, XCircle,
+} from "lucide-react";
+import {
+  AdminPage, Avatar, Btn, Chips, ConfirmSheet, EmptyState, HeroStat, PageHeader, Pill, Segmented, SkeletonList, Stars, StatCard, StatGrid,
+  Toolbar, fullDate, relativeTime, ui, useNow, type Tone,
+} from "../_pages-ui";
+import m from "./moderation.module.css";
 
 type StatusFilter = "pending" | "approved" | "rejected" | "all";
+type Tab = "hide" | "pending" | "profile" | "category";
+type Confirm =
+  | { kind: "review"; review: Review; status: "approved" | "rejected"; fromHide: boolean }
+  | { kind: "category"; request: CategoryRequest }
+  | { kind: "profile"; item: BusinessProfileChangeRequest; decision: "approved" | "rejected" };
 
-export default function SuperAdminModerationPage() {
-  const { user } = useAuth();
-  const [allRequests, setAllRequests] = useState<CategoryRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<StatusFilter>("pending");
-  const [processing, setProcessing] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    listCategoryRequests()
-      .then((data) => { if (active) setAllRequests(data); })
-      .catch(() => { if (active) toast.error("Kategori istekleri yüklenemedi."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-
-  const requests = useMemo(() => filter === "all" ? allRequests : allRequests.filter((request) => request.status === filter), [filter, allRequests]);
-
-  async function handleApprove(req: CategoryRequest) {
-    if (!user) return;
-    setProcessing(req.id);
-    try {
-      await approveCategoryRequest(req.id, user.uid, req.requestedCategory);
-      toast.success(`"${req.requestedCategory}" kategorisi onaylandı!`);
-      setAllRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? { ...r, status: "approved" as const } : r))
-      );
-    } catch {
-      toast.error("Onaylama başarısız.");
-    } finally {
-      setProcessing(null);
-    }
-  }
-
-  async function handleReject(req: CategoryRequest) {
-    if (!user) return;
-    setProcessing(req.id);
-    try {
-      await rejectCategoryRequest(req.id, user.uid);
-      toast.success(`"${req.requestedCategory}" reddedildi.`);
-      setAllRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? { ...r, status: "rejected" as const } : r))
-      );
-    } catch {
-      toast.error("Red işlemi başarısız.");
-    } finally {
-      setProcessing(null);
-    }
-  }
-
-  // Stats
-  const pendingCount = allRequests.filter((r) => r.status === "pending").length;
-  const approvedCount = allRequests.filter((r) => r.status === "approved").length;
-  const rejectedCount = allRequests.filter((r) => r.status === "rejected").length;
-
-  const statusConfig: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
-    pending: { label: "Bekliyor", color: "text-amber-600", bg: "bg-amber-500/10", icon: Clock3 },
-    approved: { label: "Onaylandı", color: "text-emerald-600", bg: "bg-emerald-500/10", icon: CheckCircle2 },
-    rejected: { label: "Reddedildi", color: "text-rose-600", bg: "bg-rose-500/10", icon: XCircle },
-  };
-
-  const filterTabs = [
-    { key: "pending" as const, label: "Bekleyenler", count: pendingCount, color: "amber" },
-    { key: "approved" as const, label: "Onaylananlar", count: approvedCount, color: "emerald" },
-    { key: "rejected" as const, label: "Reddedilenler", count: rejectedCount, color: "rose" },
-    { key: "all" as const, label: "Tümü", count: allRequests.length, color: "sky" },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="group relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-amber-600/10 p-5 transition hover:shadow-lg hover:shadow-amber-500/10">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-amber-500/10 blur-2xl transition group-hover:bg-amber-500/20" />
-          <p className="text-xs font-medium uppercase tracking-wider text-amber-600/70">Bekleyen İstekler</p>
-          <p className="mt-2 text-3xl font-bold text-amber-600">{pendingCount}</p>
-          <p className="mt-1 text-xs text-amber-600/50">Onay bekliyor</p>
-        </div>
-        <div className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-emerald-600/10 p-5 transition hover:shadow-lg hover:shadow-emerald-500/10">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-emerald-500/10 blur-2xl transition group-hover:bg-emerald-500/20" />
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-600/70">Onaylanan</p>
-          <p className="mt-2 text-3xl font-bold text-emerald-600">{approvedCount}</p>
-          <p className="mt-1 text-xs text-emerald-600/50">Kategoriye eklendi</p>
-        </div>
-        <div className="group relative overflow-hidden rounded-2xl border border-rose-500/20 bg-gradient-to-br from-rose-500/5 to-rose-600/10 p-5 transition hover:shadow-lg hover:shadow-rose-500/10">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-rose-500/10 blur-2xl transition group-hover:bg-rose-500/20" />
-          <p className="text-xs font-medium uppercase tracking-wider text-rose-600/70">Reddedilen</p>
-          <p className="mt-2 text-3xl font-bold text-rose-600">{rejectedCount}</p>
-          <p className="mt-1 text-xs text-rose-600/50">Reddedildi</p>
-        </div>
-      </div>
-
-      {/* Category Requests */}
-      <Card
-        title="Kategori Onay İstekleri"
-        description="İşletmelerin talep ettiği yeni kategorileri inceleyin"
-      >
-        {/* Filter Tabs */}
-        <div className="mb-5 flex flex-wrap gap-2">
-          {filterTabs.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition ${
-                filter === f.key
-                  ? `bg-${f.color}-500/15 text-${f.color}-600 ring-1 ring-${f.color}-500/30`
-                  : "bg-[var(--surface-2)] text-[var(--text-3)] hover:text-[var(--text-1)]"
-              }`}
-              style={
-                filter === f.key
-                  ? {
-                      background: `var(--${f.color === "amber" ? "amber" : f.color === "emerald" ? "emerald" : f.color === "rose" ? "rose" : "sky"}-bg, rgba(${f.color === "amber" ? "245,158,11" : f.color === "emerald" ? "16,185,129" : f.color === "rose" ? "244,63,94" : "14,165,233"}, 0.1))`,
-                      color: f.color === "amber" ? "#d97706" : f.color === "emerald" ? "#059669" : f.color === "rose" ? "#e11d48" : "#0284c7",
-                    }
-                  : undefined
-              }
-            >
-              {f.label}
-              <span
-                className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold"
-                style={{
-                  background:
-                    filter === f.key
-                      ? `rgba(${f.color === "amber" ? "245,158,11" : f.color === "emerald" ? "16,185,129" : f.color === "rose" ? "244,63,94" : "14,165,233"}, 0.15)`
-                      : "var(--surface-3, rgba(0,0,0,0.06))",
-                }}
-              >
-                {f.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <LoadingState title="Yükleniyor" description="Kategori istekleri çekiliyor..." />
-        ) : requests.length === 0 ? (
-          <EmptyState
-            title="İstek bulunamadı"
-            description={
-              filter === "pending"
-                ? "Onay bekleyen kategori isteği yok. Harika! 🎉"
-                : "Bu filtreyle eşleşen istek yok."
-            }
-          />
-        ) : (
-          <div className="space-y-3">
-            {requests.map((req) => {
-              const config = statusConfig[req.status] ?? statusConfig.pending;
-              const StatusIcon = config.icon;
-              const isExpanded = expandedId === req.id;
-
-              return (
-                <div
-                  key={req.id}
-                  className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)] transition hover:shadow-md"
-                >
-                  {/* Main Row */}
-                  <div
-                    className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-5 py-4"
-                    onClick={() => setExpandedId(isExpanded ? null : req.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${config.bg} text-lg`}>
-                        <StatusIcon size={18} strokeWidth={1.9} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-[var(--text-1)]">
-                            {req.requestedCategory}
-                          </p>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${config.bg} ${config.color}`}>
-                            {config.label}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-[var(--text-3)]">
-                          <span className="font-medium text-[var(--text-2)]">{req.businessName}</span>
-                          {" · "}
-                          {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString("tr-TR", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }) : "—"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {req.status === "pending" && (
-                        <>
-                          <Button
-                            onClick={(e) => { e.stopPropagation(); handleApprove(req); }}
-                            disabled={processing === req.id}
-                          >
-                            {processing === req.id ? "İşleniyor..." : <span className="inline-flex items-center gap-2"><CheckCircle2 size={15} /> Onayla</span>}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            onClick={(e) => { e.stopPropagation(); handleReject(req); }}
-                            disabled={processing === req.id}
-                          >
-                            <XCircle size={15} /> Reddet
-                          </Button>
-                        </>
-                      )}
-                      {req.status === "approved" && (
-                        <Button
-                          variant="secondary"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (!user) return;
-                            setProcessing(req.id);
-                            try {
-                              await addCategoryManually(req.requestedCategory, user.uid);
-                              toast.success(`"${req.requestedCategory}" kategoriye eklendi!`);
-                            } catch {
-                              toast.error("Kategoriye ekleme başarısız.");
-                            } finally {
-                              setProcessing(null);
-                            }
-                          }}
-                          disabled={processing === req.id}
-                        >
-                          {processing === req.id ? "Ekleniyor..." : <span className="inline-flex items-center gap-2"><FolderPlus size={15} /> Kategoriye Ekle</span>}
-                        </Button>
-                      )}
-                      <span className={`text-[var(--text-3)] transition ${isExpanded ? "rotate-180" : ""}`}>
-                        ▼
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Expanded Details */}
-                  {isExpanded && (
-                    <div className="border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-5 py-4">
-                      <div className="grid gap-3 text-sm sm:grid-cols-3">
-                        <div>
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-3)]">İşletme</p>
-                          <p className="mt-0.5 font-medium text-[var(--text-1)]">{req.businessName}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-3)]">İstek Tarihi</p>
-                          <p className="mt-0.5 font-medium text-[var(--text-1)]">
-                            {req.requestedAt ? new Date(req.requestedAt).toLocaleString("tr-TR") : "—"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-3)]">İşletme ID</p>
-                          <p className="mt-0.5 font-mono text-xs text-[var(--text-2)]">{req.businessId}</p>
-                        </div>
-                      </div>
-                      {req.reviewedAt && (
-                        <div className="mt-3 rounded-lg bg-[var(--surface-3)] p-2.5">
-                          <p className="text-xs text-[var(--text-3)]">
-                            İncelenme: {new Date(req.reviewedAt).toLocaleString("tr-TR")}
-                            {req.reviewedBy && <span> · Admin: {req.reviewedBy.slice(0, 8)}…</span>}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      <Card title="İşletme moderasyonu" description="Başvuruların gerçek zamanlı onay ve yayın işlemleri">
-        <div className="flex flex-col gap-4 rounded-2xl border border-cyan-500/15 bg-cyan-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-500/10 text-cyan-700"><Building2 size={20} /></span><div><p className="font-semibold text-[var(--text-1)]">İşletme başvuruları merkezi</p><p className="mt-1 text-xs text-[var(--text-3)]">Bekleyen başvuruları incele, onayla, reddet veya yayından kaldır.</p></div></div>
-          <Link href="/super-admin/isletmeler" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-cyan-800">Başvuruları aç <ArrowRight size={14} /></Link>
-        </div>
-      </Card>
-
-      <ProfileChangeModerationCard />
-
-      <ReviewModerationCard />
-    </div>
-  );
-}
+const CATEGORY_STATUS: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: "Bekliyor", tone: "amber" },
+  approved: { label: "Onaylandı", tone: "green" },
+  rejected: { label: "Reddedildi", tone: "red" },
+};
 
 const PROFILE_FIELD_LABELS: Record<string, string> = {
   name: "İşletme adı", category: "Kategori", businessType: "İşletme tipi", phone: "Telefon",
@@ -327,26 +58,113 @@ function profileValue(value: unknown) {
   return String(value);
 }
 
-function ProfileChangeModerationCard() {
-  const [requests, setRequests] = useState<BusinessProfileChangeRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
+function toMillis(value: string | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+export default function SuperAdminModerationPage() {
+  const { user } = useAuth();
+  const now = useNow();
+
+  // Kategori talepleri
+  const [allRequests, setAllRequests] = useState<CategoryRequest[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(true);
+  const [filter, setFilter] = useState<StatusFilter>("pending");
+
+  // Profil değişiklikleri
+  const [profileRequests, setProfileRequests] = useState<BusinessProfileChangeRequest[]>([]);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [note, setNote] = useState<Record<string, string>>({});
+
+  // Yorumlar
+  const [pendingReviews, setPendingReviews] = useState<Review[]>([]);
+  const [hideRequests, setHideRequests] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+
+  const [tab, setTab] = useState<Tab | null>(null);
+  const [processing, setProcessing] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   useEffect(() => {
     let active = true;
+    listCategoryRequests()
+      .then((data) => { if (active) setAllRequests(data); })
+      .catch(() => { if (active) toast.error("Kategori istekleri yüklenemedi."); })
+      .finally(() => { if (active) setCategoryLoading(false); });
     listBusinessProfileChangeRequests()
-      .then((rows) => { if (active) setRequests(rows.filter((row) => row.status === "pending")); })
+      .then((rows) => { if (active) setProfileRequests(rows.filter((row) => row.status === "pending")); })
       .catch(() => { if (active) toast.error("Profil değişiklikleri yüklenemedi."); })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => { if (active) setProfileLoading(false); });
+    Promise.allSettled([listHideRequestedReviews(), listPendingReviewsAcrossPlatform()])
+      .then(([hide, pending]) => {
+        if (!active) return;
+        if (hide.status === "fulfilled") setHideRequests(hide.value);
+        if (pending.status === "fulfilled") setPendingReviews(pending.value);
+        if (hide.status === "rejected" || pending.status === "rejected") toast.error("Yorumların bir kısmı yüklenemedi.");
+      })
+      .finally(() => { if (active) setReviewsLoading(false); });
     return () => { active = false; };
   }, []);
 
-  async function decide(item: BusinessProfileChangeRequest, decision: "approved" | "rejected") {
+  const pendingCount = allRequests.filter((r) => r.status === "pending").length;
+  const approvedCount = allRequests.filter((r) => r.status === "approved").length;
+  const rejectedCount = allRequests.filter((r) => r.status === "rejected").length;
+  const requests = useMemo(() => filter === "all" ? allRequests : allRequests.filter((request) => request.status === filter), [filter, allRequests]);
+
+  // Varsayılan sekme: ilk dolu kuyruk (gizleme > onay > profil > kategori).
+  const loadingAny = reviewsLoading || profileLoading || categoryLoading;
+  const autoTab: Tab = hideRequests.length ? "hide" : pendingReviews.length ? "pending" : profileRequests.length ? "profile" : pendingCount ? "category" : "hide";
+  const activeTab: Tab = tab ?? (reviewsLoading ? "hide" : autoTab);
+  const totalQueue = hideRequests.length + pendingReviews.length + profileRequests.length + pendingCount;
+
+  async function handleApprove(req: CategoryRequest) {
+    if (!user) return;
+    setProcessing(req.id);
+    try {
+      await approveCategoryRequest(req.id, user.uid, req.requestedCategory);
+      toast.success(`"${req.requestedCategory}" kategorisi onaylandı!`);
+      setAllRequests((prev) => prev.map((r) => (r.id === req.id ? { ...r, status: "approved" as const } : r)));
+    } catch {
+      toast.error("Onaylama başarısız.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  async function handleReject(req: CategoryRequest) {
+    if (!user) return;
+    setProcessing(req.id);
+    try {
+      await rejectCategoryRequest(req.id, user.uid);
+      toast.success(`"${req.requestedCategory}" reddedildi.`);
+      setAllRequests((prev) => prev.map((r) => (r.id === req.id ? { ...r, status: "rejected" as const } : r)));
+    } catch {
+      toast.error("Red işlemi başarısız.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  async function handleAddCategory(req: CategoryRequest) {
+    if (!user) return;
+    setProcessing(req.id);
+    try {
+      await addCategoryManually(req.requestedCategory, user.uid);
+      toast.success(`"${req.requestedCategory}" kategoriye eklendi!`);
+    } catch {
+      toast.error("Kategoriye ekleme başarısız.");
+    } finally {
+      setProcessing(null);
+    }
+  }
+
+  async function decideProfile(item: BusinessProfileChangeRequest, decision: "approved" | "rejected") {
     setProcessing(item.id);
     try {
       await reviewBusinessProfileChange(item.id, decision, note[item.id] ?? "");
-      setRequests((current) => current.filter((row) => row.id !== item.id));
+      setProfileRequests((current) => current.filter((row) => row.id !== item.id));
       toast.success(decision === "approved" ? "Profil değişiklikleri yayına alındı." : "Profil değişiklikleri reddedildi.");
     } catch (error) {
       toast.error((error as Error)?.message || "İnceleme tamamlanamadı.");
@@ -354,56 +172,6 @@ function ProfileChangeModerationCard() {
       setProcessing(null);
     }
   }
-
-  return (
-    <Card title={`Profil yayın kuyruğu · ${requests.length}`} description="İşletme bilgilerindeki değişiklikleri yayına girmeden önce karşılaştırın ve denetleyin.">
-      {loading ? <LoadingState title="Yükleniyor" description="Profil talepleri denetleniyor..." /> : requests.length === 0 ? (
-        <EmptyState title="Bekleyen profil değişikliği yok" description="Yeni işletme düzenlemeleri güvenli yayın kuyruğunda burada görünecek." />
-      ) : <div className="space-y-4">{requests.map((item) => (
-        <article key={item.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] shadow-sm">
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-2)] px-5 py-4">
-            <div><p className="font-bold text-[var(--text-1)]">{item.businessName}</p><p className="mt-1 text-xs text-[var(--text-3)]">{item.changedFields.length} alan değişiyor · {item.submittedAt ? new Date(item.submittedAt).toLocaleString("tr-TR") : "Şimdi"}</p></div>
-            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold ${item.riskLevel === "review" ? "bg-amber-500/10 text-amber-700" : "bg-emerald-500/10 text-emerald-700"}`}><ShieldAlert size={14}/>{item.riskLevel === "review" ? "Dikkatli incele" : "Düşük risk"}</span>
-          </header>
-          <div className="grid gap-3 p-5">{item.changedFields.map((field) => (
-            <div key={field} className="grid gap-2 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[140px_1fr_24px_1fr] md:items-center">
-              <b className="text-xs text-[var(--text-1)]">{PROFILE_FIELD_LABELS[field] ?? field}</b>
-              <span className="break-all rounded-lg bg-rose-500/5 px-3 py-2 text-xs text-[var(--text-3)]">{profileValue(item.previous[field])}</span>
-              <ArrowRight className="hidden text-[var(--text-3)] md:block" size={15}/>
-              <span className="break-all rounded-lg bg-emerald-500/8 px-3 py-2 text-xs font-medium text-[var(--text-1)]">{profileValue(item.changes[field])}</span>
-            </div>
-          ))}</div>
-          <footer className="flex flex-col gap-3 border-t border-[var(--border)] p-4 sm:flex-row sm:items-center">
-            <input value={note[item.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={500} placeholder="İşletmeye inceleme notu (isteğe bağlı)" className="min-h-11 flex-1 rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text-1)] outline-none focus:border-[var(--accent)]"/>
-            <div className="flex gap-2"><Button variant="danger" disabled={processing === item.id} onClick={() => decide(item, "rejected")}><XCircle size={15}/> Reddet</Button><Button disabled={processing === item.id} onClick={() => decide(item, "approved")}><CheckCircle2 size={15}/> Onayla ve yayınla</Button></div>
-          </footer>
-        </article>
-      ))}</div>}
-    </Card>
-  );
-}
-
-/* ─────────────── GLOBAL REVIEW MODERATION ─────────────── */
-function ReviewModerationCard() {
-  const [pendingReviews, setPendingReviews] = useState<Review[]>([]);
-  const [hideRequests, setHideRequests] = useState<Review[]>([]);
-  const [tab, setTab] = useState<"hide" | "pending">("hide");
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    Promise.allSettled([listHideRequestedReviews(), listPendingReviewsAcrossPlatform()])
-      .then(([hide, pending]) => {
-        if (!active) return;
-        if (hide.status === "fulfilled") setHideRequests(hide.value);
-        if (pending.status === "fulfilled") setPendingReviews(pending.value);
-        if (hide.status === "fulfilled" && hide.value.length === 0) setTab("pending");
-        if (hide.status === "rejected" || pending.status === "rejected") toast.error("Yorumların bir kısmı yüklenemedi.");
-      })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
 
   async function handleDecision(review: Review, status: "approved" | "rejected") {
     setProcessing(review.id);
@@ -419,78 +187,177 @@ function ReviewModerationCard() {
     }
   }
 
-  const rows = tab === "hide" ? hideRequests : pendingReviews;
+  async function runConfirm() {
+    if (!confirm) return;
+    if (confirm.kind === "review") await handleDecision(confirm.review, confirm.status);
+    else if (confirm.kind === "category") await handleReject(confirm.request);
+    else await decideProfile(confirm.item, confirm.decision);
+  }
+
+  const reviews = activeTab === "hide" ? hideRequests : pendingReviews;
 
   return (
-    <Card
-      title="Yorum Moderasyon"
-      description="İşletmelerin gizleme talepleri ve onay bekleyen yorumlar. 48 saat içinde işlem yapılmayan yorumlar otomatik yayınlanır."
-    >
-      <div className="mb-4 flex flex-wrap gap-2">
-        {([["hide", `Gizleme talepleri (${hideRequests.length})`], ["pending", `Onay bekleyen (${pendingReviews.length})`]] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === key ? "bg-[var(--accent)] text-white" : "bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text-1)]"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {loading ? (
-        <LoadingState title="Yükleniyor" description="Yorumlar çekiliyor..." />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          title={tab === "hide" ? "Bekleyen gizleme talebi yok" : "Onay bekleyen yorum yok"}
-          description={tab === "hide" ? "İşletmeler bir yorumu gizlemek istediğinde burada görünür." : "Yeni yorumlar burada görünecek."}
-        />
-      ) : (
-        <div className="space-y-3">
-          {rows.map((review) => (
-            <div
-              key={`${review.businessId}-${review.id}`}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-[var(--text-1)]">{review.customerName}</p>
-                    <span className="text-xs text-amber-500">{"★".repeat(Math.max(0, Math.min(5, review.rating)))}<span className="text-[var(--text-3)]">{"★".repeat(Math.max(0, 5 - review.rating))}</span></span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${review.isVisible ? "bg-emerald-500/10 text-emerald-600" : "bg-[var(--surface-2)] text-[var(--text-3)]"}`}>
-                      {review.isVisible ? "Şu an yayında" : "Yayında değil"}
-                    </span>
+    <AdminPage>
+      <PageHeader
+        eyebrow="Moderasyon masası"
+        icon={ShieldCheck}
+        title="İçerik ve profil denetimi"
+        description="Yorum gizleme talepleri, onay bekleyen yorumlar, profil değişiklikleri ve yeni kategori talepleri tek kuyrukta. 48 saat içinde karar verilmeyen yorumlar otomatik yayınlanır."
+        meta={<><HeroStat label="bekleyen karar" value={loadingAny ? "…" : totalQueue} /></>}
+        actions={<Link href="/super-admin/isletmeler" className={`${ui.btn} ${ui.btnOnDark}`}><Building2 size={15} /> İşletme başvuruları <ArrowRight size={14} /></Link>}
+      />
+
+      <StatGrid>
+        <StatCard label="Gizleme talebi" value={reviewsLoading ? "…" : hideRequests.length} hint="İşletme yorumu gizlemek istiyor" icon={EyeOff} tone={hideRequests.length ? "amber" : "neutral"} onClick={() => setTab("hide")} active={activeTab === "hide"} />
+        <StatCard label="Onay bekleyen yorum" value={reviewsLoading ? "…" : pendingReviews.length} hint="Yayın öncesi kontrol" icon={MessageSquareWarning} tone="blue" onClick={() => setTab("pending")} active={activeTab === "pending"} />
+        <StatCard label="Profil değişikliği" value={profileLoading ? "…" : profileRequests.length} hint="Yayın kuyruğunda" icon={UserPen} tone="violet" onClick={() => setTab("profile")} active={activeTab === "profile"} />
+        <StatCard label="Kategori talebi" value={categoryLoading ? "…" : pendingCount} hint={`${approvedCount} onaylı · ${rejectedCount} red`} icon={Tags} tone="lime" onClick={() => setTab("category")} active={activeTab === "category"} />
+      </StatGrid>
+
+      <Toolbar>
+        <Segmented label="Moderasyon kuyruğu" value={activeTab} onChange={setTab} options={[
+          { value: "hide", label: "Gizleme talepleri", count: hideRequests.length, alert: hideRequests.length > 0 },
+          { value: "pending", label: "Onay bekleyen yorumlar", count: pendingReviews.length },
+          { value: "profile", label: "Profil değişiklikleri", count: profileRequests.length },
+          { value: "category", label: "Kategori talepleri", count: pendingCount },
+        ]} />
+        {activeTab === "category" && <Chips label="Kategori durumu" value={filter} onChange={setFilter} options={[
+          { value: "pending", label: "Bekleyen", count: pendingCount },
+          { value: "approved", label: "Onaylanan", count: approvedCount },
+          { value: "rejected", label: "Reddedilen", count: rejectedCount },
+          { value: "all", label: "Tümü", count: allRequests.length },
+        ]} />}
+      </Toolbar>
+
+      {(activeTab === "hide" || activeTab === "pending") && (
+        reviewsLoading ? <SkeletonList rows={3} height={180} />
+          : reviews.length === 0 ? <div className={ui.card}><EmptyState icon={activeTab === "hide" ? EyeOff : MessageSquareWarning} title={activeTab === "hide" ? "Bekleyen gizleme talebi yok" : "Onay bekleyen yorum yok"} description={activeTab === "hide" ? "İşletmeler bir yorumu gizlemek istediğinde burada görünür." : "Yeni yorumlar burada görünecek."} /></div>
+          : <div className={`${m.list} ${m.listTwo}`}>{reviews.map((review) => {
+            const fromHide = activeTab === "hide";
+            const busy = processing === review.id;
+            const created = toMillis(review.createdAt);
+            return (
+              <article key={`${review.businessId}-${review.id}`} className={m.review}>
+                <header className={m.reviewHead}>
+                  <Avatar name={review.customerName || "Müşteri"} seed={review.customerId ?? review.id} />
+                  <div className={m.reviewWho}>
+                    <b>{review.customerName || "İsimsiz müşteri"}</b>
+                    <small><Stars value={review.rating} /> <span title={fullDate(created)}>{relativeTime(created, now)}</span></small>
                   </div>
-                  <p className="text-[10px] text-[var(--text-3)]">
-                    <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(review.businessId)}`} className="font-mono hover:underline">{review.businessId}</Link> ·{" "}
-                    {new Date(review.createdAt).toLocaleDateString("tr-TR")}
-                    {review.serviceName ? ` · ${review.serviceName}` : ""}
-                  </p>
-                  {review.comment && (
-                    <p className="mt-2 text-sm text-[var(--text-2)]">{review.comment}</p>
-                  )}
-                  {tab === "hide" && (
-                    <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                      İşletme gerekçesi: {review.hideRequest?.reason || "Belirtilmedi"}
-                    </p>
-                  )}
+                  <Pill tone={review.isVisible ? "green" : "neutral"} dot>{review.isVisible ? "Yayında" : "Yayında değil"}</Pill>
+                </header>
+                <div className={m.meta}>
+                  <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(review.businessId)}`} className={ui.link} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5 }}><Building2 size={13} /> <span className={ui.mono}>{review.businessId.slice(0, 12)}</span> <ArrowUpRight size={12} /></Link>
+                  {review.serviceName && <Pill>{review.serviceName}</Pill>}
+                  {review.staffName && <Pill>{review.staffName}</Pill>}
+                  {review.imageUrls?.length ? <Pill tone="blue"><Images size={11} /> {review.imageUrls.length} fotoğraf</Pill> : null}
+                  {review.rating <= 2 && <Pill tone="red">Düşük puan</Pill>}
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button onClick={() => handleDecision(review, "approved")} disabled={processing === review.id}>
-                    {tab === "hide" ? "✅ Yayında tut" : "✅ Onayla"}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => handleDecision(review, "rejected")}
-                    disabled={processing === review.id}
-                  >
-                    {tab === "hide" ? "🙈 Gizle" : "❌ Reddet"}
-                  </Button>
+                <p className={`${m.comment} ${review.comment ? "" : m.commentEmpty}`}>{review.comment || "Yorum metni yok, yalnızca puan verilmiş."}</p>
+                {fromHide && <div className={m.reason}><ShieldAlert size={18} style={{ flexShrink: 0 }} /><div><b>İşletme gerekçesi</b><p>{review.hideRequest?.reason || "Belirtilmedi"}</p></div></div>}
+                {review.ownerReply && <div className={m.reply}><b>İşletme yanıtı</b><br />{review.ownerReply}</div>}
+                <div className={m.actions}>
+                  <Btn variant="danger" icon={fromHide ? EyeOff : XCircle} disabled={busy} onClick={() => setConfirm({ kind: "review", review, status: "rejected", fromHide })}>{fromHide ? "Gizle" : "Reddet"}</Btn>
+                  <Btn variant="primary" icon={CheckCircle2} loading={busy} onClick={() => void handleDecision(review, "approved")}>{fromHide ? "Yayında tut" : "Onayla"}</Btn>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              </article>
+            );
+          })}</div>
       )}
-    </Card>
+
+      {activeTab === "profile" && (
+        profileLoading ? <SkeletonList rows={2} height={220} />
+          : profileRequests.length === 0 ? <div className={ui.card}><EmptyState icon={UserPen} title="Bekleyen profil değişikliği yok" description="Yeni işletme düzenlemeleri güvenli yayın kuyruğunda burada görünecek." /></div>
+          : <div className={m.list}>{profileRequests.map((item) => {
+            const busy = processing === item.id;
+            const submitted = toMillis(item.submittedAt);
+            return (
+              <article key={item.id} className={m.diffCard}>
+                <header className={m.diffHead}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                    <Avatar name={item.businessName} seed={item.businessId} />
+                    <div style={{ minWidth: 0 }}><b>{item.businessName}</b><small>{item.changedFields.length} alan değişiyor · {submitted ? relativeTime(submitted, now) : "Şimdi"}</small></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <Pill tone={item.riskLevel === "review" ? "amber" : "green"}><ShieldAlert size={11} /> {item.riskLevel === "review" ? "Dikkatli incele" : "Düşük risk"}</Pill>
+                    <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(item.businessId)}`} className={ui.link} style={{ fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 3 }}>İşletme <ArrowUpRight size={12} /></Link>
+                  </div>
+                </header>
+                {item.riskFlags?.length > 0 && <div className={m.flags} style={{ paddingTop: 12 }}>{item.riskFlags.map((flag) => <Pill key={flag} tone="amber">{flag}</Pill>)}</div>}
+                <div className={m.diffRows}>{item.changedFields.map((field) => (
+                  <div key={field} className={m.diffRow}>
+                    <b>{PROFILE_FIELD_LABELS[field] ?? field}</b>
+                    <span className={m.diffOld}>{profileValue(item.previous[field])}</span>
+                    <ArrowRight className={m.diffArrow} size={15} aria-hidden />
+                    <span className={m.diffNew}>{profileValue(item.changes[field])}</span>
+                  </div>
+                ))}</div>
+                <footer className={m.diffFoot}>
+                  <input value={note[item.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={500} placeholder="İşletmeye inceleme notu (isteğe bağlı)" aria-label="İnceleme notu" className={ui.input} />
+                  <div className={m.actions}>
+                    <Btn variant="danger" icon={XCircle} disabled={busy} onClick={() => setConfirm({ kind: "profile", item, decision: "rejected" })}>Reddet</Btn>
+                    <Btn variant="primary" icon={CheckCircle2} loading={busy} onClick={() => setConfirm({ kind: "profile", item, decision: "approved" })}>Onayla ve yayınla</Btn>
+                  </div>
+                </footer>
+              </article>
+            );
+          })}</div>
+      )}
+
+      {activeTab === "category" && (
+        categoryLoading ? <SkeletonList rows={4} height={76} />
+          : requests.length === 0 ? <div className={ui.card}><EmptyState icon={Tags} title="İstek bulunamadı" description={filter === "pending" ? "Onay bekleyen kategori isteği yok." : "Bu filtreyle eşleşen istek yok."} /></div>
+          : <div className={m.list}>{requests.map((req) => {
+            const meta = CATEGORY_STATUS[req.status] ?? CATEGORY_STATUS.pending;
+            const busy = processing === req.id;
+            const requested = toMillis(req.requestedAt);
+            return (
+              <article key={req.id} className={m.category}>
+                <span className={m.categoryIcon} aria-hidden>{req.requestedCategory.slice(0, 1).toLocaleUpperCase("tr-TR")}</span>
+                <div className={m.categoryBody}>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}><b>{req.requestedCategory}</b><Pill tone={meta.tone} dot>{meta.label}</Pill></div>
+                  <small>
+                    <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(req.businessId)}`} className={ui.link}>{req.businessName}</Link>
+                    {" · "}<span title={fullDate(requested)}>{requested ? relativeTime(requested, now) : "—"}</span>
+                    {req.reviewedAt && <> · İncelendi {new Date(req.reviewedAt).toLocaleDateString("tr-TR")}{req.reviewedBy ? ` (${req.reviewedBy.slice(0, 8)}…)` : ""}</>}
+                  </small>
+                </div>
+                <div className={m.categoryActions}>
+                  {req.status === "pending" && <>
+                    <Btn size="sm" variant="danger" icon={XCircle} disabled={busy} onClick={() => setConfirm({ kind: "category", request: req })}>Reddet</Btn>
+                    <Btn size="sm" variant="primary" icon={CheckCircle2} loading={busy} onClick={() => void handleApprove(req)}>Onayla</Btn>
+                  </>}
+                  {req.status === "approved" && <Btn size="sm" icon={FolderPlus} loading={busy} onClick={() => void handleAddCategory(req)}>Kategoriye ekle</Btn>}
+                </div>
+              </article>
+            );
+          })}</div>
+      )}
+
+      <div className={m.banner}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className={ui.iconTile}><Building2 size={18} /></span>
+          <div><b style={{ fontSize: 14 }}>İşletme başvuruları merkezi</b><p>Bekleyen başvuruları incele, onayla, reddet veya yayından kaldır.</p></div>
+        </div>
+        <Link href="/super-admin/isletmeler" className={`${ui.btn} ${ui.btnPrimary}`}>Başvuruları aç <ArrowRight size={14} /></Link>
+      </div>
+
+      <ConfirmSheet
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        onConfirm={runConfirm}
+        tone={confirm?.kind === "profile" && confirm.decision === "approved" ? "primary" : "danger"}
+        icon={confirm?.kind === "profile" && confirm.decision === "approved" ? CheckCircle2 : confirm?.kind === "review" && confirm.fromHide ? EyeOff : XCircle}
+        title={!confirm ? "" : confirm.kind === "review" ? (confirm.fromHide ? "Yorum gizlensin mi?" : "Yorum reddedilsin mi?") : confirm.kind === "category" ? "Kategori talebi reddedilsin mi?" : confirm.decision === "approved" ? "Değişiklikler yayınlansın mı?" : "Profil değişiklikleri reddedilsin mi?"}
+        description={!confirm ? undefined : confirm.kind === "review"
+          ? `${confirm.review.customerName || "Müşteri"} yorumu yayından kaldırılacak. Bu karar süper admin kararı olarak kaydedilir.`
+          : confirm.kind === "category" ? `"${confirm.request.requestedCategory}" talebi (${confirm.request.businessName}) reddedilecek.`
+          : confirm.decision === "approved" ? `${confirm.item.businessName} için ${confirm.item.changedFields.length} alan hemen canlı profile yansıyacak.` : `${confirm.item.businessName} için değişiklikler reddedilecek; not işletmeye iletilir.`}
+        confirmLabel={!confirm ? "" : confirm.kind === "review" ? (confirm.fromHide ? "Gizle" : "Reddet") : confirm.kind === "profile" && confirm.decision === "approved" ? "Onayla ve yayınla" : "Reddet"}
+      >
+        {confirm?.kind === "review" && confirm.review.comment && <p className={m.comment} style={{ fontSize: 13 }}>{confirm.review.comment}</p>}
+        {confirm?.kind === "profile" && note[confirm.item.id] && <p className={ui.muted} style={{ fontSize: 13, margin: 0 }}>Not: {note[confirm.item.id]}</p>}
+      </ConfirmSheet>
+    </AdminPage>
   );
 }

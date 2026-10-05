@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ErrorState, LoadingState } from "@/components/ui/states";
+import { AdminButton, AdminPage, Badge, EmptyState, PageHeader, Panel, SegmentedControl, SkeletonList } from "@/components/super-admin/ui";
+import styles from "./settings.module.css";
 import {
   getPlatformSettings,
   updatePlatformSettings,
@@ -12,7 +12,7 @@ import {
 } from "@/features/platform/platform-settings-repository";
 import { LIVE_FEATURE_KEYS, type LiveFeatureFlags } from "@/features/platform/live-feature-flags";
 import type { PlatformSettings } from "@/types/platform";
-import { Activity, Blocks, Check, CheckCircle2, Globe2, LoaderCircle, Megaphone, PlugZap, RotateCcw, Save, Search, Settings2, Share2, type LucideIcon } from "lucide-react";
+import { Activity, Blocks, Check, CheckCircle2, Globe2, Megaphone, PlugZap, RotateCcw, Save, Search, Settings2, Share2, type LucideIcon } from "lucide-react";
 
 const FEATURE_FLAG_LABELS: Record<string, string> = {
   allowAnonymousReviews: "Girişsiz Yorum (isim yeterli)",
@@ -82,19 +82,20 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className={`admin-setting-toggle ${checked ? "is-on" : ""}`}>
-      <div className="flex min-w-0 items-center gap-3"><span className="admin-setting-toggle-icon">{checked ? <Check size={16}/> : <span />}</span><div>
-        <p className="text-sm font-medium text-[var(--text-1)]">{label}</p>
-        {description && <p className="text-xs text-[var(--text-3)]">{description}</p>}
-      </div></div>
+    <div className={styles.toggleRow} data-on={checked || undefined}>
+      <div className="min-w-0">
+        <p className={styles.toggleLabel}>{label}</p>
+        {description && <p className={styles.toggleDesc}>{description}</p>}
+      </div>
       <button
         type="button"
-        aria-pressed={checked}
-        aria-label={`${label}: ${checked ? "açık" : "kapalı"}`}
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         onClick={() => onChange(!checked)}
-        className="admin-modern-switch"
+        className={styles.switch}
       >
-        <span />
+        <span>{checked && <Check size={12} strokeWidth={3} />}</span>
       </button>
     </div>
   );
@@ -168,36 +169,33 @@ export default function SuperAdminSettingsPage() {
   }
 
   if (loading) {
-    return <LoadingState title="Yükleniyor" description="Platform ayarları çekiliyor..." />;
+    return <AdminPage><PageHeader eyebrow="Platform yapılandırması" title="Ayarlar" icon={Globe2} description="Platform ayarları yükleniyor…" /><SkeletonList rows={4} height={72} /></AdminPage>;
   }
 
   if (loadError || !settings) {
-    return <ErrorState title="Platform ayarları yüklenemedi" description="Canlı özellikler kapalı kalır. Ayarları yeniden yüklemeyi deneyin." action={<button type="button" onClick={() => void reloadSettings()}>Yeniden dene</button>} />;
+    return <AdminPage><Panel><EmptyState icon={Settings2} title="Platform ayarları yüklenemedi" description="Canlı özellikler kapalı kalır. Ayarları yeniden yüklemeyi deneyin." action={<AdminButton variant="primary" onClick={() => void reloadSettings()}>Yeniden dene</AdminButton>} /></Panel></AdminPage>;
   }
 
   return (
-    <div className="admin-settings-page settings-page">
-      <section className="admin-settings-hero"><div className="admin-settings-hero-copy"><span><Globe2 size={15}/> PLATFORM YAPILANDIRMASI</span><h1>Ayarları tek merkezden yönetin.</h1><p>Platform davranışını, görünürlüğünü, iletişim kanallarını ve entegrasyonlarını güvenle yapılandırın.</p></div><div className={`admin-settings-health ${dirty ? "has-changes" : ""}`}><span>{dirty ? <Activity size={21}/> : <CheckCircle2 size={21}/>}</span><div><small>YAPILANDIRMA DURUMU</small><b>{dirty ? "Kaydedilmemiş değişiklikler" : "Tüm ayarlar güncel"}</b></div></div></section>
-      <nav className="settings-tabs" aria-label="Platform ayar bölümleri">
-        {TABS.map((t) => {
-          const Icon = t.icon as LucideIcon;
-          return (
-          <button
-            type="button"
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`settings-tab ${tab === t.key ? "is-active" : ""}`}
-          >
-            <Icon size={17}/>
-            {t.label}
-          </button>
-        )})}
-      </nav>
+    <AdminPage>
+      <PageHeader
+        eyebrow="Platform yapılandırması"
+        title="Ayarlar"
+        description="Platform davranışını, görünürlüğünü, iletişim kanallarını ve entegrasyonlarını güvenle yapılandırın."
+        icon={Globe2}
+        meta={<Badge tone={dirty ? "amber" : "green"} icon={dirty ? Activity : CheckCircle2}>{dirty ? "Kaydedilmemiş değişiklikler" : "Tüm ayarlar güncel"}</Badge>}
+      />
+      <SegmentedControl<TabKey>
+        ariaLabel="Platform ayar bölümleri"
+        value={tab}
+        onChange={setTab}
+        options={TABS.map((t) => ({ value: t.key, label: t.label, icon: t.icon as LucideIcon }))}
+      />
 
-      <div className="settings-tab-content" key={tab}>
+      <div className={styles.tabContent} key={tab}>
 
       {tab === "genel" && (
-        <Card
+        <Panel
           title="Platform Ayarları"
           description="Genel platform konfigürasyonu — burada yapılan değişiklikler tüm sitede geçerli olur"
         >
@@ -234,11 +232,11 @@ export default function SuperAdminSettingsPage() {
               onChange={(e) => setSettings({ ...settings, defaultPlan: e.target.value })}
             />
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "sistem" && (
-        <Card title="Sistem Durumu" description="Platform genelinde anlık durum kontrolleri">
+        <Panel title="Sistem Durumu" description="Platform genelinde anlık durum kontrolleri">
           <div className="space-y-3">
             <ToggleRow
               label="Bakım Modu"
@@ -259,11 +257,11 @@ export default function SuperAdminSettingsPage() {
               onChange={(v) => setSettings({ ...settings, bookingOpen: v })}
             />
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "ozellikler" && (
-        <Card title="Özellik Bayrakları (Feature Flags)" description="Platform genelindeki özellikleri aç/kapat">
+        <Panel title="Özellik Bayrakları (Feature Flags)" description="Platform genelindeki özellikleri aç/kapat">
           <div className="space-y-3">
             {Object.entries(settings.featureFlags).filter(([key]) => !LIVE_FEATURE_FLAG_KEYS.has(key)).map(([key, value]) => (
               <ToggleRow
@@ -274,11 +272,11 @@ export default function SuperAdminSettingsPage() {
               />
             ))}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "canli" && (
-        <Card title="Canlı Özellikler" description="Canlı modülleri platform genelinde yönetin">
+        <Panel title="Canlı Özellikler" description="Canlı modülleri platform genelinde yönetin">
           <div className="space-y-3">
             <div className="pt-1">
               <h3 className="text-sm font-semibold text-[var(--text-1)]">CANLI ÖZELLİKLER</h3>
@@ -303,11 +301,11 @@ export default function SuperAdminSettingsPage() {
               />
             ))}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "seo" && (
-        <Card title="SEO & Marka" description="Arama motorlarında ve paylaşımlarda görünecek varsayılan bilgiler">
+        <Panel title="SEO & Marka" description="Arama motorlarında ve paylaşımlarda görünecek varsayılan bilgiler">
           <div className="space-y-4">
             <Input
               label="Meta Başlık (Title)"
@@ -331,11 +329,11 @@ export default function SuperAdminSettingsPage() {
               onChange={(e) => setSettings({ ...settings, seo: { ...settings.seo, metaKeywords: e.target.value } })}
             />
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "iletisim" && (
-        <Card title="İletişim & Sosyal Medya" description="Site genelinde kullanılan sosyal medya bağlantıları">
+        <Panel title="İletişim & Sosyal Medya" description="Site genelinde kullanılan sosyal medya bağlantıları">
           <div className="grid gap-4 sm:grid-cols-2">
             {SOCIAL_LABELS.map(({ key, label, placeholder }) => (
               <Input
@@ -349,11 +347,11 @@ export default function SuperAdminSettingsPage() {
               />
             ))}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "duyuru" && (
-        <Card
+        <Panel
           title="Duyuru Banner"
           description="Etkinleştirildiğinde tüm sitenin üstünde herkese görünen bir bildirim şeridi çıkar"
         >
@@ -393,11 +391,11 @@ export default function SuperAdminSettingsPage() {
               />
             </div>
           </div>
-        </Card>
+        </Panel>
       )}
 
       {tab === "entegrasyon" && (
-        <Card
+        <Panel
           title="Entegrasyonlar"
           description="Analitik ve pazarlama entegrasyonları — kimlik alanlarını doldurun, script otomatik yüklenir"
         >
@@ -436,14 +434,17 @@ export default function SuperAdminSettingsPage() {
               }
             />
           </div>
-        </Card>
+        </Panel>
       )}
       </div>
 
-      <div className="admin-settings-savebar">
-        <div><span className={dirty ? "is-dirty" : ""}/><p><b>{dirty ? "Değişiklikler kaydedilmeyi bekliyor" : justSaved ? "Ayarlar başarıyla güncellendi" : "Yapılandırma güncel"}</b><small>{dirty ? "Yayınlamak için değişiklikleri kaydedin." : "Platform son kaydedilen ayarlarla çalışıyor."}</small></p></div>
-        <div className="admin-settings-save-actions">{dirty && savedSettings && <button type="button" className="admin-settings-reset" onClick={() => setSettings(structuredClone(savedSettings))}><RotateCcw size={16}/> Geri al</button>}<button type="button" className={`admin-settings-save ${saving ? "is-saving" : ""} ${justSaved ? "is-saved" : ""}`} onClick={() => void handleSave()} disabled={saving || !dirty}>{saving ? <LoaderCircle size={19}/> : justSaved ? <CheckCircle2 size={19}/> : <Save size={19}/>}<span>{saving ? "Kaydediliyor" : justSaved ? "Kaydedildi" : "Değişiklikleri Kaydet"}</span></button></div>
+      <div className={styles.savebar} role="region" aria-label="Kaydetme">
+        <div className={styles.saveText}><span className={dirty ? styles.dotDirty : styles.dot} aria-hidden /><p><b>{dirty ? "Değişiklikler kaydedilmeyi bekliyor" : justSaved ? "Ayarlar başarıyla güncellendi" : "Yapılandırma güncel"}</b><small>{dirty ? "Yayınlamak için değişiklikleri kaydedin." : "Platform son kaydedilen ayarlarla çalışıyor."}</small></p></div>
+        <div className={styles.saveActions}>
+          {dirty && savedSettings && <AdminButton variant="ghost" icon={RotateCcw} onClick={() => setSettings(structuredClone(savedSettings))}>Geri al</AdminButton>}
+          <AdminButton variant="primary" icon={justSaved ? CheckCircle2 : Save} loading={saving} disabled={!dirty} onClick={() => void handleSave()}>{saving ? "Kaydediliyor" : justSaved ? "Kaydedildi" : "Kaydet"}</AdminButton>
+        </div>
       </div>
-    </div>
+    </AdminPage>
   );
 }

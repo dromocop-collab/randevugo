@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emailSearchPrefix, isStaleSupportTicket, statusAfterUnsuspend, statusBeforeSuspending } from "./admin-ops.ts";
+import { emailSearchPrefix, estimateRecurringRevenue, isStaleSupportTicket, statusAfterUnsuspend, statusBeforeSuspending } from "./admin-ops.ts";
 
 const HOUR = 3_600_000;
 
@@ -36,4 +36,21 @@ test("e-posta önek araması yalnızca uygun ifadelerde yapılır", () => {
   assert.equal(emailSearchPrefix("ci"), null);
   assert.equal(emailSearchPrefix("Cihat Erdem"), null);
   assert.equal(emailSearchPrefix("çağrı"), null);
+});
+
+test("gelir tahmini gerçek paket fiyatını kullanır, süresiz/yönetici/şube tekrarını atlar", () => {
+  const fallback = { id: "RANDEVUGO", monthlyPrice: 149, yearlyPrice: 1490 };
+  const plans = [{ id: "PRO_PLUS", monthlyPrice: 300, yearlyPrice: 2400 }];
+  const result = estimateRecurringRevenue([
+    { businessId: "a", plan: "PRO_PLUS", status: "active", isLifetime: false },
+    { businessId: "b", organizationId: "org1", plan: "RANDEVUGO", status: "active", isLifetime: false, billingCycle: "yearly" },
+    { businessId: "c", organizationId: "org1", plan: "RANDEVUGO", status: "active", isLifetime: false },
+    { businessId: "d", plan: "RANDEVUGO", status: "active", isLifetime: true },
+    { businessId: "e", plan: "RANDEVUGO", status: "active", isLifetime: false, ownerUid: "admin" },
+    { businessId: "f", plan: "RANDEVUGO", status: "trialing", isLifetime: false },
+  ], plans, fallback, new Set(["admin"]));
+  assert.equal(result.payingAccounts, 2);
+  assert.equal(result.mrr, Math.round(300 + 1490 / 12));
+  assert.equal(result.skippedLifetime, 1);
+  assert.equal(result.skippedAdmin, 1);
 });

@@ -21,6 +21,8 @@ import { appointmentBlocksWait, calculateLiveQueueWait, type WaitInput, type Wai
 import { CALLED_GRACE_MINUTES, isCalledOverdue, isDeclaredEta, noticeCopy, shouldExpirePreviousBusinessDay, shouldSendAlmostReady, statusNotice, type QueueNoticeKind } from "./live-queue-notifications.js";
 import { LAST_MINUTE_WINDOW_HOURS, alertCoversSlot, isNewAlertMatch, liveModuleEnabled } from "./availability-alert-domain.js";
 import { evaluateSubscriptionAccess, legacyTrialWindow } from "./subscription-domain.js";
+import { FieldValidationError, sanitizeCustomFields, validateCustomFieldValues, type CustomBookingField } from "./booking-fields-domain.js";
+import { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
 
 const db = getFirestore();
@@ -91,12 +93,15 @@ type BookingFieldSettings = {
   collectName: boolean;
   collectEmail: boolean;
   collectNotes: boolean;
+  /** İşletmelerin süper admin onaylı ek alan ekleyebilmesi. */
+  businessCustomFieldsEnabled: boolean;
 };
 
 const DEFAULT_BOOKING_FIELD_SETTINGS: BookingFieldSettings = {
   collectName: true,
   collectEmail: true,
   collectNotes: true,
+  businessCustomFieldsEnabled: true,
 };
 
 async function loadBookingFieldSettings(): Promise<BookingFieldSettings> {
@@ -106,14 +111,127 @@ async function loadBookingFieldSettings(): Promise<BookingFieldSettings> {
     collectName: typeof data.collectName === "boolean" ? data.collectName : DEFAULT_BOOKING_FIELD_SETTINGS.collectName,
     collectEmail: typeof data.collectEmail === "boolean" ? data.collectEmail : DEFAULT_BOOKING_FIELD_SETTINGS.collectEmail,
     collectNotes: typeof data.collectNotes === "boolean" ? data.collectNotes : DEFAULT_BOOKING_FIELD_SETTINGS.collectNotes,
+    businessCustomFieldsEnabled: typeof data.businessCustomFieldsEnabled === "boolean"
+      ? data.businessCustomFieldsEnabled : DEFAULT_BOOKING_FIELD_SETTINGS.businessCustomFieldsEnabled,
   };
 }
 
-export const getBookingFieldSettings = onCall(publicCallableOptions, async () => ({
-  ...await loadBookingFieldSettings(),
-  phoneRequired: true,
-  phoneVerificationRequired: true,
-}));
+/** İşletmenin onaylı ek alanları (platform kapalıysa boş). */
+function approvedCustomFields(business: FirebaseFirestore.DocumentData | undefined, settings: BookingFieldSettings): CustomBookingField[] {
+  if (!settings.businessCustomFieldsEnabled || !Array.isArray(business?.customBookingFields)) return [];
+  try { return sanitizeCustomFields(business.customBookingFields); } catch { return []; }
+}
+
+export const getBookingFieldSettings = onCall(publicCallableOptions, async (request) => {
+  const settings = await loadBookingFieldSettings();
+  const businessId = typeof request.data?.businessId === "string" ? request.data.businessId.trim() : "";
+  let customFields: CustomBookingField[] = [];
+  if (businessId && /^[A-Za-z0-9_-]{1,128}$/.test(businessId)) {
+    const business = await db.doc(`businesses/${businessId}`).get();
+    if (business.data()?.isPublished === true) customFields = approvedCustomFields(business.data(), settings);
+  }
+  return { ...settings, customFields, phoneRequired: true, phoneVerificationRequired: true };
+});
+
+/** İşletme yöneticisi ek alan setini süper admin onayına gönderir; boş liste anında uygulanır (alanları kaldırma). */
+export const submitBookingFieldRequest = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireString(request.data?.businessId, "businessId");
+  const business = await requireBusinessManager(uid, businessId);
+  const settings = await loadBookingFieldSettings();
+  if (!settings.businessCustomFieldsEnabled) throw new HttpsError("failed-precondition", "Ek randevu alanları şu anda platform genelinde kapalı.");
+  let fields: CustomBookingField[];
+  try { fields = sanitizeCustomFields(request.data?.fields); }
+  catch (error) { throw new HttpsError("invalid-argument", error instanceof FieldValidationError ? error.message : "Alanlar geçersiz."); }
+  const businessRef = db.doc(`businesses/${businessId}`);
+  const current = approvedCustomFields(business, settings);
+  if (JSON.stringify(current) === JSON.stringify(fields)) throw new HttpsError("already-exists", "Bu alanlar zaten yayında.");
+  const previousRequestId = typeof business.bookingFieldsRequest?.requestId === "string" ? business.bookingFieldsRequest.requestId : "";
+
+  if (fields.length === 0) {
+    const batch = db.batch();
+    batch.update(businessRef, {
+      customBookingFields: [],
+      bookingFieldsRequest: { status: "approved", requestId: null, note: "Ek alanlar kaldırıldı.", updatedAt: FieldValue.serverTimestamp() },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (previousRequestId) batch.set(db.doc(`bookingFieldRequests/${previousRequestId}`), { status: "superseded", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), { action: "booking_fields.cleared", actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    return { success: true, status: "approved", requestId: null };
+  }
+
+  const requestRef = db.collection("bookingFieldRequests").doc();
+  const batch = db.batch();
+  if (previousRequestId && business.bookingFieldsRequest?.status === "pending") {
+    batch.set(db.doc(`bookingFieldRequests/${previousRequestId}`), { status: "superseded", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+  batch.set(requestRef, {
+    businessId, businessName: String(business.name ?? "İşletme").slice(0, 80), businessSlug: business.slug ?? null,
+    category: business.category ?? null, fields, currentFields: current, status: "pending",
+    requestedBy: uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.update(businessRef, {
+    bookingFieldsRequest: { status: "pending", requestId: requestRef.id, fields, note: null, updatedAt: FieldValue.serverTimestamp() },
+  });
+  batch.set(db.collection("platformAlerts").doc(), {
+    severity: "warning", category: "booking_fields", title: "Yeni randevu alanı talebi",
+    message: `${String(business.name ?? "İşletme")} ${fields.length} ek alan için onay bekliyor: ${fields.map((field) => field.label).join(", ")}`.slice(0, 300),
+    businessId, requestId: requestRef.id, isRead: false, createdAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(db.collection(`businesses/${businessId}/auditLogs`).doc(), {
+    action: "booking_fields.requested", entityId: requestRef.id, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
+  return { success: true, status: "pending", requestId: requestRef.id };
+});
+
+/** Süper admin ek alan talebini onaylar (isteğe bağlı düzenleyerek) veya reddeder. */
+export const reviewBookingFieldRequest = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const requestId = requireString(request.data?.requestId, "requestId");
+  const decision = request.data?.decision;
+  if (decision !== "approved" && decision !== "rejected") throw new HttpsError("invalid-argument", "Geçersiz karar.");
+  const note = typeof request.data?.note === "string" ? request.data.note.trim().slice(0, 300) : "";
+  if (decision === "rejected" && note.length < 3) throw new HttpsError("invalid-argument", "Reddederken işletmeye bir açıklama yazın.");
+  const requestRef = db.doc(`bookingFieldRequests/${requestId}`);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(requestRef);
+    if (!snapshot.exists) throw new HttpsError("not-found", "Talep bulunamadı.");
+    const data = snapshot.data()!;
+    if (data.status !== "pending") throw new HttpsError("failed-precondition", "Bu talep artık beklemede değil.");
+    const businessRef = db.doc(`businesses/${String(data.businessId)}`);
+    const businessSnapshot = await tx.get(businessRef);
+    if (!businessSnapshot.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    let fields: CustomBookingField[] = [];
+    if (decision === "approved") {
+      try { fields = sanitizeCustomFields(request.data?.fields ?? data.fields); }
+      catch (error) { throw new HttpsError("invalid-argument", error instanceof FieldValidationError ? error.message : "Alanlar geçersiz."); }
+    }
+    tx.update(requestRef, {
+      status: decision, note: note || null, reviewedBy: uid, reviewedAt: FieldValue.serverTimestamp(),
+      ...(decision === "approved" ? { approvedFields: fields } : {}), updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(businessRef, {
+      ...(decision === "approved" ? { customBookingFields: fields } : {}),
+      bookingFieldsRequest: { status: decision, requestId, note: note || null, fields: decision === "approved" ? fields : data.fields, updatedAt: FieldValue.serverTimestamp() },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(db.collection(`businesses/${String(data.businessId)}/notifications`).doc(), {
+      type: "booking_fields_reviewed",
+      title: decision === "approved" ? "Randevu alanlarınız yayında" : "Randevu alanı talebiniz reddedildi",
+      body: decision === "approved" ? "Ek alanlar artık randevu formunuzda görünüyor." : `Süper admin notu: ${note}`,
+      isRead: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(db.collection("platformAuditLogs").doc(), {
+      action: `booking_fields.${decision}`, businessId: data.businessId, entityId: requestId, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { success: true, status: decision };
+});
 
 export const updateBookingFieldSettings = onCall(protectedCallableOptions, async (request) => {
   const uid = request.auth?.uid;
@@ -123,6 +241,7 @@ export const updateBookingFieldSettings = onCall(protectedCallableOptions, async
     collectName: request.data?.collectName !== false,
     collectEmail: request.data?.collectEmail !== false,
     collectNotes: request.data?.collectNotes !== false,
+    businessCustomFieldsEnabled: request.data?.businessCustomFieldsEnabled !== false,
   };
   await db.doc(BOOKING_FIELD_SETTINGS_PATH).set({
     ...settings,
@@ -1244,6 +1363,109 @@ export const reviewBusiness = onCall(
     });
     await batch.commit();
     return { success: true, status: approved ? "active" : "rejected" };
+  }
+);
+
+// Keşif/arama/sitemap görünürlüğü yalnızca bu callable ile değişir; istemci sunucu onaylı durumu tekrar okur.
+export const setBusinessDiscoveryVisibility = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    if (typeof request.data?.hidden !== "boolean") throw new HttpsError("invalid-argument", "hidden alanı true/false olmalıdır.");
+    const hidden = request.data.hidden as boolean;
+    const businessRef = db.doc(`businesses/${businessId}`);
+    const changed = await db.runTransaction(async (tx) => {
+      const business = await tx.get(businessRef);
+      if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+      const previous = business.data()?.hiddenFromDiscovery === true;
+      if (previous === hidden) return false;
+      tx.update(businessRef, { hiddenFromDiscovery: hidden, updatedAt: FieldValue.serverTimestamp() });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: hidden ? "business.hidden_from_discovery" : "business.shown_in_discovery",
+        entityType: "business", entityId: businessId, businessId,
+        previousValue: previous, newValue: hidden,
+        actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    return { success: true, businessId, hiddenFromDiscovery: hidden, changed };
+  }
+);
+
+export const setBusinessSuspension = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    if (typeof request.data?.suspended !== "boolean") throw new HttpsError("invalid-argument", "suspended alanı true/false olmalıdır.");
+    const suspended = request.data.suspended as boolean;
+    const businessRef = db.doc(`businesses/${businessId}`);
+    return db.runTransaction(async (tx) => {
+      const business = await tx.get(businessRef);
+      if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+      const data = business.data() ?? {};
+      const currentlySuspended = data.isSuspended === true || data.status === "suspended";
+      const currentStatus = String(data.status ?? "");
+      if (currentlySuspended === suspended) {
+        return { success: true, businessId, isSuspended: currentlySuspended, status: currentStatus, changed: false };
+      }
+      let nextStatus: string;
+      if (suspended) {
+        const previousStatus = statusBeforeSuspending(currentStatus);
+        nextStatus = "suspended";
+        tx.update(businessRef, {
+          isSuspended: true, status: nextStatus, statusBeforeSuspension: previousStatus,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Askı öncesi durum geri yüklenir; bilinmiyorsa onaya düşer.
+        nextStatus = statusAfterUnsuspend(data.statusBeforeSuspension);
+        tx.update(businessRef, {
+          isSuspended: false, status: nextStatus, statusBeforeSuspension: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: suspended ? "business.suspended" : "business.unsuspended",
+        entityType: "business", entityId: businessId, businessId,
+        previousStatus: currentStatus || null, newStatus: nextStatus,
+        actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+      return { success: true, businessId, isSuspended: suspended, status: nextStatus, changed: true };
+    });
+  }
+);
+
+// platformPlans boşsa varsayılan tek paketi oluşturur; varsa hiçbir şeye dokunmaz (idempotent).
+export const ensureDefaultPlatformPlans = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const planRef = db.doc(`platformPlans/${DEFAULT_PLATFORM_PLAN_ID}`);
+    const created = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(planRef);
+      if (existing.exists) return false;
+      tx.set(planRef, {
+        ...defaultPlatformPlan(PLAN_ENTITLEMENTS),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+      });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "platform.default_plan_created",
+        entityType: "platformPlan", entityId: DEFAULT_PLATFORM_PLAN_ID,
+        actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    return { success: true, created, planId: DEFAULT_PLATFORM_PLAN_ID };
   }
 );
 
@@ -3441,6 +3663,15 @@ export const createAppointment = onCall(
         throw new HttpsError("failed-precondition", "Bu işletme müşteri tarafından online randevu kabul etmiyor.");
       }
     }
+    // İşletmenin onaylı ek alanları; alanları bilmeyen eski istemcilerde (customFields yok) zorunluluk aranmaz.
+    let customFieldValues: ReturnType<typeof validateCustomFieldValues> = [];
+    try {
+      customFieldValues = validateCustomFieldValues(
+        approvedCustomFields(context.business, bookingFields), serviceId, data.customFields, data.customFields !== undefined
+      );
+    } catch (error) {
+      throw new HttpsError("invalid-argument", error instanceof FieldValidationError ? error.message : "Ek alanlar geçersiz.");
+    }
     const serviceData = context.service;
     const durationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
 
@@ -3538,6 +3769,7 @@ export const createAppointment = onCall(
         status: "confirmed",
         paymentStatus: "unpaid",
         notes,
+        ...(customFieldValues.length ? { customFields: customFieldValues } : {}),
         publicToken,
         serviceName: String(serviceData.name ?? ""),
         staffName: staffData ? String(staffData.fullName ?? "") : String(context.business.name ?? "İşletme"),
@@ -3993,6 +4225,7 @@ export const getAppointmentByPublicToken = onCall(
         serviceId: String(appointment.serviceId ?? ""),
         staffId: typeof appointment.staffId === "string" ? appointment.staffId : "",
         rescheduleCount: policy.rescheduleCount,
+        customFields: Array.isArray(appointment.customFields) ? appointment.customFields : [],
       },
       policy: {
         canCancel: policy.canCancel,

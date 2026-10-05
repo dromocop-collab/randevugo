@@ -1,25 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addDoc, collection, doc, getCountFromServer, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, updateDoc, where,
   type FirestoreError, type Query, type QueryConstraint, type QueryDocumentSnapshot, type Timestamp,
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { Building2, CheckCircle2, Headphones, LoaderCircle, MessageCircleMore, Phone, RotateCcw, Search, Send, UserRound } from "lucide-react";
+import {
+  AlarmClock, ArrowLeft, Building2, CheckCircle2, Headphones, Inbox, LoaderCircle, MessageCircleMore, Phone, RotateCcw, Send, Store, UserRound,
+} from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
-import { EmptyState } from "@/components/ui/states";
-import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/features/auth/auth-context";
-import { SUPPORT_ACTIVE_STATUSES, SUPPORT_NEEDS_ADMIN_STATUSES } from "@/features/platform/admin-ops";
+import { SUPPORT_ACTIVE_STATUSES, SUPPORT_NEEDS_ADMIN_STATUSES, isStaleSupportTicket } from "@/features/platform/admin-ops";
+import {
+  AdminPage, Avatar, Btn, EmptyState, HeroStat, IconBtn, PageHeader, Pill, SearchField, Segmented, SkeletonList, StatCard, StatGrid,
+  Toolbar, cx, fullDate, relativeTime, timeOf, ui, useHotkeys, useIsClient, useMediaQuery, useNow, type Tone,
+} from "../_pages-ui";
+import s from "./support.module.css";
 
-type SupportRow = { id:string; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string; sortMillis:number };
+type SupportRow = { id:string; title:string; category:string; source:string; target:string; requesterName:string; requesterPhone:string; message:string; businessId:string|null; businessName:string|null; status:string; createdAt:string; createdMillis:number|null; sortMillis:number };
 type Filter = "needs_admin"|"active"|"business"|"all";
 type Counts = { needsAdmin:number; business:number; resolved:number };
 
 const PAGE_SIZE = 100;
-const statusLabel: Record<string,string> = { open:"Yeni", waiting_user:"İşletme yanıtı bekleniyor", waiting_admin:"Ekip yanıtı bekleniyor", resolved:"Çözüldü" };
+const STATUS_META: Record<string,{ label:string; tone:Tone }> = {
+  open: { label:"Yeni", tone:"blue" },
+  waiting_admin: { label:"Ekip yanıtı bekleniyor", tone:"amber" },
+  waiting_user: { label:"İşletme yanıtı bekleniyor", tone:"violet" },
+  resolved: { label:"Çözüldü", tone:"green" },
+};
 const FILTERS: ReadonlyArray<readonly [Filter,string]> = [["needs_admin","Yanıt bekleyen"],["active","Aktif"],["business","Mağaza mesajları"],["all","Tümü"]];
+const QUICK_REPLIES = [
+  "Merhaba, talebinizi aldık ve inceliyoruz. En kısa sürede dönüş yapacağız.",
+  "Sorunu giderdik. Tekrar dener misiniz? Devam ederse bize yazmanız yeterli.",
+  "Daha hızlı yardımcı olabilmemiz için ekran görüntüsü veya ek bilgi paylaşabilir misiniz?",
+  "Talebiniz ilgili ekibe iletildi, gelişmeleri buradan paylaşacağız.",
+  "Teşekkür ederiz, iyi çalışmalar dileriz.",
+];
 
 function filterConstraints(filter:Filter): QueryConstraint[] {
   if (filter === "needs_admin") return [where("status","in",SUPPORT_NEEDS_ADMIN_STATUSES)];
@@ -37,11 +55,17 @@ function toRow(item:QueryDocumentSnapshot): SupportRow {
   const data = item.data();
   const created = data.createdAt as Timestamp | undefined;
   const updated = data.updatedAt as Timestamp | undefined;
-  return { id:item.id, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:created?.toDate ? created.toDate().toLocaleString("tr-TR") : "Şimdi", sortMillis:(updated?.toMillis?.() ?? created?.toMillis?.() ?? Date.now()) };
+  return { id:item.id, title:String(data.title??"Destek mesajı"), category:String(data.category??"other"), source:String(data.source??"dashboard"), target:String(data.target??"platform"), requesterName:String(data.requesterName??data.userEmail??"Kullanıcı"), requesterPhone:String(data.requesterPhone??""), message:String(data.message??""), businessId:typeof data.businessId==="string"?data.businessId:null, businessName:typeof data.businessName==="string"?data.businessName:null, status:String(data.status??"open"), createdAt:created?.toDate ? created.toDate().toLocaleString("tr-TR") : "Şimdi", createdMillis:created?.toMillis?.() ?? null, sortMillis:(updated?.toMillis?.() ?? created?.toMillis?.() ?? Date.now()) };
+}
+
+function sourceLabel(row:SupportRow) {
+  return row.target==="business" ? "Mağaza mesajı" : row.source==="dashboard" ? "İşletme desteği" : "Müşteri desteği";
 }
 
 export default function SuperAdminSupportPage() {
   const { user } = useAuthContext();
+  const now = useNow();
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [filter, setFilter] = useState<Filter>("needs_admin");
   const [liveRows, setLiveRows] = useState<SupportRow[]>([]);
   const [extraRows, setExtraRows] = useState<SupportRow[]>([]);
@@ -53,6 +77,9 @@ export default function SuperAdminSupportPage() {
   const [ordered, setOrdered] = useState(true);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [search, setSearch] = useState("");
+  const [staleOnly, setStaleOnly] = useState(false);
+  const [pinned, setPinned] = useState<SupportRow | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
 
   const refreshCounts = useCallback(() => {
     const tickets = collection(getDb(),"supportTickets");
@@ -97,32 +124,197 @@ export default function SuperAdminSupportPage() {
     return [...liveRows, ...extraRows.filter((row) => !liveIds.has(row.id))];
   }, [liveRows, extraRows]);
 
+  const isStale = useCallback((row:SupportRow) => isStaleSupportTicket(row.status, row.sortMillis, now), [now]);
+  const staleCount = useMemo(() => rows.filter(isStale).length, [rows, isStale]);
+
   const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("tr-TR");
-    return rows.filter((row) => !needle || `${row.title} ${row.requesterName} ${row.requesterPhone} ${row.message} ${row.businessName??""}`.toLocaleLowerCase("tr-TR").includes(needle));
-  }, [rows, search]);
+    return rows.filter((row) => (!staleOnly || isStale(row)) && (!needle || `${row.title} ${row.requesterName} ${row.requesterPhone} ${row.message} ${row.businessName??""}`.toLocaleLowerCase("tr-TR").includes(needle)));
+  }, [rows, search, staleOnly, isStale]);
+
+  // Seçili talep filtre dışına düşse bile panelde açık kalır (son bilinen haliyle).
+  const selected = pinned ? (rows.find((row) => row.id === pinned.id) ?? pinned) : (isDesktop ? visible[0] ?? null : null);
 
   async function setStatus(id:string,status:string) {
+    setStatusBusy(true);
     try {
       await updateDoc(doc(getDb(),"supportTickets",id),{status,updatedAt:serverTimestamp()});
       setExtraRows((current) => current.map((row) => row.id === id ? { ...row, status } : row));
+      setPinned((current) => current && current.id === id ? { ...current, status } : current);
       toast.success("Talep durumu güncellendi.");
     } catch (error) { toast.error((error as Error).message); }
+    finally { setStatusBusy(false); }
   }
+
+  function move(step:number) {
+    if (!visible.length) return;
+    const index = selected ? visible.findIndex((row) => row.id === selected.id) : -1;
+    const next = visible[Math.min(visible.length - 1, Math.max(0, index + step))];
+    if (next) {
+      setPinned(next);
+      document.getElementById(`ticket-${next.id}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }
+  useHotkeys({ j: () => move(1), k: () => move(-1) }, isDesktop);
 
   const stat = (value:number|undefined) => value === undefined ? "—" : value.toLocaleString("tr-TR");
 
-  return <div className="admin-support-page">
-    <section className="admin-support-hero"><div><span><Headphones size={16}/> CANLI DESTEK MERKEZİ</span><h1>Tüm mesajlar,<br/>tek güvenli akışta.</h1><p>Müşteri, işletme ve mağaza profili mesajlarını takip edin; durumu kaybetmeden sonuçlandırın.</p></div><div className="admin-support-stats"><span><b>{stat(counts?.needsAdmin)}</b><small>yeni mesaj</small></span><span><b>{stat(counts?.business)}</b><small>mağaza mesajı</small></span><span><b>{stat(counts?.resolved)}</b><small>çözülen</small></span></div></section>
-    <section className="admin-support-toolbar"><label><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Yüklenen mesajlarda isim, telefon, mağaza veya mesaj ara…"/></label><div>{FILTERS.map(([key,label])=><button className={filter===key?"active":""} key={key} onClick={()=>setFilter(key)}>{label}</button>)}</div></section>
-    <section className="admin-support-list">{loading ? [1,2,3].map(x=><div key={x} className="admin-support-skeleton"/>) : visible.length===0 ? <EmptyState title="Mesaj bulunamadı" description={filter==="needs_admin"?"Ekip yanıtı bekleyen destek mesajı yok.":"Seçtiğiniz filtrelerle eşleşen destek mesajı yok."}/> : visible.map(row=><details key={row.id} className={`admin-support-ticket status-${row.status}`}><summary><div className="admin-support-ticket-icon">{row.target==="business"?<Building2/>:<MessageCircleMore/>}</div><div><span>{row.target==="business"?"MAĞAZA MESAJI":row.source==="dashboard"?"İŞLETME DESTEĞİ":"MÜŞTERİ DESTEĞİ"}</span><b>{row.title}</b><small>{row.requesterName} · {row.createdAt}</small></div><i>{statusLabel[row.status]??row.status}</i></summary><div className="admin-support-detail"><div className="admin-support-contact"><span><UserRound size={15}/>{row.requesterName}</span>{row.requesterPhone&&<a href={`tel:${row.requesterPhone}`}><Phone size={15}/>{row.requesterPhone}</a>}{row.businessName&&<span><Building2 size={15}/>{row.businessName}</span>}</div><p>{row.message}</p>{row.target!=="business"&&<AdminThread ticketId={row.id} userId={user?.uid??""}/>}<div className="admin-support-actions">{row.status==="resolved"?<button onClick={()=>setStatus(row.id,"waiting_admin")}><RotateCcw size={14}/> Yeniden aç</button>:<button onClick={()=>setStatus(row.id,"resolved")}><CheckCircle2 size={14}/> Çözüldü</button>}</div></div></details>)}</section>
-    {!loading && hasMore && <div className="mt-4 flex justify-center"><Button variant="secondary" loading={loadingMore} disabled={loadingMore} onClick={()=>void loadMore()}>Daha fazla yükle</Button></div>}
-  </div>;
+  const pane = selected ? (
+    <TicketPane
+      key={selected.id}
+      row={selected}
+      userId={user?.uid ?? ""}
+      stale={isStale(selected)}
+      now={now}
+      busy={statusBusy}
+      mobile={!isDesktop}
+      onBack={() => setPinned(null)}
+      onStatus={(status) => void setStatus(selected.id, status)}
+    />
+  ) : null;
+
+  return (
+    <AdminPage>
+      <PageHeader
+        eyebrow="Canlı destek merkezi"
+        icon={Headphones}
+        title="Destek gelen kutusu"
+        description="Müşteri, işletme ve mağaza mesajlarını tek akışta yanıtlayın; 24 saati aşan talepler kırmızıyla öne çıkar."
+        meta={<>
+          <HeroStat label="yanıt bekliyor" value={stat(counts?.needsAdmin)} />
+          <HeroStat label="24 saati aşan" value={staleCount} />
+        </>}
+      />
+
+      <StatGrid>
+        <StatCard label="Yanıt bekleyen" value={stat(counts?.needsAdmin)} hint="Yeni + ekip yanıtı bekleyen" icon={Inbox} tone="amber" onClick={() => { setFilter("needs_admin"); setStaleOnly(false); }} active={filter === "needs_admin" && !staleOnly} />
+        <StatCard label="24 saati aşan" value={staleCount} hint="yüklenenler arasında" icon={AlarmClock} tone={staleCount ? "red" : "neutral"} onClick={() => setStaleOnly((value) => !value)} active={staleOnly} />
+        <StatCard label="Mağaza mesajı" value={stat(counts?.business)} hint="İşletmelere gelen" icon={Store} tone="blue" onClick={() => { setFilter("business"); setStaleOnly(false); }} active={filter === "business" && !staleOnly} />
+        <StatCard label="Çözülen" value={stat(counts?.resolved)} hint="Toplam kapanan" icon={CheckCircle2} tone="green" />
+      </StatGrid>
+
+      <Toolbar sticky={false}>
+        <SearchField value={search} onChange={setSearch} placeholder="İsim, telefon, mağaza veya mesaj ara…" label="Destek mesajlarında ara" />
+        <Segmented label="Destek filtresi" value={filter} onChange={(value) => { setFilter(value); setPinned(null); }}
+          options={FILTERS.map(([value,label]) => ({ value, label, count: value === "needs_admin" ? counts?.needsAdmin : value === "business" ? counts?.business : undefined }))} />
+      </Toolbar>
+
+      <div className={s.inbox}>
+        <div className={s.list} role="listbox" aria-label="Destek talepleri">
+          {staleOnly && <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)" }}><Pill tone="red" dot>Yalnızca 24 saati aşanlar</Pill> <button type="button" className={ui.link} style={{ border: 0, background: "none", cursor: "pointer", fontSize: 12.5 }} onClick={() => setStaleOnly(false)}>Temizle</button></div>}
+          {loading ? <div style={{ padding: 14 }}><SkeletonList rows={6} height={76} /></div>
+            : visible.length === 0 ? <EmptyState icon={Inbox} title="Mesaj bulunamadı" description={staleOnly ? "24 saati aşan bekleyen talep yok. Harika." : filter==="needs_admin"?"Ekip yanıtı bekleyen destek mesajı yok.":"Seçtiğiniz filtrelerle eşleşen destek mesajı yok."} />
+            : visible.map((row) => {
+              const meta = STATUS_META[row.status];
+              const stale = isStale(row);
+              const active = selected?.id === row.id;
+              return (
+                <button key={row.id} id={`ticket-${row.id}`} type="button" role="option" aria-selected={active}
+                  className={cx(s.item, active && s.itemActive, stale && s.itemStale, (SUPPORT_NEEDS_ADMIN_STATUSES as string[]).includes(row.status) && s.itemNeeds)}
+                  onClick={() => setPinned(row)}>
+                  <Avatar name={row.requesterName} seed={row.requesterName + row.requesterPhone} />
+                  <span style={{ minWidth: 0 }}>
+                    <span className={s.itemTop}><span className={s.itemName}>{row.requesterName}</span><time className={s.itemTime} title={fullDate(row.sortMillis)}>{relativeTime(row.sortMillis, now)}</time></span>
+                    <span className={s.itemTitle} style={{ display: "block" }}>{row.title}</span>
+                    {row.message && <span className={s.itemPreview}>{row.message}</span>}
+                    <span className={s.itemTags}>
+                      <Pill tone={meta?.tone ?? "neutral"} dot>{meta?.label ?? row.status}</Pill>
+                      {stale && <Pill tone="red">24 saati aştı</Pill>}
+                      <Pill>{sourceLabel(row)}</Pill>
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          {!loading && hasMore && <div className={ui.loadMore} style={{ paddingTop: 14 }}><Btn size="sm" loading={loadingMore} onClick={() => void loadMore()}>Daha fazla yükle</Btn></div>}
+        </div>
+        {isDesktop && (pane ?? <div className={s.pane}><div className={s.paneEmpty}><EmptyState icon={MessageCircleMore} title="Bir konuşma seçin" description="Soldaki listeden bir talep seçin. j / k ile talepler arasında gezinebilirsiniz." /></div></div>)}
+      </div>
+      {!isDesktop && pane}
+    </AdminPage>
+  );
 }
 
-function AdminThread({ticketId,userId}:{ticketId:string;userId:string}){
-  const [messages,setMessages]=useState<Array<{id:string;body:string;role:string;time:string}>>([]); const [body,setBody]=useState(""); const [sending,setSending]=useState(false);
+function TicketPane({ row, userId, stale, now, busy, mobile, onBack, onStatus }: {
+  row:SupportRow; userId:string; stale:boolean; now:number; busy:boolean; mobile:boolean; onBack:()=>void; onStatus:(status:string)=>void;
+}) {
+  const mounted = useIsClient();
+  const meta = STATUS_META[row.status];
+  useEffect(() => {
+    if (!mobile) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event:KeyboardEvent) => { if (event.key === "Escape") onBack(); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKey); };
+  }, [mobile, onBack]);
+
+  const content = (
+    <>
+      <header className={s.paneHead}>
+        <div className={s.paneTitleRow}>
+          <IconBtn label="Listeye dön" icon={ArrowLeft} className={s.backBtn} onClick={onBack} />
+          <Avatar name={row.requesterName} seed={row.requesterName + row.requesterPhone} />
+          <div className={s.paneTitle}><h2 title={row.title}>{row.title}</h2><p>{row.requesterName} · {sourceLabel(row)}</p></div>
+          {row.status==="resolved"
+            ? <Btn size="sm" icon={RotateCcw} loading={busy} onClick={()=>onStatus("waiting_admin")}>Yeniden aç</Btn>
+            : <Btn size="sm" variant="primary" icon={CheckCircle2} loading={busy} onClick={()=>onStatus("resolved")}>Çözüldü</Btn>}
+        </div>
+        <div className={s.contactRow}>
+          <Pill tone={meta?.tone ?? "neutral"} dot>{meta?.label ?? row.status}</Pill>
+          {stale && <Pill tone="red">24 saati aştı · {relativeTime(row.sortMillis, now)}</Pill>}
+          <span className={s.contact}><UserRound size={13}/>{row.requesterName}</span>
+          {row.requesterPhone && <a className={s.contact} href={`tel:${row.requesterPhone}`}><Phone size={13}/>{row.requesterPhone}</a>}
+          {row.businessName && <a className={s.contact} href={row.businessId ? `/super-admin/isletmeler?q=${encodeURIComponent(row.businessId)}` : undefined}><Building2 size={13}/>{row.businessName}</a>}
+        </div>
+      </header>
+      {row.target!=="business"
+        ? <AdminThread ticketId={row.id} userId={userId} row={row} />
+        : <div className={s.thread}>
+            <span className={s.threadNote}>{row.createdAt}</span>
+            <div className={s.bubbleRow}><div className={cx(s.bubble, s.bubbleFirst)}>{row.message || "Mesaj içeriği yok."}<span className={s.bubbleMeta}>{row.requesterName} · {timeOf(row.createdMillis)}</span></div></div>
+            <p className={s.readonlyNote}>Bu mesaj mağazaya iletildi; yanıtı işletme verir. Durumu buradan yönetebilirsiniz.</p>
+          </div>}
+    </>
+  );
+
+  if (mobile) {
+    if (!mounted) return null;
+    return createPortal(<div className={cx(ui.page, s.paneMobile)} role="dialog" aria-modal="true" aria-label={row.title}>{content}</div>, document.body);
+  }
+  return <section className={s.pane} aria-label="Konuşma">{content}</section>;
+}
+
+function AdminThread({ticketId,userId,row}:{ticketId:string;userId:string;row:SupportRow}){
+  const [messages,setMessages]=useState<Array<{id:string;body:string;role:string;time:string}>>([]);
+  const [body,setBody]=useState("");
+  const [sending,setSending]=useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(()=>onSnapshot(query(collection(getDb(),"supportTickets",ticketId,"messages"),orderBy("createdAt","asc")),snapshot=>setMessages(snapshot.docs.map(item=>{const d=item.data();const stamp=d.createdAt as Timestamp|undefined;return{id:item.id,body:String(d.body??""),role:String(d.senderRole??"business"),time:stamp?.toDate?stamp.toDate().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"}):"Şimdi"}}))),[ticketId]);
-  async function send(){if(!body.trim()||!userId)return;setSending(true);try{await addDoc(collection(getDb(),"supportTickets",ticketId,"messages"),{body:body.trim(),senderId:userId,senderRole:"admin",createdAt:serverTimestamp()});await updateDoc(doc(getDb(),"supportTickets",ticketId),{status:"waiting_user",updatedAt:serverTimestamp()});setBody("");toast.success("Yanıt işletmeye gönderildi.")}catch(error){toast.error((error as Error).message)}finally{setSending(false)}}
-  return <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-[var(--surface-2)] p-3"><div className="max-h-72 space-y-2 overflow-y-auto p-1">{messages.length===0?<p className="text-xs text-[var(--text-3)]">Henüz karşılıklı yanıt yok.</p>:messages.map(item=><div key={item.id} className={`flex ${item.role==="admin"?"justify-end":"justify-start"}`}><div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs leading-5 ${item.role==="admin"?"bg-[#0b6b45] text-white":"bg-[var(--surface-1)] text-[var(--text-1)]"}`}>{item.body}<small className="mt-1 block opacity-50">{item.time}</small></div></div>)}</div><div className="mt-3 flex items-end gap-2 rounded-2xl bg-[var(--surface-1)] p-2"><textarea value={body} onChange={event=>setBody(event.target.value)} placeholder="İşletmeye yanıt yazın…" className="min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-xs outline-none"/><button onClick={send} disabled={sending||!body.trim()} className="grid h-10 w-10 place-items-center rounded-xl bg-[#0b6b45] text-white disabled:opacity-40">{sending?<LoaderCircle size={16} className="animate-spin"/>:<Send size={16}/>}</button></div></div>
+  useEffect(() => {
+    const viewport = threadRef.current;
+    if (!viewport) return;
+    const frame = window.requestAnimationFrame(() => viewport.scrollTo({ top: viewport.scrollHeight }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length]);
+  async function send(){if(!body.trim()||!userId)return;setSending(true);try{await addDoc(collection(getDb(),"supportTickets",ticketId,"messages"),{body:body.trim(),senderId:userId,senderRole:"admin",createdAt:serverTimestamp()});await updateDoc(doc(getDb(),"supportTickets",ticketId),{status:"waiting_user",updatedAt:serverTimestamp()});setBody("");toast.success("Yanıt gönderildi.")}catch(error){toast.error((error as Error).message)}finally{setSending(false)}}
+  function insertQuick(text:string){ setBody((current) => current.trim() ? `${current.trimEnd()}\n${text}` : text); inputRef.current?.focus(); }
+  return <>
+    <div ref={threadRef} className={s.thread} aria-live="polite">
+      <span className={s.threadNote}>{row.createdAt}</span>
+      <div className={s.bubbleRow}><div className={cx(s.bubble, s.bubbleFirst)}>{row.message || "Mesaj içeriği yok."}<span className={s.bubbleMeta}>{row.requesterName} · ilk mesaj</span></div></div>
+      {messages.length===0 && <span className={s.threadNote}>Henüz karşılıklı yanıt yok</span>}
+      {messages.map(item=><div key={item.id} className={cx(s.bubbleRow, item.role==="admin" && s.bubbleRowAdmin)}><div className={cx(s.bubble, item.role==="admin" && s.bubbleAdmin)}>{item.body}<span className={s.bubbleMeta}>{item.role==="admin"?"Ekip":row.requesterName} · {item.time}</span></div></div>)}
+    </div>
+    <div className={s.composer}>
+      <div className={s.quick} aria-label="Hazır yanıtlar">{QUICK_REPLIES.map((text)=><button key={text} type="button" onClick={()=>insertQuick(text)} title={text}>{text.split(/[,.]/)[0]}</button>)}</div>
+      <div className={s.composeRow}>
+        <textarea ref={inputRef} rows={1} value={body} onChange={event=>setBody(event.target.value)} placeholder="Yanıt yazın…" aria-label="Yanıt"
+          onKeyDown={(event)=>{ if (event.key==="Enter" && (event.metaKey||event.ctrlKey)) { event.preventDefault(); void send(); } }}/>
+        <button type="button" className={s.sendBtn} onClick={()=>void send()} disabled={sending||!body.trim()} aria-label="Yanıtı gönder">{sending?<LoaderCircle size={18} className={ui.spin}/>:<Send size={18}/>}</button>
+      </div>
+      <span className={s.composeHint}>⌘/Ctrl + Enter ile gönder · yanıt sonrası durum “İşletme yanıtı bekleniyor” olur</span>
+    </div>
+  </>;
 }
