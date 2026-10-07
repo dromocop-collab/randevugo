@@ -4255,6 +4255,177 @@ export const getAppointmentByPublicToken = onCall(
   }
 );
 
+// ── Süper admin push bildirimleri (yeni destek talebi/mesajı, yeni işletme) ──
+// Mobil/web istemcilerde değişiklik gerekmez: bildirim adminin kayıtlı tüm cihazlarına gider.
+const PRIMARY_ADMIN_EMAIL = "cihatwin@gmail.com";
+
+async function platformAdminUserIds(): Promise<string[]> {
+  const ids = new Set<string>();
+  try {
+    ids.add((await auth.getUserByEmail(PRIMARY_ADMIN_EMAIL)).uid);
+  } catch (error) {
+    logger.warn("Ana admin hesabı bulunamadı.", { error: error instanceof Error ? error.message : String(error) });
+  }
+  (await db.collection("platformAdmins").limit(50).get()).docs.forEach((doc) => ids.add(doc.id));
+  return [...ids];
+}
+
+async function notifyPlatformAdmins(title: string, body: string, data: Record<string, string>, collapseId: string, excludeUid?: string) {
+  const recipients = (await platformAdminUserIds()).filter((uid) => uid !== excludeUid);
+  if (recipients.length) await pushToUsers(recipients, title, body, { audience: "admin", ...data }, collapseId);
+}
+
+function shortText(value: unknown, max: number) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+export const adminSupportTicketCreated = onDocumentCreated(
+  { document: "supportTickets/{ticketId}", region: "europe-west1" },
+  async (event) => {
+    const ticket = event.data?.data();
+    // Mağaza mesajları (target "business") işletmeye gider; admine yalnızca platform desteği bildirilir.
+    if (!ticket || ticket.target === "business") return;
+    const who = shortText(ticket.requesterName ?? ticket.businessName ?? ticket.userEmail ?? "Kullanıcı", 40);
+    const kind = ticket.source === "dashboard" || ticket.businessId ? "İşletme desteği" : "Müşteri desteği";
+    await notifyPlatformAdmins(
+      `🆘 Yeni destek talebi · ${kind}`,
+      `${who}: ${shortText(ticket.message || ticket.title, 140)}`,
+      { route: "admin_support", ticketId: event.params.ticketId },
+      `support-${event.params.ticketId}`,
+      typeof ticket.userId === "string" ? ticket.userId : undefined
+    );
+  }
+);
+
+export const adminSupportMessageCreated = onDocumentCreated(
+  { document: "supportTickets/{ticketId}/messages/{messageId}", region: "europe-west1" },
+  async (event) => {
+    const message = event.data?.data();
+    if (!message || message.senderRole === "admin") return;
+    const ticket = (await db.doc(`supportTickets/${event.params.ticketId}`).get()).data();
+    if (!ticket || ticket.target === "business") return;
+    const who = message.senderRole === "business"
+      ? shortText(ticket.businessName ?? "İşletme", 40)
+      : shortText(ticket.requesterName ?? "Müşteri", 40);
+    await notifyPlatformAdmins(
+      `💬 Destek yanıtı · ${who}`,
+      shortText(message.body, 160),
+      { route: "admin_support", ticketId: event.params.ticketId },
+      `support-${event.params.ticketId}`,
+      typeof message.senderId === "string" ? message.senderId : undefined
+    );
+  }
+);
+
+export const adminBusinessCreated = onDocumentCreated(
+  { document: "businesses/{businessId}", region: "europe-west1" },
+  async (event) => {
+    const business = event.data?.data();
+    if (!business) return;
+    const place = [business.district, business.city].filter(Boolean).join(", ");
+    const category = shortText(business.categoryLabel ?? business.category ?? "", 30);
+    await notifyPlatformAdmins(
+      "🎉 Yeni işletme kaydı",
+      [shortText(business.name ?? "Yeni işletme", 60), category, place].filter(Boolean).join(" · "),
+      { route: "admin_businesses", businessId: event.params.businessId },
+      `business-${event.params.businessId}`,
+      typeof business.ownerUid === "string" ? business.ownerUid : undefined
+    );
+  }
+);
+
+// ── Onay bekleyen işler için admin bildirimi ──
+// Belge "pending" durumuna ilk kez geçtiğinde (yeni ya da yeniden gönderilen talep) bildirim gider.
+function becamePending(before: FirebaseFirestore.DocumentData | undefined, after: FirebaseFirestore.DocumentData | undefined, statuses: string[]) {
+  return Boolean(after && statuses.includes(String(after.status)) && !(before && statuses.includes(String(before.status))));
+}
+
+async function businessNameOf(businessId: unknown, fallback?: unknown) {
+  if (typeof fallback === "string" && fallback.trim()) return shortText(fallback, 50);
+  if (typeof businessId !== "string" || !businessId) return "Bir işletme";
+  return shortText((await db.doc(`businesses/${businessId}`).get()).data()?.name ?? "Bir işletme", 50);
+}
+
+export const adminApprovalBusinessStore = onDocumentWritten(
+  { document: "businessApprovalRequests/{businessId}", region: "europe-west1" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!becamePending(before, after, ["pending"])) return;
+    const position = Number(after?.storePosition ?? 0);
+    await notifyPlatformAdmins(
+      "🏪 Yeni şube onay bekliyor",
+      `${await businessNameOf(event.params.businessId, after?.businessName)}${position > 1 ? ` · ${position}. mağaza` : ""}`,
+      { route: "admin_approvals", kind: "store", businessId: event.params.businessId },
+      `approval-store-${event.params.businessId}`
+    );
+  }
+);
+
+export const adminApprovalProfileChange = onDocumentWritten(
+  { document: "businessProfileChangeRequests/{requestId}", region: "europe-west1" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!becamePending(before, after, ["pending"])) return;
+    const changed = after?.changes && typeof after.changes === "object" ? Object.keys(after.changes).length : 0;
+    await notifyPlatformAdmins(
+      "📝 Profil değişikliği onay bekliyor",
+      `${await businessNameOf(after?.businessId ?? event.params.requestId, after?.businessName)}${changed ? ` · ${changed} alan` : ""}`,
+      { route: "admin_approvals", kind: "profile", requestId: event.params.requestId },
+      `approval-profile-${event.params.requestId}`
+    );
+  }
+);
+
+export const adminApprovalCategory = onDocumentCreated(
+  { document: "categoryRequests/{requestId}", region: "europe-west1" },
+  async (event) => {
+    const request = event.data?.data();
+    if (!request || request.status !== "pending") return;
+    await notifyPlatformAdmins(
+      "🏷️ Yeni kategori talebi",
+      `${await businessNameOf(request.businessId, request.businessName)}: “${shortText(request.requestedCategory, 40)}”`,
+      { route: "admin_approvals", kind: "category", requestId: event.params.requestId },
+      `approval-category-${event.params.requestId}`
+    );
+  }
+);
+
+export const adminApprovalPurchase = onDocumentWritten(
+  { document: "subscriptionPurchaseRequests/{businessId}", region: "europe-west1" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!becamePending(before, after, ["pending_payment", "pending", "payment_submitted"])) return;
+    const amount = Number(after?.amount ?? 0);
+    await notifyPlatformAdmins(
+      "💳 Paket satın alma talebi",
+      `${await businessNameOf(event.params.businessId, after?.businessName)} · ${shortText(after?.planLabel ?? after?.planId ?? "Paket", 30)}${amount > 0 ? ` · ${amount.toLocaleString("tr-TR")} ₺` : ""}`,
+      { route: "admin_subscriptions", businessId: event.params.businessId },
+      `approval-purchase-${event.params.businessId}`
+    );
+  }
+);
+
+// Randevu alanı talebi, yorum gizleme talebi ve kritik SMS hataları zaten platformAlerts'e yazılıyor.
+export const adminPlatformAlertCreated = onDocumentCreated(
+  { document: "platformAlerts/{alertId}", region: "europe-west1" },
+  async (event) => {
+    const alert = event.data?.data();
+    if (!alert || alert.isRead === true) return;
+    const icon = alert.severity === "critical" ? "🚨" : alert.category === "review" ? "⭐️" : alert.category === "booking_fields" ? "🧩" : "🔔";
+    const kindRoute = alert.category === "review" ? "admin_moderation" : alert.category === "booking_fields" ? "admin_booking_fields" : "admin_alerts";
+    await notifyPlatformAdmins(
+      `${icon} ${shortText(alert.title ?? "Platform uyarısı", 60)}`,
+      shortText(alert.message, 160),
+      { route: kindRoute, alertId: event.params.alertId },
+      `alert-${event.params.alertId}`
+    );
+  }
+);
+
 // ── Takvim (.ics) ve Apple Cüzdan kartı ──
 // Sertifikalar platformPrivateSettings/appleWallet belgesinde tutulur (istemci kurallarıyla okunamaz).
 // Belge yoksa Cüzdan butonu gösterilmez; takvim dosyası her zaman çalışır.
