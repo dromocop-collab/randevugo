@@ -41,7 +41,7 @@ export default function SurveyPage() {
             <h2 id="anket-about-title" className={styles.aboutTitle}>Randevu trafiği, fark etmeden haftanı yiyor olabilir.</h2>
             <p className={styles.aboutText}>
               Kuaförden berbere, kliniğe, diyetisyene, kursa kadar pek çok işletme günün önemli bir kısmını telefon, WhatsApp ve DM ile
-              randevu ayarlamaya harcıyor. SeninRandevun bu işi senin yerine 7/24 yapar. Lansmana özel ilk 3 ay ücretsiz.
+              randevu ayarlamaya harcıyor. SeninRandevun bu işi senin yerine 7/24 yapar. Lansmana özel ilk ay ücretsiz.
             </p>
             <div className={styles.aboutGrid}>
               <article className={styles.aboutCard}>

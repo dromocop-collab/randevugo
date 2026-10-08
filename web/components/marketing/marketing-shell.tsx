@@ -359,7 +359,7 @@ export function MarketingHeader() {
                 <PlayBadge />
                 <Link href="/isletmeler" className={styles.businessCard} onClick={closeMenu}>
                   <span className={styles.businessIcon} aria-hidden="true"><BriefcaseBusiness size={18} /></span>
-                  <span><b>İşletmeler için</b><small>İlk 3 ay ücretsiz</small></span>
+                  <span><b>İşletmeler için</b><small>İlk ay ücretsiz</small></span>
                   <ArrowUpRight size={16} aria-hidden="true" />
                 </Link>
               </section>

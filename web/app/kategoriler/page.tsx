@@ -253,7 +253,7 @@ export default async function CategoriesPage() {
             <div className={styles.ctaIcon} aria-hidden="true"><BriefcaseBusiness size={22} /></div>
             <div className={styles.ctaCopy}>
               <h2 id="business-cta-title">Kategorinde işletmen mi var?</h2>
-              <p>İşletmeni ücretsiz listele, online randevu almaya bugün başla. Lansmana özel ilk 3 ay bizden.</p>
+              <p>İşletmeni ücretsiz listele, online randevu almaya bugün başla. Lansmana özel ilk ay bizden.</p>
             </div>
             <div className={styles.ctaActions}>
               <Link href="/isletmeler/kayit" className={styles.ctaPrimary}>Ücretsiz kayıt ol <ArrowUpRight size={16} /></Link>

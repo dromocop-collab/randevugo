@@ -363,7 +363,7 @@ export default function SuperAdminSubscriptionsPage() {
       {plansFromFallback && !loading && (
         <Callout tone="blue" icon={PackagePlus} title="Paket koleksiyonu boş"
           action={<AdminButton size="sm" variant="primary" icon={PackagePlus} loading={creatingDefault} onClick={() => void createDefaultPlan()}>Varsayılan paketi oluştur</AdminButton>}>
-          Şu an kod içindeki yerleşik SeninRandevun paketi (149 ₺/ay, 1.490 ₺/yıl, tüm özellikler) gösteriliyor. Oluşturduğunuzda paket Firestore’a kaydedilir ve buradan düzenlenebilir.
+          Şu an kod içindeki yerleşik SeninRandevun paketi (500 ₺/ay, 5.000 ₺/yıl, tüm özellikler) gösteriliyor. Oluşturduğunuzda paket Firestore’a kaydedilir ve buradan düzenlenebilir.
         </Callout>
       )}
 

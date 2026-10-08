@@ -61,7 +61,7 @@ const STEP_GUIDANCE = [
   { title: "Markanı doğru konumlandır", text: "Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur.", items: ["Benzersiz mağaza adresi", "Doğru müşteri segmenti", "SEO uyumlu profil başlangıcı"] },
   { title: "Müşterilerin sana ulaşsın", text: "İletişim ve konum bilgileri randevu güvenini yükseltir.", items: ["Türkiye telefon doğrulaması", "Şehir ve ilçe eşleşmesi", "Harita için hazır adres"] },
   { title: "Randevuya hazır vitrin", text: "Hazır hizmet şablonları ve çalışma saatleriyle mağazan ilk günden randevu almaya başlar.", items: ["Kategorine özel hizmetler", "Önerilen fiyat aralıkları", "Tek tıkla çalışma saatleri"] },
-  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; istersen logo ve kapak da ekle.", items: ["İlk 3 ay ücretsiz kullanım", "Paylaşılabilir mağaza linki ve QR", "Çoklu mağaza onay güvencesi"] },
+  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; istersen logo ve kapak da ekle.", items: ["İlk ay ücretsiz kullanım", "Paylaşılabilir mağaza linki ve QR", "Çoklu mağaza onay güvencesi"] },
 ] as const;
 
 

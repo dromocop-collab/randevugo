@@ -29,7 +29,7 @@ export default function Page() {
         { href: "/guvenlik", label: "Güvenlik", text: "Verilerinizi nasıl koruyoruz?" },
         { href: "/iletisim", label: "İletişim", text: "Bize ulaşın." },
       ]}
-      cta={{ title: <>İşletmenizi bugünden<br /><em>daha akıllı yönetin.</em></>, text: "Çalışma alanınızı dakikalar içinde açın; ilk 3 ay bizden.", primary: { href: "/isletmeler/kayit", label: "İlk 3 ay ücretsiz başla" }, secondary: { href: "/kesfet", label: "İşletme keşfet" } }}
+      cta={{ title: <>İşletmenizi bugünden<br /><em>daha akıllı yönetin.</em></>, text: "Çalışma alanınızı dakikalar içinde açın; ilk ay bizden.", primary: { href: "/isletmeler/kayit", label: "İlk ay ücretsiz başla" }, secondary: { href: "/kesfet", label: "İşletme keşfet" } }}
     />
   </MarketingPage>;
 }

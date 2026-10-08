@@ -19,8 +19,8 @@ test("askıya alırken yalnızca geri yüklenebilir durum saklanır", () => {
 test("varsayılan paket tek plan fiyatlarını ve tüm yetkileri taşır", () => {
   const plan = defaultPlatformPlan(["appointments", "branches"]);
   assert.equal(plan.id, "RANDEVUGO");
-  assert.equal(plan.monthlyPrice, 149);
-  assert.equal(plan.yearlyPrice, 1490);
+  assert.equal(plan.monthlyPrice, 500);
+  assert.equal(plan.yearlyPrice, 5000);
   assert.equal(plan.maxStores, 10);
   assert.deepEqual(plan.entitlements, ["appointments", "branches"]);
   assert.equal(plan.isActive, true);

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Diamond, Gift, Sparkles, X } from "lucide-react";
 
 const CAMPAIGN_STORAGE_KEY = "seninrandevun:three-months-free:seen:v1";
-const announcement = "İlk 3 ay bizden · Lansmana özel";
+const announcement = "İlk ay bizden · Lansmana özel";
 
 export function LaunchCampaign({ showTicker = false }: { showTicker?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -31,11 +31,11 @@ export function LaunchCampaign({ showTicker = false }: { showTicker?: boolean })
   return (
     <>
       {showTicker && (
-        <Link href="/isletmeler/kayit" className="campaign-ticker" aria-label="Lansmana özel ilk 3 ay ücretsiz kampanyasını incele">
+        <Link href="/isletmeler/kayit" className="campaign-ticker" aria-label="Lansmana özel ilk ay ücretsiz kampanyasını incele">
           <span className="campaign-ticker-track" aria-hidden="true">
             {[0, 1, 2, 3, 4, 5].map((item) => (
               <span key={item}>
-                <b><Gift size={12} /> 3 AY HEDİYE</b>
+                <b><Gift size={12} /> 1 AY HEDİYE</b>
                 <strong>{announcement}</strong>
                 <Diamond size={6} />
                 <small>Kredi kartı gerekmez</small>
@@ -53,8 +53,8 @@ export function LaunchCampaign({ showTicker = false }: { showTicker?: boolean })
             <div className="campaign-modal-art" aria-hidden="true"><span>3</span><small>AY</small><Gift size={28} /></div>
             <div className="campaign-modal-copy">
               <span><Sparkles size={14} /> YENİ İŞLETMELERE ÖZEL</span>
-              <h2 id="campaign-title">SeninRandevun&apos;da<br /><em>ilk 3 ay bizden.</em></h2>
-              <p>İşletme hesabınızı şimdi açın; tüm özellikleri kayıt tarihinizden itibaren 3 ay boyunca ücretsiz kullanın.</p>
+              <h2 id="campaign-title">SeninRandevun&apos;da<br /><em>ilk ay bizden.</em></h2>
+              <p>İşletme hesabınızı şimdi açın; tüm özellikleri kayıt tarihinizden itibaren 1 ay boyunca ücretsiz kullanın.</p>
               <ul>
                 <li>✓ Kredi kartı gerekmez</li>
                 <li>✓ Kurulum ücreti yok</li>

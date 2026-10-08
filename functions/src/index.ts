@@ -53,6 +53,9 @@ const LIVE_FEATURE_KEYS = [
 ] as const;
 type LiveFeatureKey = typeof LIVE_FEATURE_KEYS[number];
 const PLATFORM_SETTINGS_PATH = "platformSettings/global";
+// Yeni açılan işletmelerin ücretsiz deneme süresi (2026-10-08: 3 aydan 1 aya indirildi).
+// Eski işletmelerin geçiş kaydı (legacyTrialWindow, 90 gün) verilen sözü korumak için değişmedi.
+const NEW_BUSINESS_TRIAL_DAYS = 30;
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK === "true";
 const publicCallableOptions = {
   region: "europe-west1",
@@ -1307,10 +1310,10 @@ export const createBusiness = onCall(
         status: creatorIsPlatformAdmin ? "active" : String(inheritedSubscription?.data()?.status ?? "trialing"),
         accessMode: creatorIsPlatformAdmin ? "lifetime" : String(inheritedSubscription?.data()?.accessMode ?? "timed"),
         isLifetime: creatorIsPlatformAdmin || inheritedSubscription?.data()?.isLifetime === true,
-        trialDays: 90,
+        trialDays: NEW_BUSINESS_TRIAL_DAYS,
         trialStartedAt: inheritedSubscription?.data()?.trialStartedAt ?? new Date().toISOString(),
         ...(creatorIsPlatformAdmin ? {} : {
-          trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + NEW_BUSINESS_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
         }),
         // Ücretli (active) merkez aboneliğinin bitiş tarihi şubeye de taşınır; aksi halde
         // erişim kontrolü bitiş tarihi bulamayıp şubeyi ilk randevuda "süresi doldu" sayıyordu.

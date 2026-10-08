@@ -144,7 +144,7 @@ export function HomeBusinessBand() {
           <span className={styles.kicker}><Building2 size={13} aria-hidden="true" /> İŞLETMELER İÇİN</span>
           <h2 id="home-biz-title">Takvimin düzenlensin.<br />Günün sadeleşsin.</h2>
           <p>Online randevu sayfanı oluştur; hizmetlerini, çalışanlarını, çalışma saatlerini ve müşteri ilişkilerini tek panelden yönet.</p>
-          <ul><li><Check size={14} aria-hidden="true" /> İlk 3 ay ücretsiz</li><li><Check size={14} aria-hidden="true" /> Kredi kartı gerekmez</li><li><Check size={14} aria-hidden="true" /> Kolay kurulum</li></ul>
+          <ul><li><Check size={14} aria-hidden="true" /> İlk ay ücretsiz</li><li><Check size={14} aria-hidden="true" /> Kredi kartı gerekmez</li><li><Check size={14} aria-hidden="true" /> Kolay kurulum</li></ul>
         </div>
         <div className={styles.bandActions}>
           <Link href="/isletmeler/kayit" className={styles.btnLime}>Ücretsiz başla <ArrowUpRight size={16} /></Link>

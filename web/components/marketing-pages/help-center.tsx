@@ -158,7 +158,7 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
             <ol>
               {quickStart[mode].map(([no, text]) => <li key={no}><b>{no}</b><span>{text}</span></li>)}
             </ol>
-            <Link href={business ? "/isletmeler/kayit" : "/kesfet"} className={cx(mp.btn, mp.btnGreen)}>{business ? "İlk 3 ay ücretsiz başla" : "İşletme keşfet"} <ArrowRight size={16} aria-hidden="true" /></Link>
+            <Link href={business ? "/isletmeler/kayit" : "/kesfet"} className={cx(mp.btn, mp.btnGreen)}>{business ? "İlk ay ücretsiz başla" : "İşletme keşfet"} <ArrowRight size={16} aria-hidden="true" /></Link>
           </div>
         </section>
 

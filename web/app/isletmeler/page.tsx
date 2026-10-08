@@ -31,7 +31,7 @@ const FLOW = [
 ];
 
 const BUSINESS_FAQ = [
-  ["İlk 3 ay gerçekten ücretsiz mi?", "Evet. Lansman döneminde açılan işletme hesapları ilk 3 ay tüm özellikleri ücretsiz kullanır. Başlamak için kredi kartı gerekmez."],
+  ["İlk ay gerçekten ücretsiz mi?", "Evet. Lansman döneminde açılan işletme hesapları ilk ay tüm özellikleri ücretsiz kullanır. Başlamak için kredi kartı gerekmez."],
   ["Kurulum ne kadar sürer?", "Hizmetlerinizi, çalışanlarınızı ve çalışma saatlerinizi ekledikten sonra randevu sayfanız yayına hazırdır; aynı gün randevu almaya başlayabilirsiniz. Kurulum rehberi ve destek ekibi yanınızda."],
   ["Müşterilerim uygulama indirmek zorunda mı?", "Hayır. Müşterileriniz randevu sayfanızdan tarayıcıyla randevu alabilir. Dilerlerse iPhone ve Android uygulamasını da kullanabilirler."],
   ["Birden fazla şubem ve çalışanım var, uygun mu?", "Evet. Çoklu şube, rol bazlı ekip erişimi ve çalışan bazlı takvimler pakete dahildir. Güncel limitler fiyatlar sayfasında yazar."],
@@ -63,7 +63,7 @@ async function loadBusinessCount(): Promise<{ businesses: number; cities: number
 
 export const metadata = createPublicMetadata({
   title: "İşletme ve Randevu Yönetim Programı",
-  description: "Online randevu, takvim, çalışan, müşteri, paket, kasa ve şube süreçlerinizi tek panelden yönetin. SeninRandevun işletme paneli lansmana özel ilk 3 ay ücretsiz.",
+  description: "Online randevu, takvim, çalışan, müşteri, paket, kasa ve şube süreçlerinizi tek panelden yönetin. SeninRandevun işletme paneli lansmana özel ilk ay ücretsiz.",
   pathname: "/isletmeler",
   keywords: ["randevu programı", "işletme yönetim programı", "online randevu sistemi", "müşteri takip programı", "kuaför randevu programı", "salon yönetim sistemi"],
   imageAlt: "SeninRandevun işletme ve online randevu yönetim programı",
@@ -73,7 +73,7 @@ const businessJsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     { "@type": "WebPage", "@id": `${SEO_SITE_URL}/isletmeler#webpage`, url: `${SEO_SITE_URL}/isletmeler`, name: "Randevu ve İşletme Yönetim Programı", description: "Randevu, çalışan, müşteri, paket, kasa ve şube süreçlerini tek panelden yöneten işletme yazılımı.", inLanguage: "tr-TR", isPartOf: { "@id": `${SEO_SITE_URL}/#website` } },
-    { "@type": "SoftwareApplication", "@id": `${SEO_SITE_URL}/isletmeler#software`, name: "SeninRandevun İşletme Yönetim Sistemi", applicationCategory: "BusinessApplication", applicationSubCategory: "Appointment Scheduling Software", operatingSystem: "Web, iOS", url: `${SEO_SITE_URL}/isletmeler`, description: "Hizmet işletmeleri için randevu, ekip, müşteri, paket, kasa ve şube yönetimi.", offers: { "@type": "Offer", price: "0", priceCurrency: "TRY", description: "Lansmana özel ilk 3 ay ücretsiz" }, featureList: ["Online randevu", "Takvim yönetimi", "Müşteri takibi", "Çalışan yönetimi", "Paket ve seans takibi", "Kasa ve gelir-gider takibi", "Şube yönetimi"], publisher: { "@id": `${SEO_SITE_URL}/#organization` } },
+    { "@type": "SoftwareApplication", "@id": `${SEO_SITE_URL}/isletmeler#software`, name: "SeninRandevun İşletme Yönetim Sistemi", applicationCategory: "BusinessApplication", applicationSubCategory: "Appointment Scheduling Software", operatingSystem: "Web, iOS", url: `${SEO_SITE_URL}/isletmeler`, description: "Hizmet işletmeleri için randevu, ekip, müşteri, paket, kasa ve şube yönetimi.", offers: { "@type": "Offer", price: "0", priceCurrency: "TRY", description: "Lansmana özel ilk ay ücretsiz" }, featureList: ["Online randevu", "Takvim yönetimi", "Müşteri takibi", "Çalışan yönetimi", "Paket ve seans takibi", "Kasa ve gelir-gider takibi", "Şube yönetimi"], publisher: { "@id": `${SEO_SITE_URL}/#organization` } },
     { "@type": "BreadcrumbList", "@id": `${SEO_SITE_URL}/isletmeler#breadcrumb`, itemListElement: [{ "@type": "ListItem", position: 1, name: "Ana Sayfa", item: SEO_SITE_URL }, { "@type": "ListItem", position: 2, name: "İşletmeler İçin", item: `${SEO_SITE_URL}/isletmeler` }] },
   ],
 };
@@ -98,11 +98,11 @@ export default async function BusinessesPage() {
       <div className={styles.heroBackdrop} aria-hidden="true"><span className={styles.heroGrid} /><span className={`${styles.heroGlow} ${styles.glowA}`} /><span className={`${styles.heroGlow} ${styles.glowB}`} /></div>
       <div className={`${styles.wrap} ${styles.heroInner}`}>
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}><Gift size={13} aria-hidden="true" /> İŞLETMELER İÇİN · İLK 3 AY ÜCRETSİZ</span>
+          <span className={styles.eyebrow}><Gift size={13} aria-hidden="true" /> İŞLETMELER İÇİN · İLK AY ÜCRETSİZ</span>
           <h1 id="biz-title" className={styles.title}>Takviminizi değil,<br /><em>işletmenizi yönetin.</em></h1>
           <p className={styles.lead}>Online randevu, ekip, müşteri, kasa ve hatırlatmalar tek akıllı panelde. Siz hizmetinize odaklanın; SeninRandevun gününüzü düzenlesin.</p>
           <div className={styles.heroActions}>
-            <Link href="/isletmeler/kayit" className={styles.btnLime}>İlk 3 ay ücretsiz başla <ArrowUpRight size={17} aria-hidden="true" /></Link>
+            <Link href="/isletmeler/kayit" className={styles.btnLime}>İlk ay ücretsiz başla <ArrowUpRight size={17} aria-hidden="true" /></Link>
             <Link href="/isletmeler/giris" className={styles.btnGhost}><LogIn size={16} aria-hidden="true" /> İşletme girişi</Link>
           </div>
           <ul className={styles.heroProof}>
@@ -128,7 +128,7 @@ export default async function BusinessesPage() {
           <div><dt>online randevu sayfası</dt><dd>7/24</dd></div>
         </>}
         <div><dt>web, iPhone ve Android</dt><dd>Her cihazda</dd></div>
-        <div><dt>lansmana özel ücretsiz</dt><dd>3 ay</dd></div>
+        <div><dt>lansmana özel ücretsiz</dt><dd>1 ay</dd></div>
       </dl>
     </section>
 
@@ -180,7 +180,7 @@ export default async function BusinessesPage() {
             ? <><h2 id="biz-price-title">{plans.length} paket.<br /><em>Size uygun olanı seçin.</em></h2>
               <p>Gizli ücret ve kurulum bedeli yok. Aylık {formatPrice(startingPrice)} {currencySymbol(plans[0].currency)}&apos;den başlayan paketlerle başlayın, ihtiyacınız büyüdükçe yükseltin.</p></>
             : <><h2 id="biz-price-title">Tek paket.<br /><em>Her şey dahil.</em></h2>
-              <p>Özellik kilidi, gizli ücret ve kurulum bedeli yok. İlk 3 ay ücretsiz; sonra işletmenize uygun dönemle devam edin.</p></>}
+              <p>Özellik kilidi, gizli ücret ve kurulum bedeli yok. İlk ay ücretsiz; sonra işletmenize uygun dönemle devam edin.</p></>}
           <ul className={styles.checkList}>
             <li><ShieldCheck size={16} aria-hidden="true" /> Siz onaylamadan ücretli dönem başlamaz</li>
             <li><UsersRound size={16} aria-hidden="true" /> {multiple ? maxStaff : plan.maxStaff} çalışana, {multiple ? maxStores : plan.maxStores} şubeye kadar</li>
@@ -208,7 +208,7 @@ export default async function BusinessesPage() {
       <div className={styles.wrap}>
         <div className={styles.final} data-reveal="">
           <RoviMascot size={110} mood="wave" alt="" className={styles.finalRovi} />
-          <span className={styles.kickerLight}>İLK 3 AY BOYUNCA TÜM ÖZELLİKLER AÇIK</span>
+          <span className={styles.kickerLight}>İLK AY BOYUNCA TÜM ÖZELLİKLER AÇIK</span>
           <h2 id="biz-final-title">Yarının işleyişini<br /><em>bugün kurun.</em></h2>
           <p>Kredi kartı yok. Kurulum ücreti yok. Sadece daha akıcı bir işletme günü.</p>
           <div className={styles.finalActions}>

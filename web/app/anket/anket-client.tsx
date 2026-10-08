@@ -403,7 +403,7 @@ export function SurveyExperience() {
               </Link>
               <div className={styles.offer}>
                 <Gift size={16} aria-hidden="true" />
-                <span><strong>İlk 3 ay ücretsiz</strong> · kart gerekmez</span>
+                <span><strong>İlk ay ücretsiz</strong> · kart gerekmez</span>
               </div>
               <div className={styles.secondaryRow}>
                 <button type="button" className={styles.secondary} onClick={share}>

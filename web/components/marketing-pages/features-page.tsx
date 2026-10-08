@@ -46,7 +46,7 @@ export function FeaturesPage() {
             <h1 className={cx(mp.title, mp.rise)} style={{ ["--i" as string]: 1 } as CSSProperties}>Randevudan kasaya,<br /><em>işletmenizin tamamı.</em></h1>
             <p className={cx(mp.lead, mp.rise)} style={{ ["--i" as string]: 2 } as CSSProperties}>Takvim, online randevu, hatırlatmalar, canlı sıra, ekip, müşteri, kasa ve analitik — hepsi tek akıcı panelde, web&apos;de ve cebinizde.</p>
             <div className={cx(mp.actions, mp.rise)} style={{ ["--i" as string]: 3 } as CSSProperties}>
-              <Link href="/isletmeler/kayit" className={cx(mp.btn, mp.btnLime)}>İlk 3 ay ücretsiz başla <ArrowRight size={17} aria-hidden="true" /></Link>
+              <Link href="/isletmeler/kayit" className={cx(mp.btn, mp.btnLime)}>İlk ay ücretsiz başla <ArrowRight size={17} aria-hidden="true" /></Link>
               <Link href="/fiyatlar" className={cx(mp.btn, mp.btnGlass)}>Fiyatları gör</Link>
             </div>
             <div className={mp.pills}>
@@ -102,8 +102,8 @@ export function FeaturesPage() {
 
         <p className={s.disclaimer}>Ekran görselleri temsilîdir; isimler, saatler ve tutarlar örnek veridir.</p>
 
-        <PageCta title={<>İşletmeniz daha akıcı<br /><em>çalışmaya hazır.</em></>} text="Çalışma alanınızı dakikalar içinde açın; ilk 3 ay bizden, kredi kartı gerekmez.">
-          <Link href="/isletmeler/kayit" className={cx(mp.btn, mp.btnLime)}>İlk 3 ay ücretsiz <ArrowRight size={17} aria-hidden="true" /></Link>
+        <PageCta title={<>İşletmeniz daha akıcı<br /><em>çalışmaya hazır.</em></>} text="Çalışma alanınızı dakikalar içinde açın; ilk ay bizden, kredi kartı gerekmez.">
+          <Link href="/isletmeler/kayit" className={cx(mp.btn, mp.btnLime)}>İlk ay ücretsiz <ArrowRight size={17} aria-hidden="true" /></Link>
           <Link href="/fiyatlar" className={cx(mp.btn, mp.btnGlass)}>Fiyatlar</Link>
         </PageCta>
       </div>

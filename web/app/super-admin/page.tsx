@@ -340,7 +340,7 @@ export default function SuperAdminDashboard() {
       )}
       {stats.plansFromFallback && (
         <Callout tone="blue" icon={PackagePlus} title="Paket koleksiyonu boş" action={<AdminButton size="sm" variant="primary" href="/super-admin/abonelikler">Paketi oluştur</AdminButton>}>
-          Gelir tahmini varsayılan SeninRandevun fiyatıyla (149 ₺/ay) hesaplanıyor. Abonelikler sayfasından varsayılan paketi kalıcı olarak oluşturun.
+          Gelir tahmini varsayılan SeninRandevun fiyatıyla (500 ₺/ay) hesaplanıyor. Abonelikler sayfasından varsayılan paketi kalıcı olarak oluşturun.
         </Callout>
       )}
 

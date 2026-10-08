@@ -162,7 +162,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
           </div>
 
           <div className="auth-capability-strip mt-6">
-            {(customer ? [["81", "şehirde keşif"], ["7/24", "randevu erişimi"], ["Tek", "kişisel merkez"]] : [["90 gün", "tüm özellikler"], ["7/24", "online randevu"], ["Tek", "bağlı operasyon"]]).map(([value,label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
+            {(customer ? [["81", "şehirde keşif"], ["7/24", "randevu erişimi"], ["Tek", "kişisel merkez"]] : [["30 gün", "tüm özellikler"], ["7/24", "online randevu"], ["Tek", "bağlı operasyon"]]).map(([value,label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
           </div>
         </div>
       </section>

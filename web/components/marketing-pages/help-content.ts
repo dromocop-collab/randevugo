@@ -63,7 +63,7 @@ export const businessTopics: HelpTopic[] = [
   {
     id: "kurulum", icon: "store", title: "Kurulum ve mağaza", description: "Profilinizi eksiksiz kurup keşfete hazır hâle getirin.",
     articles: [
-      { title: "İşletme çalışma alanını açma", answer: ["İşletme kayıt sayfasından hesabınızı ve işletmenizi birkaç adımda oluşturun. Lansman kampanyası kapsamında ilk 3 ay ücretsizdir, kredi kartı gerekmez."], links: [{ href: "/isletmeler/kayit", label: "İşletme kaydı" }] },
+      { title: "İşletme çalışma alanını açma", answer: ["İşletme kayıt sayfasından hesabınızı ve işletmenizi birkaç adımda oluşturun. Lansman kampanyası kapsamında ilk ay ücretsizdir, kredi kartı gerekmez."], links: [{ href: "/isletmeler/kayit", label: "İşletme kaydı" }] },
       { title: "Logo, kapak ve konum ekleme", answer: ["Panelde Ayarlar bölümünden logo, kapak görseli, açıklama, adres ve iletişim bilgilerinizi ekleyin. Eksiksiz profil keşfette daha güven verir."], links: [{ href: "/dashboard/ayarlar", label: "Ayarlar" }] },
       { title: "Mağazayı yayına alma kontrolü", answer: ["Yeni mağazalar, platform ekibinin kısa incelemesinden sonra yayına alınır. Bu sürede hizmetlerinizi, ekibinizi ve çalışma saatlerinizi tamamlayın.", "Yayına girdikten sonra mağaza bağlantınızı ve QR kodunuzu paylaşarak online randevu almaya başlayabilirsiniz."] },
     ],
@@ -95,7 +95,7 @@ export const businessTopics: HelpTopic[] = [
   {
     id: "abonelik", icon: "card", title: "Plan ve abonelik", description: "Ücretsiz dönem, fatura ve abonelik detaylarını öğrenin.",
     articles: [
-      { title: "İlk 3 ay ücretsiz kampanyası nasıl çalışır?", answer: ["Lansman döneminde açılan işletme hesapları 90 gün boyunca tüm özellikleri ücretsiz kullanır; başlamak için kredi kartı gerekmez."], links: [{ href: "/fiyatlar", label: "Fiyatlar" }] },
+      { title: "İlk ay ücretsiz kampanyası nasıl çalışır?", answer: ["Lansman döneminde açılan işletme hesapları 30 gün boyunca tüm özellikleri ücretsiz kullanır; başlamak için kredi kartı gerekmez."], links: [{ href: "/fiyatlar", label: "Fiyatlar" }] },
       { title: "Abonelik ve ödeme adımları", answer: ["Tek plan vardır ve tüm özellikler açıktır. Panelde Abonelik bölümünden aylık veya yıllık plan için talep oluşturursunuz; ekibimiz ödeme adımlarını sizinle paylaşır."], links: [{ href: "/dashboard/abonelik", label: "Abonelik" }, { href: "/fiyatlar", label: "Plan detayları" }] },
       { title: "Plan durumunu görüntüleme", answer: ["Abonelik ekranında deneme süresinin ne zaman biteceğini ve mevcut plan durumunuzu görürsünüz. Süre yaklaşırken panelde bilgilendirme gösterilir."] },
     ],

@@ -52,7 +52,7 @@ const STEPS = [
   { title: "Kategori", benefit: "Hizmet ve vitrin önerileri sana göre gelir" },
   { title: "İşletme bilgisi", benefit: "Müşterilerin seni tek linkle bulur" },
   { title: "Çalışma şekli", benefit: "Takvim ve yetkiler hazır kurulur" },
-  { title: "Hesap", benefit: "90 gün ücretsiz, kart gerekmez" },
+  { title: "Hesap", benefit: "30 gün ücretsiz, kart gerekmez" },
 ] as const;
 /** Adım başına tahmini süre (sn) — "~1 dk kaldı" etiketi için. */
 const STEP_SECONDS = [15, 35, 10, 45] as const;
@@ -255,7 +255,7 @@ export function BusinessSignupWizard() {
     <main className={w.stage}>
       <header className={w.header}>
         <Link href="/" aria-label="SeninRandevun ana sayfa" className={w.brand}><Image src="/logo.png" alt="" width={40} height={40} /><b>Senin<span>Randevun</span></b></Link>
-        <div className={w.headerBadges}><small>İLK 3 AY ÜCRETSİZ</small><span><BadgeCheck size={15} aria-hidden="true" /> Kredi kartı gerekmez</span></div>
+        <div className={w.headerBadges}><small>İLK AY ÜCRETSİZ</small><span><BadgeCheck size={15} aria-hidden="true" /> Kredi kartı gerekmez</span></div>
       </header>
 
       <section className={w.shell}>
@@ -525,7 +525,7 @@ export function BusinessSignupWizard() {
           <p className={w.previewNote}>Örnek hizmetler kategorine göre öneridir; bir sonraki ekranda fiyatlarını düzenleyip seçeceksin.</p>
         </aside>
       </section>
-      <footer className={w.footer}><span><BadgeCheck size={14} aria-hidden="true" /> 90 gün tüm özellikler açık</span><span><Zap size={14} aria-hidden="true" /> Birkaç dakikada hazır</span><Link href="/isletmeler/giris">Zaten hesabın var mı? Giriş yap</Link></footer>
+      <footer className={w.footer}><span><BadgeCheck size={14} aria-hidden="true" /> 30 gün tüm özellikler açık</span><span><Zap size={14} aria-hidden="true" /> Birkaç dakikada hazır</span><Link href="/isletmeler/giris">Zaten hesabın var mı? Giriş yap</Link></footer>
     </main>
   );
 }

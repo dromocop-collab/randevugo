@@ -68,7 +68,7 @@ export default async function DiscoverPage() {
         <section className={`${styles.page} ${styles.empty}`} style={{ marginTop: 36, borderStyle: "solid", justifyItems: "start", textAlign: "left" }}>
           <span className={styles.eyebrow} style={{ color: "var(--green-2)", borderColor: "var(--line)", background: "var(--soft)" }}><BriefcaseBusiness size={13} /> İŞLETME SAHİPLERİ İÇİN</span>
           <h3>İşletmeni burada listele, randevularını tek yerden yönet.</h3>
-          <p>Takvim, ekip, müşteri ve kasa yönetimi tek profesyonel çalışma alanında. Lansmana özel ilk 3 ay ücretsiz.</p>
+          <p>Takvim, ekip, müşteri ve kasa yönetimi tek profesyonel çalışma alanında. Lansmana özel ilk ay ücretsiz.</p>
           <div className={styles.emptyActions} style={{ justifyContent: "flex-start" }}>
             <Link href="/isletmeler" className={`${styles.pill} ${styles.pillPrimary}`}>İşletme çözümleri <ArrowUpRight size={15} /></Link>
           </div>

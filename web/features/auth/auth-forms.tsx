@@ -429,7 +429,7 @@ const SCREEN_COPY: Record<AccountType, Record<ScreenMode, { eyebrow: string; tit
   },
   business: {
     login: { eyebrow: "İŞLETME PANELİ", title: <>İşletmeni <em>tek ekrandan</em> yönet.</>, text: "Takvim, ekip, müşteri ve kasa — kaldığın yerden güvenle devam et.", bubble: "Hoş geldin!", mood: "wave" },
-    register: { eyebrow: "İLK 3 AY ÜCRETSİZ", title: <>İşletmen için <em>online randevu</em>, dakikalar içinde.</>, text: "Mağaza sayfanı kur, hizmet ve ekibini ekle, ilk online randevunu bugün al.", bubble: "Kuralım mı?", mood: "happy" },
+    register: { eyebrow: "İLK AY ÜCRETSİZ", title: <>İşletmen için <em>online randevu</em>, dakikalar içinde.</>, text: "Mağaza sayfanı kur, hizmet ve ekibini ekle, ilk online randevunu bugün al.", bubble: "Kuralım mı?", mood: "happy" },
     forgot: { eyebrow: "HESAP GÜVENLİĞİ", title: <>Şifreni <em>güvenle</em> yenile.</>, text: "E-postana gelen 6 haneli kodla birkaç adımda paneline geri dön.", bubble: "Hallederiz!", mood: "thinking" },
   },
 };
@@ -489,7 +489,7 @@ export function AuthScreen({ variant = "customer", mode, children }: { variant?:
           <div className={s.vStats}>
             {customer
               ? <><span><Gift size={15} aria-hidden="true" /> Üyelik ücretsiz</span><span><Clock3 size={15} aria-hidden="true" /> 7/24 online randevu</span><span><BellRing size={15} aria-hidden="true" /> Akıllı hatırlatmalar</span></>
-              : <><span><Gift size={15} aria-hidden="true" /> İlk 3 ay ücretsiz</span><span><CreditCard size={15} aria-hidden="true" /> Kredi kartı gerekmez</span><span><Zap size={15} aria-hidden="true" /> Dakikalar içinde kurulum</span></>}
+              : <><span><Gift size={15} aria-hidden="true" /> İlk ay ücretsiz</span><span><CreditCard size={15} aria-hidden="true" /> Kredi kartı gerekmez</span><span><Zap size={15} aria-hidden="true" /> Dakikalar içinde kurulum</span></>}
           </div>
         </div>
       </aside>
@@ -641,7 +641,7 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
       <p className={s.switchLine}>
         {customer
           ? <>Hesabın yok mu? <Link href="/musteri/kayit">Ücretsiz kayıt ol</Link></>
-          : <>Henüz işletmeni eklemedin mi? <Link href="/isletmeler/kayit?source=login">3 ay ücretsiz başla</Link></>}
+          : <>Henüz işletmeni eklemedin mi? <Link href="/isletmeler/kayit?source=login">1 ay ücretsiz başla</Link></>}
       </p>
       <TrustLine accountType={accountType} />
     </div>
@@ -812,7 +812,7 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
         : <CardHead
             icon={customer ? Sparkles : Building2}
             title={customer ? "Ücretsiz hesap oluştur" : "Çalışma alanını oluştur"}
-            subtitle={customer ? "Bir dakikadan kısa sürer, üyelik tamamen ücretsiz." : "Lansmana özel: tüm özellikler ilk 3 ay ücretsiz."}
+            subtitle={customer ? "Bir dakikadan kısa sürer, üyelik tamamen ücretsiz." : "Lansmana özel: tüm özellikler ilk ay ücretsiz."}
           />}
 
       {!embedded && <SocialSignIn accountType={accountType} mode="register" />}
@@ -887,14 +887,14 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
         {touched.agreed && consentMsg ? <p id={`${consentId}-error`} className={s.error}><AlertCircle size={14} aria-hidden="true" />{consentMsg}</p> : null}
 
         <SubmitButton loading={loading} loadingText="Hesap oluşturuluyor…">
-          {customer ? "Ücretsiz hesap oluştur" : "İlk 3 ay ücretsiz başla"} <ArrowRight size={18} aria-hidden="true" />
+          {customer ? "Ücretsiz hesap oluştur" : "İlk ay ücretsiz başla"} <ArrowRight size={18} aria-hidden="true" />
         </SubmitButton>
       </form>
 
       {!embedded && customer ? <CustomerExtras /> : null}
       {!embedded && !customer ? (
         <div className={s.chips}>
-          <span><Gift size={14} aria-hidden="true" /> İlk 3 ay ücretsiz</span>
+          <span><Gift size={14} aria-hidden="true" /> İlk ay ücretsiz</span>
           <span><Zap size={14} aria-hidden="true" /> 2 dk kurulum</span>
           <span><CreditCard size={14} aria-hidden="true" /> Kredi kartı yok</span>
         </div>
