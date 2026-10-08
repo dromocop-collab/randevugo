@@ -8,7 +8,15 @@ const WWW_HOST = `www.${CANONICAL_HOST}`;
 export function proxy(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim().toLowerCase();
   const host = (forwarded || request.headers.get("host") || "").replace(/:\d+$/, "").toLowerCase();
-  if (host !== WWW_HOST) return NextResponse.next();
+  if (host !== WWW_HOST) {
+    // GEÇİCİ teşhis: App Hosting'in hangi alan adı başlıklarını ilettiğini görmek için.
+    const response = NextResponse.next();
+    const seen = ["host", "x-forwarded-host", "x-original-host", "forwarded", "x-fah-host", "x-envoy-original-host"]
+      .map((key) => `${key}=${request.headers.get(key) ?? "-"}`)
+      .join("; ");
+    response.headers.set("x-sr-host-debug", `${seen}; nextUrl=${request.nextUrl.host}`.slice(0, 400));
+    return response;
+  }
 
   const target = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${CANONICAL_HOST}`);
   const response = NextResponse.redirect(target, 308);
