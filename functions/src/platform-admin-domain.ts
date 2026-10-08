@@ -24,8 +24,8 @@ export function defaultPlatformPlan(entitlements: readonly string[]) {
   return {
     id: DEFAULT_PLATFORM_PLAN_ID,
     label: "SeninRandevun",
-    monthlyPrice: 500,
-    yearlyPrice: 5000,
+    monthlyPrice: 490,
+    yearlyPrice: 4990,
     currency: "TRY",
     trialDays: 30,
     maxStores: 10,

@@ -1,7 +1,7 @@
 /**
  * SeninRandevun — Tek Abonelik Modeli
  *
- * Tek plan: "SeninRandevun" — 500 TL/ay veya 5.000 TL/yıl
+ * Tek plan: "SeninRandevun" — 490 TL/ay veya 4.990 TL/yıl
  * Lansman kampanyası: yeni açılan işletme hesaplarına ilk ay (30 gün) ücretsiz, kredi kartı gerekmez
  * Tüm özellikler açık — feature kilidi yok
  */
@@ -60,10 +60,10 @@ export function getPlanFeatures(_plan?: AnyPlanType): PlanFeatures {
 }
 
 export const PLAN_PRICE = {
-  monthly: 500,
-  yearly: 5000,
+  monthly: 490,
+  yearly: 4990,
   /** @deprecated Yeni kullanımlarda monthly alanını tercih edin. */
-  monthlyEquivalent: 417,
+  monthlyEquivalent: 416,
   currency: "TRY" as const,
   trialDays: 30,
 } as const;
