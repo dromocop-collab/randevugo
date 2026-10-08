@@ -44,13 +44,6 @@ const nextConfig: NextConfig = {
       "/randevularim": "/hesabim",
     };
     return [
-      // www → çıplak alan adı (tek kanonik adres; SEO ve çerezler için).
-      {
-        source: "/:path*",
-        has: [{ type: "host" as const, value: "www.seninrandevun.com" }],
-        destination: "https://seninrandevun.com/:path*",
-        permanent: true,
-      },
       ...Object.entries(aliases).map(([source, destination]) => ({ source, destination, permanent: true })),
     ];
   },
