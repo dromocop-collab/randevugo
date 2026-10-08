@@ -10,13 +10,16 @@ import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
-import { NEW_APPOINTMENT_EVENT, notifyAppointmentsChanged } from "@/components/dashboard/dashboard-events";
+import { NEW_APPOINTMENT_EVENT, notifyAppointmentsChanged, openQuickAppointment } from "@/components/dashboard/dashboard-events";
+import { useNotificationSoundSync } from "@/features/push/notification-sound-sync";
 import styles from "./shell.module.css";
 
 const COLLAPSE_KEY = "sr-dashboard-sidebar-collapsed";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  // Randevu sesi tercihini hesaptan al (panelde push ön plan zili seçili sesi çalar).
+  useNotificationSoundSync();
 
   useEffect(() => {
     try {
@@ -71,6 +74,16 @@ function GlobalQuickAppointment() {
     window.addEventListener(NEW_APPOINTMENT_EVENT, onOpen);
     return () => window.removeEventListener(NEW_APPOINTMENT_EVENT, onOpen);
   }, []);
+
+  // Herkese açık sayfalardaki işletme yardımcısından "Yeni randevu": /dashboard?yeniRandevu=1
+  useEffect(() => {
+    if (!businessId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("yeniRandevu") !== "1") return;
+    url.searchParams.delete("yeniRandevu");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    openQuickAppointment();
+  }, [businessId]);
 
   if (!businessId) return null;
   return (

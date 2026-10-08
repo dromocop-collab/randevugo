@@ -12,6 +12,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { LiveQueueSettings } from "@/features/live-queue/live-queue-settings";
 import { BusinessAvailabilitySettings } from "@/features/availability/business-availability-settings";
 import { PushToggleCard } from "@/features/push";
+import { setCompanionHidden, useCompanionHidden } from "@/features/business-companion/companion-settings";
 import { BusinessBookingFieldsEditor } from "@/features/booking-fields/business-booking-fields-editor";
 import { getBusinessById, updateBusiness } from "@/features/businesses/business-repository";
 import { submitBusinessProfileChange } from "@/features/businesses/business-profile-review-repository";
@@ -21,6 +22,7 @@ import type { Business, BusinessCategory, BusinessType, SmsPreferences, SocialMe
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import { ConfirmSheet, HeroChip, Notice, Panel, SaveBar, Sk, StudioHero, StudioPage, ToggleRow, cx, studio as k } from "../_studio";
 import { AppearanceSection } from "./appearance-section";
+import { NotificationSoundSection } from "./notification-sound-section";
 import st from "./settings.module.css";
 import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
 
@@ -93,6 +95,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("bilgiler");
+  // Derin bağlantı: /dashboard/ayarlar?tab=randevu (ör. sitedeki işletme yardımcısından).
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested && TABS.some((tab) => tab.id === requested)) queueMicrotask(() => setActiveTab(requested as Tab));
+  }, []);
   const [settingsSearch, setSettingsSearch] = useState("");
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
 
@@ -628,6 +635,8 @@ export default function SettingsPage() {
               <div className={st.mounted}>
                 <p className={k.sectionLabel}>Bildirimler</p>
                 <PushToggleCard audience="business" />
+                <NotificationSoundSection />
+                <div className={k.group}><CompanionToggleRow /></div>
               </div>
             </>
           )}
@@ -650,6 +659,20 @@ export default function SettingsPage() {
         {galleryToRemove ? <Image className={st.confirmPreview} src={galleryToRemove} alt="" width={320} height={200} /> : null}
       </ConfirmSheet>
     </StudioPage>
+  );
+}
+
+/** Herkese açık sayfalardaki işletme yardımcısı (canlı randevu zili + mini panel); cihaz başına tercih. */
+function CompanionToggleRow() {
+  const hidden = useCompanionHidden();
+  return (
+    <ToggleRow
+      icon={Store}
+      title="Sitede işletme yardımcısı"
+      note="Giriş yapmışken ana sayfa, keşfet ve mağaza sayfalarında yeni randevu zili, bildirim kartı ve mini panel (bu cihaz)."
+      checked={!hidden}
+      onChange={(checked) => setCompanionHidden(!checked)}
+    />
   );
 }
 

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
 import {
   DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, ensureDefaultPlatformPlans, isLegacyPlanId, listPlatformPlansWithSource,
-  planDisplayLabel, removePlatformPlan, savePlatformPlan, type PlatformPlan,
+  planDisplayLabel, refreshPublicPricingPages, removePlatformPlan, savePlatformPlan, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import { backfillLegacyBusinessSubscriptions, completeSubscriptionPurchase, deleteBusinessPermanently, ensureAdminOwnedBusinessesLifetime, updateBusinessSubscription, type AdminSubscriptionMode } from "@/features/subscriptions/admin-subscription-repository";
 import { getDb } from "@/lib/firebase/firestore";
@@ -191,6 +191,7 @@ export default function SuperAdminSubscriptionsPage() {
     try {
       const result = await ensureDefaultPlatformPlans();
       toast.success(result.created ? "Varsayılan SeninRandevun paketi oluşturuldu." : "Varsayılan paket zaten mevcut.");
+      void refreshPublicPricingPages();
       await reload();
     } catch (error) {
       toast.error((error as Error).message || "Varsayılan paket oluşturulamadı.");
@@ -243,7 +244,7 @@ export default function SuperAdminSubscriptionsPage() {
     if (!Number.isInteger(editing.maxStaff) || editing.maxStaff < 1) { toast.error("Çalışan limiti en az 1 olmalıdır."); return; }
     if (editing.entitlements.length === 0) { toast.error("Pakete en az bir kullanılabilir özellik seçin."); return; }
     setBusy(true);
-    try { await savePlatformPlan({ ...editing, id: editing.id.trim(), label: editing.label.trim(), description: editing.description.trim() }); setPlanEditorOpen(false); await reload(); toast.success(editingPlanId ? "Paket değişiklikleri kaydedildi." : "Paket oluşturuldu."); setEditingPlanId(editing.id); }
+    try { await savePlatformPlan({ ...editing, id: editing.id.trim(), label: editing.label.trim(), description: editing.description.trim() }); setPlanEditorOpen(false); await reload(); toast.success(editingPlanId ? "Paket değişiklikleri kaydedildi." : "Paket oluşturuldu.", { description: editing.isActive ? "Fiyat sayfası güncelleniyor (en geç 1 dakika)." : "Paket satışta değil; fiyat sayfasında gösterilmez." }); setEditingPlanId(editing.id); }
     catch (error) { toast.error((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -482,6 +483,7 @@ export default function SuperAdminSubscriptionsPage() {
               <Input label="Deneme (gün)" type="number" inputMode="numeric" value={editing.trialDays} onChange={(event) => setEditing({ ...editing, trialDays: Number(event.target.value) })} min={0} />
               <Input label="Maks. şube" type="number" inputMode="numeric" value={editing.maxStores} onChange={(event) => setEditing({ ...editing, maxStores: Number(event.target.value) })} min={1} max={25} />
               <Input label="Maks. çalışan" type="number" inputMode="numeric" value={editing.maxStaff} onChange={(event) => setEditing({ ...editing, maxStaff: Number(event.target.value) })} min={1} />
+              <Input label="Sıra (fiyat sayfası)" type="number" inputMode="numeric" placeholder="Boş: fiyata göre" value={editing.sortOrder ?? ""} onChange={(event) => setEditing({ ...editing, sortOrder: event.target.value === "" ? null : Number(event.target.value) })} />
             </div>
             <div className="mt-3"><Input label="Paket açıklaması" value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} /></div>
           </section>
@@ -511,8 +513,8 @@ export default function SuperAdminSubscriptionsPage() {
               <textarea rows={4} value={editing.features.join("\n")} onChange={(event) => setEditing({ ...editing, features: event.target.value.split("\n").map((row) => row.trim()).filter(Boolean) })} />
             </label>
             <div className={styles.checks}>
-              <label><input type="checkbox" checked={editing.isActive} onChange={(event) => setEditing({ ...editing, isActive: event.target.checked })} /> Satışa ve atamaya açık</label>
-              <label><input type="checkbox" checked={editing.isRecommended} onChange={(event) => setEditing({ ...editing, isRecommended: event.target.checked })} /> Önerilen paket rozeti</label>
+              <label><input type="checkbox" checked={editing.isActive} onChange={(event) => setEditing({ ...editing, isActive: event.target.checked })} /> Satışa ve atamaya açık (fiyat sayfasında görünür)</label>
+              <label><input type="checkbox" checked={editing.isRecommended} onChange={(event) => setEditing({ ...editing, isRecommended: event.target.checked })} /> Önerilen paket rozeti (tek pakette olur; diğerlerinden kaldırılır)</label>
             </div>
           </section>
         </form>

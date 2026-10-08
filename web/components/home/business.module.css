@@ -295,6 +295,11 @@
 .teaserPrice b { font-size: clamp(44px, 12vw, 60px); font-weight: 850; letter-spacing: -0.05em; line-height: 1; }
 .teaserPrice span { color: rgb(255 255 255 / 0.7); font-size: 16px; font-weight: 700; }
 .teaserCard > small { color: rgb(255 255 255 / 0.7); font-size: 13.5px; }
+.teaserPlans { display: grid; gap: 6px; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid rgb(255 255 255 / 0.16); list-style: none; }
+.teaserPlans li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 14px; }
+.teaserPlans span { min-width: 0; overflow: hidden; color: rgb(255 255 255 / 0.85); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.teaserPlans b { flex: none; font-weight: 850; font-variant-numeric: tabular-nums; }
+.teaserPlans small { margin-left: 3px; color: rgb(255 255 255 / 0.65); font-size: 12px; font-weight: 700; }
 .teaserCard .btnLime { margin-top: 16px; }
 .teaserLink { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; color: rgb(255 255 255 / 0.85); font-size: 13.5px; font-weight: 700; text-decoration: none; }
 
@@ -321,6 +326,8 @@
   box-shadow: var(--shadow-lift);
 }
 .planRecommended { border: 2px solid color-mix(in srgb, var(--green-2) 55%, transparent); }
+/* Çoklu pakette kartlar eşit yükseklikte; özellik listesi kalan alanı doldurur. */
+.planGrid:not(.planGridSingle) .planCard { grid-template-rows: auto 1fr; }
 .planMain { display: flex; flex-direction: column; padding: 24px 20px; }
 .planTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .planTop h3 { margin: 0; font-size: 22px; font-weight: 850; letter-spacing: -0.02em; }
@@ -335,6 +342,10 @@
 .planCta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; margin-top: 18px; border-radius: 16px; background: linear-gradient(135deg, var(--green-2), var(--green)); color: #fff; font-size: 15.5px; font-weight: 850; text-decoration: none; box-shadow: 0 14px 30px rgb(20 83 45 / 0.28); transition: transform 0.2s var(--ease), box-shadow 0.2s; }
 .planCta:hover { transform: translateY(-2px); box-shadow: 0 20px 40px rgb(20 83 45 / 0.35); }
 .planCta svg { color: var(--lime); }
+.planCta.planCtaQuiet { border: 1.5px solid color-mix(in srgb, var(--green-2) 45%, transparent); background: transparent; color: var(--ink); box-shadow: none; }
+.planCta.planCtaQuiet svg { color: var(--green-2); }
+.planCta.planCtaQuiet:hover { background: color-mix(in srgb, var(--green-2) 8%, transparent); box-shadow: none; }
+:global(:root[data-theme="dark"]) .planCta.planCtaQuiet svg { color: var(--lime); }
 .planLimits { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; color: var(--muted); font-size: 13px; font-weight: 650; }
 .planLimits span { display: inline-flex; align-items: center; gap: 6px; }
 .planFeatures { padding: 22px 20px 24px; border-top: 1px solid var(--line); background: var(--soft); }
@@ -454,7 +465,8 @@
   .planSingle .planFeatures { border-top: 0; border-left: 1px solid var(--line); padding: 28px; }
   .planSingle .planMain { padding: 32px; }
   .planSingle .planFeatures ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
-  .planGrid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .planGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .planGrid[data-count="2"] { max-width: 940px; margin-inline: auto; }
   .planGridSingle { grid-template-columns: minmax(0, 1fr); max-width: 940px; }
   .scopeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .startSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -463,6 +475,8 @@
 
 /* ─────────────── Masaüstü ─────────────── */
 @media (min-width: 1040px) {
+  .planGrid[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .planGrid[data-count="4"] { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
   .hero { padding: 72px 0 88px; }
   .heroInner { grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); gap: 52px; }
   .mockStage { padding: 34px 24px 44px 0; }

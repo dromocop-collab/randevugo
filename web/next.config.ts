@@ -43,7 +43,16 @@ const nextConfig: NextConfig = {
       "/magazalar": "/kesfet",
       "/randevularim": "/hesabim",
     };
-    return Object.entries(aliases).map(([source, destination]) => ({ source, destination, permanent: true }));
+    return [
+      // www → çıplak alan adı (tek kanonik adres; SEO ve çerezler için).
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: "www.seninrandevun.com" }],
+        destination: "https://seninrandevun.com/:path*",
+        permanent: true,
+      },
+      ...Object.entries(aliases).map(([source, destination]) => ({ source, destination, permanent: true })),
+    ];
   },
   // Takvim/Cüzdan dosyaları aynı alan adından sunulur (iOS Safari "Takvime ekle" sayfasını doğrudan açar).
   async rewrites() {

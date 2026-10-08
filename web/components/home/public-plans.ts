@@ -1,19 +1,35 @@
-import { defaultPlatformPlan, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { getFirebaseConfig } from "@/lib/firebase/config";
+import {
+  PLATFORM_PLANS_CACHE_TAG, defaultPlatformPlan, plansFromRestList, publicPlatformPlans, type PlatformPlan,
+} from "@/features/subscriptions/platform-plan-domain";
+
+/** Fiyat gösteren sayfaların ISR süresi (sn). Süper admin kaydında ayrıca anında tazelenir. */
+export const PUBLIC_PLANS_REVALIDATE_SECONDS = 60;
 
 /**
- * Herkese açık sayfalar için yayındaki paketler (sunucuda, 4 sn zaman aşımıyla).
- * Okunamazsa veya aktif paket yoksa constants/plans'tan türetilen varsayılan paket döner.
+ * Herkese açık sayfalar için satıştaki paketler (sunucuda).
+ * Firestore REST ile okunur (kurallar platformPlans'ı herkese açar): istemci SDK'sının sunucudaki
+ * soğuk açılış gecikmesi yok ve fetch önbelleği PLATFORM_PLANS_CACHE_TAG ile anında geçersiz kılınabilir.
+ *
+ * Okuma başarısız olursa: derleme sırasında varsayılan paket döner; çalışma anında hata fırlatılır ki
+ * ISR son başarılı sayfayı sunmaya devam etsin (yanlışlıkla "tek paket" sürümü önbelleğe yazılmasın).
  */
 export async function loadPublicPlans(): Promise<PlatformPlan[]> {
   try {
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4_000));
-    const rows = await Promise.race([listPlatformPlans(), timeout]);
-    const active = rows.filter((plan) => plan.isActive);
-    if (!active.length) return [defaultPlatformPlan()];
-    // Önerilen paket önce, sonra fiyata göre.
-    return JSON.parse(JSON.stringify(active.sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended) || a.monthlyPrice - b.monthlyPrice))) as PlatformPlan[];
-  } catch {
-    return [defaultPlatformPlan()];
+    const { projectId, apiKey } = getFirebaseConfig();
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/platformPlans?pageSize=100${apiKey ? `&key=${encodeURIComponent(apiKey)}` : ""}`;
+    const response = await fetch(url, {
+      next: { revalidate: PUBLIC_PLANS_REVALIDATE_SECONDS, tags: [PLATFORM_PLANS_CACHE_TAG] },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (!response.ok) throw new Error(`platformPlans okunamadı (${response.status})`);
+    return publicPlatformPlans(plansFromRestList(await response.json()));
+  } catch (error) {
+    if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NODE_ENV !== "production") {
+      console.warn("[public-plans] varsayılan pakete düşüldü:", (error as Error).message);
+      return [defaultPlatformPlan()];
+    }
+    throw error;
   }
 }
 

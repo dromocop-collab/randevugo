@@ -23,6 +23,7 @@ import {
   playNotificationChime,
   unlockNotificationAudio,
 } from "@/features/push/notification-sound";
+import { isForegroundMessageClaimed } from "@/features/push/foreground-claims";
 
 export type PushStatus = "loading" | "unsupported" | "blocked" | "off" | "on";
 
@@ -55,6 +56,8 @@ function retainForegroundToasts() {
   foregroundStarting = listenForegroundMessages((payload) => {
     // Sayfa görünürken FCM bildirimi işletim sistemine göstermez, buraya iletir: zil + toast.
     const data = payload.data ?? {};
+    // İşletme yardımcısı aynı olayı zaten gösteriyorsa (herkese açık sayfalarda) tekrar zil/toast yok.
+    if (isForegroundMessageClaimed(data)) return;
     const title = payload.notification?.title ?? data.title ?? "Yeni bildirim";
     const body = payload.notification?.body ?? data.body ?? "";
     const target = data.audience === "business" ? "/dashboard/randevular" : data.audience === "customer" ? "/hesabim?tab=appointments" : null;

@@ -29,7 +29,8 @@ export function PricingPlans({ plans }: { plans: PlatformPlan[] }) {
       <button type="button" role="radio" aria-checked={cycle === "yearly"} className={cycle === "yearly" ? styles.cycleOn : ""} onClick={() => setCycle("yearly")}>Yıllık{bestSaving > 0 && <small>%{bestSaving} avantaj</small>}</button>
       <span className={styles.cycleThumb} data-cycle={cycle} aria-hidden="true" />
     </div>
-    <div className={`${styles.planGrid} ${plans.length === 1 ? styles.planGridSingle : ""}`}>
+    {/* data-count: 1 → yatay tek kart, 2–3 → yan yana, 4+ → sarmalanan ızgara (CSS). */}
+    <div className={`${styles.planGrid} ${plans.length === 1 ? styles.planGridSingle : ""}`} data-count={Math.min(plans.length, 4)}>
       {plans.map((plan) => <PlanCard key={plan.id} plan={plan} cycle={cycle} href={cta.href} label={cta.label} single={plans.length === 1} />)}
     </div>
   </div>;
@@ -49,7 +50,7 @@ function PlanCard({ plan, cycle, href, label, single }: { plan: PlatformPlan; cy
         <h3>{plan.label}</h3>
         {plan.isRecommended && <span className={styles.planBadge}><Sparkles size={12} aria-hidden="true" /> Önerilen</span>}
       </div>
-      <p className={styles.planDesc}>{plan.description || "İşletmenizin tüm randevu operasyonu için tek paket."}</p>
+      <p className={styles.planDesc}>{plan.description || (single ? "İşletmenizin tüm randevu operasyonu için tek paket." : `${features.length} özellik dahil.`)}</p>
       <div className={styles.planPrice} aria-live="polite">
         <b>{formatPrice(price)} {symbol}</b><span>/ {cycle === "yearly" ? "yıl" : "ay"}</span>
       </div>
@@ -59,14 +60,14 @@ function PlanCard({ plan, cycle, href, label, single }: { plan: PlatformPlan; cy
           : saving > 0 ? <>Yıllık öderseniz %{saving} tasarruf</> : "Aylık ödeme, istediğiniz zaman bırakın"}
       </p>
       {plan.trialDays > 0 && <p className={styles.planTrial}><Gift size={15} aria-hidden="true" /> İlk {plan.trialDays} gün ücretsiz · Kredi kartı gerekmez</p>}
-      <Link href={href} className={styles.planCta}>{label} <ArrowUpRight size={17} aria-hidden="true" /></Link>
+      <Link href={href} className={`${styles.planCta} ${!single && !plan.isRecommended ? styles.planCtaQuiet : ""}`}>{label} <ArrowUpRight size={17} aria-hidden="true" /></Link>
       <div className={styles.planLimits}>
         <span><Store size={14} aria-hidden="true" /> {plan.maxStores} şubeye kadar</span>
         <span><UsersRound size={14} aria-hidden="true" /> {plan.maxStaff} çalışana kadar</span>
       </div>
     </div>
     <div className={styles.planFeatures}>
-      <span className={styles.planFeaturesLabel}>PAKETTE HER ŞEY DAHİL</span>
+      <span className={styles.planFeaturesLabel}>{single ? "PAKETTE HER ŞEY DAHİL" : "PAKETTE NELER VAR"}</span>
       <ul>{features.map((feature) => <li key={feature}><span><Check size={12} aria-hidden="true" /></span>{feature}</li>)}</ul>
       <p className={styles.planNote}><BadgeCheck size={14} aria-hidden="true" /> Siz onaylamadan ücretli dönem başlamaz.</p>
     </div>

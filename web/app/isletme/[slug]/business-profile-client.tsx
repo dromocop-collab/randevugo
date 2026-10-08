@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
+import { StorefrontOwnerBar } from "@/features/business-companion/storefront-owner-bar";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
 import {
   getBusinessBySlug,
@@ -305,6 +306,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
       <div ref={rootRef} className={styles.page}>
 
       <main className={styles.main}>
+        <StorefrontOwnerBar businessId={business.id} slug={business.slug} name={business.name} />
         {/* ━━━ HERO ━━━ */}
         <section className={styles.hero} aria-label={`${business.name} profili`}>
           <div className={styles.cover}>
@@ -484,7 +486,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
       <div className={styles.footerPad}><MarketingFooter /></div>
 
       {/* ━━━ MOBİL ALT ÇUBUK ━━━ */}
-      <div className={styles.bottomBar}>
+      <div className={styles.bottomBar} data-storefront-bottom-bar="">
         <div className={styles.barInfo}>
           <small>{minPrice !== null ? "Başlayan fiyatlarla" : business.name}</small>
           <b>{minPrice !== null ? `${formatPrice(minPrice, currency)}'den` : "Online randevu"}</b>

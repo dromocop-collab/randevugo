@@ -1,55 +1,22 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getAuth } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
-import { ALL_SUBSCRIPTION_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
-import { PLAN_FEATURE_LIST, PLAN_FEATURES, PLAN_LABEL, PLAN_PRICE } from "@/constants/plans";
+import { ALL_SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
+import { PLAN_LABEL } from "@/constants/plans";
+import {
+  DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, normalizePlatformPlan, sortPlatformPlans, type PlatformPlan,
+} from "@/features/subscriptions/platform-plan-domain";
 
-export interface PlatformPlan {
-  id: string;
-  label: string;
-  yearlyPrice: number;
-  monthlyPrice: number;
-  currency: string;
-  trialDays: number;
-  maxStores: number;
-  maxStaff: number;
-  isActive: boolean;
-  isRecommended: boolean;
-  description: string;
-  features: string[];
-  entitlements: SubscriptionEntitlement[];
-  /** true: Firestore'da yok, constants/plans'tan türetilen yerleşik varsayılan paket. */
-  isFallback?: boolean;
-}
+export { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, type PlatformPlan };
+export { activePlatformPlans, featuredPlanId, publicPlatformPlans, sortPlatformPlans } from "@/features/subscriptions/platform-plan-domain";
 
-export const DEFAULT_PLATFORM_PLAN_ID = "RANDEVUGO";
 /** Eski (tek plan öncesi) paket kodları; tüm özellikler açık kalır, RANDEVUGO'ya taşınabilir. */
 export const LEGACY_PLAN_IDS = ["FREE", "PRO", "BUSINESS"] as const;
 
 export function isLegacyPlanId(planId: string): boolean {
   return (LEGACY_PLAN_IDS as readonly string[]).includes(planId.toUpperCase());
-}
-
-/** platformPlans boşken kullanılan yerleşik paket (functions ensureDefaultPlatformPlans ile aynı değerler). */
-export function defaultPlatformPlan(): PlatformPlan {
-  return {
-    id: DEFAULT_PLATFORM_PLAN_ID,
-    label: PLAN_LABEL,
-    monthlyPrice: PLAN_PRICE.monthly,
-    yearlyPrice: PLAN_PRICE.yearly,
-    currency: PLAN_PRICE.currency,
-    trialDays: PLAN_PRICE.trialDays,
-    // Paket belgesi yokken backend 10 şubeye izin verir; varsayılan paket bunu korur.
-    maxStores: PLAN_FEATURES.maxBranches,
-    maxStaff: PLAN_FEATURES.maxStaff,
-    isActive: true,
-    isRecommended: true,
-    description: "Tüm randevu operasyonunu tek merkezden yönetin.",
-    features: [...PLAN_FEATURE_LIST],
-    entitlements: [...ALL_SUBSCRIPTION_ENTITLEMENTS],
-    isFallback: true,
-  };
 }
 
 /** Paket kodunun okunur adı: tanımlı paket → etiketi, eski kod → "Eski paket: X". */
@@ -74,26 +41,22 @@ export async function listPlatformPlans(): Promise<PlatformPlan[]> {
 
 async function listStoredPlatformPlans(): Promise<PlatformPlan[]> {
   const snapshot = await getDocs(collection(getDb(), "platformPlans"));
-  return snapshot.docs.map((item) => {
-    const data = item.data();
-    return {
-      id: item.id,
-      label: String(data.label ?? item.id),
-      yearlyPrice: Number(data.yearlyPrice ?? 0),
-      monthlyPrice: Number(data.monthlyPrice ?? Math.round(Number(data.yearlyPrice ?? 0) / 12)),
-      currency: String(data.currency ?? "TRY"),
-      trialDays: Number(data.trialDays ?? 0),
-      maxStores: Number(data.maxStores ?? 3),
-      maxStaff: Number(data.maxStaff ?? 250),
-      isActive: data.isActive !== false,
-      isRecommended: data.isRecommended === true,
-      description: String(data.description ?? ""),
-      features: Array.isArray(data.features) ? data.features.map(String) : [],
-      entitlements: Array.isArray(data.entitlements)
-        ? data.entitlements.map(String).filter((key): key is SubscriptionEntitlement => ALL_SUBSCRIPTION_ENTITLEMENTS.includes(key as SubscriptionEntitlement))
-        : [],
-    };
-  });
+  return sortPlatformPlans(snapshot.docs.map((item) => normalizePlatformPlan(item.id, item.data())));
+}
+
+/**
+ * Herkese açık fiyat sayfalarını (/fiyatlar, /isletmeler, /) hemen tazeler.
+ * Hata yutulur: en kötü durumda sayfalar kısa ISR süresi (60 sn) sonunda kendiliğinden yenilenir.
+ */
+export async function refreshPublicPricingPages(): Promise<boolean> {
+  try {
+    const token = await getAuth(getFirebaseApp()).currentUser?.getIdToken();
+    if (!token) return false;
+    const response = await fetch("/api/platform-plans/revalidate", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 /** Yalnızca süper admin: platformPlans/RANDEVUGO yoksa oluşturur (idempotent, audit log'lu). */
@@ -108,22 +71,45 @@ export async function ensureDefaultPlatformPlans(): Promise<{ created: boolean; 
 
 export async function savePlatformPlan(input: PlatformPlan): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { isFallback, ...plan } = input;
+  const { isFallback, sortOrder, ...plan } = input;
   const planId = plan.id.trim().toUpperCase();
   if (!/^[A-Z0-9_-]{1,40}$/.test(planId)) throw new Error("Paket kodu geçersiz.");
   const entitlements = [...new Set(plan.entitlements)].filter((key) => ALL_SUBSCRIPTION_ENTITLEMENTS.includes(key));
   if (entitlements.length === 0) throw new Error("Pakete en az bir özellik seçin.");
-  const planRef = doc(getDb(), "platformPlans", planId);
+  const label = plan.label.trim();
+  const monthlyPrice = Math.max(0, Number(plan.monthlyPrice) || 0);
+  const db = getDb();
+  const planRef = doc(db, "platformPlans", planId);
   const existing = await getDoc(planRef);
   await setDoc(planRef, {
     ...plan,
     id: planId,
+    label,
+    monthlyPrice,
+    yearlyPrice: Math.max(0, Number(plan.yearlyPrice) || 0),
+    // iOS süper admin "name"/"price" alanlarını da okur/yazar; iki istemci aynı değeri görsün.
+    name: label,
+    price: monthlyPrice,
+    features: plan.features.map((item) => item.trim()).filter(Boolean),
+    sortOrder: sortOrder !== null && Number.isFinite(sortOrder) ? Math.round(sortOrder) : null,
     entitlements,
     updatedAt: serverTimestamp(),
     ...(!existing.exists() ? { createdAt: serverTimestamp() } : {}),
   }, { merge: true });
+
+  // "Önerilen" rozeti tek pakette olur: bu paket önerilen yapıldıysa diğerlerinden kaldırılır.
+  if (plan.isRecommended) {
+    const others = (await getDocs(collection(db, "platformPlans"))).docs.filter((item) => item.id !== planId && item.data().isRecommended === true);
+    if (others.length) {
+      const batch = writeBatch(db);
+      others.forEach((item) => batch.update(item.ref, { isRecommended: false, updatedAt: serverTimestamp() }));
+      await batch.commit();
+    }
+  }
+  await refreshPublicPricingPages();
 }
 
 export async function removePlatformPlan(planId: string): Promise<void> {
   await deleteDoc(doc(getDb(), "platformPlans", planId));
+  await refreshPublicPricingPages();
 }

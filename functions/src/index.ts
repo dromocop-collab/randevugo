@@ -1788,7 +1788,11 @@ export const requestSubscriptionPurchase = onCall(
     const business = await requireBusinessManager(uid, businessId);
     const plan = await db.doc(`platformPlans/${planId}`).get();
     if (!plan.exists || plan.data()?.isActive === false) throw new HttpsError("not-found", "Seçilen paket şu anda satışta değil.");
-    const amount = Math.max(0, Number(plan.data()?.[billingCycle === "yearly" ? "yearlyPrice" : "monthlyPrice"] ?? 0));
+    // iOS süper admin eskiden yalnızca name/price yazıyordu; aylık/yıllık fiyat yoksa onlardan türetilir.
+    const planData = plan.data() ?? {};
+    const monthlyPrice = Number(planData.monthlyPrice ?? planData.price ?? 0);
+    const yearlyPrice = Number(planData.yearlyPrice ?? (Number.isFinite(monthlyPrice) ? monthlyPrice * 12 : 0));
+    const amount = Math.max(0, (billingCycle === "yearly" ? yearlyPrice : monthlyPrice) || 0);
     const requestRef = db.doc(`subscriptionPurchaseRequests/${businessId}`);
     const now = FieldValue.serverTimestamp();
     await requestRef.set({
@@ -1797,7 +1801,7 @@ export const requestSubscriptionPurchase = onCall(
       ownerUid: String(business.ownerUid ?? uid),
       requestedBy: uid,
       planId,
-      planLabel: String(plan.data()?.label ?? planId),
+      planLabel: String(planData.label ?? planData.name ?? planId),
       billingCycle,
       amount,
       currency: String(plan.data()?.currency ?? "TRY"),

@@ -47,7 +47,8 @@ const businessFaqJsonLd = {
 };
 
 // Paket fiyatı ve canlı işletme sayıları sunucuda hazırlanır, 5 dakikada bir yenilenir.
-export const revalidate = 300;
+// Paket fiyatları süper admin kaydında anında, aksi halde en geç 60 sn'de yenilenir (statik değer olmalı).
+export const revalidate = 60;
 const PROOF_MIN_BUSINESSES = 12;
 
 async function loadBusinessCount(): Promise<{ businesses: number; cities: number } | null> {
@@ -82,6 +83,10 @@ export default async function BusinessesPage() {
   const plan = featuredPlan(plans);
   const symbol = currencySymbol(plan.currency);
   const saving = yearlySavingPercent(plan);
+  const multiple = plans.length > 1;
+  const startingPrice = Math.min(...plans.map((item) => item.monthlyPrice));
+  const maxStaff = Math.max(...plans.map((item) => item.maxStaff));
+  const maxStores = Math.max(...plans.map((item) => item.maxStores));
   const showCounts = Boolean(counts && counts.businesses >= PROOF_MIN_BUSINESSES);
 
   return <BusinessPage className={styles.page}><main className={styles.main}>
@@ -171,11 +176,14 @@ export default async function BusinessesPage() {
       <div className={`${styles.wrap} ${styles.teaser}`}>
         <div className={styles.teaserCopy} data-reveal="">
           <span className={styles.kicker}>ŞEFFAF FİYAT</span>
-          <h2 id="biz-price-title">Tek paket.<br /><em>Her şey dahil.</em></h2>
-          <p>Özellik kilidi, gizli ücret ve kurulum bedeli yok. İlk 3 ay ücretsiz; sonra işletmenize uygun dönemle devam edin.</p>
+          {multiple
+            ? <><h2 id="biz-price-title">{plans.length} paket.<br /><em>Size uygun olanı seçin.</em></h2>
+              <p>Gizli ücret ve kurulum bedeli yok. Aylık {formatPrice(startingPrice)} {currencySymbol(plans[0].currency)}&apos;den başlayan paketlerle başlayın, ihtiyacınız büyüdükçe yükseltin.</p></>
+            : <><h2 id="biz-price-title">Tek paket.<br /><em>Her şey dahil.</em></h2>
+              <p>Özellik kilidi, gizli ücret ve kurulum bedeli yok. İlk 3 ay ücretsiz; sonra işletmenize uygun dönemle devam edin.</p></>}
           <ul className={styles.checkList}>
             <li><ShieldCheck size={16} aria-hidden="true" /> Siz onaylamadan ücretli dönem başlamaz</li>
-            <li><UsersRound size={16} aria-hidden="true" /> {plan.maxStaff} çalışana, {plan.maxStores} şubeye kadar</li>
+            <li><UsersRound size={16} aria-hidden="true" /> {multiple ? maxStaff : plan.maxStaff} çalışana, {multiple ? maxStores : plan.maxStores} şubeye kadar</li>
             <li><Sparkles size={16} aria-hidden="true" /> Yeni özellikler pakete otomatik eklenir</li>
           </ul>
         </div>
@@ -184,8 +192,11 @@ export default async function BusinessesPage() {
           <strong>{plan.label}</strong>
           <div className={styles.teaserPrice}><b>{formatPrice(plan.monthlyPrice)} {symbol}</b><span>/ ay</span></div>
           <small>veya yıllık {formatPrice(plan.yearlyPrice)} {symbol}{saving > 0 ? ` · %${saving} tasarruf` : ""}</small>
+          {multiple && <ul className={styles.teaserPlans} aria-label="Diğer paketler">
+            {plans.filter((item) => item.id !== plan.id).map((item) => <li key={item.id}><span>{item.label}</span><b>{formatPrice(item.monthlyPrice)} {currencySymbol(item.currency)}<small>/ ay</small></b></li>)}
+          </ul>}
           <Link href="/isletmeler/kayit" className={styles.btnLime}>Ücretsiz başla <ArrowUpRight size={17} aria-hidden="true" /></Link>
-          <Link href="/fiyatlar" className={styles.teaserLink}>Paket detayları ve karşılaştırma <ArrowRight size={14} aria-hidden="true" /></Link>
+          <Link href="/fiyatlar" className={styles.teaserLink}>{multiple ? "Tüm paketleri karşılaştır" : "Paket detayları ve karşılaştırma"} <ArrowRight size={14} aria-hidden="true" /></Link>
         </div>
       </div>
     </section>

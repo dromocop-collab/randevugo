@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Building2, Check, CreditCard, Crown, LoaderCircle, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription, requestSubscriptionPurchase } from "@/features/subscriptions/subscription-repository";
-import { listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
 import { ConfirmSheet, EmptyState, HeroChip, Notice, Panel, Pill, Segmented, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "@/app/dashboard/_studio";
@@ -32,6 +32,8 @@ function formatDate(value?: string) {
 export default function SubscriptionPage() {
   const { businessId } = useBusiness();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  // allPlans: mevcut (satıştan kalkmış olabilecek) paketin adı için; plans: satıştakiler, fiyat sayfasıyla aynı sırada.
+  const [allPlans, setAllPlans] = useState<PlatformPlan[]>([]);
   const [plans, setPlans] = useState<PlatformPlan[]>([]);
   const [cycle, setCycle] = useState<Cycle>("yearly");
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function SubscriptionPage() {
     if (!businessId) return;
     let alive = true;
     Promise.all([getBusinessSubscription(businessId), listPlatformPlans()])
-      .then(([current, rows]) => { if (alive) { setSubscription(current); setPlans(rows.filter((item) => item.isActive)); } })
+      .then(([current, rows]) => { if (alive) { setSubscription(current); setAllPlans(rows); setPlans(activePlatformPlans(rows)); } })
       .catch(() => { if (alive) toast.error("Paket bilgileri alınamadı."); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -72,7 +74,8 @@ export default function SubscriptionPage() {
   if (loading) return <StudioPage label="Abonelik"><StudioSkeleton stats={0} rows={3} label="Paket bilgileri yükleniyor" /></StudioPage>;
   const active = isSubscriptionActive(subscription);
   const lifetime = subscription?.isLifetime === true || subscription?.accessMode === "lifetime";
-  const currentPlan = plans.find((plan) => plan.id === subscription?.plan);
+  const currentPlan = allPlans.find((plan) => plan.id === subscription?.plan);
+  const highlightedId = featuredPlanId(plans);
   const statusLabel = lifetime ? "Süresiz" : active ? "Aktif" : "Süresi doldu";
   const endsAt = lifetime ? null : formatDate(subscription?.status === "trialing" ? subscription?.trialEndsAt : subscription?.subscriptionEndsAt);
   const bestSaving = plans.reduce((max, plan) => Math.max(max, yearlySaving(plan)), 0);
@@ -107,7 +110,7 @@ export default function SubscriptionPage() {
           : (
             <div className={css.plans}>
               {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan} cycle={cycle} selected={plan.id === subscription?.plan} active={active} lifetime={lifetime}
+                <PlanCard key={plan.id} plan={plan} highlighted={plan.id === highlightedId} cycle={cycle} selected={plan.id === subscription?.plan} active={active} lifetime={lifetime}
                   busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => setConfirmPlan(plan)} />
               ))}
             </div>
@@ -136,18 +139,18 @@ export default function SubscriptionPage() {
   );
 }
 
-function PlanCard({ plan, cycle, selected, active, lifetime, busy, pending, onChoose }: { plan: PlatformPlan; cycle: Cycle; selected: boolean; active: boolean; lifetime: boolean; busy: boolean; pending: boolean; onChoose: () => void }) {
+function PlanCard({ plan, highlighted, cycle, selected, active, lifetime, busy, pending, onChoose }: { plan: PlatformPlan; highlighted: boolean; cycle: Cycle; selected: boolean; active: boolean; lifetime: boolean; busy: boolean; pending: boolean; onChoose: () => void }) {
   const entitlements = plan.entitlements.length ? plan.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS;
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const saving = yearlySaving(plan);
   const perMonth = cycle === "yearly" && plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : 0;
   return (
-    <article className={cx(css.plan, plan.isRecommended && css.planRecommended, selected && css.planCurrent)} aria-current={selected ? "true" : undefined}>
+    <article className={cx(css.plan, highlighted && css.planRecommended, selected && css.planCurrent)} aria-current={selected ? "true" : undefined}>
       <div className={css.planHead}>
         <small className={css.planCode}>{plan.id}</small>
         <div className={css.planBadges}>
           {selected ? <Pill tone={active || lifetime ? "ok" : "warn"} dot>Mevcut paket</Pill> : null}
-          {plan.isRecommended ? <Pill tone="accent"><Sparkles size={12} aria-hidden /> Önerilen</Pill> : null}
+          {highlighted ? <Pill tone="accent"><Sparkles size={12} aria-hidden /> Önerilen</Pill> : null}
         </div>
       </div>
       <h3 className={css.planName}>{plan.label}</h3>
@@ -168,7 +171,7 @@ function PlanCard({ plan, cycle, selected, active, lifetime, busy, pending, onCh
         {entitlements.map((key) => <li key={key}><span className={css.check} aria-hidden><Check size={12} strokeWidth={3} /></span>{entitlementLabel(key)}</li>)}
       </ul>
       <button type="button" disabled={selected || lifetime || busy} onClick={onChoose}
-        className={cx(studio.btn, studio.btnLg, studio.btnBlock, plan.isRecommended || !selected ? studio.btnPrimary : undefined)}>
+        className={cx(studio.btn, studio.btnLg, studio.btnBlock, highlighted || !selected ? studio.btnPrimary : undefined)}>
         {pending ? <LoaderCircle size={17} className={studio.spin} aria-hidden /> : <CreditCard size={17} aria-hidden />}
         {selected ? "Mevcut paketiniz" : lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : "Bu paketi seç"}
       </button>

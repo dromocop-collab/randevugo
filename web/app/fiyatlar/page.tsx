@@ -11,8 +11,9 @@ import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS, entitlementLa
 import { safeJsonLd } from "@/lib/seo/metadata";
 import styles from "@/components/home/business.module.css";
 
-// Paketler süper admin panelinden yönetilir; sayfa sunucuda hazırlanıp 5 dakikada bir yenilenir.
-export const revalidate = 300;
+// Paketler süper admin panelinden yönetilir; kayıtta anında (api/platform-plans/revalidate),
+// aksi halde en geç 60 sn'de yenilenir. Değer sabit olmalı (segment config statik okunur).
+export const revalidate = 60;
 
 const COMPARISON: Array<[string, string, string]> = [
   ["Randevu alma", "Telefon ve mesajla, mesai saatinde", "7/24 online, saniyeler içinde"],
@@ -33,6 +34,9 @@ export default async function PricingPage() {
   const plans = await loadPublicPlans();
   const plan = featuredPlan(plans);
   const trialDays = Math.max(0, ...plans.map((item) => item.trialDays));
+  const multiple = plans.length > 1;
+  const maxStaff = Math.max(...plans.map((item) => item.maxStaff));
+  const maxStores = Math.max(...plans.map((item) => item.maxStores));
   const included = new Set(plans.flatMap((item) => item.entitlements.length ? item.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS));
   const groups = SUBSCRIPTION_ENTITLEMENTS.reduce<Record<string, typeof SUBSCRIPTION_ENTITLEMENTS[number][]>>((acc, item) => {
     if (included.has(item.key)) (acc[item.group] ??= []).push(item);
@@ -41,7 +45,10 @@ export default async function PricingPage() {
 
   const faqs = [
     ["Ücretsiz deneme kampanyası nasıl çalışır?", `İşletmeler seçtikleri pakette belirtilen deneme süresinden yararlanır${trialDays ? ` (şu anda ${trialDays} gün)` : ""}. Başlamak için kredi kartı gerekmez; deneme boyunca paketteki tüm özellikler açıktır.`],
-    ["Çalışan veya randevu limiti var mı?", `Randevu sayısı sınırsızdır. Çalışan ve şube limitleri pakete göre değişir; ${plan.label} paketinde ${plan.maxStaff} çalışana ve ${plan.maxStores} şubeye kadar destek vardır.`],
+    ["Çalışan veya randevu limiti var mı?", multiple
+      ? `Randevu sayısı sınırsızdır. Çalışan ve şube limitleri pakete göre değişir; paketlerimizde ${maxStaff} çalışana ve ${maxStores} şubeye kadar destek vardır. Her paketin limitleri kartında yazar.`
+      : `Randevu sayısı sınırsızdır. ${plan.label} paketinde ${plan.maxStaff} çalışana ve ${plan.maxStores} şubeye kadar destek vardır.`],
+    ...(multiple ? [["Paketler arasında geçiş yapabilir miyim?", "Evet. İşletme panelinizdeki Abonelik sayfasından dilediğiniz zaman paket değiştirebilirsiniz; kayıtlarınız korunur."] as const] : []),
     ["İstediğim zaman ayrılabilir miyim?", "Evet. Taahhüt yoktur; aboneliğinizi dilediğiniz zaman sonlandırabilirsiniz."],
     ["Mevcut verilerimi taşıyabilir miyim?", "Müşteri listenizi aktarabilir, kurulum desteğimizden yararlanabilirsiniz."],
     ["Deneme bitince ne olur?", "Siz onaylamadan ücretli dönem başlamaz. Aylık veya yıllık ödeme seçeneğiyle devam edebilirsiniz; kayıtlarınız korunur."],
@@ -68,8 +75,11 @@ export default async function PricingPage() {
       <div className={styles.heroBackdrop} aria-hidden="true"><span className={styles.heroGrid} /><span className={`${styles.heroGlow} ${styles.glowA}`} /><span className={`${styles.heroGlow} ${styles.glowB}`} /></div>
       <div className={`${styles.wrap} ${styles.priceHeroInner}`}>
         <span className={styles.eyebrow}><Gift size={13} aria-hidden="true" /> LANSMANA ÖZEL{trialDays ? ` · ${trialDays} GÜN ÜCRETSİZ` : ""}</span>
-        <h1 id="price-title" className={styles.title}>Tek paket. <em>Her şey dahil.</em></h1>
-        <p className={styles.lead}>Randevu, ekip, müşteri, kasa ve hatırlatmalar tek fiyatta. Özellik kilidi, kurulum ücreti ve taahhüt yok.</p>
+        {multiple
+          ? <><h1 id="price-title" className={styles.title}>İşletmenize uygun <em>paketi seçin.</em></h1>
+            <p className={styles.lead}>Randevu, ekip, müşteri ve hatırlatmalar her pakette. İhtiyacınız büyüdükçe paketinizi yükseltin; kurulum ücreti ve taahhüt yok.</p></>
+          : <><h1 id="price-title" className={styles.title}>Tek paket. <em>Her şey dahil.</em></h1>
+            <p className={styles.lead}>Randevu, ekip, müşteri, kasa ve hatırlatmalar tek fiyatta. Özellik kilidi, kurulum ücreti ve taahhüt yok.</p></>}
       </div>
     </section>
 
@@ -86,7 +96,9 @@ export default async function PricingPage() {
     <section className={styles.section} aria-labelledby="price-scope-title">
       <div className={styles.wrap}>
         <div className={styles.sectionHead} data-reveal="">
-          <div><span className={styles.kicker}>PAKET KAPSAMI</span><h2 id="price-scope-title">Her modül açık,<br /><em>her gün kullanılır.</em></h2><p>Paketlerde yayınlanan tüm yetkiler. Yeni özellikler geldikçe pakete eklenir.</p></div>
+          <div><span className={styles.kicker}>PAKET KAPSAMI</span>{multiple
+            ? <><h2 id="price-scope-title">Paketleri<br /><em>yan yana karşılaştırın.</em></h2><p>Her pakette hangi modüllerin açık olduğunu görün. Yeni özellikler geldikçe paketlere eklenir.</p></>
+            : <><h2 id="price-scope-title">Her modül açık,<br /><em>her gün kullanılır.</em></h2><p>Paketlerde yayınlanan tüm yetkiler. Yeni özellikler geldikçe pakete eklenir.</p></>}</div>
         </div>
         {plans.length > 1 ? <div className={styles.tableWrap} data-reveal="">
           <table className={styles.table}>

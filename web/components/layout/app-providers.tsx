@@ -14,6 +14,7 @@ import { IosSmartBanner } from "@/components/marketing/ios-smart-banner";
 import { BrandCursor } from "@/components/ui/brand-cursor";
 import { initializeFirebaseAppCheck } from "@/lib/firebase/app-check";
 import { PushAutoRefresh } from "@/features/push";
+import { BusinessCompanionGate } from "@/features/business-companion/companion-gate";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -34,6 +35,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
           {/* Push açıksa her sayfada ön plan bildirimi (zil + toast) çalışır; izin istemez. */}
           <PushAutoRefresh />
           <SupportBubble />
+          {/* İşletme hesabıyla herkese açık sayfalarda: canlı randevu zili, yeni randevu kartı, mini panel. */}
+          <BusinessCompanionGate />
           <IosSmartBanner />
           <BrandCursor />
         </BusinessProvider>
