@@ -5211,6 +5211,7 @@ async function sendMutlucellSms(
   // Mutlucell başarılı gönderimde $ ile başlayan paket numarası döndürür.
   if (!result.startsWith("$")) {
     console.error("Mutlucell API error:", result);
+    if (result === "22") await raiseSmsBalanceAlert("exhausted");
 
     throw new HttpsError(
       "unavailable",
@@ -5540,6 +5541,83 @@ export const sendAppointmentSmsJobs = onSchedule(
     for (const document of snapshot.docs) {
       await processAppointmentSmsJob(document.ref);
     }
+  }
+);
+
+// ── SMS bakiyesi uyarısı ──
+// Bakiye bitince randevu SMS'leri sessizce durmasın: günlük kontrol + gönderimde "22" (yetersiz bakiye) anında uyarı.
+// Uyarı platformAlerts'e yazılır; adminPlatformAlertCreated süper admin cihazlarına push gönderir. Günde en fazla bir uyarı.
+const MUTLUCELL_CREDIT_URL = "https://smsgw.mutlucell.com/smsgw-ws/gtcrdtex";
+const SMS_BALANCE_STATE_PATH = "platformPrivateSettings/smsBalance";
+const DEFAULT_SMS_LOW_BALANCE = 300;
+
+async function raiseSmsBalanceAlert(kind: "low" | "exhausted", balance?: number) {
+  try {
+    const stateRef = db.doc(SMS_BALANCE_STATE_PATH);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+    const created = await db.runTransaction(async (tx) => {
+      const state = (await tx.get(stateRef)).data() ?? {};
+      if (state.lastAlertDay === today && (state.lastAlertKind === kind || state.lastAlertKind === "exhausted")) return false;
+      tx.set(stateRef, { lastAlertDay: today, lastAlertKind: kind, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(db.collection("platformAlerts").doc(), {
+        severity: kind === "exhausted" ? "critical" : "warning",
+        category: "sms",
+        title: kind === "exhausted" ? "SMS bakiyesi bitti" : "SMS bakiyesi azaldı",
+        message: kind === "exhausted"
+          ? "Mutlucell bakiyesi yetersiz olduğu için randevu SMS'leri gönderilemiyor. Hemen kontör yükleyin."
+          : `Mutlucell SMS bakiyesi ${balance ?? "?"} krediye düştü. Randevu SMS'leri kesilmeden kontör yükleyin.`,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    if (created) logger.warn("SMS bakiye uyarısı oluşturuldu.", { kind, balance });
+  } catch (error) {
+    logger.error("SMS bakiye uyarısı oluşturulamadı.", { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+/** Mutlucell kredi sorgusu: başarılıysa "$1234.5" döner; sayı çözülemezse null (yanlış alarm üretmez). */
+async function fetchMutlucellBalance(config: MutlucellConfiguration): Promise<number | null> {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><smskredi ka="${xmlEscape(config.username)}" pwd="${xmlEscape(config.apiKey)}" />`;
+  const response = await fetch(MUTLUCELL_CREDIT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/xml; charset=UTF-8" },
+    body: xml,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const text = (await response.text()).trim();
+  const match = response.ok ? /^\$\s*(-?\d+(?:[.,]\d+)?)$/.exec(text) : null;
+  if (!match) {
+    logger.warn("Mutlucell kredi sorgusu çözülemedi.", { status: response.status, result: text.slice(0, 20) });
+    return null;
+  }
+  return Number(match[1].replace(",", "."));
+}
+
+export const checkSmsBalance = onSchedule(
+  {
+    region: "europe-west1",
+    schedule: "every day 09:00",
+    timeZone: "Europe/Istanbul",
+    secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY],
+    maxInstances: 1,
+  },
+  async () => {
+    const config = await getMutlucellConfiguration();
+    if (!config.username || !config.apiKey) return;
+    const balance = await fetchMutlucellBalance(config);
+    if (balance === null) return;
+    const settings = (await db.doc(MUTLUCELL_SETTINGS_PATH).get()).data() ?? {};
+    const threshold = Number.isFinite(Number(settings.lowBalanceThreshold)) && Number(settings.lowBalanceThreshold) > 0
+      ? Number(settings.lowBalanceThreshold)
+      : DEFAULT_SMS_LOW_BALANCE;
+    await db.doc(SMS_BALANCE_STATE_PATH).set(
+      { lastBalance: balance, threshold, checkedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    if (balance <= 0) await raiseSmsBalanceAlert("exhausted", balance);
+    else if (balance < threshold) await raiseSmsBalanceAlert("low", balance);
   }
 );
 
