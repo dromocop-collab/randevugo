@@ -20,7 +20,7 @@
     "pkijs": "^3.4.1"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^4.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "typescript": "^5.7.2"
   },
   "overrides": {
