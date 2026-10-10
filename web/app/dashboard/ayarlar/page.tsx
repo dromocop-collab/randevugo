@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import {
@@ -23,6 +23,8 @@ import { canonicalBusinessCategory } from "@/lib/business-categories";
 import { ConfirmSheet, HeroChip, Notice, Panel, SaveBar, Sk, StudioHero, StudioPage, ToggleRow, cx, studio as k } from "../_studio";
 import { AppearanceSection } from "./appearance-section";
 import { NotificationSoundSection } from "./notification-sound-section";
+import { InstagramGlyph } from "@/features/share/instagram-glyph";
+import { InstagramShareSheet } from "@/features/share/instagram-share-sheet";
 import st from "./settings.module.css";
 import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
 
@@ -92,6 +94,8 @@ function cleanSocial(value: SocialMediaLinks) {
 export default function SettingsPage() {
   const { businessId } = useBusiness();
   const [business, setBusiness] = useState<Business | null>(null);
+  const [instagramOpen, setInstagramOpen] = useState(false);
+  const closeInstagram = useCallback(() => setInstagramOpen(false), []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("bilgiler");
@@ -370,13 +374,19 @@ export default function SettingsPage() {
         title="Ayarlar"
         description="Profil, marka, kanallar ve randevu kurallarını tek yerden, güvenle yönet."
         actions={business?.slug
-          ? <a className={cx(k.btn, k.btnGlass)} href={`/isletme/${business.slug}`} target="_blank" rel="noreferrer"><Globe2 size={16} aria-hidden /> Profili önizle</a>
+          ? <>
+              <a className={cx(k.btn, k.btnGlass)} href={`/isletme/${business.slug}`} target="_blank" rel="noreferrer"><Globe2 size={16} aria-hidden /> Profili önizle</a>
+              {business.status === "active" && business.isPublished
+                ? <button type="button" className={cx(k.btn, k.btnGlass)} onClick={() => setInstagramOpen(true)} aria-haspopup="dialog"><InstagramGlyph size={16} /> Instagram için görsel</button>
+                : null}
+            </>
           : null}
       >
         <HeroChip icon={ShieldCheck} value={`%${profileScore}`} label="profil" />
         <HeroChip icon={AtSign} value={`${socialCount}/6`} label="kanal" />
         <HeroChip icon={Clock3} value={`${rules.slotInterval} dk`} label="slot" />
       </StudioHero>
+      {business?.slug ? <InstagramShareSheet open={instagramOpen} onClose={closeInstagram} slug={business.slug} businessName={business.name} version={business.updatedAt} /> : null}
 
       {business?.profileReviewStatus === "pending" && (
         <Notice tone="warn" icon={ShieldCheck} title="Yayın öncesi inceleme sürüyor">

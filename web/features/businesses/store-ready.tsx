@@ -10,6 +10,7 @@ import {
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { encodeQr, qrSvgPath } from "@/features/businesses/qr-code";
 import { storeDisplayUrl, storeUrl, whatsappShareUrl } from "@/features/businesses/setup-helpers";
+import { InstagramGlyph } from "@/features/share/instagram-glyph";
 import r from "./store-ready.module.css";
 
 export interface StoreReadyProps {
@@ -22,14 +23,6 @@ export interface StoreReadyProps {
   logoUploaded?: boolean;
   coverUploaded?: boolean;
   onGoToDashboard: () => void;
-}
-
-function InstagramGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
-    </svg>
-  );
 }
 
 const CONFETTI = Array.from({ length: 18 }, (_, index) => index);

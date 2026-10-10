@@ -7,16 +7,16 @@ import { ImageResponse } from "next/og";
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 export const OG_CONTENT_TYPE = "image/png";
 
-type Font = { name: string; data: ArrayBuffer; weight: 600 | 700; style: "normal" };
+export type OgFont = { name: string; data: ArrayBuffer; weight: 600 | 700; style: "normal" };
 
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
-let fontsPromise: Promise<Font[]> | null = null;
+let fontsPromise: Promise<OgFont[]> | null = null;
 
 /** Türkçe karakterleri (ğ, ş, ı, İ, ₺) kapsayan Poppins; okunamazsa varsayılan yazı tipine düşer. */
-function loadFonts(): Promise<Font[]> {
+export function loadFonts(): Promise<OgFont[]> {
   fontsPromise ??= Promise.all([
     readFile(join(process.cwd(), "lib/seo/fonts/Poppins-SemiBold.ttf")),
     readFile(join(process.cwd(), "lib/seo/fonts/Poppins-Bold.ttf")),
@@ -31,7 +31,7 @@ function loadFonts(): Promise<Font[]> {
 
 let iconPromise: Promise<string | null> | null = null;
 
-function loadBrandIcon(): Promise<string | null> {
+export function loadBrandIcon(): Promise<string | null> {
   iconPromise ??= readFile(join(process.cwd(), "public/icon-192.png"))
     .then((data) => `data:image/png;base64,${data.toString("base64")}`)
     .catch(() => null);

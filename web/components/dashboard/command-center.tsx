@@ -13,7 +13,7 @@ import { dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
 import {
   Activity, BarChart3, BellRing, Bot, CalendarDays, CalendarPlus, Clipboard, Clock3, CornerDownLeft, CreditCard, Headphones, House,
-  LayoutPanelTop, ListChecks, Palette, Plus, ReceiptText, Scissors, Search, Settings2, Star, UserPlus, UsersRound, WandSparkles, X,
+  LayoutPanelTop, ListChecks, Palette, Plus, ReceiptText, Scissors, Search, Settings2, Share2, Star, UserPlus, UsersRound, WandSparkles, X,
 } from "lucide-react";
 import styles from "./command-center.module.css";
 
@@ -60,6 +60,10 @@ export function DashboardCommandCenter() {
         await navigator.clipboard.writeText(`${window.location.origin}/isletme/${activeBusiness.slug}`);
         toast.success("Mağaza linki kopyalandı.");
       } catch { toast.error("Bağlantı kopyalanamadı."); }
+    } },
+    { id: "instagram-share", label: "Instagram için görsel", description: "Hikâye/gönderi görseli: hizmetler, fiyatlar ve QR kod", group: "Hızlı işlemler", icon: Share2, keywords: "instagram hikaye story gönderi paylaş görsel qr reklam", run: () => {
+      if (!activeBusiness?.slug) { toast.error("Mağaza bağlantısı henüz hazır değil."); return; }
+      router.push(`/isletme/${encodeURIComponent(activeBusiness.slug)}?paylas=instagram`);
     } },
     { id: "home", label: "Bugün", description: "Günün özeti ve sıradaki randevular", group: "Sayfalar", icon: House, keywords: "ana sayfa genel bakış özet bugün", href: "/dashboard", run: go("/dashboard") },
     { id: "calendar", label: "Takvim", description: "Günlük ve haftalık programı görüntüle", group: "Sayfalar", icon: CalendarDays, keywords: "takvim randevu program gün hafta", href: "/dashboard/takvim", run: go("/dashboard/takvim") },

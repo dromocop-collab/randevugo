@@ -6,13 +6,14 @@ import { ChartNoAxesCombined, PenLine, Share2, Store } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { companionLinks, isManagerRole } from "@/features/business-companion/companion-domain";
 import { useCompanionPreviewFlag } from "@/features/business-companion/preview-flag";
+import { InstagramGlyph } from "@/features/share/instagram-glyph";
 import styles from "./storefront-owner-bar.module.css";
 
 /**
  * İşletmenin KENDİ vitrin sayfasında (/isletme/<slug>) yöneticiye görünen ince şerit:
- * "Bu senin mağazan — Düzenle / İstatistik / Paylaş". Ek okuma yapmaz (BusinessProvider listesini kullanır).
+ * "Bu senin mağazan — Düzenle / İstatistik / Instagram / Paylaş". Ek okuma yapmaz (BusinessProvider listesini kullanır).
  */
-export function StorefrontOwnerBar({ businessId, slug, name }: { businessId: string; slug: string; name: string }) {
+export function StorefrontOwnerBar({ businessId, slug, name, onInstagram }: { businessId: string; slug: string; name: string; onInstagram?: () => void }) {
   const { businesses, setBusinessId, businessId: activeId } = useBusiness();
   const preview = useCompanionPreviewFlag();
   const mine = businesses.find((business) => business.id === businessId);
@@ -45,6 +46,7 @@ export function StorefrontOwnerBar({ businessId, slug, name }: { businessId: str
       <div className={styles.actions}>
         <Link href={companionLinks.settings} onClick={selectThis} className={styles.action}><PenLine size={15} aria-hidden="true" /> Düzenle</Link>
         <Link href={companionLinks.analytics} onClick={selectThis} className={styles.action}><ChartNoAxesCombined size={15} aria-hidden="true" /> İstatistik</Link>
+        {onInstagram ? <button type="button" onClick={onInstagram} className={styles.action} aria-haspopup="dialog" title="Instagram için görsel"><InstagramGlyph size={15} /> Instagram</button> : null}
         <button type="button" onClick={() => void share()} className={`${styles.action} ${styles.primary}`}><Share2 size={15} aria-hidden="true" /> Paylaş</button>
       </div>
     </aside>

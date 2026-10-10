@@ -12,6 +12,8 @@ import {
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/marketing-shell";
 import { StorefrontOwnerBar } from "@/features/business-companion/storefront-owner-bar";
+import { InstagramGlyph } from "@/features/share/instagram-glyph";
+import { InstagramShareSheet } from "@/features/share/instagram-share-sheet";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
 import {
   getBusinessBySlug,
@@ -76,6 +78,8 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   const [nowMillis, setNowMillis] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>("hizmetler");
   const [tabsStuck, setTabsStuck] = useState(false);
+  const [instagramOpen, setInstagramOpen] = useState(false);
+  const closeInstagram = useCallback(() => setInstagramOpen(false), []);
   const rootRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const tabsRailRef = useRef<HTMLDivElement>(null);
@@ -86,6 +90,15 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
     const first = window.setTimeout(tick, 0);
     const timer = window.setInterval(tick, 60_000);
     return () => { window.clearTimeout(first); window.clearInterval(timer); };
+  }, []);
+
+  // Panelden gelen "Instagram için görsel" bağlantısı (?paylas=instagram) pencereyi açar; parametre adresten silinir.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("paylas") !== "instagram") return;
+    url.searchParams.delete("paylas");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    queueMicrotask(() => setInstagramOpen(true));
   }, []);
 
   useEffect(() => subscribeLiveFeatureAvailability((flags) =>
@@ -298,7 +311,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   }
 
   const statusClass = !status || status.kind === "unknown" ? "" : status.kind === "open" ? (status.closingSoon ? styles.statusSoon : styles.statusOpen) : status.kind === "break" ? styles.statusBreak : styles.statusClosed;
-  const quickCount = 3 + (business.phone ? 1 : 0);
+  const quickCount = 4 + (business.phone ? 1 : 0);
 
   return (
     <div className="marketing-page">
@@ -306,7 +319,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
       <div ref={rootRef} className={styles.page}>
 
       <main className={styles.main}>
-        <StorefrontOwnerBar businessId={business.id} slug={business.slug} name={business.name} />
+        <StorefrontOwnerBar businessId={business.id} slug={business.slug} name={business.name} onInstagram={() => setInstagramOpen(true)} />
         {/* ━━━ HERO ━━━ */}
         <section className={styles.hero} aria-label={`${business.name} profili`}>
           <div className={styles.cover}>
@@ -362,10 +375,11 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
               </div>
 
               <div>
-                <div className={styles.quickActions} style={{ gridTemplateColumns: `repeat(${quickCount}, minmax(0, 1fr))` }}>
+                <div className={styles.quickActions} data-count={quickCount} style={{ gridTemplateColumns: `repeat(${quickCount}, minmax(0, 1fr))` }}>
                   {business.phone && <a href={telHref(business.phone)} className={styles.quickAction}><Phone size={19} aria-hidden="true" /> Ara</a>}
                   <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel="Mesaj" triggerClassName="storefront-quick-msg" />
                   <a href={mapsHref(business)} target="_blank" rel="noopener noreferrer" className={styles.quickAction}><Navigation size={19} aria-hidden="true" /> Yol tarifi</a>
+                  <button type="button" className={styles.quickAction} onClick={() => setInstagramOpen(true)} aria-haspopup="dialog" aria-label="Instagram'da paylaş"><InstagramGlyph size={19} /> Instagram</button>
                   <button type="button" className={styles.quickAction} onClick={share}><Share2 size={19} aria-hidden="true" /> Paylaş</button>
                 </div>
                 <div className={styles.stats}>
@@ -484,6 +498,8 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
 
       {/* Mobilde sabit randevu çubuğu footer'ın altını kapatmasın. */}
       <div className={styles.footerPad}><MarketingFooter /></div>
+
+      <InstagramShareSheet open={instagramOpen} onClose={closeInstagram} slug={business.slug || slug} businessName={business.name} version={business.updatedAt} />
 
       {/* ━━━ MOBİL ALT ÇUBUK ━━━ */}
       <div className={styles.bottomBar} data-storefront-bottom-bar="">

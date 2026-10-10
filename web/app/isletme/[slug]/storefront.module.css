@@ -231,6 +231,10 @@
 .quickAction:active { transform: scale(0.96); }
 @media (hover: hover) { .quickAction:hover { background: color-mix(in srgb, var(--green-2) 9%, var(--soft)); } }
 .quickActions :global(.storefront-quick-msg) { font: inherit; font-size: 12px; font-weight: 700; }
+/* Beş düğmede (Ara · Mesaj · Yol tarifi · Instagram · Paylaş) dar ekranda etiketler sığsın. */
+.quickActions[data-count="5"] { gap: 6px; }
+.quickActions[data-count="5"] .quickAction,
+.quickActions[data-count="5"] :global(.storefront-quick-msg) { padding-inline: 2px; font-size: 11.5px; letter-spacing: -0.01em; }
 .quickActions :global(.storefront-quick-msg) svg:first-child { color: var(--green-text); }
 .quickActions :global(.storefront-quick-msg) svg:last-child { display: none; }
 
