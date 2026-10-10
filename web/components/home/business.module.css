@@ -353,6 +353,8 @@
 .planFeatures ul { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; margin: 12px 0 0; padding: 0; list-style: none; }
 .planFeatures li { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 650; }
 .planFeatures li > span { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 7px; background: var(--green-2); color: #fff; }
+.planFeatures li.planFeatureOff { color: var(--faint); font-weight: 550; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--faint) 55%, transparent); }
+.planFeatures li.planFeatureOff > span { background: var(--line); color: var(--faint); }
 .planNote { display: flex; align-items: center; gap: 6px; margin: 16px 0 0; color: var(--muted); font-size: 12.5px; }
 .assurance { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: 18px 0 0; padding: 0; list-style: none; }
 .assurance li { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 700; }
