@@ -7,6 +7,7 @@ import { Building2, Check, CreditCard, Crown, LoaderCircle, ShieldCheck, Sparkle
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout } from "@/features/subscriptions/subscription-repository";
 import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { TERMS_VERSION } from "@/lib/legal/seller";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
 import { ConfirmSheet, EmptyState, HeroChip, Notice, Panel, Pill, Segmented, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "@/app/dashboard/_studio";
@@ -60,7 +61,7 @@ export default function SubscriptionPage() {
       if (price > 0) {
         try {
           // Ücretli paket: PayTR güvenli ödeme sayfasına tam sayfa yönlendirme. Erişimi yalnız PayTR bildirimi açar.
-          const checkout = await startSubscriptionCheckout({ businessId, planId: plan.id, billingCycle: cycle, acceptedTerms: true });
+          const checkout = await startSubscriptionCheckout({ businessId, planId: plan.id, billingCycle: cycle, acceptedTerms: true, termsVersion: TERMS_VERSION });
           return window.location.assign(checkout.checkoutUrl);
         } catch (error) {
           // Online ödeme henüz açılmadıysa eski manuel talep akışına düşer.
@@ -130,7 +131,7 @@ export default function SubscriptionPage() {
             </div>
           )}
         <p className={css.footnote}>
-          Fiyatlara KDV dahildir. Satın alarak <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı kabul etmiş olursunuz.
+          Fiyatlara KDV dahildir. Ödeme öncesinde <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>, <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link> onayınıza sunulur.
         </p>
       </Panel>
 
@@ -155,8 +156,10 @@ export default function SubscriptionPage() {
           <label className={css.terms}>
             <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
             <span>
+              <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>&apos;nu,{" "}
               <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link>&apos;ni ve{" "}
-              <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı okudum, onaylıyorum.
+              <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı okudum, onaylıyorum. Hizmetin ödeme anında
+              başlamasını talep ediyorum ve bu nedenle cayma hakkımın bulunmadığını biliyorum.
             </span>
           </label>
         ) : null}

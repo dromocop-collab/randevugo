@@ -1,22 +1,31 @@
-// Mesafeli satış sözleşmesi ve iptal/iade sayfalarındaki satıcı bilgileri.
-// PayTR başvurusu ve yasal zorunluluk için unvan, adres ve vergi bilgileri DOLU olmalı.
+// Ön bilgilendirme formu, mesafeli satış sözleşmesi ve iptal/iade sayfalarındaki satıcı bilgileri.
+// Gerçek kişi tacirin ticari unvanı ad-soyadını içermelidir (TTK m.40).
 export const SELLER = {
-  title: "",          // Ticari unvan / şahıs şirketi adı (ör. "Ad Soyad – SeninRandevun")
-  address: "",        // Açık adres
-  taxOffice: "",      // Vergi dairesi
-  taxNumber: "",      // Vergi no / TCKN
-  mersis: "",         // Varsa MERSİS no
-  phone: "",          // Müşteri hizmetleri telefonu
+  title: "Muhammet Cihat Erdem – Senin Randevun",
+  owner: "Muhammet Cihat Erdem",
+  brand: "SeninRandevun",
+  address: "",        // Açık adres (vergi levhasındaki iş yeri adresi)
+  taxOffice: "Fethiye",
+  taxNumber: "",      // BİLEREK BOŞ: şahıs şirketinde VKN = TCKN, herkese açık sayfada yayımlanmaz (faturada yer alır)
+  mersis: "",
+  phone: "0530 478 82 98",
   email: "info@seninrandevun.com",
+  website: "https://seninrandevun.com",
 } as const;
+
+/** Sözleşme sürümü: metin esaslı değiştiğinde güncellenir, ödeme kaydına yazılır (delil). */
+export const TERMS_VERSION = "2026-10-12";
+export const TERMS_DATE_LABEL = "12 EKİM 2026";
 
 export function sellerLines(): string[] {
   return [
-    SELLER.title && `Unvan: ${SELLER.title}`,
+    `Ticari unvan: ${SELLER.title}`,
+    `İşletme sahibi: ${SELLER.owner}`,
     SELLER.address && `Adres: ${SELLER.address}`,
-    (SELLER.taxOffice || SELLER.taxNumber) && `Vergi dairesi / no: ${[SELLER.taxOffice, SELLER.taxNumber].filter(Boolean).join(" / ")}`,
+    `Vergi dairesi${SELLER.taxNumber ? " / no" : ""}: ${[SELLER.taxOffice, SELLER.taxNumber].filter(Boolean).join(" / ")}`,
     SELLER.mersis && `MERSİS: ${SELLER.mersis}`,
-    SELLER.phone && `Telefon: ${SELLER.phone}`,
+    `Telefon: ${SELLER.phone}`,
     `E-posta: ${SELLER.email}`,
+    `İnternet sitesi: ${SELLER.website}`,
   ].filter((line): line is string => Boolean(line));
 }

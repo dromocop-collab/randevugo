@@ -36,6 +36,7 @@ export async function startSubscriptionCheckout(input: {
   planId: string;
   billingCycle: "monthly" | "yearly";
   acceptedTerms: true;
+  termsVersion: string;
 }): Promise<{ merchantOid: string; checkoutUrl: string }> {
   const callable = httpsCallable<typeof input, { merchantOid: string; checkoutUrl: string }>(
     getFunctions(getFirebaseApp(), "europe-west1"),

@@ -1917,6 +1917,7 @@ export const startSubscriptionCheckout = onCall(
     if (request.data?.acceptedTerms !== true) {
       throw new HttpsError("invalid-argument", "Devam etmek için mesafeli satış sözleşmesini onaylayın.");
     }
+    const termsVersion = String(request.data?.termsVersion ?? "").slice(0, 20);
     await consumeSecurityLimit(`paytr-checkout:${uid}`, 12, 60 * 60_000);
     const business = await requireBusinessManager(uid, businessId);
 
@@ -1963,7 +1964,10 @@ export const startSubscriptionCheckout = onCall(
       merchantOid, provider: "paytr", businessId,
       organizationId: typeof business.organizationId === "string" ? business.organizationId : null,
       uid, email, planId, planLabel, billingCycle, amountKurus, currency: "TRY",
-      testMode: config.testMode, status: "pending", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      testMode: config.testMode, status: "pending",
+      // Ön bilgilendirme + mesafeli satış onayı (delil): sürüm, zaman ve IP.
+      terms: { accepted: true, version: termsVersion || null, acceptedAt: FieldValue.serverTimestamp(), ip: userIp },
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
 
     let token = "";
