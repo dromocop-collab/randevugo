@@ -64,8 +64,10 @@ export default function SubscriptionPage() {
           const checkout = await startSubscriptionCheckout({ businessId, planId: plan.id, billingCycle: cycle, acceptedTerms: true, termsVersion: TERMS_VERSION });
           return window.location.assign(checkout.checkoutUrl);
         } catch (error) {
-          // Online ödeme henüz açılmadıysa eski manuel talep akışına düşer.
-          if (!String((error as Error).message).includes("PAYMENT_NOT_CONFIGURED")) throw error;
+          // Online ödeme henüz açılmadıysa (ayar yok ya da fonksiyon henüz deploy edilmemiş) eski manuel talep akışına düşer.
+          const code = String((error as { code?: string }).code ?? "");
+          const notReady = String((error as Error).message).includes("PAYMENT_NOT_CONFIGURED") || code === "functions/not-found" || code === "functions/internal";
+          if (!notReady) throw error;
         }
       }
       const result = await requestSubscriptionPurchase({ businessId, planId: plan.id, billingCycle: cycle });
