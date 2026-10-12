@@ -2876,9 +2876,11 @@ body:has(.cookie-consent) .support-bubble-btn { bottom:154px; }
   .admin-settings-hero::before,.admin-settings-health.has-changes>span,.admin-settings-page .settings-tab.is-active svg,.admin-settings-savebar,.admin-settings-savebar>div:first-child>span.is-dirty,.admin-settings-save svg { animation:none !important; }
 }
 
-.content-page {
+/* Kabuktaki .marketing-page > main { width: 100% } kuralı bu genişliği eziyordu; daha özgül seçiciyle sınırlanır. */
+.content-page,
+.marketing-page > main.content-page {
   width: min(1120px, calc(100% - 40px));
-  margin: auto;
+  margin-inline: auto;
   padding: 105px 0 120px
 }
 
@@ -2985,8 +2987,9 @@ body:has(.cookie-consent) .support-bubble-btn { bottom:154px; }
 }
 
 @media(max-width:650px) {
-  .content-page {
-    width: calc(100% - 28px);
+  .content-page,
+  .marketing-page > main.content-page {
+    width: calc(100% - 32px);
     padding-top: 70px
   }
 
