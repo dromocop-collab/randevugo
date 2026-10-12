@@ -4,7 +4,7 @@ export const SELLER = {
   title: "Muhammet Cihat Erdem – Senin Randevun",
   owner: "Muhammet Cihat Erdem",
   brand: "SeninRandevun",
-  address: "",        // Açık adres (vergi levhasındaki iş yeri adresi)
+  address: "Akarca Mah. Yunus Nadi Cad. No: 8, Fethiye / Muğla",
   taxOffice: "Fethiye",
   taxNumber: "",      // BİLEREK BOŞ: şahıs şirketinde VKN = TCKN, herkese açık sayfada yayımlanmaz (faturada yer alır)
   mersis: "",
