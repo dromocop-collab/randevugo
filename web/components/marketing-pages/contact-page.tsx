@@ -1,16 +1,18 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Headphones, LayoutDashboard, LifeBuoy, Mail, MessageCircleMore, Phone, ShieldCheck, Store, UserRound } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Headphones, LayoutDashboard, LifeBuoy, Mail, MapPin, MessageCircleMore, Phone, ShieldCheck, Store, UserRound } from "lucide-react";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { Crumbs, SectionHead, cx } from "./ui";
 import mp from "./mp.module.css";
 import s from "./contact.module.css";
+import { SELLER } from "@/lib/legal/seller";
 
 const channels = [
   { id: "whatsapp", icon: MessageCircleMore, eyebrow: "En hızlı kanal", label: "WhatsApp", value: "0530 478 82 98", note: "Hızlı mesaj gönderin", href: "https://wa.me/905304788298", cta: "Mesaj yaz", external: true },
   { id: "email", icon: Mail, eyebrow: "Detaylı talepler", label: "E-posta", value: "info@seninrandevun.com", note: "Genel sorular ve iş birlikleri", href: "mailto:info@seninrandevun.com", cta: "E-posta gönder", external: false },
   { id: "phone", icon: Phone, eyebrow: "Doğrudan görüşme", label: "Telefon", value: "0530 478 82 98", note: "Hafta içi 09:00–18:00", href: "tel:+905304788298", cta: "Hemen ara", external: false },
+  { id: "address", icon: MapPin, eyebrow: "Yazışma adresi", label: "Adres", value: SELLER.address, note: SELLER.title, href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(SELLER.address)}`, cta: "Haritada aç", external: true },
 ];
 
 export function ContactPage() {

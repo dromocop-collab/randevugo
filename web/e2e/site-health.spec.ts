@@ -51,6 +51,7 @@ const STATIC_ROUTES = [
   "/mesafeli-satis-sozlesmesi",
   "/on-bilgilendirme-formu",
   "/iptal-ve-iade",
+  "/teslimat-ve-ifa",
   "/kvkk",
   "/mobil-uygulama",
   "/mugla",

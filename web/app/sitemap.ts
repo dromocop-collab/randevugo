@@ -58,6 +58,7 @@ const STATIC_PAGES: [string, number, MetadataRoute.Sitemap[number]["changeFreque
   ["/mesafeli-satis-sozlesmesi", 0.2, "yearly"],
   ["/on-bilgilendirme-formu", 0.2, "yearly"],
   ["/iptal-ve-iade", 0.2, "yearly"],
+  ["/teslimat-ve-ifa", 0.2, "yearly"],
   ["/cerez-politikasi", 0.2, "yearly"],
 ];
 

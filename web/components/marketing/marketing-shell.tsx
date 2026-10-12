@@ -19,7 +19,9 @@ import {
   LifeBuoy,
   LogIn,
   Mail,
+  MapPin,
   MoonStar,
+  Phone,
   Search,
   ShieldCheck,
   Smartphone,
@@ -37,6 +39,7 @@ import { LaunchCampaign } from "@/components/marketing/launch-campaign";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { APP_STORE_URL, PLAY_STORE_AVAILABLE, PLAY_STORE_URL } from "@/lib/app-store";
 import { CATEGORY_CATALOG, FEATURED_CATEGORIES, categoryHref } from "@/components/marketing/category-catalog";
+import { SELLER } from "@/lib/legal/seller";
 import styles from "./marketing-shell.module.css";
 
 type NavItem = { href: string; label: string; description: string; icon: LucideIcon; live?: boolean; wide?: boolean };
@@ -383,7 +386,7 @@ const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: "Keşfet", links: [["Tüm mağazalar", "/kesfet"], ["Kategoriler", "/kategoriler"], ["Şimdi müsait", "/simdi-musait"], ["Canlı sıra", "/siram"], ["Online randevu", "/online-randevu"], ["Mobil uygulama", "/mobil-uygulama"]] },
   { title: "İşletmeler", links: [["İşletmeler için", "/isletmeler"], ["Özellikler", "/ozellikler"], ["Fiyatlar", "/fiyatlar"], ["Ücretsiz kayıt", "/isletmeler/kayit"], ["İşletme girişi", "/isletmeler/giris"], ["İşletme yardımı", "/isletmeler/yardim"]] },
   { title: "SeninRandevun", links: [["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Randevularım", "/hesabim"], ["Güvenlik", "/guvenlik"]] },
-  { title: "Yasal", links: [["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Mesafeli satış", "/mesafeli-satis-sozlesmesi"], ["Ön bilgilendirme", "/on-bilgilendirme-formu"], ["İptal ve iade", "/iptal-ve-iade"], ["Çerez politikası", "/cerez-politikasi"]] },
+  { title: "Yasal", links: [["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Mesafeli satış", "/mesafeli-satis-sozlesmesi"], ["Ön bilgilendirme", "/on-bilgilendirme-formu"], ["İptal ve iade", "/iptal-ve-iade"], ["Teslimat ve ifa", "/teslimat-ve-ifa"], ["Çerez politikası", "/cerez-politikasi"]] },
 ];
 
 const FOOTER_CATEGORIES = CATEGORY_CATALOG.filter((item) => item.landing);
@@ -438,6 +441,8 @@ export function MarketingFooter() {
             <p>Yakınındaki iyi hizmetleri keşfet, sana uygun saati seç ve randevunu anında al.</p>
             <div className={styles.footerStatus}><i /> Sistemler aktif · 7/24 online</div>
             <a href="mailto:info@seninrandevun.com" className={styles.footerEmail}><Mail size={14} /> info@seninrandevun.com</a>
+            <a href="tel:+905304788298" className={styles.footerEmail}><Phone size={14} /> {SELLER.phone}</a>
+            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(SELLER.address)}`} target="_blank" rel="noopener noreferrer" className={styles.footerEmail}><MapPin size={14} /> {SELLER.address}</a>
           </div>
           {FOOTER_COLUMNS.map((column) => <FooterColumn key={column.title} title={column.title} links={column.links} />)}
         </div>
