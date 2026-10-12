@@ -1931,6 +1931,11 @@ export const startSubscriptionCheckout = onCall(
       throw new HttpsError("failed-precondition", "İşletmenizde süresiz erişim tanımlı; ödeme gerekmiyor.");
     }
     if (!config) throw new HttpsError("failed-precondition", "PAYMENT_NOT_CONFIGURED: Online ödeme henüz açılmadı.");
+    // Test modunda PayTR'nin herkese açık test kartlarıyla ödeme "başarılı" olur ve paket açılır.
+    // Bu yüzden test modunda ödeme sayfasını yalnız süper admin açabilir; diğerleri manuel akışa düşer.
+    if (config.testMode && !(await isPlatformAdminAccount(uid, request.auth?.token.email as string | undefined))) {
+      throw new HttpsError("failed-precondition", "PAYMENT_NOT_CONFIGURED: Online ödeme henüz açılmadı.");
+    }
 
     const planData = plan.data() ?? {};
     const monthlyPrice = Number(planData.monthlyPrice ?? planData.price ?? 0);
@@ -2038,6 +2043,11 @@ export const paytrNotification = onRequest(
         paymentType: typeof body.payment_type === "string" ? body.payment_type : null,
         notifiedTestMode: String(body.test_mode ?? "") === "1", updatedAt: FieldValue.serverTimestamp(),
       };
+      // Bildirim test modundaysa ama kayıt canlı modda açıldıysa (ya da tersi) erişim açılmaz.
+      if (String(body.test_mode ?? "") === "1" && current.data()?.testMode !== true) {
+        tx.set(paymentRef, { ...common, status: "failed", failedReasonMsg: "Test modunda yapılan ödeme canlı siparişte kabul edilmez." }, { merge: true });
+        return "failed" as const;
+      }
       if (paytrStatus !== "success") {
         tx.set(paymentRef, {
           ...common, status: "failed",
