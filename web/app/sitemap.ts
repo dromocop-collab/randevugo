@@ -55,6 +55,8 @@ const STATIC_PAGES: [string, number, MetadataRoute.Sitemap[number]["changeFreque
   ["/kvkk", 0.2, "yearly"],
   ["/gizlilik", 0.2, "yearly"],
   ["/kullanim-kosullari", 0.2, "yearly"],
+  ["/mesafeli-satis-sozlesmesi", 0.2, "yearly"],
+  ["/iptal-ve-iade", 0.2, "yearly"],
   ["/cerez-politikasi", 0.2, "yearly"],
 ];
 

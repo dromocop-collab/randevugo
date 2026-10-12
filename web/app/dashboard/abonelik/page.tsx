@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Check, CreditCard, Crown, LoaderCircle, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
-import { getBusinessSubscription, requestSubscriptionPurchase } from "@/features/subscriptions/subscription-repository";
+import { getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout } from "@/features/subscriptions/subscription-repository";
 import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
@@ -39,6 +40,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [confirmPlan, setConfirmPlan] = useState<PlatformPlan | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   useEffect(() => {
     if (!businessId) return;
@@ -54,6 +56,17 @@ export default function SubscriptionPage() {
     if (!businessId || busyPlan) return;
     setBusyPlan(plan.id);
     try {
+      const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+      if (price > 0) {
+        try {
+          // Ücretli paket: PayTR güvenli ödeme sayfasına tam sayfa yönlendirme. Erişimi yalnız PayTR bildirimi açar.
+          const checkout = await startSubscriptionCheckout({ businessId, planId: plan.id, billingCycle: cycle, acceptedTerms: true });
+          return window.location.assign(checkout.checkoutUrl);
+        } catch (error) {
+          // Online ödeme henüz açılmadıysa eski manuel talep akışına düşer.
+          if (!String((error as Error).message).includes("PAYMENT_NOT_CONFIGURED")) throw error;
+        }
+      }
       const result = await requestSubscriptionPurchase({ businessId, planId: plan.id, billingCycle: cycle });
       if (result.checkoutUrl) return window.location.assign(result.checkoutUrl);
       if (result.status === "completed") {
@@ -99,8 +112,9 @@ export default function SubscriptionPage() {
         {endsAt ? <HeroChip value={endsAt} label={subscription?.status === "trialing" ? "deneme bitişi" : "yenileme"} /> : null}
       </StudioHero>
 
-      <Notice tone="accent" icon={ShieldCheck} title="Güvenli paket geçişi">
-        Ücret tahsil edilmeden ücretli paket aktifleştirilmez; kayıtlarınız hiçbir zaman silinmez.
+      <Notice tone="accent" icon={ShieldCheck} title="Güvenli ödeme, otomatik yenileme yok">
+        Ödeme PayTR güvencesiyle 3D Secure ile alınır; kart bilgileriniz bizde saklanmaz. Paket dönem sonunda kendiliğinden yenilenmez,
+        kalan deneme veya abonelik süreniz yeni dönemin önüne eklenir. Kayıtlarınız hiçbir zaman silinmez.
       </Notice>
 
       <Panel icon={Sparkles} title="İhtiyacınız kadarını seçin" description="Tüm paketlerde verileriniz korunur.">
@@ -111,20 +125,23 @@ export default function SubscriptionPage() {
             <div className={css.plans}>
               {plans.map((plan) => (
                 <PlanCard key={plan.id} plan={plan} highlighted={plan.id === highlightedId} cycle={cycle} selected={plan.id === subscription?.plan} active={active} lifetime={lifetime}
-                  busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => setConfirmPlan(plan)} />
+                  busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => { setAcceptedTerms(false); setConfirmPlan(plan); }} />
               ))}
             </div>
           )}
-        <p className={css.footnote}>Ödeme sağlayıcısı hazırsa güvenli ödeme ekranı açılır. Henüz yapılandırılmadıysa talep kaydedilir ve ücret tahsil edilmeden paket açılmaz.</p>
+        <p className={css.footnote}>
+          Fiyatlara KDV dahildir. Satın alarak <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı kabul etmiş olursunuz.
+        </p>
       </Panel>
 
       <ConfirmSheet
         open={confirmPlan !== null}
         tone="primary"
         title={confirmPlan ? `${confirmPlan.label} paketini seçiyorsunuz` : "Paket seçimi"}
-        description="Ödeme sağlayıcısı hazırsa güvenli ödeme ekranına yönlendirilirsiniz; değilse talebiniz kaydedilir ve ücret tahsil edilmeden paket açılmaz."
-        confirmLabel={busyPlan ? "Hazırlanıyor…" : "Onayla ve devam et"}
+        description="PayTR güvenli ödeme sayfasına yönlendirileceksiniz. Ödeme onaylanınca paketiniz otomatik tanımlanır."
+        confirmLabel={busyPlan ? "Hazırlanıyor…" : confirmPrice > 0 ? "Ödemeye geç" : "Onayla"}
         busy={busyPlan !== null}
+        confirmDisabled={confirmPrice > 0 && !acceptedTerms}
         onConfirm={confirmChoice}
         onClose={() => setConfirmPlan(null)}
       >
@@ -133,6 +150,15 @@ export default function SubscriptionPage() {
             <span>{cycle === "yearly" ? "Yıllık ödeme" : "Aylık ödeme"}</span>
             <b>{money(confirmPrice, confirmPlan.currency)}<small> / {cycle === "yearly" ? "yıl" : "ay"}</small></b>
           </div>
+        ) : null}
+        {confirmPlan && confirmPrice > 0 ? (
+          <label className={css.terms}>
+            <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
+            <span>
+              <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link>&apos;ni ve{" "}
+              <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı okudum, onaylıyorum.
+            </span>
+          </label>
         ) : null}
       </ConfirmSheet>
     </StudioPage>
@@ -170,10 +196,10 @@ function PlanCard({ plan, highlighted, cycle, selected, active, lifetime, busy, 
       <ul className={css.features}>
         {entitlements.map((key) => <li key={key}><span className={css.check} aria-hidden><Check size={12} strokeWidth={3} /></span>{entitlementLabel(key)}</li>)}
       </ul>
-      <button type="button" disabled={selected || lifetime || busy} onClick={onChoose}
-        className={cx(studio.btn, studio.btnLg, studio.btnBlock, highlighted || !selected ? studio.btnPrimary : undefined)}>
+      <button type="button" disabled={lifetime || busy} onClick={onChoose}
+        className={cx(studio.btn, studio.btnLg, studio.btnBlock, studio.btnPrimary)}>
         {pending ? <LoaderCircle size={17} className={studio.spin} aria-hidden /> : <CreditCard size={17} aria-hidden />}
-        {selected ? "Mevcut paketiniz" : lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : "Bu paketi seç"}
+        {lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : selected ? (active ? "Süreyi uzat" : "Paketi yenile") : "Bu paketi seç"}
       </button>
     </article>
   );

@@ -237,7 +237,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lab
 }
 
 /** Yıkıcı/geri alınamaz işlemler için onay. */
-export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla", cancelLabel = "Vazgeç", tone = "danger", busy, onConfirm, onClose, children }: {
+export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla", cancelLabel = "Vazgeç", tone = "danger", busy, confirmDisabled, onConfirm, onClose, children }: {
   open: boolean;
   title: string;
   description?: ReactNode;
@@ -245,6 +245,7 @@ export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla"
   cancelLabel?: string;
   tone?: "danger" | "primary";
   busy?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onClose: () => void;
   children?: ReactNode;
@@ -254,7 +255,7 @@ export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla"
     <Sheet open={open} onClose={busy ? () => undefined : onClose} labelledBy={titleId}
       footer={<>
         <button type="button" className={s.btn} onClick={onClose} disabled={busy}>{cancelLabel}</button>
-        <button type="button" data-autofocus className={cx(s.btn, tone === "danger" ? s.btnDanger : s.btnPrimary)} onClick={onConfirm} disabled={busy}>
+        <button type="button" data-autofocus className={cx(s.btn, tone === "danger" ? s.btnDanger : s.btnPrimary)} onClick={onConfirm} disabled={busy || confirmDisabled}>
           {busy ? <LoaderCircle size={16} className={s.spin} aria-hidden /> : null}{confirmLabel}
         </button>
       </>}>

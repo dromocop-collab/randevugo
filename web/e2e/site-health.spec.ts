@@ -48,6 +48,8 @@ const STATIC_ROUTES = [
   "/kesfet",
   "/kuafor-randevu",
   "/kullanim-kosullari",
+  "/mesafeli-satis-sozlesmesi",
+  "/iptal-ve-iade",
   "/kvkk",
   "/mobil-uygulama",
   "/mugla",

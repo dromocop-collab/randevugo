@@ -164,3 +164,15 @@ test("müşteri kendi yorumlarını collection group ile okuyabilir, başkasın�
   await assertSucceeds(getDocs(query(collectionGroup(as("cust1"), "reviews"), where("customerId", "==", "cust1"))));
   await assertFails(getDocs(query(collectionGroup(as("cust1"), "reviews"), where("customerId", "==", "cust2"))));
 });
+
+// ── PayTR ödeme kayıtları ──────────────────────────────────────────────────
+test("abonelik ödemesini yalnız işletme üyesi okur, kimse istemciden yazamaz", async () => {
+  const path = "subscriptionPayments/SRTEST12345678";
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), path), { businessId: BIZ, status: "pending", amountKurus: 49000 }));
+  await assertSucceeds(getDoc(doc(as("owner"), path)));
+  await assertSucceeds(getDoc(doc(as("manager"), path)));
+  await assertFails(getDoc(doc(as("attacker"), path)));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), path)));
+  await assertFails(updateDoc(doc(as("owner"), path), { status: "paid" }));
+  await assertFails(setDoc(doc(as("owner"), "subscriptionPayments/SRFAKE12345678"), { businessId: BIZ, status: "paid" }));
+});

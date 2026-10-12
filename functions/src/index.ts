@@ -26,6 +26,7 @@ import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppoint
 import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
 
@@ -1884,6 +1885,223 @@ export const completeSubscriptionPurchase = onCall(
     batch.set(db.collection("platformAuditLogs").doc(), { action: "subscription.purchase_completed", businessId, plan: planId, billingCycle: cycle, affectedBranches: affected.length, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
     await batch.commit();
     return { success: true, affectedBranches: affected.length };
+  }
+);
+
+// ── PayTR ile web abonelik satışı ──
+// Yalnız web paneli çağırır (mobil uygulamalarda satış yok). Ayarlar
+// platformPrivateSettings/paytr: { merchantId, merchantKey, merchantSalt, testMode, enabled }.
+// Ödeme kaydı subscriptionPayments/{merchantOid}; erişimi yalnız PayTR bildirimi (paytrNotification) açar.
+const PAYTR_SETTINGS_PATH = "platformPrivateSettings/paytr";
+
+async function loadPaytrConfig(): Promise<PaytrConfig | null> {
+  return parsePaytrConfig((await db.doc(PAYTR_SETTINGS_PATH).get()).data());
+}
+
+function subscriptionEndMillis(row: Record<string, unknown> | undefined): number | null {
+  if (!row) return null;
+  const status = String(row.status ?? "");
+  if (status === "trialing") return entitlementDateMillis(row.trialEndsAt);
+  if (status === "active") return entitlementDateMillis(row.subscriptionEndsAt);
+  return null;
+}
+
+export const startSubscriptionCheckout = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Paket satın almak için giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const planId = requireString(request.data?.planId, "Paket").toUpperCase().slice(0, 40);
+    const billingCycle: BillingCycle = request.data?.billingCycle === "yearly" ? "yearly" : "monthly";
+    if (request.data?.acceptedTerms !== true) {
+      throw new HttpsError("invalid-argument", "Devam etmek için mesafeli satış sözleşmesini onaylayın.");
+    }
+    await consumeSecurityLimit(`paytr-checkout:${uid}`, 12, 60 * 60_000);
+    const business = await requireBusinessManager(uid, businessId);
+
+    const [plan, subscription, config] = await Promise.all([
+      db.doc(`platformPlans/${planId}`).get(),
+      db.doc(`subscriptions/${businessId}`).get(),
+      loadPaytrConfig(),
+    ]);
+    if (!plan.exists || plan.data()?.isActive === false) throw new HttpsError("not-found", "Seçilen paket şu anda satışta değil.");
+    if (subscription.data()?.isLifetime === true || subscription.data()?.accessMode === "lifetime") {
+      throw new HttpsError("failed-precondition", "İşletmenizde süresiz erişim tanımlı; ödeme gerekmiyor.");
+    }
+    if (!config) throw new HttpsError("failed-precondition", "PAYMENT_NOT_CONFIGURED: Online ödeme henüz açılmadı.");
+
+    const planData = plan.data() ?? {};
+    const monthlyPrice = Number(planData.monthlyPrice ?? planData.price ?? 0);
+    const yearlyPrice = Number(planData.yearlyPrice ?? (Number.isFinite(monthlyPrice) ? monthlyPrice * 12 : 0));
+    const amountKurus = toKurus(Math.max(0, (billingCycle === "yearly" ? yearlyPrice : monthlyPrice) || 0));
+    if (amountKurus < 100) throw new HttpsError("failed-precondition", "Bu paket için online ödeme gerekmiyor.");
+    const currency = String(planData.currency ?? "TRY").toUpperCase();
+    if (currency !== "TRY" && currency !== "TL") throw new HttpsError("failed-precondition", "Online ödeme yalnız TL paketlerde kullanılabilir.");
+
+    const userIp = clientIpFrom(request.rawRequest);
+    if (!userIp || userIp === "unknown") throw new HttpsError("failed-precondition", "Bağlantı bilgisi alınamadı, sayfayı yenileyip tekrar deneyin.");
+    const email = String(request.auth?.token.email ?? business.email ?? "").trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("failed-precondition", "Hesabınızda e-posta adresi bulunmuyor.");
+
+    const planLabel = String(planData.label ?? planData.name ?? planId);
+    const merchantOid = newMerchantOid();
+    const userBasket = buildUserBasket(`SeninRandevun ${planLabel} paketi (${billingCycle === "yearly" ? "1 yıl" : "1 ay"})`, amountKurus);
+    const customer = paytrCustomerFields({
+      name: request.auth?.token.name ?? business.ownerName ?? business.name,
+      address: [business.address, business.district, business.city].filter(Boolean).join(" "),
+      phone: business.phone,
+    });
+    const tokenInput = {
+      merchantId: config.merchantId, userIp, merchantOid, email, paymentAmount: amountKurus, userBasket,
+      noInstallment: "1" as const, maxInstallment: "0", currency: "TL", testMode: (config.testMode ? "1" : "0") as "0" | "1",
+    };
+    const resultUrl = `${SITE_ORIGIN}/dashboard/abonelik/odeme?oid=${merchantOid}`;
+
+    const paymentRef = db.doc(`subscriptionPayments/${merchantOid}`);
+    await paymentRef.set({
+      merchantOid, provider: "paytr", businessId,
+      organizationId: typeof business.organizationId === "string" ? business.organizationId : null,
+      uid, email, planId, planLabel, billingCycle, amountKurus, currency: "TRY",
+      testMode: config.testMode, status: "pending", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    let token = "";
+    let reason = "";
+    try {
+      const response = await fetch(PAYTR_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: new URLSearchParams({
+          merchant_id: config.merchantId, user_ip: userIp, merchant_oid: merchantOid, email,
+          payment_amount: String(amountKurus), paytr_token: paytrRequestToken(tokenInput, config.merchantKey, config.merchantSalt),
+          user_basket: userBasket, debug_on: tokenInput.testMode, no_installment: tokenInput.noInstallment,
+          max_installment: tokenInput.maxInstallment, user_name: customer.userName, user_address: customer.userAddress,
+          user_phone: customer.userPhone, merchant_ok_url: resultUrl, merchant_fail_url: `${resultUrl}&sonuc=hata`,
+          timeout_limit: "30", currency: "TL", test_mode: tokenInput.testMode, lang: "tr",
+        }).toString(),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const body = await response.json().catch(() => null) as { status?: string; token?: string; reason?: string } | null;
+      if (body?.status === "success" && typeof body.token === "string" && body.token) token = body.token;
+      else reason = String(body?.reason ?? `HTTP ${response.status}`);
+    } catch (error) {
+      reason = error instanceof Error ? error.message : String(error);
+    }
+    if (!token) {
+      logger.error("PayTR token alınamadı", { merchantOid, businessId, reason });
+      await paymentRef.set({ status: "token_failed", failedReason: shortText(reason, 300), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      throw new HttpsError("unavailable", "Ödeme sayfası şu anda açılamadı. Lütfen biraz sonra tekrar deneyin.");
+    }
+    return { merchantOid, checkoutUrl: `${PAYTR_CHECKOUT_BASE}${token}` };
+  }
+);
+
+/** PayTR "Bildirim URL"si. Yanıt düz metin "OK" olmalı; aksi halde PayTR tekrar dener. */
+export const paytrNotification = onRequest(
+  { region: "europe-west1", memory: "256MiB", maxInstances: 10 },
+  async (req, res) => {
+    if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    const config = await loadPaytrConfig();
+    if (!config) { logger.error("PayTR bildirimi geldi ama ayar yok"); res.status(503).send("not configured"); return; }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!verifyPaytrCallback(body, config)) {
+      logger.warn("PayTR bildirimi imzası geçersiz", { merchantOid: String(body.merchant_oid ?? "") });
+      res.status(400).send("PAYTR notification failed: bad hash");
+      return;
+    }
+    const merchantOid = String(body.merchant_oid);
+    const paytrStatus = String(body.status);
+    const totalAmount = Number(body.total_amount);
+    if (!isMerchantOid(merchantOid)) { logger.warn("PayTR bildirimi: tanınmayan sipariş", { merchantOid }); res.send("OK"); return; }
+
+    const paymentRef = db.doc(`subscriptionPayments/${merchantOid}`);
+    const initial = await paymentRef.get();
+    if (!initial.exists) { logger.warn("PayTR bildirimi: ödeme kaydı yok", { merchantOid }); res.send("OK"); return; }
+    const payment = initial.data()!;
+    const businessId = String(payment.businessId);
+    const organizationId = typeof payment.organizationId === "string" ? payment.organizationId : "";
+    const branchRefs = organizationId
+      ? (await db.collection("businesses").where("organizationId", "==", organizationId).limit(25).get()).docs.map((d) => d.ref)
+      : [db.doc(`businesses/${businessId}`)];
+
+    const outcome = await db.runTransaction(async (tx) => {
+      const current = await tx.get(paymentRef);
+      const status = String(current.data()?.status ?? "");
+      if (status === "paid" || status === "failed" || status === "amount_mismatch") return "duplicate" as const;
+      const common = {
+        paytrStatus, totalAmountKurus: Number.isFinite(totalAmount) ? totalAmount : null,
+        paymentType: typeof body.payment_type === "string" ? body.payment_type : null,
+        notifiedTestMode: String(body.test_mode ?? "") === "1", updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (paytrStatus !== "success") {
+        tx.set(paymentRef, {
+          ...common, status: "failed",
+          failedReasonCode: shortText(body.failed_reason_code, 20), failedReasonMsg: shortText(body.failed_reason_msg, 200),
+        }, { merge: true });
+        return "failed" as const;
+      }
+      // total_amount taksit farkı içerebilir; asla tutarın altında olamaz.
+      if (!Number.isFinite(totalAmount) || totalAmount < Number(payment.amountKurus)) {
+        tx.set(paymentRef, { ...common, status: "amount_mismatch" }, { merge: true });
+        return "amount_mismatch" as const;
+      }
+
+      const cycle: BillingCycle = payment.billingCycle === "yearly" ? "yearly" : "monthly";
+      const planId = String(payment.planId);
+      const branches = await Promise.all(branchRefs.map((ref) => tx.get(ref)));
+      const subscriptions = await Promise.all(branchRefs.map((ref) => tx.get(db.doc(`subscriptions/${ref.id}`))));
+      const now = Date.now();
+      const own = subscriptions[branchRefs.findIndex((ref) => ref.id === businessId)]?.data();
+      const window = paidPeriodWindow(subscriptionEndMillis(own), cycle, now);
+      branches.forEach((branch, index) => {
+        if (!branch.exists) return;
+        const row = subscriptions[index].data();
+        if (row?.isLifetime === true || row?.accessMode === "lifetime") return;
+        const branchWindow = paidPeriodWindow(subscriptionEndMillis(row), cycle, now);
+        tx.update(branch.ref, { plan: planId, updatedAt: FieldValue.serverTimestamp() });
+        tx.set(db.doc(`subscriptions/${branch.id}`), {
+          businessId: branch.id, ...(organizationId ? { organizationId } : {}),
+          plan: planId, status: "active", accessMode: "timed", isLifetime: false,
+          ...(row?.status === "active" && subscriptionEndMillis(row) ? {} : { subscriptionStartedAt: new Date(branchWindow.startMillis).toISOString() }),
+          subscriptionEndsAt: new Date(branchWindow.endMillis).toISOString(),
+          trialEndsAt: FieldValue.delete(), reminders: FieldValue.delete(), expiredAt: FieldValue.delete(),
+          renewalEnabled: false, paymentProvider: "paytr", lastPaymentId: merchantOid, lastPaidAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      tx.set(paymentRef, {
+        ...common, status: "paid", paidAt: FieldValue.serverTimestamp(),
+        periodStart: new Date(window.startMillis).toISOString(), periodEnd: new Date(window.endMillis).toISOString(),
+        affectedBranches: branches.filter((b) => b.exists).length,
+      }, { merge: true });
+      tx.set(db.doc(`subscriptionPurchaseRequests/${businessId}`), {
+        businessId, planId, planLabel: payment.planLabel ?? planId, billingCycle: cycle, amount: Number(payment.amountKurus) / 100,
+        status: "completed", provider: "paytr", paymentId: merchantOid, completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+        type: "subscription_paid", title: "Ödemeniz alındı",
+        body: `${String(payment.planLabel ?? planId)} paketiniz ${new Date(window.endMillis).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihine kadar aktif.`,
+        isRead: false, createdAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "subscription.paytr_paid", entityType: "subscriptionPayment", entityId: merchantOid, businessId,
+        organizationId: organizationId || null, plan: planId, billingCycle: cycle, amountKurus: payment.amountKurus,
+        totalAmountKurus: totalAmount, testMode: payment.testMode === true, createdAt: FieldValue.serverTimestamp(),
+      });
+      return "paid" as const;
+    });
+
+    if (outcome === "paid" || outcome === "amount_mismatch") {
+      const amountText = `${(Number(payment.amountKurus) / 100).toLocaleString("tr-TR")} ₺`;
+      await notifyPlatformAdmins(
+        outcome === "paid" ? "💰 Abonelik ödemesi alındı" : "🚨 PayTR tutar uyuşmazlığı",
+        `${await businessNameOf(businessId, undefined)} · ${shortText(payment.planLabel ?? payment.planId, 30)} · ${amountText}${payment.testMode === true ? " (test)" : ""}`,
+        { route: "admin_subscriptions", businessId },
+        `paytr-${merchantOid}`
+      ).catch((error) => logger.warn("PayTR admin bildirimi gönderilemedi", { error: String(error) }));
+    }
+    res.set("Content-Type", "text/plain").send("OK");
   }
 );
 
@@ -5761,7 +5979,7 @@ export const expireBusinessSubscriptions = onSchedule(
           }, { merge: true });
           batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
             type: "subscription_expired",
-            title: "Ücretsiz kullanım süreniz sona erdi",
+            title: status === "trialing" ? "Ücretsiz kullanım süreniz sona erdi" : "Abonelik süreniz sona erdi",
             body: "Yeni randevu kabul etmeye devam etmek için web işletme panelinden aboneliğinizi yenileyin.",
             isRead: false,
             createdAt: FieldValue.serverTimestamp(),
@@ -5785,7 +6003,9 @@ export const expireBusinessSubscriptions = onSchedule(
         }, { merge: true });
         batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
           type: "subscription_expiring",
-          title: remainingDays <= 1 ? "Ücretsiz kullanımınız yarın sona eriyor" : "Ücretsiz kullanımınız yakında sona eriyor",
+          title: status === "trialing"
+            ? (remainingDays <= 1 ? "Ücretsiz kullanımınız yarın sona eriyor" : "Ücretsiz kullanımınız yakında sona eriyor")
+            : (remainingDays <= 1 ? "Aboneliğiniz yarın sona eriyor" : "Aboneliğiniz yakında sona eriyor"),
           body: `${remainingDays} gün sonra yeni randevu alımı duracak. Aboneliğinizi web işletme panelinden yenileyebilirsiniz.`,
           isRead: false,
           createdAt: FieldValue.serverTimestamp(),

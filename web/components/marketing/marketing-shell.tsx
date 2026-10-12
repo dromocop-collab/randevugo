@@ -383,7 +383,7 @@ const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: "Keşfet", links: [["Tüm mağazalar", "/kesfet"], ["Kategoriler", "/kategoriler"], ["Şimdi müsait", "/simdi-musait"], ["Canlı sıra", "/siram"], ["Online randevu", "/online-randevu"], ["Mobil uygulama", "/mobil-uygulama"]] },
   { title: "İşletmeler", links: [["İşletmeler için", "/isletmeler"], ["Özellikler", "/ozellikler"], ["Fiyatlar", "/fiyatlar"], ["Ücretsiz kayıt", "/isletmeler/kayit"], ["İşletme girişi", "/isletmeler/giris"], ["İşletme yardımı", "/isletmeler/yardim"]] },
   { title: "SeninRandevun", links: [["Hakkımızda", "/hakkimizda"], ["İletişim", "/iletisim"], ["Müşteri yardımı", "/yardim-merkezi"], ["Randevularım", "/hesabim"], ["Güvenlik", "/guvenlik"]] },
-  { title: "Yasal", links: [["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Çerez politikası", "/cerez-politikasi"]] },
+  { title: "Yasal", links: [["KVKK", "/kvkk"], ["Gizlilik", "/gizlilik"], ["Kullanım koşulları", "/kullanim-kosullari"], ["Mesafeli satış", "/mesafeli-satis-sozlesmesi"], ["İptal ve iade", "/iptal-ve-iade"], ["Çerez politikası", "/cerez-politikasi"]] },
 ];
 
 const FOOTER_CATEGORIES = CATEGORY_CATALOG.filter((item) => item.landing);
