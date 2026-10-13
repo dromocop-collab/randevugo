@@ -3,35 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, CreditCard, Crown, LoaderCircle, MessageSquareText, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
+import { CalendarClock, ReceiptText, RefreshCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout } from "@/features/subscriptions/subscription-repository";
 import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
-import { smsQuotaLabel, staffLimitLabel, storeLimitLabel } from "@/features/subscriptions/platform-plan-domain";
 import { TERMS_VERSION } from "@/lib/legal/seller";
-import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
+import { entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
-import { ConfirmSheet, EmptyState, HeroChip, Notice, Panel, Pill, Segmented, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "@/app/dashboard/_studio";
+import { ConfirmSheet, EmptyState, Panel, Segmented, StudioPage, StudioSkeleton } from "@/app/dashboard/_studio";
 import css from "./abonelik.module.css";
+import { CompareTable, CurrentSubscription, PlanCard, money, yearlySaving, type Cycle, type PlanRelation } from "./plan-cards";
 import { SmsCreditsPanel } from "./sms-credits-panel";
 
-type Cycle = "monthly" | "yearly";
-
-function money(value: number, currency: string) {
-  return `${value.toLocaleString("tr-TR")} ${currency === "TRY" ? "₺" : currency}`;
-}
-
-function yearlySaving(plan: PlatformPlan) {
-  const full = plan.monthlyPrice * 12;
-  if (!full || plan.yearlyPrice <= 0 || plan.yearlyPrice >= full) return 0;
-  return Math.round((full - plan.yearlyPrice) / full * 100);
-}
-
-function formatDate(value?: string) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) : null;
-}
 
 export default function SubscriptionPage() {
   const { businessId } = useBusiness();
@@ -92,59 +75,74 @@ export default function SubscriptionPage() {
   if (loading) return <StudioPage label="Abonelik"><StudioSkeleton stats={0} rows={3} label="Paket bilgileri yükleniyor" /></StudioPage>;
   const active = isSubscriptionActive(subscription);
   const lifetime = subscription?.isLifetime === true || subscription?.accessMode === "lifetime";
+  const trialing = subscription?.status === "trialing" && active;
   const currentPlan = allPlans.find((plan) => plan.id === subscription?.plan);
+  const currentForSale = plans.find((plan) => plan.id === subscription?.plan) ?? null;
   const highlightedId = featuredPlanId(plans);
-  const statusLabel = lifetime ? "Süresiz" : active ? "Aktif" : "Süresi doldu";
-  const endsAt = lifetime ? null : formatDate(subscription?.status === "trialing" ? subscription?.trialEndsAt : subscription?.subscriptionEndsAt);
+  const cheapest = plans.reduce<PlatformPlan | null>((min, plan) => !min || plan.monthlyPrice < min.monthlyPrice ? plan : min, null);
   const bestSaving = plans.reduce((max, plan) => Math.max(max, yearlySaving(plan)), 0);
   const cycleOptions = [
     { value: "monthly" as const, label: "Aylık" },
     { value: "yearly" as const, label: bestSaving ? <>Yıllık <span className={css.saveTag}>-%{bestSaving}</span></> : "Yıllık" },
   ];
   const confirmPrice = confirmPlan ? (cycle === "yearly" ? confirmPlan.yearlyPrice : confirmPlan.monthlyPrice) : 0;
+  const lostOnSwitch = confirmPlan && currentPlan && active && !trialing && confirmPlan.id !== currentPlan.id
+    ? currentPlan.entitlements.filter((key) => !confirmPlan.entitlements.includes(key))
+    : [];
+  const open = (plan: PlatformPlan) => { setAcceptedTerms(false); setConfirmPlan(plan); };
 
   return (
     <StudioPage label="Abonelik">
-      <StudioHero
-        eyebrow="Abonelik merkezi"
-        icon={CreditCard}
-        title="İşletmenize uygun paketi seçin."
-        description="Paketinizde bulunan özellikler panelinize yansır. Paket değişiminde mevcut verileriniz korunur."
-        mascot="happy"
-      >
-        <HeroChip icon={Crown} value={currentPlan?.label ?? subscription?.plan ?? "Tanımsız"} label="mevcut paket" />
-        <Pill tone={active ? "ok" : "bad"} dot className={css.heroPill}>{statusLabel}</Pill>
-        {endsAt ? <HeroChip value={endsAt} label={subscription?.status === "trialing" ? "deneme bitişi" : "yenileme"} /> : null}
-      </StudioHero>
+      <CurrentSubscription
+        subscription={subscription} plan={currentPlan ?? null} active={active} lifetime={lifetime} trialing={trialing}
+        busy={busyPlan !== null}
+        onRenew={currentForSale && !trialing ? () => open(currentForSale) : null}
+      />
 
-      <Notice tone="accent" icon={ShieldCheck} title="Güvenli ödeme, otomatik yenileme yok">
-        Ödeme PayTR güvencesiyle 3D Secure ile alınır; kart bilgileriniz bizde saklanmaz. Paket dönem sonunda kendiliğinden yenilenmez,
-        kalan deneme veya abonelik süreniz yeni dönemin önüne eklenir. Kayıtlarınız hiçbir zaman silinmez.
-      </Notice>
+      <section className={css.section} aria-labelledby="plans-title" id="paketler">
+        <div className={css.sectionHead}>
+          <div>
+            <h2 id="plans-title">{trialing ? "Deneme bitmeden paketinizi seçin" : "Paketler"}</h2>
+            <p>{trialing ? "Deneme süresince tüm özellikler açık. Kalan gün, seçtiğiniz paketin önüne eklenir." : "İstediğiniz zaman geçiş yapın; verileriniz her zaman korunur."}</p>
+          </div>
+          {plans.length ? <Segmented label="Ödeme dönemi" options={cycleOptions} value={cycle} onChange={setCycle} /> : null}
+        </div>
 
-      <Panel icon={Sparkles} title="İhtiyacınız kadarını seçin" description="Tüm paketlerde verileriniz korunur.">
-        {plans.length ? <div className={css.cycleRow}><Segmented label="Ödeme dönemi" options={cycleOptions} value={cycle} onChange={setCycle} /></div> : null}
         {plans.length === 0
-          ? <EmptyState mood="thinking" title="Şu anda satışa açık paket bulunmuyor." description="Yeni paketler yayınlandığında burada görünecek." />
+          ? <Panel><EmptyState mood="thinking" title="Şu anda satışa açık paket bulunmuyor." description="Yeni paketler yayınlandığında burada görünecek." /></Panel>
           : (
-            <div className={css.plans}>
-              {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan} highlighted={plan.id === highlightedId} cycle={cycle} selected={plan.id === subscription?.plan} active={active} lifetime={lifetime}
-                  busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => { setAcceptedTerms(false); setConfirmPlan(plan); }} />
-              ))}
+            <div className={css.plans} data-count={plans.length}>
+              {plans.map((plan) => {
+                const isCurrent = plan.id === subscription?.plan;
+                const relation: PlanRelation = isCurrent ? "current" : !currentPlan ? "new" : plan.monthlyPrice > currentPlan.monthlyPrice ? "upgrade" : "downgrade";
+                return (
+                  <PlanCard key={plan.id} plan={plan} cycle={cycle} relation={relation} trialing={trialing && isCurrent} expired={!active && !lifetime}
+                    recommended={plan.id === highlightedId && !isCurrent} base={cheapest && cheapest.id !== plan.id ? cheapest : null}
+                    lifetime={lifetime} busy={busyPlan !== null} pending={busyPlan === plan.id} onChoose={() => open(plan)} />
+                );
+              })}
             </div>
           )}
+
+        {plans.length > 1 ? <CompareTable plans={plans} currentId={subscription?.plan ?? null} /> : null}
+
+        <ul className={css.trust} aria-label="Ödeme güvencesi">
+          <li><ShieldCheck size={15} aria-hidden /> PayTR · 3D Secure</li>
+          <li><RefreshCcw size={15} aria-hidden /> Otomatik yenileme yok</li>
+          <li><CalendarClock size={15} aria-hidden /> Kalan süre kaybolmaz</li>
+          <li><ReceiptText size={15} aria-hidden /> Fiyatlara KDV dahil</li>
+        </ul>
         <p className={css.footnote}>
-          Fiyatlara KDV dahildir. Ödeme öncesinde <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>, <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link> onayınıza sunulur.
+          Ödeme öncesinde <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>, <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link> onayınıza sunulur.
         </p>
-      </Panel>
+      </section>
 
       {businessId ? <SmsCreditsPanel businessId={businessId} quota={currentPlan?.smsMonthlyQuota ?? null} unlimited={lifetime || (currentPlan?.smsMonthlyQuota ?? null) === null} /> : null}
 
       <ConfirmSheet
         open={confirmPlan !== null}
         tone="primary"
-        title={confirmPlan ? `${confirmPlan.label} paketini seçiyorsunuz` : "Paket seçimi"}
+        title={confirmPlan ? (confirmPlan.id === subscription?.plan ? `${confirmPlan.label} · süreyi uzat` : `${confirmPlan.label} paketine geç`) : "Paket seçimi"}
         description="PayTR güvenli ödeme sayfasına yönlendirileceksiniz. Ödeme onaylanınca paketiniz otomatik tanımlanır."
         confirmLabel={busyPlan ? "Hazırlanıyor…" : confirmPrice > 0 ? "Ödemeye geç" : "Onayla"}
         busy={busyPlan !== null}
@@ -154,9 +152,14 @@ export default function SubscriptionPage() {
       >
         {confirmPlan ? (
           <div className={css.confirmSummary}>
-            <span>{cycle === "yearly" ? "Yıllık ödeme" : "Aylık ödeme"}</span>
-            <b>{money(confirmPrice, confirmPlan.currency)}<small> / {cycle === "yearly" ? "yıl" : "ay"}</small></b>
+            <span>{cycle === "yearly" ? "1 yıl" : "1 ay"} · {confirmPlan.label}</span>
+            <b>{money(confirmPrice, confirmPlan.currency)}</b>
           </div>
+        ) : null}
+        {lostOnSwitch.length ? (
+          <p className={css.downgradeNote}>
+            <TriangleAlert size={15} aria-hidden /> Geçişle birlikte şu özellikler kapanır: {lostOnSwitch.map(entitlementLabel).join(", ")}. Kalan süreniz yeni paketin önüne eklenir.
+          </p>
         ) : null}
         {confirmPlan && confirmPrice > 0 ? (
           <label className={css.terms}>
@@ -174,43 +177,3 @@ export default function SubscriptionPage() {
   );
 }
 
-function PlanCard({ plan, highlighted, cycle, selected, active, lifetime, busy, pending, onChoose }: { plan: PlatformPlan; highlighted: boolean; cycle: Cycle; selected: boolean; active: boolean; lifetime: boolean; busy: boolean; pending: boolean; onChoose: () => void }) {
-  const entitlements = plan.entitlements.length ? plan.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS;
-  const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
-  const saving = yearlySaving(plan);
-  const perMonth = cycle === "yearly" && plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : 0;
-  return (
-    <article className={cx(css.plan, highlighted && css.planRecommended, selected && css.planCurrent)} aria-current={selected ? "true" : undefined}>
-      <div className={css.planHead}>
-        <small className={css.planCode}>{plan.id}</small>
-        <div className={css.planBadges}>
-          {selected ? <Pill tone={active || lifetime ? "ok" : "warn"} dot>Mevcut paket</Pill> : null}
-          {highlighted ? <Pill tone="accent"><Sparkles size={12} aria-hidden /> Önerilen</Pill> : null}
-        </div>
-      </div>
-      <h3 className={css.planName}>{plan.label}</h3>
-      {plan.description ? <p className={css.planDesc}>{plan.description}</p> : null}
-      <div className={css.price}>
-        <b>{money(price, plan.currency)}</b>
-        <span>/ {cycle === "yearly" ? "yıl" : "ay"}</span>
-      </div>
-      <div className={css.priceNote}>
-        {perMonth ? <span>Aylık ~{money(perMonth, plan.currency)}</span> : null}
-        {cycle === "yearly" && saving ? <Pill tone="ok">%{saving} tasarruf</Pill> : null}
-      </div>
-      <div className={css.limits}>
-        <span><Building2 size={14} aria-hidden />{storeLimitLabel(plan.maxStores)}</span>
-        <span><UsersRound size={14} aria-hidden />{staffLimitLabel(plan.maxStaff)}</span>
-        {smsQuotaLabel(plan.smsMonthlyQuota) ? <span><MessageSquareText size={14} aria-hidden />{smsQuotaLabel(plan.smsMonthlyQuota)}</span> : null}
-      </div>
-      <ul className={css.features}>
-        {entitlements.map((key) => <li key={key}><span className={css.check} aria-hidden><Check size={12} strokeWidth={3} /></span>{entitlementLabel(key)}</li>)}
-      </ul>
-      <button type="button" disabled={lifetime || busy} onClick={onChoose}
-        className={cx(studio.btn, studio.btnLg, studio.btnBlock, studio.btnPrimary)}>
-        {pending ? <LoaderCircle size={17} className={studio.spin} aria-hidden /> : <CreditCard size={17} aria-hidden />}
-        {lifetime ? "Süresiz erişim aktif" : busy ? "Hazırlanıyor…" : selected ? (active ? "Süreyi uzat" : "Paketi yenile") : "Bu paketi seç"}
-      </button>
-    </article>
-  );
-}
