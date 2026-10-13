@@ -417,14 +417,23 @@ function entitlementDateMillis(value: unknown): number | null {
   return null;
 }
 
+/** Abonelik paketi tek doğru kaynaktır; yalnız abonelikte paket yoksa işletme belgesine bakılır. */
+function subscriptionPlanOf(subscription: Record<string, unknown> | undefined, business: Record<string, unknown> | undefined): string {
+  const fromSubscription = typeof subscription?.plan === "string" ? subscription.plan.trim() : "";
+  if (fromSubscription) return fromSubscription;
+  const fromBusiness = typeof business?.plan === "string" ? business.plan.trim() : "";
+  return fromBusiness || "RANDEVUGO";
+}
+
 async function grantAdminOwnerLifetimeAccess(businessId: string) {
   const business = await db.doc(`businesses/${businessId}`).get();
   const ownerUid = typeof business.data()?.ownerUid === "string" ? String(business.data()?.ownerUid) : "";
   if (!ownerUid || !(await isPlatformAdminAccount(ownerUid))) return false;
+  const current = await db.doc(`subscriptions/${businessId}`).get();
   await db.doc(`subscriptions/${businessId}`).set({
     businessId,
     userId: ownerUid,
-    plan: String(business.data()?.plan ?? "RANDEVUGO"),
+    plan: subscriptionPlanOf(current.data(), business.data()),
     status: "active",
     accessMode: "lifetime",
     isLifetime: true,
@@ -1197,7 +1206,7 @@ export const createBusiness = onCall(
       // İlk mağaza denemeyi Tam Kontrol'de yaşar (paket yoksa/kapalıysa varsayılan pakete düşer); şubeler merkezin paketini alır.
       const trialPlanSnapshot = sourceBusiness ? null : await transaction.get(db.doc(`platformPlans/${TRIAL_PLAN_ID}`));
       const inheritedPlan = sourceBusiness
-        ? String(sourceBusiness.data().plan ?? "RANDEVUGO")
+        ? subscriptionPlanOf(inheritedSubscription?.data(), sourceBusiness.data())
         : trialPlanSnapshot?.exists && trialPlanSnapshot.data()?.isActive !== false ? TRIAL_PLAN_ID : DEFAULT_PLATFORM_PLAN_ID;
       const inheritedPlanSnapshot = sourceBusiness
         ? await transaction.get(db.doc(`platformPlans/${inheritedPlan}`))
@@ -2310,12 +2319,14 @@ export const ensureAdminOwnedBusinessesLifetime = onCall(
     await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
     const businesses = await db.collection("businesses").where("ownerUid", "==", uid).limit(20).get();
     if (businesses.empty) return { success: true, affectedBusinesses: 0 };
+    const existing = await db.getAll(...businesses.docs.map((business) => db.doc(`subscriptions/${business.id}`)));
     const batch = db.batch();
-    businesses.docs.forEach((business) => {
+    businesses.docs.forEach((business, index) => {
       batch.set(db.doc(`subscriptions/${business.id}`), {
         businessId: business.id,
         userId: uid,
-        plan: String(business.data().plan ?? "RANDEVUGO"),
+        // Paket abonelik kaydında tutulur; işletme belgesindeki (olası eski) değerle EZİLMEZ.
+        plan: subscriptionPlanOf(existing[index].data(), business.data()),
         ...adminSubscriptionPatch("lifetime"),
         updatedBy: uid,
       }, { merge: true });
@@ -2354,9 +2365,15 @@ export const backfillLegacyBusinessSubscriptions = onCall(
     const batch = db.batch();
     let updated = 0;
 
+    let planRepaired = 0;
     businesses.docs.forEach((business, index) => {
       const subscription = subscriptionSnapshots[index];
       const row = subscription.data() ?? {};
+      // İşletme belgesindeki paket abonelikten farklıysa abonelik esas alınır (listeler aynı paketi göstersin).
+      if (subscription.exists && typeof row.plan === "string" && row.plan && business.data().plan !== row.plan) {
+        batch.update(business.ref, { plan: row.plan, updatedAt: FieldValue.serverTimestamp() });
+        planRepaired += 1;
+      }
       const lifetime = row.isLifetime === true || row.accessMode === "lifetime";
       if (lifetime) return;
 
@@ -2414,12 +2431,13 @@ export const backfillLegacyBusinessSubscriptions = onCall(
       updated += 1;
     });
 
-    if (updated > 0) {
+    if (updated > 0 || planRepaired > 0) {
       batch.set(db.collection("platformAuditLogs").doc(), {
         action: "subscription.legacy_backfill",
         entityType: "subscription",
         processed: businesses.size,
         updated,
+        planRepaired,
         actorUid: uid,
         createdAt: FieldValue.serverTimestamp(),
       });
@@ -2427,7 +2445,7 @@ export const backfillLegacyBusinessSubscriptions = onCall(
     }
 
     const nextCursor = businesses.size === pageSize ? businesses.docs.at(-1)?.id ?? null : null;
-    return { success: true, processed: businesses.size, updated, nextCursor };
+    return { success: true, processed: businesses.size, updated, planRepaired, nextCursor };
   }
 );
 
@@ -4744,6 +4762,24 @@ export const adminApprovalCategory = onDocumentCreated(
       { route: "admin_approvals", kind: "category", requestId: event.params.requestId },
       `approval-category-${event.params.requestId}`
     );
+  }
+);
+
+/**
+ * Abonelik paketi değişince işletme belgesindeki "plan" alanını eşitler.
+ * Paket her zaman subscriptions/{id}.plan'dan okunur; bu tetikleyici listelerin (işletmeler, keşif, iOS) aynı paketi göstermesini sağlar.
+ */
+export const syncBusinessPlanFromSubscription = onDocumentWritten(
+  { document: "subscriptions/{businessId}", region: "europe-west1" },
+  async (event) => {
+    const plan = event.data?.after.data()?.plan;
+    if (typeof plan !== "string" || !plan.trim() || event.data?.before.data()?.plan === plan) return;
+    const businessRef = db.doc(`businesses/${event.params.businessId}`);
+    await db.runTransaction(async (tx) => {
+      const business = await tx.get(businessRef);
+      if (!business.exists || business.data()?.plan === plan) return;
+      tx.update(businessRef, { plan, updatedAt: FieldValue.serverTimestamp() });
+    });
   }
 );
 
