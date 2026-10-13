@@ -23,6 +23,8 @@ export type MutlucellSettings = {
 
 export type SmsOperation = {
   id: string;
+  businessId?: string;
+  businessName?: string;
   type: "confirmation" | "reminder" | "cancellation" | "reschedule";
   phoneMasked: string;
   status: "accepted" | "pending" | "delivered" | "failed";
@@ -68,4 +70,36 @@ export async function testMutlucellSettings(phone: string): Promise<{ providerMe
 export async function getSmsOperations(): Promise<SmsOperationsResult> {
   const result = await callable<Record<string, never>, SmsOperationsResult>("getSmsOperations")({});
   return result.data;
+}
+
+export type SmsUsageStatus = "ok" | "low" | "exhausted" | "unlimited";
+
+export type SmsBusinessUsageRow = {
+  businessId: string;
+  businessName: string;
+  city: string;
+  planId: string;
+  planLabel: string;
+  quota: number | null;
+  used: number;
+  extraBalance: number;
+  status: SmsUsageStatus;
+};
+
+export type SmsBusinessUsageResult = {
+  periodKey: string;
+  providerBalance: number | null;
+  rows: SmsBusinessUsageRow[];
+  totals: { used: number; extraOutstanding: number; exhausted: number; low: number };
+  packs: { monthCount: number; monthSms: number; monthRevenueKurus: number; allTimeRevenueKurus: number };
+};
+
+export async function getSmsBusinessUsage(): Promise<SmsBusinessUsageResult> {
+  const result = await callable<Record<string, never>, SmsBusinessUsageResult>("getSmsBusinessUsage")({});
+  return result.data;
+}
+
+export async function adjustBusinessSmsCredits(input: { businessId: string; delta: number; reason: string }): Promise<number> {
+  const result = await callable<typeof input, { success: boolean; extraBalance: number }>("adjustBusinessSmsCredits")(input);
+  return result.data.extraBalance;
 }

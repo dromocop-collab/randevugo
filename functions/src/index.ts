@@ -10,7 +10,7 @@ import {
   getFirestore,
   type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
-import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { HttpsError, onCall, onRequest, type CallableRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { X509Certificate, createHash, randomUUID, randomInt } from "crypto";
@@ -26,8 +26,9 @@ import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppoint
 import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
-import { DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
+import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
 
 const db = getFirestore();
@@ -1193,7 +1194,11 @@ export const createBusiness = onCall(
       const organizationName = String(
         organization.data()?.name ?? sourceBusiness?.data().organizationName ?? sourceBusiness?.data().name ?? name
       ).slice(0, 100);
-      const inheritedPlan = String(sourceBusiness?.data().plan ?? "RANDEVUGO");
+      // İlk mağaza denemeyi Tam Kontrol'de yaşar (paket yoksa/kapalıysa varsayılan pakete düşer); şubeler merkezin paketini alır.
+      const trialPlanSnapshot = sourceBusiness ? null : await transaction.get(db.doc(`platformPlans/${TRIAL_PLAN_ID}`));
+      const inheritedPlan = sourceBusiness
+        ? String(sourceBusiness.data().plan ?? "RANDEVUGO")
+        : trialPlanSnapshot?.exists && trialPlanSnapshot.data()?.isActive !== false ? TRIAL_PLAN_ID : DEFAULT_PLATFORM_PLAN_ID;
       const inheritedPlanSnapshot = sourceBusiness
         ? await transaction.get(db.doc(`platformPlans/${inheritedPlan}`))
         : null;
@@ -1474,6 +1479,46 @@ export const ensureDefaultPlatformPlans = onCall(
       return true;
     });
     return { success: true, created, planId: DEFAULT_PLATFORM_PLAN_ID };
+  }
+);
+
+/** Süper admin: önerilen paket yapısını (yetkiler, şube/çalışan/SMS sınırları) uygular. Fiyatlara dokunmaz. */
+export const applyRecommendedPlatformPlans = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const refs = RECOMMENDED_PLATFORM_PLANS.map((plan) => db.doc(`platformPlans/${plan.id}`));
+    await db.runTransaction(async (tx) => {
+      const snapshots = await tx.getAll(...refs);
+      RECOMMENDED_PLATFORM_PLANS.forEach((plan, index) => {
+        tx.set(refs[index], {
+          ...recommendedPlanPatch(plan, snapshots[index].data()),
+          ...(snapshots[index].exists ? {} : { createdAt: FieldValue.serverTimestamp(), createdBy: uid }),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "platform.recommended_plans_applied", entityType: "platformPlan",
+        entityId: RECOMMENDED_PLATFORM_PLANS.map((plan) => plan.id).join(","), actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    // Denemedeki işletmeler kampanya sözü gereği tüm özellikleri görmeye devam eder: Temel'den Tam Kontrol'e taşınır.
+    const trialing = await db.collection("subscriptions").where("status", "==", "trialing").limit(2000).get();
+    const toMove = trialing.docs.filter((document) => String(document.data().plan ?? DEFAULT_PLATFORM_PLAN_ID) === DEFAULT_PLATFORM_PLAN_ID && document.data().isLifetime !== true);
+    for (let offset = 0; offset < toMove.length; offset += 200) {
+      const chunk = toMove.slice(offset, offset + 200);
+      // Silinmiş işletme için boş belge oluşturmamak adına yalnız var olan işletmeler güncellenir.
+      const businesses = await db.getAll(...chunk.map((document) => db.doc(`businesses/${document.id}`)));
+      const batch = db.batch();
+      chunk.forEach((document, index) => {
+        batch.set(document.ref, { plan: TRIAL_PLAN_ID, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        if (businesses[index].exists) batch.update(businesses[index].ref, { plan: TRIAL_PLAN_ID, updatedAt: FieldValue.serverTimestamp() });
+      });
+      await batch.commit();
+    }
+    return { success: true, planIds: RECOMMENDED_PLATFORM_PLANS.map((plan) => plan.id), trialsMoved: toMove.length };
   }
 );
 
@@ -1945,66 +1990,115 @@ export const startSubscriptionCheckout = onCall(
     const currency = String(planData.currency ?? "TRY").toUpperCase();
     if (currency !== "TRY" && currency !== "TL") throw new HttpsError("failed-precondition", "Online ödeme yalnız TL paketlerde kullanılabilir.");
 
-    const userIp = clientIpFrom(request.rawRequest);
-    if (!userIp || userIp === "unknown") throw new HttpsError("failed-precondition", "Bağlantı bilgisi alınamadı, sayfayı yenileyip tekrar deneyin.");
-    const email = String(request.auth?.token.email ?? business.email ?? "").trim();
-    if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("failed-precondition", "Hesabınızda e-posta adresi bulunmuyor.");
-
     const planLabel = String(planData.label ?? planData.name ?? planId);
-    const merchantOid = newMerchantOid();
-    const userBasket = buildUserBasket(`SeninRandevun ${planLabel} paketi (${billingCycle === "yearly" ? "1 yıl" : "1 ay"})`, amountKurus);
-    const customer = paytrCustomerFields({
-      name: request.auth?.token.name ?? business.ownerName ?? business.name,
-      address: [business.address, business.district, business.city].filter(Boolean).join(" "),
-      phone: business.phone,
+    return openPaytrCheckout({
+      request, business, businessId, config, termsVersion, amountKurus,
+      basketName: `SeninRandevun ${planLabel} paketi (${billingCycle === "yearly" ? "1 yıl" : "1 ay"})`,
+      paymentFields: { kind: "plan", planId, planLabel, billingCycle },
     });
-    const tokenInput = {
-      merchantId: config.merchantId, userIp, merchantOid, email, paymentAmount: amountKurus, userBasket,
-      noInstallment: "1" as const, maxInstallment: "0", currency: "TL", testMode: (config.testMode ? "1" : "0") as "0" | "1",
-    };
-    const resultUrl = `${SITE_ORIGIN}/dashboard/abonelik/odeme?oid=${merchantOid}`;
-
-    const paymentRef = db.doc(`subscriptionPayments/${merchantOid}`);
-    await paymentRef.set({
-      merchantOid, provider: "paytr", businessId,
-      organizationId: typeof business.organizationId === "string" ? business.organizationId : null,
-      uid, email, planId, planLabel, billingCycle, amountKurus, currency: "TRY",
-      testMode: config.testMode, status: "pending",
-      // Ön bilgilendirme + mesafeli satış onayı (delil): sürüm, zaman ve IP.
-      terms: { accepted: true, version: termsVersion || null, acceptedAt: FieldValue.serverTimestamp(), ip: userIp },
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    let token = "";
-    let reason = "";
-    try {
-      const response = await fetch(PAYTR_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-        body: new URLSearchParams({
-          merchant_id: config.merchantId, user_ip: userIp, merchant_oid: merchantOid, email,
-          payment_amount: String(amountKurus), paytr_token: paytrRequestToken(tokenInput, config.merchantKey, config.merchantSalt),
-          user_basket: userBasket, debug_on: tokenInput.testMode, no_installment: tokenInput.noInstallment,
-          max_installment: tokenInput.maxInstallment, user_name: customer.userName, user_address: customer.userAddress,
-          user_phone: customer.userPhone, merchant_ok_url: resultUrl, merchant_fail_url: `${resultUrl}&sonuc=hata`,
-          timeout_limit: "30", currency: "TL", test_mode: tokenInput.testMode, lang: "tr",
-        }).toString(),
-        signal: AbortSignal.timeout(15_000),
-      });
-      const body = await response.json().catch(() => null) as { status?: string; token?: string; reason?: string } | null;
-      if (body?.status === "success" && typeof body.token === "string" && body.token) token = body.token;
-      else reason = String(body?.reason ?? `HTTP ${response.status}`);
-    } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
-    }
-    if (!token) {
-      logger.error("PayTR token alınamadı", { merchantOid, businessId, reason });
-      await paymentRef.set({ status: "token_failed", failedReason: shortText(reason, 300), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      throw new HttpsError("unavailable", "Ödeme sayfası şu anda açılamadı. Lütfen biraz sonra tekrar deneyin.");
-    }
-    return { merchantOid, checkoutUrl: `${PAYTR_CHECKOUT_BASE}${token}` };
   }
 );
+
+/** Ek SMS kredisi satışı (yalnız web). Kredi ödeme bildirimiyle smsUsage/{businessId}.extraBalance'a eklenir. */
+export const startSmsPackCheckout = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "SMS paketi almak için giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const pack = findSmsPack(request.data?.packId);
+    if (!pack) throw new HttpsError("invalid-argument", "SMS paketi bulunamadı.");
+    if (request.data?.acceptedTerms !== true) {
+      throw new HttpsError("invalid-argument", "Devam etmek için mesafeli satış sözleşmesini onaylayın.");
+    }
+    const termsVersion = String(request.data?.termsVersion ?? "").slice(0, 20);
+    await consumeSecurityLimit(`paytr-checkout:${uid}`, 12, 60 * 60_000);
+    const business = await requireBusinessManager(uid, businessId);
+    const config = await loadPaytrConfig();
+    if (!config || (config.testMode && !(await isPlatformAdminAccount(uid, request.auth?.token.email as string | undefined)))) {
+      throw new HttpsError("failed-precondition", "PAYMENT_NOT_CONFIGURED: Online ödeme henüz açılmadı.");
+    }
+    return openPaytrCheckout({
+      request, business, businessId, config, termsVersion, amountKurus: toKurus(pack.price),
+      basketName: `SeninRandevun ek SMS kredisi (${pack.count} SMS)`,
+      paymentFields: { kind: "sms_pack", packId: pack.id, smsCount: pack.count, planLabel: `${pack.count} SMS`, billingCycle: null },
+    });
+  }
+);
+
+export const getSmsPacks = onCall({ region: "europe-west1" }, async () => ({ packs: SMS_PACKS }));
+
+/** Ödeme kaydını yazar, PayTR token'ı alır ve güvenli ödeme sayfası adresini döner. */
+async function openPaytrCheckout(input: {
+  request: CallableRequest;
+  business: Record<string, unknown>;
+  businessId: string;
+  config: PaytrConfig;
+  termsVersion: string;
+  amountKurus: number;
+  basketName: string;
+  paymentFields: Record<string, unknown>;
+}) {
+  const { request, business, businessId, config, termsVersion, amountKurus, basketName, paymentFields } = input;
+  const uid = request.auth!.uid;
+  const userIp = clientIpFrom(request.rawRequest);
+  if (!userIp || userIp === "unknown") throw new HttpsError("failed-precondition", "Bağlantı bilgisi alınamadı, sayfayı yenileyip tekrar deneyin.");
+  const email = String(request.auth?.token.email ?? business.email ?? "").trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("failed-precondition", "Hesabınızda e-posta adresi bulunmuyor.");
+
+  const merchantOid = newMerchantOid();
+  const userBasket = buildUserBasket(basketName, amountKurus);
+  const customer = paytrCustomerFields({
+    name: request.auth?.token.name ?? business.ownerName ?? business.name,
+    address: [business.address, business.district, business.city].filter(Boolean).join(" "),
+    phone: business.phone,
+  });
+  const tokenInput = {
+    merchantId: config.merchantId, userIp, merchantOid, email, paymentAmount: amountKurus, userBasket,
+    noInstallment: "1" as const, maxInstallment: "0", currency: "TL", testMode: (config.testMode ? "1" : "0") as "0" | "1",
+  };
+  const resultUrl = `${SITE_ORIGIN}/dashboard/abonelik/odeme?oid=${merchantOid}`;
+
+  const paymentRef = db.doc(`subscriptionPayments/${merchantOid}`);
+  await paymentRef.set({
+    merchantOid, provider: "paytr", businessId,
+    organizationId: typeof business.organizationId === "string" ? business.organizationId : null,
+    uid, email, ...paymentFields, amountKurus, currency: "TRY",
+    testMode: config.testMode, status: "pending",
+    // Ön bilgilendirme + mesafeli satış onayı (delil): sürüm, zaman ve IP.
+    terms: { accepted: true, version: termsVersion || null, acceptedAt: FieldValue.serverTimestamp(), ip: userIp },
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  let token = "";
+  let reason = "";
+  try {
+    const response = await fetch(PAYTR_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({
+        merchant_id: config.merchantId, user_ip: userIp, merchant_oid: merchantOid, email,
+        payment_amount: String(amountKurus), paytr_token: paytrRequestToken(tokenInput, config.merchantKey, config.merchantSalt),
+        user_basket: userBasket, debug_on: tokenInput.testMode, no_installment: tokenInput.noInstallment,
+        max_installment: tokenInput.maxInstallment, user_name: customer.userName, user_address: customer.userAddress,
+        user_phone: customer.userPhone, merchant_ok_url: resultUrl, merchant_fail_url: `${resultUrl}&sonuc=hata`,
+        timeout_limit: "30", currency: "TL", test_mode: tokenInput.testMode, lang: "tr",
+      }).toString(),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = await response.json().catch(() => null) as { status?: string; token?: string; reason?: string } | null;
+    if (body?.status === "success" && typeof body.token === "string" && body.token) token = body.token;
+    else reason = String(body?.reason ?? `HTTP ${response.status}`);
+  } catch (error) {
+    reason = error instanceof Error ? error.message : String(error);
+  }
+  if (!token) {
+    logger.error("PayTR token alınamadı", { merchantOid, businessId, reason });
+    await paymentRef.set({ status: "token_failed", failedReason: shortText(reason, 300), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    throw new HttpsError("unavailable", "Ödeme sayfası şu anda açılamadı. Lütfen biraz sonra tekrar deneyin.");
+  }
+  return { merchantOid, checkoutUrl: `${PAYTR_CHECKOUT_BASE}${token}` };
+}
 
 /** PayTR "Bildirim URL"si. Yanıt düz metin "OK" olmalı; aksi halde PayTR tekrar dener. */
 export const paytrNotification = onRequest(
@@ -2059,6 +2153,25 @@ export const paytrNotification = onRequest(
       if (!Number.isFinite(totalAmount) || totalAmount < Number(payment.amountKurus)) {
         tx.set(paymentRef, { ...common, status: "amount_mismatch" }, { merge: true });
         return "amount_mismatch" as const;
+      }
+
+      if (payment.kind === "sms_pack") {
+        const smsCount = Math.max(0, Math.floor(Number(payment.smsCount ?? 0)));
+        const usageRef = db.doc(`smsUsage/${businessId}`);
+        const state = normalizeSmsUsage((await tx.get(usageRef)).data(), smsPeriodKey());
+        // Ek kredi gelince "kota doldu" uyarısı bu ay tekrar gönderilebilsin diye sıfırlanır.
+        tx.set(usageRef, { businessId, ...state, extraBalance: state.extraBalance + smsCount, notified: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        tx.set(paymentRef, { ...common, status: "paid", paidAt: FieldValue.serverTimestamp(), extraBalanceAfter: state.extraBalance + smsCount }, { merge: true });
+        tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+          type: "sms_pack_paid", title: "Ek SMS kredisi eklendi",
+          body: `${smsCount} SMS hesabınıza eklendi. Toplam ek kredi: ${state.extraBalance + smsCount}.`,
+          isRead: false, createdAt: FieldValue.serverTimestamp(),
+        });
+        tx.set(db.collection("platformAuditLogs").doc(), {
+          action: "sms.pack_paid", entityType: "subscriptionPayment", entityId: merchantOid, businessId,
+          smsCount, amountKurus: payment.amountKurus, testMode: payment.testMode === true, createdAt: FieldValue.serverTimestamp(),
+        });
+        return "paid" as const;
       }
 
       const cycle: BillingCycle = payment.billingCycle === "yearly" ? "yearly" : "monthly";
@@ -4347,6 +4460,8 @@ async function runBusinessAutomations(businessId: string, trigger: BusinessAutom
   const snapshot = await db.collection(`businesses/${businessId}/automationRules`).where("enabled", "==", true).limit(50).get();
   const rules = snapshot.docs.filter((item) => item.data().trigger === trigger).slice(0, 20);
   if (!rules.length) return;
+  // Paket düşürülünce eski kurallar çalışmaya devam etmesin (kural yazma zaten firestore.rules'ta kısıtlı).
+  try { await requirePlanEntitlement(businessId, "automations"); } catch { return; }
   const notificationRefs = rules.map((rule) => {
     const executionId = createHash("sha256").update(`${eventId}:${rule.id}`).digest("hex").slice(0, 32);
     return db.doc(`businesses/${businessId}/notifications/automation_${executionId}`);
@@ -5606,6 +5721,47 @@ async function syncAppointmentReminderJob(
   }, { merge: true });
 }
 
+// ── İşletme SMS kotası (paket smsMonthlyQuota + satın alınan ek kredi) ──
+async function businessSmsQuota(businessId: string): Promise<number | null> {
+  const subscription = (await db.doc(`subscriptions/${businessId}`).get()).data();
+  if (subscription?.isLifetime === true || subscription?.accessMode === "lifetime") return null;
+  const planId = String(subscription?.plan ?? "RANDEVUGO");
+  return planSmsQuota((await db.doc(`platformPlans/${planId}`).get()).data());
+}
+
+async function notifySmsQuota(businessId: string, kind: "low" | "exhausted", periodKey: string, quota: number) {
+  const usageRef = db.doc(`smsUsage/${businessId}`);
+  const shouldNotify = await db.runTransaction(async (tx) => {
+    const notified = ((await tx.get(usageRef)).data()?.notified ?? {}) as Record<string, unknown>;
+    if (notified[kind] === periodKey) return false;
+    tx.set(usageRef, { notified: { [kind]: periodKey } }, { merge: true });
+    return true;
+  });
+  if (!shouldNotify) return;
+  await db.collection(`businesses/${businessId}/notifications`).add({
+    type: kind === "low" ? "sms_quota_low" : "sms_quota_exhausted",
+    title: kind === "low" ? "SMS kotanız azaldı" : "SMS kotanız doldu",
+    body: kind === "low"
+      ? `Bu ayki ${quota} SMS'in %80'ini kullandınız. Web panelindeki Abonelik sayfasından ek SMS alabilirsiniz.`
+      : "Bu ay randevu SMS'leri gönderilmiyor (uygulama bildirimleri devam ediyor). Web panelindeki Abonelik sayfasından ek SMS alabilir veya Tam Kontrol paketine geçebilirsiniz.",
+    isRead: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
+/** Gönderilen SMS'i işletmenin kotasından düşer; eşik aşılırsa bir kez bildirir. */
+async function recordBusinessSmsUsage(businessId: string, credits: number, quota: number | null) {
+  const periodKey = smsPeriodKey();
+  const usageRef = db.doc(`smsUsage/${businessId}`);
+  const next = await db.runTransaction(async (tx) => {
+    const state = consumeSms(normalizeSmsUsage((await tx.get(usageRef)).data(), periodKey), credits, quota);
+    tx.set(usageRef, { businessId, ...state, quota, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return state;
+  });
+  const warning = smsQuotaWarning(next, quota);
+  if (warning && quota !== null) await notifySmsQuota(businessId, warning, periodKey, quota);
+}
+
 async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference) {
   let job: FirebaseFirestore.DocumentData | null = null;
   await db.runTransaction(async (tx) => {
@@ -5671,6 +5827,16 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       await ref.delete();
       return;
     }
+    const smsQuota = await businessSmsQuota(businessId);
+    const usage = normalizeSmsUsage((await db.doc(`smsUsage/${businessId}`).get()).data(), smsPeriodKey());
+    if (!smsAllowance(usage, smsQuota).canSend) {
+      await Promise.all([
+        ref.delete(),
+        appointmentRef.update({ [`sms.${type}.status`]: "skipped_quota", [`sms.${type}.skippedAt`]: FieldValue.serverTimestamp() }),
+      ]);
+      if (smsQuota !== null) await notifySmsQuota(businessId, "exhausted", usage.periodKey, smsQuota);
+      return;
+    }
     const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
     const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
     const staffName = String(appointment.staffName ?? "").trim().slice(0, 70);
@@ -5716,6 +5882,8 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+    await recordBusinessSmsUsage(businessId, mutlucellCredits(providerMessageId), smsQuota)
+      .catch((usageError) => logger.warn("SMS kullanımı kaydedilemedi", { businessId, error: String(usageError) }));
   } catch (error) {
     const attempts = Number(data.attempts ?? 0) + 1;
     const message = error instanceof Error ? error.message.slice(0, 300) : "SMS gönderilemedi.";
@@ -6037,12 +6205,18 @@ export const getSmsOperations = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
-    const snapshot = await db.collection("smsOperationsLogs").orderBy("sentAt", "desc").limit(60).get();
+    const snapshot = await db.collection("smsOperationsLogs").orderBy("sentAt", "desc").limit(200).get();
+    const businessIds = [...new Set(snapshot.docs.map((document) => String(document.data().businessId ?? "")).filter(Boolean))];
+    const businessDocs = businessIds.length ? await db.getAll(...businessIds.map((id) => db.doc(`businesses/${id}`))) : [];
+    const names = new Map(businessDocs.map((document) => [document.id, String(document.data()?.name ?? "Silinmiş işletme")]));
     const rows = snapshot.docs.map((document) => {
       const data = document.data();
       const sentAt = data.sentAt as Timestamp | undefined;
+      const businessId = String(data.businessId ?? "");
       return {
         id: document.id,
+        businessId,
+        businessName: businessId ? names.get(businessId) ?? "—" : "Platform",
         type: String(data.type ?? ""),
         phoneMasked: String(data.phoneMasked ?? ""),
         status: String(data.status ?? "accepted"),
@@ -6061,6 +6235,104 @@ export const getSmsOperations = onCall(
         credits: rows.reduce((total, row) => total + row.credits, 0),
       },
     };
+  }
+);
+
+/** Süper admin: işletme bazında bu ayki SMS kullanımı, kota durumu, ek krediler ve SMS paketi gelirleri. */
+export const getSmsBusinessUsage = onCall(
+  { region: "europe-west1", secrets: [MUTLUCELL_USERNAME, MUTLUCELL_API_KEY] },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const periodKey = smsPeriodKey();
+    const [usageSnapshot, plansSnapshot, packsSnapshot, providerBalance] = await Promise.all([
+      db.collection("smsUsage").limit(1000).get(),
+      db.collection("platformPlans").get(),
+      db.collection("subscriptionPayments").where("kind", "==", "sms_pack").where("status", "==", "paid").limit(1000).get(),
+      getMutlucellConfiguration().then((config) => fetchMutlucellBalance(config)).catch(() => null),
+    ]);
+    const planQuota = new Map(plansSnapshot.docs.map((document) => [document.id, planSmsQuota(document.data())]));
+    const planLabel = new Map(plansSnapshot.docs.map((document) => [document.id, String(document.data().label ?? document.data().name ?? document.id)]));
+    const ids = usageSnapshot.docs.map((document) => document.id);
+    const [businessDocs, subscriptionDocs] = ids.length
+      ? await Promise.all([db.getAll(...ids.map((id) => db.doc(`businesses/${id}`))), db.getAll(...ids.map((id) => db.doc(`subscriptions/${id}`)))])
+      : [[], []];
+    const rows = usageSnapshot.docs.map((document, index) => {
+      const state = normalizeSmsUsage(document.data(), periodKey);
+      const subscription = subscriptionDocs[index]?.data();
+      const lifetime = subscription?.isLifetime === true || subscription?.accessMode === "lifetime";
+      const planId = String(subscription?.plan ?? businessDocs[index]?.data()?.plan ?? "RANDEVUGO");
+      const quota = lifetime ? null : planQuota.get(planId) ?? null;
+      const warning = smsQuotaWarning(state, quota);
+      return {
+        businessId: document.id,
+        businessName: String(businessDocs[index]?.data()?.name ?? "Silinmiş işletme"),
+        city: String(businessDocs[index]?.data()?.city ?? ""),
+        planId, planLabel: lifetime ? "Süresiz" : planLabel.get(planId) ?? planId,
+        quota, used: state.used, extraBalance: state.extraBalance,
+        status: quota === null ? "unlimited" : warning ?? "ok",
+      };
+    }).sort((a, b) => b.used - a.used);
+
+    const monthStart = Date.parse(`${periodKey}-01T00:00:00+03:00`);
+    const packs = packsSnapshot.docs.map((document) => document.data());
+    const paidAtMillis = (row: FirebaseFirestore.DocumentData) => (row.paidAt as Timestamp | undefined)?.toMillis() ?? 0;
+    const thisMonthPacks = packs.filter((row) => paidAtMillis(row) >= monthStart && row.testMode !== true);
+    const livePacks = packs.filter((row) => row.testMode !== true);
+    return {
+      periodKey,
+      providerBalance,
+      rows,
+      totals: {
+        used: rows.reduce((sum, row) => sum + row.used, 0),
+        extraOutstanding: rows.reduce((sum, row) => sum + row.extraBalance, 0),
+        exhausted: rows.filter((row) => row.status === "exhausted").length,
+        low: rows.filter((row) => row.status === "low").length,
+      },
+      packs: {
+        monthCount: thisMonthPacks.length,
+        monthSms: thisMonthPacks.reduce((sum, row) => sum + Number(row.smsCount ?? 0), 0),
+        monthRevenueKurus: thisMonthPacks.reduce((sum, row) => sum + Number(row.amountKurus ?? 0), 0),
+        allTimeRevenueKurus: livePacks.reduce((sum, row) => sum + Number(row.amountKurus ?? 0), 0),
+      },
+    };
+  }
+);
+
+/** Süper admin: işletmeye ek SMS kredisi verir veya düşer (ör. telafi, hediye, hatalı yükleme). */
+export const adjustBusinessSmsCredits = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const delta = Math.trunc(Number(request.data?.delta));
+    if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 100_000) throw new HttpsError("invalid-argument", "Kredi miktarı -100.000 ile 100.000 arasında, sıfırdan farklı olmalı.");
+    const reason = String(request.data?.reason ?? "").trim().slice(0, 200);
+    if (reason.length < 3) throw new HttpsError("invalid-argument", "Kısa bir açıklama yazın (ör. telafi, kampanya hediyesi).");
+    const business = await db.doc(`businesses/${businessId}`).get();
+    if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    const usageRef = db.doc(`smsUsage/${businessId}`);
+    const balance = await db.runTransaction(async (tx) => {
+      const state = normalizeSmsUsage((await tx.get(usageRef)).data(), smsPeriodKey());
+      const next = Math.max(0, state.extraBalance + delta);
+      tx.set(usageRef, { businessId, ...state, extraBalance: next, ...(delta > 0 ? { notified: FieldValue.delete() } : {}), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "sms.credits_adjusted", entityType: "business", entityId: businessId, businessId,
+        delta, balanceBefore: state.extraBalance, balanceAfter: next, reason, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+      if (delta > 0) {
+        tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
+          type: "sms_credits_granted", title: "Hesabınıza SMS kredisi eklendi",
+          body: `${delta.toLocaleString("tr-TR")} ek SMS kredisi tanımlandı. Toplam ek kredi: ${next.toLocaleString("tr-TR")}.`,
+          isRead: false, createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      return next;
+    });
+    return { success: true, extraBalance: balance };
   }
 );
 

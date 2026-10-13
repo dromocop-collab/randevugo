@@ -55,7 +55,24 @@ function PaymentResult() {
   }
 
   const amount = `${(payment.amountKurus / 100).toLocaleString("tr-TR")} ₺`;
-  const summary = `${payment.planLabel} · ${payment.billingCycle === "yearly" ? "1 yıl" : "1 ay"} · ${amount}${payment.testMode ? " (test)" : ""}`;
+  const isSmsPack = payment.kind === "sms_pack";
+  const summary = isSmsPack
+    ? `${(payment.smsCount ?? 0).toLocaleString("tr-TR")} ek SMS · ${amount}${payment.testMode ? " (test)" : ""}`
+    : `${payment.planLabel} · ${payment.billingCycle === "yearly" ? "1 yıl" : "1 ay"} · ${amount}${payment.testMode ? " (test)" : ""}`;
+
+  if (payment.status === "paid" && isSmsPack) {
+    return (
+      <StudioPage label="Ödeme sonucu">
+        <Panel icon={CheckCircle2} title="Ödemeniz alındı, SMS krediniz eklendi." description={summary}>
+          <Notice tone="accent" icon={CheckCircle2}>
+            {typeof payment.extraBalanceAfter === "number" ? <>Toplam ek krediniz: <b>{payment.extraBalanceAfter.toLocaleString("tr-TR")} SMS</b>. </> : null}
+            Ek krediler ay sonunda silinmez; aylık kotanız bittiğinde kullanılır.
+          </Notice>
+          <div style={{ marginTop: 16 }}>{back}</div>
+        </Panel>
+      </StudioPage>
+    );
+  }
 
   if (payment.status === "paid") {
     const until = formatDate(payment.periodEnd);

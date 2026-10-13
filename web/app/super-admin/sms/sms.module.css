@@ -61,3 +61,28 @@
   .logMain { display: contents; }
   .logMain small { font-size: 13px; color: var(--ink-2); }
 }
+
+/* İşletme SMS kullanımı */
+.usageActions { display: inline-flex; align-items: center; gap: 8px; }
+.usageToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; }
+.usageToolbar > :first-child { flex: 1 1 240px; }
+.usageName { display: grid; gap: 2px; min-width: 0; }
+.usageName b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usageName small { color: var(--muted); font-size: 12px; }
+.usageCell { display: grid; gap: 6px; }
+.usageText { font-variant-numeric: tabular-nums; font-weight: 700; }
+.usageTrack { display: block; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.usageTrack i { display: block; height: 100%; border-radius: inherit; background: var(--green-2); }
+.usageTrack i[data-status="low"] { background: var(--amber); }
+.usageTrack i[data-status="exhausted"] { background: var(--red); }
+.usageCard { display: grid; gap: 10px; width: 100%; text-align: left; }
+.usageCardFoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.usageCardFoot small { margin-right: auto; color: var(--muted); }
+.adjustForm { display: grid; gap: 14px; }
+.adjustNow { margin: 0; color: var(--muted); font-size: 13px; }
+.adjustNow b { color: var(--ink, inherit); }
+.adjustPresets { display: flex; flex-wrap: wrap; gap: 8px; }
+.adjustPreset { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: inherit; font-weight: 750; cursor: pointer; }
+.adjustPreset[data-active] { border-color: currentColor; background: var(--soft); }
+.adjustField { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.adjustField input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-weight: 600; }

@@ -83,3 +83,22 @@
 .terms { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--k-line); border-radius: 14px; color: var(--k-muted); font-size: 13px; line-height: 1.5; cursor: pointer; }
 .terms input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--k-core); }
 .terms a, .footnote a { color: var(--k-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+.smsStats { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
+.smsStats > div { display: grid; gap: 2px; }
+.smsStats small { color: var(--k-muted); font-size: 12px; font-weight: 700; }
+.smsStats b { color: var(--k-ink); font-size: 24px; font-weight: 820; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.smsStats b span { color: var(--k-faint); font-size: 15px; font-weight: 700; }
+.smsStats > :last-child { margin-left: auto; }
+.smsBar { height: 8px; margin: 14px 0 0; border-radius: 999px; background: var(--k-line); overflow: hidden; }
+.smsBar i { display: block; height: 100%; border-radius: inherit; background: var(--k-core); transition: width 0.4s ease; }
+.smsBar i[data-tone="warn"] { background: #d99a1e; }
+.smsBar i[data-tone="bad"] { background: #d4473b; }
+.smsNote { margin: 10px 0 0; color: var(--k-faint); font-size: 12px; line-height: 1.6; }
+.smsPacks { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0 0; }
+.smsPack { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--k-line); border-radius: 16px; background: transparent; color: var(--k-ink); text-align: left; cursor: pointer; transition: border-color 0.2s ease, transform 0.2s ease; }
+.smsPack:hover { border-color: var(--k-core); transform: translateY(-1px); }
+.smsPack span { display: inline-flex; align-items: center; gap: 6px; color: var(--k-muted); font-size: 13px; font-weight: 750; }
+.smsPack b { font-size: 20px; font-weight: 820; font-variant-numeric: tabular-nums; }
+.smsPack small { color: var(--k-faint); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .smsBar i, .smsPack { transition: none; } }

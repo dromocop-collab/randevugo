@@ -176,3 +176,12 @@ test("abonelik ödemesini yalnız işletme üyesi okur, kimse istemciden yazamaz
   await assertFails(updateDoc(doc(as("owner"), path), { status: "paid" }));
   await assertFails(setDoc(doc(as("owner"), "subscriptionPayments/SRFAKE12345678"), { businessId: BIZ, status: "paid" }));
 });
+
+test("SMS kullanımını yalnız işletme üyesi okur; kredi istemciden artırılamaz", async () => {
+  const path = `smsUsage/${BIZ}`;
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), path), { periodKey: "2026-10", used: 10, extraBalance: 0 }));
+  await assertSucceeds(getDoc(doc(as("owner"), path)));
+  await assertSucceeds(getDoc(doc(as("staff1"), path)));
+  await assertFails(getDoc(doc(as("attacker"), path)));
+  await assertFails(updateDoc(doc(as("owner"), path), { extraBalance: 9999 }));
+});

@@ -14,7 +14,7 @@ export default function Page() {
     { title: "Satıcı bilgileri", body: "Hizmeti sunan satıcıya ait bilgiler:", bullets: sellerLines() },
     {
       title: "Hizmetin temel nitelikleri",
-      body: "SeninRandevun; işletmelerin online randevu sayfası, takvim, çalışan, hizmet, müşteri, bildirim ve paket kapsamındaki diğer modülleri kullanmasını sağlayan bulut tabanlı bir randevu yönetim yazılımıdır. Hizmet internet tarayıcısı ve mobil uygulamalar üzerinden kullanılır; fiziksel teslimat yoktur. Paketlerin kapsamı Fiyatlar sayfasında ve işletme panelindeki Abonelik ekranında listelenir.",
+      body: "SeninRandevun; işletmelerin online randevu sayfası, takvim, çalışan, hizmet, müşteri, bildirim ve paket kapsamındaki diğer modülleri kullanmasını sağlayan bulut tabanlı bir randevu yönetim yazılımıdır. Hizmet internet tarayıcısı ve mobil uygulamalar üzerinden kullanılır; fiziksel teslimat yoktur. Paketlerin kapsamı (şube, çalışan ve aylık SMS kotası dahil) Fiyatlar sayfasında ve işletme panelindeki Abonelik ekranında listelenir. Ek SMS kredisi, aylık kota bittiğinde kullanılan ve ay sonunda silinmeyen SMS adedidir; ödeme onayıyla hesaba anında eklenir.",
     },
     {
       title: "Toplam fiyat ve ödeme",

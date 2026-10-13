@@ -179,3 +179,12 @@
   .column i, .rankTrack i { animation: none; }
   .insight, .insight:hover { transition: none; transform: none; }
 }
+
+.tableWrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 11px 10px; border-bottom: 1px solid var(--k-line); text-align: right; white-space: nowrap; }
+.table th:first-child, .table td:first-child { text-align: left; }
+.table thead th { color: var(--k-muted); font-size: 12px; font-weight: 750; }
+.table tbody th { color: var(--k-ink); font-weight: 750; }
+.table tfoot th, .table tfoot td { border-bottom: 0; color: var(--k-ink); font-weight: 800; }
+.tableNote { margin: 12px 0 0; color: var(--k-faint); font-size: 12px; line-height: 1.6; }

@@ -23,13 +23,14 @@ export default function Page() {
         "Platform: seninrandevun.com internet sitesi, işletme paneli ve SeninRandevun mobil uygulamaları.",
         "Paket: Platform'da yayımlanan, kapsamı ve fiyatı satın alma ekranında gösterilen işletme abonelik planı.",
         "Dönem: Satın alınan kullanım süresi; aylık pakette 1 takvim ayı, yıllık pakette 1 takvim yılıdır.",
+        "SMS Kotası ve Ek SMS Kredisi: Paket'e dahil, her takvim ayı yenilenen randevu SMS'i adedi ile bu kota bittiğinde kullanılan, ayrıca satın alınan ve ay sonunda silinmeyen SMS kredisi.",
         "Ödeme Kuruluşu: Kart ödemelerine aracılık eden, 6493 sayılı Kanun kapsamında lisanslı PayTR Ödeme ve Elektronik Para Kuruluşu A.Ş.",
         "Tüketici: 6502 sayılı Tüketicinin Korunması Hakkında Kanun anlamında ticari veya mesleki olmayan amaçlarla hareket eden gerçek veya tüzel kişi.",
       ],
     },
     {
       title: "Sözleşmenin konusu",
-      body: "Sözleşmenin konusu, Alıcı'nın seçtiği Paket'in seçilen Dönem boyunca Platform üzerinde kullanım hakkının (yazılım hizmeti) elektronik ortamda sağlanması ve bunun karşılığında bedelin ödenmesidir. Hizmet; randevu, takvim, çalışan, hizmet, müşteri ve Paket kapsamındaki diğer modüllerin kullanımını içerir. Satıcı, işletmenin müşterilerine sunduğu asıl hizmetin (kuaförlük, sağlık, güzellik vb.) tarafı veya sağlayıcısı değildir.",
+      body: "Sözleşmenin konusu, Alıcı'nın seçtiği Paket'in seçilen Dönem boyunca Platform üzerinde kullanım hakkının (yazılım hizmeti) elektronik ortamda sağlanması ve bunun karşılığında bedelin ödenmesidir. Sözleşme, aynı şekilde satın alınan ek SMS kredilerini de kapsar. Hizmet; randevu, takvim, çalışan, hizmet, müşteri ve Paket kapsamındaki diğer modüllerin kullanımını içerir. Satıcı, işletmenin müşterilerine sunduğu asıl hizmetin (kuaförlük, sağlık, güzellik vb.) tarafı veya sağlayıcısı değildir.",
     },
     {
       title: "Hizmetin temel nitelikleri ve bedel",

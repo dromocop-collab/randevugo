@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BellRing, CalendarCheck2, CalendarClock, ChartColumnBig, Gauge, Layers3, Sparkles, TrendingUp, UsersRound, Wallet } from "lucide-react";
+import { ArrowRight, BellRing, CalendarCheck2, CalendarClock, ChartColumnBig, Download, Gauge, HandCoins, Layers3, Sparkles, TrendingUp, UsersRound, Wallet } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { listAppointments } from "@/features/appointments/appointment-repository";
 import { listCustomers } from "@/features/customers/customer-repository";
+import { listStaff } from "@/features/staff/staff-repository";
+import type { Staff } from "@/types/staff";
+import { buildCommissionReport, commissionCsv } from "./commission";
 import type { Appointment } from "@/types/appointments";
 import { Notice, Panel, Pill, Segmented, Sk, StatTile, cx, studio } from "@/app/dashboard/_studio";
 import { AreaChart, ColumnChart, RankBars, StackBar } from "./charts";
@@ -22,6 +25,7 @@ export function AnalyticsOverview() {
   const { businessId } = useBusinessContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [customerCount, setCustomerCount] = useState(0);
+  const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [range, setRange] = useState<"7" | "30" | "90">("30");
@@ -30,14 +34,15 @@ export function AnalyticsOverview() {
     if (!businessId) return;
     let active = true;
     queueMicrotask(() => { if (active) { setLoading(true); setError(""); } });
-    Promise.all([listAppointments(businessId), listCustomers(businessId)]).then(([items, customers]) => {
-      if (!active) return; setAppointments(items); setCustomerCount(customers.length);
+    Promise.all([listAppointments(businessId), listCustomers(businessId), listStaff(businessId).catch(() => [] as Staff[])]).then(([items, customers, members]) => {
+      if (!active) return; setAppointments(items); setCustomerCount(customers.length); setStaff(members);
     }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Analitik verileri alınamadı."); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [businessId]);
 
   const days = Number(range) as RangeDays;
   const report = useMemo(() => buildReport(appointments, customerCount, days), [appointments, customerCount, days]);
+  const commission = useMemo(() => buildCommissionReport(appointments, staff, days), [appointments, staff, days]);
   if (loading) return <AnalyticsLoading />;
 
   const period = `Son ${days} gün`;
@@ -111,6 +116,32 @@ export function AnalyticsOverview() {
         </Panel>
       </div>
 
+      <Panel icon={HandCoins} title="Prim raporu" description={`${period} · tamamlanan randevu cirosu × çalışanın prim oranı`}
+        actions={commission.rows.length ? <button type="button" className={cx(studio.btn, studio.btnSoft)} onClick={() => downloadCsv(commissionCsv(commission.rows, period), `prim-raporu-${days}-gun.csv`)}><Download size={15} aria-hidden /> CSV indir</button> : null}>
+        {commission.rows.length ? (
+          <div className={css.tableWrap}>
+            <table className={css.table}>
+              <caption className={studio.srOnly}>{period} prim raporu</caption>
+              <thead><tr><th scope="col">Çalışan</th><th scope="col">Randevu</th><th scope="col">Ciro</th><th scope="col">Oran</th><th scope="col">Hak edilen</th><th scope="col" title="Tüm zamanlarda hak edilen − ödenen">Ödenmemiş</th></tr></thead>
+              <tbody>
+                {commission.rows.map((row) => (
+                  <tr key={row.staffId}>
+                    <th scope="row">{row.name}</th>
+                    <td>{row.completed}</td>
+                    <td>{currency(row.revenue)}</td>
+                    <td>%{row.rate}</td>
+                    <td><b>{currency(row.earned)}</b></td>
+                    <td>{row.outstanding > 0 ? <Pill tone="warn">{currency(row.outstanding)}</Pill> : <Pill tone="ok">Ödendi</Pill>}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr><th scope="row">Toplam</th><td /><td>{currency(commission.totals.revenue)}</td><td /><td><b>{currency(commission.totals.earned)}</b></td><td>{currency(commission.totals.outstanding)}</td></tr></tfoot>
+            </table>
+          </div>
+        ) : <EmptyLine text="Prim raporu için Çalışanlar sayfasından çalışanlara prim oranı girin; tamamlanan randevular burada hesaplanır." />}
+        <p className={css.tableNote}>Prim ödemesini çalışanın düzenleme penceresindeki &quot;Ödendi işaretle&quot; ile kaydedin; ödenmemiş tutar buradan düşer.</p>
+      </Panel>
+
       <Panel icon={Sparkles} title="Akıllı öneriler" description="Verinizden çıkan, hemen uygulayabileceğiniz sıradaki adımlar"
         actions={<Pill tone="accent">{report.insights.length} aksiyon hazır</Pill>}>
         <div className={css.insights}>
@@ -133,6 +164,15 @@ export function AnalyticsOverview() {
       </Panel>
     </div>
   );
+}
+
+function downloadCsv(content: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function Delta({ value, note }: { value: number; note: string }) {

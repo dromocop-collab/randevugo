@@ -4,13 +4,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { toast } from "sonner";
 import { collection, doc, getDoc, getDocs, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import {
-  BadgeCheck, CalendarClock, CircleAlert, Clock3, Copy, Crown, PackagePlus, PencilLine, Plus, ReceiptText,
+  BadgeCheck, CalendarClock, CircleAlert, Clock3, Copy, Crown, MessageSquareText, PackagePlus, Sparkles, PencilLine, Plus, ReceiptText,
   RefreshCw, Save, Store, Trash2, UsersRound, WalletCards,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
 import {
-  DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, ensureDefaultPlatformPlans, isLegacyPlanId, listPlatformPlansWithSource,
+  DEFAULT_PLATFORM_PLAN_ID, applyRecommendedPlatformPlans, defaultPlatformPlan, ensureDefaultPlatformPlans, isLegacyPlanId, listPlatformPlansWithSource,
   planDisplayLabel, refreshPublicPricingPages, removePlatformPlan, savePlatformPlan, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import { backfillLegacyBusinessSubscriptions, completeSubscriptionPurchase, deleteBusinessPermanently, ensureAdminOwnedBusinessesLifetime, updateBusinessSubscription, type AdminSubscriptionMode } from "@/features/subscriptions/admin-subscription-repository";
@@ -121,6 +121,7 @@ export default function SuperAdminSubscriptionsPage() {
   const [editing, setEditing] = useState<PlatformPlan>(freshPlan);
   const [busy, setBusy] = useState(false);
   const [creatingDefault, setCreatingDefault] = useState(false);
+  const [applyingRecommended, setApplyingRecommended] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<PlatformPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,6 +187,21 @@ export default function SuperAdminSubscriptionsPage() {
     queueMicrotask(() => { void reload(true); });
   }, [reload]);
 
+  async function applyRecommended() {
+    if (!window.confirm("Temel (SeninRandevun) ve Tam Kontrol paketlerinin özellikleri, şube/çalışan/SMS sınırları önerilen yapıya göre güncellenecek. Fiyatlar değişmez; mevcut işletmelerin fazla şube/çalışanı korunur. Deneme sürecindeki işletmeler Tam Kontrol'e taşınır. Devam edilsin mi?")) return;
+    setApplyingRecommended(true);
+    try {
+      const result = await applyRecommendedPlatformPlans();
+      toast.success(`Önerilen paket ayarları uygulandı (${result.planIds.join(", ")}). ${result.trialsMoved} deneme işletmesi Tam Kontrol'e taşındı.`);
+      void refreshPublicPricingPages();
+      await reload();
+    } catch (error) {
+      toast.error((error as Error).message || "Önerilen ayarlar uygulanamadı.");
+    } finally {
+      setApplyingRecommended(false);
+    }
+  }
+
   async function createDefaultPlan() {
     setCreatingDefault(true);
     try {
@@ -242,6 +258,7 @@ export default function SuperAdminSubscriptionsPage() {
     if (!Number.isFinite(editing.yearlyPrice) || !Number.isFinite(editing.monthlyPrice) || editing.yearlyPrice < 0 || editing.monthlyPrice < 0) { toast.error("Fiyatlar sıfır veya daha büyük olmalıdır."); return; }
     if (!Number.isInteger(editing.maxStores) || editing.maxStores < 1 || editing.maxStores > 25) { toast.error("Şube limiti 1–25 arasında olmalıdır."); return; }
     if (!Number.isInteger(editing.maxStaff) || editing.maxStaff < 1) { toast.error("Çalışan limiti en az 1 olmalıdır."); return; }
+    if (editing.smsMonthlyQuota !== null && (!Number.isInteger(editing.smsMonthlyQuota) || editing.smsMonthlyQuota < 0)) { toast.error("SMS kotası 0 veya daha büyük bir tam sayı olmalıdır (boş = sınırsız)."); return; }
     if (editing.entitlements.length === 0) { toast.error("Pakete en az bir kullanılabilir özellik seçin."); return; }
     setBusy(true);
     try { await savePlatformPlan({ ...editing, id: editing.id.trim(), label: editing.label.trim(), description: editing.description.trim() }); setPlanEditorOpen(false); await reload(); toast.success(editingPlanId ? "Paket değişiklikleri kaydedildi." : "Paket oluşturuldu.", { description: editing.isActive ? "Fiyat sayfası güncelleniyor (en geç 1 dakika)." : "Paket satışta değil; fiyat sayfasında gösterilmez." }); setEditingPlanId(editing.id); }
@@ -392,7 +409,10 @@ export default function SuperAdminSubscriptionsPage() {
         </Panel>
       )}
 
-      <Panel title="Paketler" description="Kartlardan düzenleyin; seçilmeyen özellikler hem menüden gizlenir hem sunucuda engellenir." actions={<AdminButton size="sm" variant="secondary" icon={Plus} onClick={() => startNewPlan()}>Yeni paket</AdminButton>}>
+      <Panel title="Paketler" description="Kartlardan düzenleyin; seçilmeyen özellikler hem menüden gizlenir hem sunucuda engellenir." actions={<span className="flex flex-wrap gap-2">
+        <AdminButton size="sm" variant="secondary" icon={Sparkles} loading={applyingRecommended} onClick={() => void applyRecommended()}>Önerilen ayarları uygula</AdminButton>
+        <AdminButton size="sm" variant="secondary" icon={Plus} onClick={() => startNewPlan()}>Yeni paket</AdminButton>
+      </span>}>
         <div className={styles.planGrid}>
           {plans.map((plan) => (
             <article key={plan.id} className={styles.plan} data-recommended={plan.isRecommended || undefined}>
@@ -413,6 +433,7 @@ export default function SuperAdminSubscriptionsPage() {
                 <Badge size="sm" icon={BadgeCheck}>{plan.entitlements.length} özellik</Badge>
                 <Badge size="sm" icon={Store}>{plan.maxStores} şube</Badge>
                 <Badge size="sm" icon={UsersRound}>{plan.maxStaff} çalışan</Badge>
+                <Badge size="sm" icon={MessageSquareText}>{plan.smsMonthlyQuota === null ? "SMS sınırsız" : `${plan.smsMonthlyQuota} SMS/ay`}</Badge>
                 <Badge size="sm" icon={Clock3}>{plan.trialDays} gün deneme</Badge>
                 <Badge size="sm" tone="violet">{usage(plan.id)} abonelik</Badge>
               </div>
@@ -483,6 +504,7 @@ export default function SuperAdminSubscriptionsPage() {
               <Input label="Deneme (gün)" type="number" inputMode="numeric" value={editing.trialDays} onChange={(event) => setEditing({ ...editing, trialDays: Number(event.target.value) })} min={0} />
               <Input label="Maks. şube" type="number" inputMode="numeric" value={editing.maxStores} onChange={(event) => setEditing({ ...editing, maxStores: Number(event.target.value) })} min={1} max={25} />
               <Input label="Maks. çalışan" type="number" inputMode="numeric" value={editing.maxStaff} onChange={(event) => setEditing({ ...editing, maxStaff: Number(event.target.value) })} min={1} />
+              <Input label="Aylık SMS (boş = sınırsız)" type="number" inputMode="numeric" value={editing.smsMonthlyQuota ?? ""} onChange={(event) => setEditing({ ...editing, smsMonthlyQuota: event.target.value === "" ? null : Number(event.target.value) })} min={0} />
               <Input label="Sıra (fiyat sayfası)" type="number" inputMode="numeric" placeholder="Boş: fiyata göre" value={editing.sortOrder ?? ""} onChange={(event) => setEditing({ ...editing, sortOrder: event.target.value === "" ? null : Number(event.target.value) })} />
             </div>
             <div className="mt-3"><Input label="Paket açıklaması" value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} /></div>

@@ -6,7 +6,8 @@ import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { BusinessFaq } from "@/components/home/business-sections";
 import { BusinessCtaLink, PricingPlans } from "@/components/home/pricing-plans";
 import { ScrollReveal } from "@/components/home/scroll-reveal";
-import { featuredPlan, loadPublicPlans } from "@/components/home/public-plans";
+import { loadPublicPlans } from "@/components/home/public-plans";
+import { staffLimitLabel, storeLimitLabel, type PlatformPlan } from "@/features/subscriptions/platform-plan-domain";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { safeJsonLd } from "@/lib/seo/metadata";
 import styles from "@/components/home/business.module.css";
@@ -32,11 +33,10 @@ const STEPS = [
 
 export default async function PricingPage() {
   const plans = await loadPublicPlans();
-  const plan = featuredPlan(plans);
   const trialDays = Math.max(0, ...plans.map((item) => item.trialDays));
   const multiple = plans.length > 1;
-  const maxStaff = Math.max(...plans.map((item) => item.maxStaff));
-  const maxStores = Math.max(...plans.map((item) => item.maxStores));
+  const limitText = (item: PlatformPlan) => `${item.label}: ${storeLimitLabel(item.maxStores)}, ${staffLimitLabel(item.maxStaff).toLocaleLowerCase("tr-TR")}${item.smsMonthlyQuota !== null ? `, ayda ${item.smsMonthlyQuota} SMS` : ""}`;
+  const smsPlans = plans.filter((item) => item.smsMonthlyQuota !== null);
   const included = new Set(plans.flatMap((item) => item.entitlements.length ? item.entitlements : ALL_SUBSCRIPTION_ENTITLEMENTS));
   const groups = SUBSCRIPTION_ENTITLEMENTS.reduce<Record<string, typeof SUBSCRIPTION_ENTITLEMENTS[number][]>>((acc, item) => {
     if (included.has(item.key)) (acc[item.group] ??= []).push(item);
@@ -44,10 +44,9 @@ export default async function PricingPage() {
   }, {});
 
   const faqs = [
-    ["Ücretsiz deneme kampanyası nasıl çalışır?", `İşletmeler seçtikleri pakette belirtilen deneme süresinden yararlanır${trialDays ? ` (şu anda ${trialDays} gün)` : ""}. Başlamak için kredi kartı gerekmez; deneme boyunca paketteki tüm özellikler açıktır.`],
-    ["Çalışan veya randevu limiti var mı?", multiple
-      ? `Randevu sayısı sınırsızdır. Çalışan ve şube limitleri pakete göre değişir; paketlerimizde ${maxStaff} çalışana ve ${maxStores} şubeye kadar destek vardır. Her paketin limitleri kartında yazar.`
-      : `Randevu sayısı sınırsızdır. ${plan.label} paketinde ${plan.maxStaff} çalışana ve ${plan.maxStores} şubeye kadar destek vardır.`],
+    ["Ücretsiz deneme kampanyası nasıl çalışır?", `İşletmeler seçtikleri pakette belirtilen deneme süresinden yararlanır${trialDays ? ` (şu anda ${trialDays} gün)` : ""}. Başlamak için kredi kartı gerekmez; deneme boyunca en kapsamlı paketteki tüm özellikler açıktır; deneme bitince size uyan paketi seçersiniz.`],
+    ["Çalışan veya randevu limiti var mı?", `Randevu sayısı sınırsızdır. Şube, çalışan ve SMS sınırları pakete göre değişir: ${plans.map(limitText).join("; ")}.`],
+    ...(smsPlans.length ? [["SMS hatırlatmaları dahil mi?", "Evet. Randevu onayı, hatırlatma, iptal ve değişiklik SMS'leri paketinizin aylık SMS kotasından düşer; kota her ay yenilenir. Kota biterse işletme panelinden ek SMS paketi alabilirsiniz. Uygulama bildirimleri her pakette sınırsızdır."] as const] : []),
     ...(multiple ? [["Paketler arasında geçiş yapabilir miyim?", "Evet. İşletme panelinizdeki Abonelik sayfasından dilediğiniz zaman paket değiştirebilirsiniz; kayıtlarınız korunur."] as const] : []),
     ["İstediğim zaman ayrılabilir miyim?", "Evet. Taahhüt yoktur; aboneliğinizi dilediğiniz zaman sonlandırabilirsiniz."],
     ["Mevcut verilerimi taşıyabilir miyim?", "Müşteri listenizi aktarabilir, kurulum desteğimizden yararlanabilirsiniz."],

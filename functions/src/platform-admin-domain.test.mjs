@@ -25,3 +25,20 @@ test("varsayılan paket tek plan fiyatlarını ve tüm yetkileri taşır", () =>
   assert.deepEqual(plan.entitlements, ["appointments", "branches"]);
   assert.equal(plan.isActive, true);
 });
+
+test("recommended plans keep existing prices and set limits", async () => {
+  const { RECOMMENDED_PLATFORM_PLANS, recommendedPlanPatch } = await import("../lib/platform-admin-domain.js");
+  const [basic, full] = RECOMMENDED_PLATFORM_PLANS;
+  const patch = recommendedPlanPatch(basic, { label: "SeninRandevun", monthlyPrice: 490, yearlyPrice: 4990, currency: "TRY" });
+  assert.equal("monthlyPrice" in patch, false);
+  assert.equal(patch.maxStores, 1);
+  assert.equal(patch.smsMonthlyQuota, 150);
+  assert.ok(patch.entitlements.includes("customers"));
+  assert.ok(!patch.entitlements.includes("branches"));
+  const fresh = recommendedPlanPatch(full, undefined);
+  assert.equal(fresh.monthlyPrice, 1499);
+  assert.equal(fresh.label, "Tam Kontrol");
+  assert.ok(fresh.entitlements.includes("branches") && fresh.entitlements.includes("analytics"));
+  // Tam paket Temel'in tüm yetkilerini içerir.
+  assert.ok(basic.entitlements.every((key) => full.entitlements.includes(key)));
+});

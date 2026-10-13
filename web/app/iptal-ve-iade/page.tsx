@@ -25,6 +25,7 @@ export default function Page() {
       "30 günü aşan mücbir sebep nedeniyle sözleşmenin feshedilmesi",
     ] },
     { title: "İade edilmeyen durumlar", body: "Yukarıdaki haller dışında, başlamış dönemin kullanılmayan kısmı için kısmi iade yapılmaz. Kullanım koşullarına aykırılık nedeniyle hesabın askıya alınması veya sözleşmenin feshedilmesi halinde iade yapılmaz. Kampanya, indirim ve ücretsiz deneme süreleri nakde çevrilmez." },
+    { title: "Ek SMS kredisi", body: "Satın alınan ek SMS kredisi süresizdir, ay sonunda silinmez ve paket süresi dolsa bile hesabınızda kalır. Mükerrer ödeme veya kredinin teknik hata nedeniyle hesaba tanımlanamaması halinde tam iade yapılır; bunun dışında kullanılmış ya da kullanılmamış krediler için iade yapılmaz." },
     { title: "Başvuru ve iade süreci", body: `İade taleplerinizi işletme panelindeki destek bölümünden, ${SELLER.email} adresinden veya ${SELLER.phone} numaralı telefondan; ödeme tarihi, işletme adı ve talebinizin gerekçesiyle iletebilirsiniz. Talepler en geç 5 iş günü içinde sonuçlandırılır. Uygun bulunan iadeler, onay tarihinden itibaren en geç 14 gün içinde ödemenin yapıldığı karta ödeme kuruluşu üzerinden yapılır; tutarın kartınıza yansıma süresi bankanıza bağlıdır. İadeye konu bedel için gerekli fatura düzeltmeleri mevzuata uygun olarak yapılır.` },
   ]} />;
 }

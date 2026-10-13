@@ -16,6 +16,8 @@ export interface PlatformPlan {
   trialDays: number;
   maxStores: number;
   maxStaff: number;
+  /** Aylık randevu SMS kotası; null = sınırsız (alanı olmayan eski paketler). */
+  smsMonthlyQuota: number | null;
   /** Satışa ve atamaya açık mı (süper admin "Satışta" anahtarı). */
   isActive: boolean;
   isRecommended: boolean;
@@ -43,6 +45,7 @@ export function defaultPlatformPlan(): PlatformPlan {
     // Paket belgesi yokken backend 10 şubeye izin verir; varsayılan paket bunu korur.
     maxStores: PLAN_FEATURES.maxBranches,
     maxStaff: PLAN_FEATURES.maxStaff,
+    smsMonthlyQuota: null,
     isActive: true,
     isRecommended: true,
     sortOrder: null,
@@ -121,6 +124,7 @@ export function normalizePlatformPlan(id: string, data: RawPlan): PlatformPlan {
     trialDays: Math.max(0, Math.round(toNumber(data.trialDays) ?? 0)),
     maxStores: Math.max(1, Math.round(toNumber(data.maxStores) ?? 3)),
     maxStaff: Math.max(1, Math.round(toNumber(data.maxStaff) ?? 250)),
+    smsMonthlyQuota: smsQuotaOf(data.smsMonthlyQuota),
     isActive,
     isRecommended: recommendedFlags.includes(true),
     sortOrder,
@@ -128,6 +132,25 @@ export function normalizePlatformPlan(id: string, data: RawPlan): PlatformPlan {
     features: toStringList(data.features),
     entitlements: [...new Set(entitlements)],
   };
+}
+
+function smsQuotaOf(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const quota = toNumber(value);
+  return quota !== null && quota >= 0 ? Math.floor(quota) : null;
+}
+
+/** Kartlardaki çalışan sınırı: 100 ve üstü pratikte sınırsız gösterilir. */
+export function staffLimitLabel(maxStaff: number): string {
+  return maxStaff >= 100 ? "Sınırsız çalışan" : `${maxStaff} çalışan`;
+}
+
+export function storeLimitLabel(maxStores: number): string {
+  return maxStores <= 1 ? "1 şube" : `${maxStores} şubeye kadar`;
+}
+
+export function smsQuotaLabel(quota: number | null): string | null {
+  return quota === null ? null : `Ayda ${quota.toLocaleString("tr-TR")} SMS`;
 }
 
 /** Görüntüleme sırası: sortOrder (tanımlılar önce) → aylık fiyat → ad. */

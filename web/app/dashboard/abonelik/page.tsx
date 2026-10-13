@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, CreditCard, Crown, LoaderCircle, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
+import { Building2, Check, CreditCard, Crown, LoaderCircle, MessageSquareText, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout } from "@/features/subscriptions/subscription-repository";
 import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { smsQuotaLabel, staffLimitLabel, storeLimitLabel } from "@/features/subscriptions/platform-plan-domain";
 import { TERMS_VERSION } from "@/lib/legal/seller";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
 import { ConfirmSheet, EmptyState, HeroChip, Notice, Panel, Pill, Segmented, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "@/app/dashboard/_studio";
 import css from "./abonelik.module.css";
+import { SmsCreditsPanel } from "./sms-credits-panel";
 
 type Cycle = "monthly" | "yearly";
 
@@ -137,6 +139,8 @@ export default function SubscriptionPage() {
         </p>
       </Panel>
 
+      {businessId ? <SmsCreditsPanel businessId={businessId} quota={currentPlan?.smsMonthlyQuota ?? null} unlimited={lifetime || (currentPlan?.smsMonthlyQuota ?? null) === null} /> : null}
+
       <ConfirmSheet
         open={confirmPlan !== null}
         tone="primary"
@@ -195,8 +199,9 @@ function PlanCard({ plan, highlighted, cycle, selected, active, lifetime, busy, 
         {cycle === "yearly" && saving ? <Pill tone="ok">%{saving} tasarruf</Pill> : null}
       </div>
       <div className={css.limits}>
-        <span><Building2 size={14} aria-hidden />{plan.maxStores} şube</span>
-        <span><UsersRound size={14} aria-hidden />{plan.maxStaff} çalışan</span>
+        <span><Building2 size={14} aria-hidden />{storeLimitLabel(plan.maxStores)}</span>
+        <span><UsersRound size={14} aria-hidden />{staffLimitLabel(plan.maxStaff)}</span>
+        {smsQuotaLabel(plan.smsMonthlyQuota) ? <span><MessageSquareText size={14} aria-hidden />{smsQuotaLabel(plan.smsMonthlyQuota)}</span> : null}
       </div>
       <ul className={css.features}>
         {entitlements.map((key) => <li key={key}><span className={css.check} aria-hidden><Check size={12} strokeWidth={3} /></span>{entitlementLabel(key)}</li>)}

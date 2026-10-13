@@ -20,6 +20,7 @@ import {
   cx, groupByDay, timeOf, ui, useNow, type Tone,
 } from "../_pages-ui";
 import s from "./sms.module.css";
+import { SmsBusinessUsage } from "./business-usage";
 
 type StatusFilter = "all" | "delivered" | "pending" | "failed";
 
@@ -95,7 +96,7 @@ export default function SmsCenterPage() {
     return operations.rows
       .filter((row) => statusFilter === "all" || (statusFilter === "pending" ? row.status === "pending" || row.status === "accepted" : row.status === statusFilter))
       .filter((row) => typeFilter === "all" || row.type === typeFilter)
-      .filter((row) => !needle || row.phoneMasked.replace(/\s/g, "").includes(needle))
+      .filter((row) => !needle || row.phoneMasked.replace(/\s/g, "").includes(needle) || (row.businessName ?? "").toLocaleLowerCase("tr-TR").replace(/\s/g, "").includes(needle.toLocaleLowerCase("tr-TR")))
       .map((row) => ({ ...row, sentMillis: row.sentAt ? new Date(row.sentAt).getTime() : null }))
       .sort((x, y) => (y.sentMillis ?? 0) - (x.sentMillis ?? 0));
   }, [logSearch, operations.rows, statusFilter, typeFilter]);
@@ -178,6 +179,8 @@ export default function SmsCenterPage() {
         <StatCard label="Kredi" value={summary.credits.toLocaleString("tr-TR")} hint="harcanan" icon={Coins} tone="blue" />
       </StatGrid>
 
+      <SmsBusinessUsage />
+
       <Card title="Sağlık kontrolü" description={`${healthChecks.filter((check) => check.ok).length}/${healthChecks.length} kontrol başarılı`} icon={ListChecks}>
         <div className={s.checks}>
           {healthChecks.map((check) => (
@@ -237,7 +240,7 @@ export default function SmsCenterPage() {
         action={<IconBtn label="Kayıtları yenile" icon={RefreshCw} spinning={refreshing} onClick={() => void manualRefresh()} disabled={refreshing} />}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 6 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <SearchField value={logSearch} onChange={setLogSearch} placeholder="Telefonda ara (maskeli)…" label="SMS kayıtlarında ara" shortcut={false} />
+            <SearchField value={logSearch} onChange={setLogSearch} placeholder="İşletme adı veya telefon (maskeli)…" label="SMS kayıtlarında ara" shortcut={false} />
             <Segmented label="Teslim durumu" value={statusFilter} onChange={setStatusFilter} options={[
               { value: "all", label: "Tümü" },
               { value: "delivered", label: "Teslim", count: summary.delivered },
@@ -255,7 +258,7 @@ export default function SmsCenterPage() {
               {group.items.map((row) => (
                 <div key={row.id} className={s.logRow}>
                   <span className={s.logTime}>{timeOf(row.sentMillis)}</span>
-                  <span className={s.logMain}><b>{TYPE_LABEL[row.type] ?? row.type}</b><small className={ui.mono}>{row.phoneMasked}</small></span>
+                  <span className={s.logMain}><b>{TYPE_LABEL[row.type] ?? row.type}{row.businessName ? <> · {row.businessName}</> : null}</b><small className={ui.mono}>{row.phoneMasked}</small></span>
                   <span className={s.logEnd}><span className={s.credits}>{row.credits} kredi</span><Pill tone={statusTone(row.status)} dot>{row.statusLabel}</Pill></span>
                 </div>
               ))}

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpRight, BadgeCheck, Check, Gift, Minus, Sparkles, Store, UsersRound } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, Check, Gift, MessageSquareText, Minus, Sparkles, Store, UsersRound } from "lucide-react";
 import { PLAN_FEATURE_LIST } from "@/constants/plans";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
 import type { PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
+import { smsQuotaLabel, staffLimitLabel, storeLimitLabel } from "@/features/subscriptions/platform-plan-domain";
 import { useAuth } from "@/hooks/use-auth";
 import { currencySymbol, formatPrice, yearlySavingPercent } from "./public-plans";
 import styles from "./business.module.css";
@@ -75,8 +76,9 @@ function PlanCard({ plan, cycle, href, label, single, compare }: { plan: Platfor
       {plan.trialDays > 0 && <p className={styles.planTrial}><Gift size={15} aria-hidden="true" /> İlk {plan.trialDays} gün ücretsiz · Kredi kartı gerekmez</p>}
       <Link href={href} className={`${styles.planCta} ${!single && !plan.isRecommended ? styles.planCtaQuiet : ""}`}>{label} <ArrowUpRight size={17} aria-hidden="true" /></Link>
       <div className={styles.planLimits}>
-        <span><Store size={14} aria-hidden="true" /> {plan.maxStores} şubeye kadar</span>
-        <span><UsersRound size={14} aria-hidden="true" /> {plan.maxStaff} çalışana kadar</span>
+        <span><Store size={14} aria-hidden="true" /> {storeLimitLabel(plan.maxStores)}</span>
+        <span><UsersRound size={14} aria-hidden="true" /> {staffLimitLabel(plan.maxStaff)}</span>
+        {smsQuotaLabel(plan.smsMonthlyQuota) ? <span><MessageSquareText size={14} aria-hidden="true" /> {smsQuotaLabel(plan.smsMonthlyQuota)}</span> : null}
       </div>
     </div>
     <div className={styles.planFeatures}>

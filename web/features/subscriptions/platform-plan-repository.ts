@@ -69,6 +69,16 @@ export async function ensureDefaultPlatformPlans(): Promise<{ created: boolean; 
   return { created: result.data.created === true, planId: String(result.data.planId ?? DEFAULT_PLATFORM_PLAN_ID) };
 }
 
+/** Yalnızca süper admin: önerilen paket yapısını uygular (Temel + Tam Kontrol yetkileri, şube/çalışan/SMS sınırları). Fiyatlara dokunmaz. */
+export async function applyRecommendedPlatformPlans(): Promise<{ planIds: string[]; trialsMoved: number }> {
+  const callable = httpsCallable<Record<string, never>, { success: boolean; planIds: string[]; trialsMoved?: number }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "applyRecommendedPlatformPlans",
+  );
+  const { data } = await callable({});
+  return { planIds: data.planIds ?? [], trialsMoved: Number(data.trialsMoved ?? 0) };
+}
+
 export async function savePlatformPlan(input: PlatformPlan): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { isFallback, sortOrder, ...plan } = input;

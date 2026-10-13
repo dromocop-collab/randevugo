@@ -324,6 +324,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // İşletmenin aylık SMS kullanımı ve ek kredisi: yalnız functions yazar.
+    match /smsUsage/{businessId} {
+      allow read: if isAuthenticated() && (isPlatformAdmin() || isMember(businessId) || isBusinessOwner(businessId));
+      allow write: if false;
+    }
+
     // PayTR ödeme kayıtları: yalnız functions yazar (startSubscriptionCheckout + paytrNotification).
     match /subscriptionPayments/{merchantOid} {
       allow read: if isAuthenticated() && (isPlatformAdmin() ||
