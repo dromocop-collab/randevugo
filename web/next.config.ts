@@ -55,6 +55,9 @@ const nextConfig: NextConfig = {
       { source: "/.well-known/assetlinks.json", destination: "/api/assetlinks" },
       { source: "/api/randevu/:token/takvim.ics", destination: `${fn}?token=:token&kind=ics` },
       { source: "/api/randevu/:token/cuzdan.pkpass", destination: `${fn}?token=:token&kind=pkpass` },
+      // Özel auth alan adı (lib/firebase/config.ts): giriş penceresi seninrandevun.com üzerinden açılır.
+      { source: "/__/auth/:path*", destination: "https://randevugo-d1d2e.firebaseapp.com/__/auth/:path*" },
+      { source: "/__/firebase/:path*", destination: "https://randevugo-d1d2e.firebaseapp.com/__/firebase/:path*" },
     ];
   },
   async headers() {
