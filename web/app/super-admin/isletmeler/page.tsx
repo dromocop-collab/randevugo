@@ -179,12 +179,13 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
     }
   }
 
-  async function changePlan(biz: BusinessItem, planId: string) {
+  async function changePlan(biz: BusinessItem, planId: string, grantPeriod?: "monthly" | "yearly") {
     setBusy(`plan:${biz.id}`);
     try {
-      const result = await assignBusinessPlan(biz.id, planId);
+      const result = await assignBusinessPlan(biz.id, planId, grantPeriod);
       await Promise.all(businesses.filter((item) => item.id === biz.id || (biz.organizationId && item.organizationId === biz.organizationId)).map((item) => refreshFromServer(item.id).catch(() => undefined)));
-      toast.success(`${planDisplayLabel(planId, plans)} paketi ${result.affectedBranches} şubeye tanımlandı.`);
+      const until = result.grantedUntil ? new Date(result.grantedUntil).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) : null;
+      toast.success(`${planDisplayLabel(planId, plans)} paketi ${result.affectedBranches} şubeye tanımlandı.${until ? ` Erişim ${until} tarihine kadar.` : ""}`);
     } catch (error) {
       toast.error((error as Error).message || "Paket atanamadı.");
     } finally {
@@ -390,7 +391,7 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
           onSelect={setSelectedId}
           onToggleHidden={() => void toggleHidden(selected)}
           onSuspend={() => setSuspendTarget(selected)}
-          onChangePlan={(planId) => void changePlan(selected, planId)}
+          onChangePlan={(planId, grantPeriod) => void changePlan(selected, planId, grantPeriod)}
           onDecide={(decision) => void decide(selected, decision)}
         />
       )}
@@ -475,11 +476,13 @@ function BusinessDetailSheet({
   onSelect: (id: string) => void;
   onToggleHidden: () => void;
   onSuspend: () => void;
-  onChangePlan: (planId: string) => void;
+  onChangePlan: (planId: string, grantPeriod?: "monthly" | "yearly") => void;
   onDecide: (decision: "approved" | "rejected") => void;
 }) {
   const [extra, setExtra] = useState<{ id: string; owner: OwnerInfo; subscription: SubscriptionInfo } | null>(null);
   const [planChoice, setPlanChoice] = useState<{ id: string; plan: string } | null>(null);
+  const [periodChoice, setPeriodChoice] = useState<{ id: string; period: "none" | "monthly" | "yearly" } | null>(null);
+  const chosenPeriod = periodChoice?.id === biz.id ? periodChoice.period : "none";
   const chosenPlan = planChoice?.id === biz.id ? planChoice.plan : isLegacyPlanId(biz.plan) ? DEFAULT_PLATFORM_PLAN_ID : biz.plan;
 
   useEffect(() => {
@@ -553,11 +556,22 @@ function BusinessDetailSheet({
               ...assignable.map((plan) => ({ value: plan.id, label: `${plan.label} · ${plan.monthlyPrice.toLocaleString("tr-TR")} ₺/ay` })),
             ]}
           />
-          <AdminButton variant="primary" loading={isBusy("plan")} disabled={anyBusy || chosenPlan === biz.plan} onClick={() => onChangePlan(chosenPlan)}>
+          <SelectField
+            ariaLabel="Verilecek süre"
+            value={chosenPeriod}
+            onChange={(value) => setPeriodChoice({ id: biz.id, period: value as "none" | "monthly" | "yearly" })}
+            disabled={anyBusy}
+            options={[
+              { value: "none", label: "Süreye dokunma" },
+              { value: "monthly", label: "+1 ay süre ver" },
+              { value: "yearly", label: "+1 yıl süre ver" },
+            ]}
+          />
+          <AdminButton variant="primary" loading={isBusy("plan")} disabled={anyBusy || (chosenPlan === biz.plan && chosenPeriod === "none")} onClick={() => onChangePlan(chosenPlan, chosenPeriod === "none" ? undefined : chosenPeriod)}>
             {isLegacyPlanId(biz.plan) && chosenPlan === DEFAULT_PLATFORM_PLAN_ID ? "Taşı" : "Uygula"}
           </AdminButton>
         </div>
-        <p className={styles.hint}>Paket firmadaki tüm şubelere uygulanır; erişim süresi Abonelikler sayfasından yönetilir.</p>
+        <p className={styles.hint}>Paket firmadaki tüm şubelere uygulanır. Süre seçerseniz kalan sürenin üstüne eklenir ve abonelik &quot;Aktif&quot; olur (süresiz işletmelerde değişmez). Tarihi elle ayarlamak için Abonelikler › Yönet.</p>
 
         <h3 className={styles.sectionTitle}>Abonelik</h3>
         {!info ? <Skeleton height={64} radius={16} /> : sub ? (

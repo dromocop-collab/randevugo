@@ -27,10 +27,11 @@ export async function setBusinessSuspension(businessId: string, suspended: boole
   return result.data;
 }
 
-export async function assignBusinessPlan(businessId: string, plan: string) {
-  const result = await callable<{ businessId: string; plan: string }, { success: boolean; plan: string; affectedBranches: number }>(
+/** grantPeriod: paketle birlikte süre ver (+1 ay / +1 yıl, kalan sürenin ardına eklenir). Yoksa süre değişmez. */
+export async function assignBusinessPlan(businessId: string, plan: string, grantPeriod?: "monthly" | "yearly") {
+  const result = await callable<{ businessId: string; plan: string; grantPeriod?: string }, { success: boolean; plan: string; affectedBranches: number; grantedUntil?: string | null }>(
     "assignBusinessPlan",
-  )({ businessId, plan });
+  )({ businessId, plan, ...(grantPeriod ? { grantPeriod } : {}) });
   return result.data;
 }
 

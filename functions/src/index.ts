@@ -1709,6 +1709,8 @@ export const assignBusinessPlan = onCall(
     await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
     const businessId = requireString(request.data?.businessId, "businessId");
     const plan = requireString(request.data?.plan, "Paket").toUpperCase().slice(0, 40);
+    // İsteğe bağlı: paketle birlikte süre ver (+1 ay / +1 yıl). Ödemelerle aynı kural: kalan sürenin ardına eklenir.
+    const grantPeriod: BillingCycle | null = request.data?.grantPeriod === "yearly" ? "yearly" : request.data?.grantPeriod === "monthly" ? "monthly" : null;
     const planSnapshot = await db.doc(`platformPlans/${plan}`).get();
     if (!planSnapshot.exists && !["RANDEVUGO", "FREE", "PRO", "BUSINESS"].includes(plan)) throw new HttpsError("not-found", "Seçilen paket bulunamadı.");
     const business = await db.doc(`businesses/${businessId}`).get();
@@ -1719,15 +1721,26 @@ export const assignBusinessPlan = onCall(
       : [business];
     const subscriptionSnapshots = await db.getAll(...branchDocuments.map((branch) => db.doc(`subscriptions/${branch.id}`)));
     const batch = db.batch();
+    const now = Date.now();
+    let grantedUntil: string | null = null;
     branchDocuments.forEach((branch, index) => {
+      const row = subscriptionSnapshots[index].data();
+      const lifetime = row?.isLifetime === true || row?.accessMode === "lifetime";
+      const window = grantPeriod && !lifetime ? paidPeriodWindow(subscriptionEndMillis(row), grantPeriod, now) : null;
+      if (window && branch.id === businessId) grantedUntil = new Date(window.endMillis).toISOString();
       batch.update(branch.ref, { plan, updatedAt: FieldValue.serverTimestamp() });
       batch.set(db.doc(`subscriptions/${branch.id}`), {
         businessId: branch.id,
         ...(organizationId ? { organizationId } : {}),
         plan,
-        // Paket atamak erişim süresini değiştirmez. Süre yalnızca
-        // updateBusinessSubscription üzerinden açıkça yönetilir.
-        ...(!subscriptionSnapshots[index].exists ? {
+        // grantPeriod yoksa paket atamak erişim süresini değiştirmez (süre Abonelikler › Yönet'ten de yönetilir).
+        ...(window ? {
+          status: "active", accessMode: "timed", isLifetime: false,
+          ...(row?.status === "active" && subscriptionEndMillis(row) ? {} : { subscriptionStartedAt: new Date(window.startMillis).toISOString() }),
+          subscriptionEndsAt: new Date(window.endMillis).toISOString(),
+          trialEndsAt: FieldValue.delete(), reminders: FieldValue.delete(), expiredAt: FieldValue.delete(),
+          renewalEnabled: false, paymentProvider: "manual",
+        } : !subscriptionSnapshots[index].exists ? {
           status: "expired", accessMode: "timed", isLifetime: false,
           renewalEnabled: false, paymentProvider: "manual",
         } : {}),
@@ -1737,10 +1750,10 @@ export const assignBusinessPlan = onCall(
     });
     batch.set(db.collection("platformAuditLogs").doc(), {
       action: "subscription.plan_assigned", businessId, organizationId: organizationId || null,
-      affectedBranches: branchDocuments.length, plan, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      affectedBranches: branchDocuments.length, plan, grantPeriod, grantedUntil, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
-    return { success: true, plan, affectedBranches: branchDocuments.length };
+    return { success: true, plan, affectedBranches: branchDocuments.length, grantedUntil };
   }
 );
 

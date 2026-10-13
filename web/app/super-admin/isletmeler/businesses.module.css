@@ -23,8 +23,8 @@
 @media (min-width: 768px) { .actions { display: flex; flex-wrap: wrap; } .actions > :nth-child(3) { margin-left: auto; } }
 .sectionTitle { margin: 10px 0 0; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sa-faint); }
 .sectionTitle small { font-weight: 600; letter-spacing: 0; }
-.planRow { display: flex; gap: 8px; }
-.planRow select { flex: 1; width: 100%; }
+.planRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.planRow select { flex: 1 1 160px; width: 100%; min-width: 0; }
 .hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sa-muted); }
 .link { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 0; background: none; color: var(--sa-brand-ink); font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
 .link:hover { text-decoration: underline; }
