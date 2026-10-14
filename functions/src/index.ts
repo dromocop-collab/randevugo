@@ -26,6 +26,7 @@ import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppoint
 import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
@@ -2048,6 +2049,110 @@ export const startSmsPackCheckout = onCall(
   }
 );
 
+/** İşletme fatura bilgileri (alıcı). Ödemeden önce zorunlu; yalnız yönetici/sahip okur ve yazar. */
+export const saveBillingProfile = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    let profile;
+    try { profile = normalizeBillingProfile(request.data?.profile as Record<string, unknown>); } catch (error) {
+      throw new HttpsError("invalid-argument", (error as Error).message);
+    }
+    await db.doc(`businesses/${businessId}/billing/profile`).set({ ...profile, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid });
+    return { success: true, profile };
+  }
+);
+
+/** Süper admin: PayTR ödemeleri + fatura durumu (en yeni 500). */
+export const listSubscriptionPayments = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const snapshot = await db.collection("subscriptionPayments").orderBy("createdAt", "desc").limit(500).get();
+    const businessIds = [...new Set(snapshot.docs.map((document) => String(document.data().businessId ?? "")).filter(Boolean))];
+    const businessDocs = businessIds.length ? await db.getAll(...businessIds.map((id) => db.doc(`businesses/${id}`))) : [];
+    const names = new Map(businessDocs.map((document) => [document.id, String(document.data()?.name ?? "Silinmiş işletme")]));
+    const iso = (value: unknown) => value instanceof Timestamp ? value.toDate().toISOString() : null;
+    const rows = snapshot.docs.map((document) => {
+      const data = document.data();
+      const invoice = (data.invoice ?? {}) as Record<string, unknown>;
+      const amountKurus = Number(data.amountKurus ?? 0);
+      return {
+        merchantOid: document.id,
+        businessId: String(data.businessId ?? ""),
+        businessName: names.get(String(data.businessId ?? "")) ?? "—",
+        kind: data.kind === "sms_pack" ? "sms_pack" : "plan",
+        label: String(data.planLabel ?? data.planId ?? ""),
+        billingCycle: data.billingCycle === "yearly" ? "yearly" : data.billingCycle === "monthly" ? "monthly" : null,
+        smsCount: Number(data.smsCount ?? 0) || null,
+        amountKurus,
+        vat: data.vat ?? vatBreakdown(amountKurus),
+        status: String(data.status ?? "pending"),
+        testMode: data.testMode === true,
+        createdAt: iso(data.createdAt),
+        paidAt: iso(data.paidAt),
+        paymentType: typeof data.paymentType === "string" ? data.paymentType : null,
+        failedReason: String(data.failedReasonMsg ?? data.failedReason ?? "") || null,
+        billing: data.billing ?? null,
+        billingTaxIdMasked: typeof data.billing?.taxId === "string" ? maskTaxId(data.billing.taxId) : null,
+        invoice: {
+          status: data.status === "paid" ? (invoice.status === "issued" ? "issued" : "pending") : "none",
+          number: typeof invoice.number === "string" ? invoice.number : null,
+          date: typeof invoice.date === "string" ? invoice.date : null,
+          url: typeof invoice.url === "string" ? invoice.url : null,
+          method: typeof invoice.method === "string" ? invoice.method : null,
+        },
+      };
+    });
+    const einvoice = (await db.doc("platformPrivateSettings/einvoice").get()).data();
+    return { rows, einvoiceProvider: typeof einvoice?.provider === "string" && einvoice.enabled !== false ? einvoice.provider : null };
+  }
+);
+
+/** Süper admin: ödemeyi elle "faturalandı" işaretler (e-Arşiv portalından/muhasebeciden kesilen fatura) veya işareti kaldırır. */
+export const markPaymentInvoice = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const merchantOid = requireString(request.data?.merchantOid, "Ödeme");
+    if (!isMerchantOid(merchantOid)) throw new HttpsError("invalid-argument", "Ödeme numarası geçersiz.");
+    const ref = db.doc(`subscriptionPayments/${merchantOid}`);
+    const clear = request.data?.clear === true;
+    const number = String(request.data?.number ?? "").trim().slice(0, 40);
+    const date = String(request.data?.date ?? "").trim();
+    const url = String(request.data?.url ?? "").trim().slice(0, 500);
+    if (!clear) {
+      if (number.length < 3) throw new HttpsError("invalid-argument", "Fatura numarasını girin.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError("invalid-argument", "Fatura tarihini girin.");
+      if (url && !/^https:\/\//.test(url)) throw new HttpsError("invalid-argument", "Fatura bağlantısı https ile başlamalı.");
+    }
+    await db.runTransaction(async (tx) => {
+      const payment = await tx.get(ref);
+      if (!payment.exists) throw new HttpsError("not-found", "Ödeme bulunamadı.");
+      if (payment.data()?.status !== "paid") throw new HttpsError("failed-precondition", "Yalnız tamamlanmış ödemeler faturalanır.");
+      // update: "invoice" alanını bütünüyle değiştirir (merge eski fatura no/tarihini bırakırdı).
+      tx.update(ref, {
+        invoice: clear
+          ? { status: "pending" }
+          : { status: "issued", number, date, ...(url ? { url } : {}), method: "manual", issuedBy: uid, issuedAt: FieldValue.serverTimestamp() },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: clear ? "invoice.unmarked" : "invoice.marked_issued", entityType: "subscriptionPayment", entityId: merchantOid,
+        businessId: payment.data()?.businessId ?? null, invoiceNumber: clear ? null : number, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return { success: true };
+  }
+);
+
 export const getSmsPacks = onCall({ region: "europe-west1" }, async () => ({ packs: SMS_PACKS }));
 
 /** Ödeme kaydını yazar, PayTR token'ı alır ve güvenli ödeme sayfası adresini döner. */
@@ -2063,6 +2168,14 @@ async function openPaytrCheckout(input: {
 }) {
   const { request, business, businessId, config, termsVersion, amountKurus, basketName, paymentFields } = input;
   const uid = request.auth!.uid;
+  // Fatura kesilebilmesi için alıcı bilgileri ödemeden önce zorunlu; ödeme kaydına o anki hali kopyalanır.
+  const billingSnapshot = await db.doc(`businesses/${businessId}/billing/profile`).get();
+  if (!billingSnapshot.exists) throw new HttpsError("failed-precondition", "BILLING_PROFILE_REQUIRED: Ödemeden önce fatura bilgilerinizi girin.");
+  let billing;
+  try { billing = normalizeBillingProfile(billingSnapshot.data()); } catch (error) {
+    throw new HttpsError("failed-precondition", `BILLING_PROFILE_REQUIRED: ${(error as Error).message}`);
+  }
+
   const userIp = clientIpFrom(request.rawRequest);
   if (!userIp || userIp === "unknown") throw new HttpsError("failed-precondition", "Bağlantı bilgisi alınamadı, sayfayı yenileyip tekrar deneyin.");
   const email = String(request.auth?.token.email ?? business.email ?? "").trim();
@@ -2086,6 +2199,7 @@ async function openPaytrCheckout(input: {
     merchantOid, provider: "paytr", businessId,
     organizationId: typeof business.organizationId === "string" ? business.organizationId : null,
     uid, email, ...paymentFields, amountKurus, currency: "TRY",
+    billing, vat: vatBreakdown(amountKurus),
     testMode: config.testMode, status: "pending",
     // Ön bilgilendirme + mesafeli satış onayı (delil): sürüm, zaman ve IP.
     terms: { accepted: true, version: termsVersion || null, acceptedAt: FieldValue.serverTimestamp(), ip: userIp },
@@ -2183,7 +2297,7 @@ export const paytrNotification = onRequest(
         const state = normalizeSmsUsage((await tx.get(usageRef)).data(), smsPeriodKey());
         // Ek kredi gelince "kota doldu" uyarısı bu ay tekrar gönderilebilsin diye sıfırlanır.
         tx.set(usageRef, { businessId, ...state, extraBalance: state.extraBalance + smsCount, notified: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        tx.set(paymentRef, { ...common, status: "paid", paidAt: FieldValue.serverTimestamp(), extraBalanceAfter: state.extraBalance + smsCount }, { merge: true });
+        tx.set(paymentRef, { ...common, status: "paid", paidAt: FieldValue.serverTimestamp(), extraBalanceAfter: state.extraBalance + smsCount, invoice: { status: "pending" } }, { merge: true });
         tx.set(db.collection(`businesses/${businessId}/notifications`).doc(), {
           type: "sms_pack_paid", title: "Ek SMS kredisi eklendi",
           body: `${smsCount} SMS hesabınıza eklendi. Toplam ek kredi: ${state.extraBalance + smsCount}.`,
@@ -2220,7 +2334,7 @@ export const paytrNotification = onRequest(
         }, { merge: true });
       });
       tx.set(paymentRef, {
-        ...common, status: "paid", paidAt: FieldValue.serverTimestamp(),
+        ...common, status: "paid", paidAt: FieldValue.serverTimestamp(), invoice: { status: "pending" },
         periodStart: new Date(window.startMillis).toISOString(), periodEnd: new Date(window.endMillis).toISOString(),
         affectedBranches: branches.filter((b) => b.exists).length,
       }, { merge: true });
@@ -5791,8 +5905,9 @@ async function notifySmsQuota(businessId: string, kind: "low" | "exhausted", per
     type: kind === "low" ? "sms_quota_low" : "sms_quota_exhausted",
     title: kind === "low" ? "SMS kotanız azaldı" : "SMS kotanız doldu",
     body: kind === "low"
-      ? `Bu ayki ${quota} SMS'in %80'ini kullandınız. Web panelindeki Abonelik sayfasından ek SMS alabilirsiniz.`
-      : "Bu ay randevu SMS'leri gönderilmiyor (uygulama bildirimleri devam ediyor). Web panelindeki Abonelik sayfasından ek SMS alabilir veya Tam Kontrol paketine geçebilirsiniz.",
+      // Bu bildirimler mobil uygulamalarda da görünür: satın almaya yönlendiren ifade içermez (App Store 3.1.1 / 3.1.3).
+      ? `Bu ayki ${quota} SMS'in %80'ini kullandınız.`
+      : "Bu ayki SMS kotanız doldu; randevu SMS'leri ay sonuna kadar gönderilmiyor. Uygulama bildirimleri çalışmaya devam ediyor.",
     isRead: false,
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -6211,7 +6326,8 @@ export const expireBusinessSubscriptions = onSchedule(
           batch.set(db.collection(`businesses/${document.id}/notifications`).doc(), {
             type: "subscription_expired",
             title: status === "trialing" ? "Ücretsiz kullanım süreniz sona erdi" : "Abonelik süreniz sona erdi",
-            body: "Yeni randevu kabul etmeye devam etmek için web işletme panelinden aboneliğinizi yenileyin.",
+            // Mobilde de görünür: satın almaya yönlendirme yok (App Store 3.1.1 / 3.1.3).
+            body: "Yeni online randevu alımı durduruldu. Kayıtlarınız korunuyor.",
             isRead: false,
             createdAt: FieldValue.serverTimestamp(),
           });
@@ -6237,7 +6353,7 @@ export const expireBusinessSubscriptions = onSchedule(
           title: status === "trialing"
             ? (remainingDays <= 1 ? "Ücretsiz kullanımınız yarın sona eriyor" : "Ücretsiz kullanımınız yakında sona eriyor")
             : (remainingDays <= 1 ? "Aboneliğiniz yarın sona eriyor" : "Aboneliğiniz yakında sona eriyor"),
-          body: `${remainingDays} gün sonra yeni randevu alımı duracak. Aboneliğinizi web işletme panelinden yenileyebilirsiniz.`,
+          body: `${remainingDays} gün sonra yeni online randevu alımı duracak.`,
           isRead: false,
           createdAt: FieldValue.serverTimestamp(),
         });

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, ReceiptText, RefreshCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
-import { getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout } from "@/features/subscriptions/subscription-repository";
+import { getBillingProfile, getBusinessSubscription, requestSubscriptionPurchase, startSubscriptionCheckout, type BillingProfile } from "@/features/subscriptions/subscription-repository";
 import { activePlatformPlans, featuredPlanId, listPlatformPlans, type PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
 import { TERMS_VERSION } from "@/lib/legal/seller";
 import { entitlementLabel } from "@/constants/subscription-entitlements";
@@ -14,10 +14,12 @@ import { ConfirmSheet, EmptyState, Panel, Segmented, StudioPage, StudioSkeleton 
 import css from "./abonelik.module.css";
 import { CompareTable, CurrentSubscription, PlanCard, money, yearlySaving, type Cycle, type PlanRelation } from "./plan-cards";
 import { SmsCreditsPanel } from "./sms-credits-panel";
+import { BillingProfilePanel, BillingProfileSheet } from "./billing-profile";
 
 
 export default function SubscriptionPage() {
-  const { businessId } = useBusiness();
+  const { businessId, businesses } = useBusiness();
+  const business = businesses.find((item) => item.id === businessId) ?? null;
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   // allPlans: mevcut (satıştan kalkmış olabilecek) paketin adı için; plans: satıştakiler, fiyat sayfasıyla aynı sırada.
   const [allPlans, setAllPlans] = useState<PlatformPlan[]>([]);
@@ -27,12 +29,14 @@ export default function SubscriptionPage() {
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [confirmPlan, setConfirmPlan] = useState<PlatformPlan | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [billing, setBilling] = useState<BillingProfile | null>(null);
+  const [billingOpen, setBillingOpen] = useState(false);
 
   useEffect(() => {
     if (!businessId) return;
     let alive = true;
-    Promise.all([getBusinessSubscription(businessId), listPlatformPlans()])
-      .then(([current, rows]) => { if (alive) { setSubscription(current); setAllPlans(rows); setPlans(activePlatformPlans(rows)); } })
+    Promise.all([getBusinessSubscription(businessId), listPlatformPlans(), getBillingProfile(businessId).catch(() => null)])
+      .then(([current, rows, profile]) => { if (alive) { setSubscription(current); setAllPlans(rows); setPlans(activePlatformPlans(rows)); setBilling(profile); } })
       .catch(() => { if (alive) toast.error("Paket bilgileri alınamadı."); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -62,7 +66,9 @@ export default function SubscriptionPage() {
         toast.success(`${plan.label} paketi hesabınıza tanımlandı.`);
       } else toast.success("Paket talebiniz ödeme bekleyen işlemlere alındı.");
     } catch (error) {
-      toast.error((error as Error).message || "Paket seçimi tamamlanamadı.");
+      const message = String((error as Error).message ?? "");
+      if (message.includes("BILLING_PROFILE_REQUIRED")) { setBillingOpen(true); toast.error("Ödemeden önce fatura bilgilerinizi tamamlayın."); return; }
+      toast.error(message || "Paket seçimi tamamlanamadı.");
     } finally { setBusyPlan(null); }
   }
 
@@ -89,7 +95,12 @@ export default function SubscriptionPage() {
   const lostOnSwitch = confirmPlan && currentPlan && active && !trialing && confirmPlan.id !== currentPlan.id
     ? currentPlan.entitlements.filter((key) => !confirmPlan.entitlements.includes(key))
     : [];
-  const open = (plan: PlatformPlan) => { setAcceptedTerms(false); setConfirmPlan(plan); };
+  const needsBilling = () => { if (billing) return false; toast.message("Önce fatura bilgilerinizi ekleyin; e-Arşiv faturanız bu bilgilerle kesilir."); setBillingOpen(true); return true; };
+  const open = (plan: PlatformPlan) => {
+    const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+    if (price > 0 && needsBilling()) return;
+    setAcceptedTerms(false); setConfirmPlan(plan);
+  };
 
   return (
     <StudioPage label="Abonelik">
@@ -137,7 +148,14 @@ export default function SubscriptionPage() {
         </p>
       </section>
 
-      {businessId ? <SmsCreditsPanel businessId={businessId} quota={currentPlan?.smsMonthlyQuota ?? null} unlimited={lifetime || (currentPlan?.smsMonthlyQuota ?? null) === null} /> : null}
+      {businessId ? <SmsCreditsPanel businessId={businessId} quota={currentPlan?.smsMonthlyQuota ?? null} unlimited={lifetime || (currentPlan?.smsMonthlyQuota ?? null) === null} needsBilling={needsBilling} /> : null}
+
+      {!lifetime ? <BillingProfilePanel profile={billing} onEdit={() => setBillingOpen(true)} /> : null}
+      {businessId && billingOpen ? (
+        <BillingProfileSheet open businessId={businessId} initial={billing}
+          defaults={{ name: business?.name ?? "", address: business?.address ?? "", district: business?.district ?? "", city: business?.city ?? "", email: business?.email ?? "" }}
+          onClose={() => setBillingOpen(false)} onSaved={(profile) => { setBilling(profile); setBillingOpen(false); }} />
+      ) : null}
 
       <ConfirmSheet
         open={confirmPlan !== null}

@@ -97,3 +97,28 @@ export async function startSmsPackCheckout(input: { businessId: string; packId: 
   );
   return (await callable(input)).data;
 }
+
+export type BillingProfile = {
+  type: "individual" | "company";
+  name: string;
+  taxId: string;
+  taxOffice: string;
+  address: string;
+  district: string;
+  city: string;
+  email: string;
+};
+
+/** businesses/{id}/billing/profile — yalnız sahip/yönetici okuyabilir; yoksa null. */
+export async function getBillingProfile(businessId: string): Promise<BillingProfile | null> {
+  const snap = await getDoc(doc(getDb(), "businesses", businessId, "billing", "profile"));
+  return snap.exists() ? (snap.data() as BillingProfile) : null;
+}
+
+export async function saveBillingProfile(businessId: string, profile: BillingProfile): Promise<BillingProfile> {
+  const callable = httpsCallable<{ businessId: string; profile: BillingProfile }, { success: boolean; profile: BillingProfile }>(
+    getFunctions(getFirebaseApp(), "europe-west1"),
+    "saveBillingProfile",
+  );
+  return (await callable({ businessId, profile })).data.profile;
+}

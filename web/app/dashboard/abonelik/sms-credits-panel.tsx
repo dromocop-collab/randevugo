@@ -10,7 +10,7 @@ import { ConfirmSheet, Panel, Pill } from "@/app/dashboard/_studio";
 import css from "./abonelik.module.css";
 
 /** Abonelik › SMS: bu ayki kullanım, ek kredi ve ek SMS paketi satın alma (yalnız web). */
-export function SmsCreditsPanel({ businessId, quota, unlimited }: { businessId: string; quota: number | null; unlimited: boolean }) {
+export function SmsCreditsPanel({ businessId, quota, unlimited, needsBilling }: { businessId: string; quota: number | null; unlimited: boolean; needsBilling: () => boolean }) {
   const [usage, setUsage] = useState<SmsUsage | null>(null);
   const [pack, setPack] = useState<SmsPack | null>(null);
   const [accepted, setAccepted] = useState(false);
@@ -36,6 +36,7 @@ export function SmsCreditsPanel({ businessId, quota, unlimited }: { businessId: 
       window.location.assign(checkout.checkoutUrl);
     } catch (error) {
       const message = String((error as Error).message ?? "");
+      if (message.includes("BILLING_PROFILE_REQUIRED")) { setPack(null); setBusy(false); needsBilling(); return; }
       toast.error(message.includes("PAYMENT_NOT_CONFIGURED") ? "Online ödeme şu anda kapalı. Destek ekibimizden ek SMS talep edebilirsiniz." : message || "Ödeme sayfası açılamadı.");
       setBusy(false);
     }
@@ -59,7 +60,7 @@ export function SmsCreditsPanel({ businessId, quota, unlimited }: { businessId: 
       {!unlimited ? (
         <div className={css.smsPacks}>
           {SMS_PACKS.map((item) => (
-            <button key={item.id} type="button" className={css.smsPack} onClick={() => { setAccepted(false); setPack(item); }}>
+            <button key={item.id} type="button" className={css.smsPack} onClick={() => { if (needsBilling()) return; setAccepted(false); setPack(item); }}>
               <span><Plus size={14} aria-hidden /> {item.count.toLocaleString("tr-TR")} SMS</span>
               <b>{item.price.toLocaleString("tr-TR")} ₺</b>
               <small>SMS başı {(item.price / item.count).toLocaleString("tr-TR", { maximumFractionDigits: 2 })} ₺</small>

@@ -1,0 +1,19 @@
+.notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); border-radius: 16px; background: var(--amber-soft); color: var(--ink); }
+.notice svg { flex: none; margin-top: 2px; color: var(--amber); }
+.notice p { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; }
+.toolbar > :first-child { flex: 1 1 260px; }
+.who { display: grid; gap: 2px; min-width: 0; }
+.who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.num { font-variant-numeric: tabular-nums; }
+.card { display: grid; gap: 8px; width: 100%; text-align: left; }
+.cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sheetTitle { margin: 18px 0 8px; color: var(--ink); font-size: 13px; font-weight: 800; letter-spacing: 0.02em; }
+.sheetTitle:first-child { margin-top: 0; }
+.copyRow { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.warn { display: flex; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--amber-soft); color: var(--ink); font-size: 13px; line-height: 1.5; }
+.warn svg { flex: none; margin-top: 2px; color: var(--amber); }
+.form { display: grid; gap: 10px; }
+.field { display: grid; gap: 5px; font-size: 13px; font-weight: 700; }
+.field input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-weight: 600; }

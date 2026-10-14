@@ -1,6 +1,6 @@
 import {
   BarChart3, BellRing, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
-  MessageSquareText, PartyPopper, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
+  MessageSquareText, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 export type AdminNavItem = { href: string; label: string; short?: string; icon: LucideIcon; keywords?: string };
@@ -22,6 +22,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/super-admin/isletmeler", label: "İşletmeler", icon: Building2, keywords: "mağaza şube onay askı gizle" },
       { href: "/super-admin/kullanicilar", label: "Kullanıcılar", icon: UsersRound, keywords: "hesap üye müşteri" },
       { href: "/super-admin/abonelikler", label: "Abonelikler", icon: WalletCards, keywords: "paket plan fiyat ödeme gelir" },
+      { href: "/super-admin/odemeler", label: "Ödemeler & Faturalar", short: "Ödemeler", icon: ReceiptText, keywords: "paytr tahsilat fatura e-arşiv muhasebe kdv" },
     ],
   },
   {

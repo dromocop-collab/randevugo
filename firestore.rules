@@ -324,6 +324,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // İşletme fatura bilgileri (TCKN/VKN içerir): yalnız sahip/yönetici ve süper admin okur; saveBillingProfile yazar.
+    match /businesses/{businessId}/billing/{docId} {
+      allow read: if isAuthenticated() && (isPlatformAdmin() || isBusinessOwner(businessId) || canManage(businessId));
+      allow write: if false;
+    }
+
     // İşletmenin aylık SMS kullanımı ve ek kredisi: yalnız functions yazar.
     match /smsUsage/{businessId} {
       allow read: if isAuthenticated() && (isPlatformAdmin() || isMember(businessId) || isBusinessOwner(businessId));
@@ -332,8 +338,9 @@ service cloud.firestore {
 
     // PayTR ödeme kayıtları: yalnız functions yazar (startSubscriptionCheckout + paytrNotification).
     match /subscriptionPayments/{merchantOid} {
+      // Fatura bilgisi (TCKN/VKN) içerir: çalışan (staff) okuyamaz.
       allow read: if isAuthenticated() && (isPlatformAdmin() ||
-        isMember(resource.data.businessId) || isBusinessOwner(resource.data.businessId));
+        canManage(resource.data.businessId) || isBusinessOwner(resource.data.businessId));
       allow write: if false;
     }
 

@@ -171,6 +171,7 @@ test("abonelik ödemesini yalnız işletme üyesi okur, kimse istemciden yazamaz
   await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), path), { businessId: BIZ, status: "pending", amountKurus: 49000 }));
   await assertSucceeds(getDoc(doc(as("owner"), path)));
   await assertSucceeds(getDoc(doc(as("manager"), path)));
+  await assertFails(getDoc(doc(as("staff1"), path)));
   await assertFails(getDoc(doc(as("attacker"), path)));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), path)));
   await assertFails(updateDoc(doc(as("owner"), path), { status: "paid" }));
@@ -184,4 +185,14 @@ test("SMS kullanımını yalnız işletme üyesi okur; kredi istemciden artırı
   await assertSucceeds(getDoc(doc(as("staff1"), path)));
   await assertFails(getDoc(doc(as("attacker"), path)));
   await assertFails(updateDoc(doc(as("owner"), path), { extraBalance: 9999 }));
+});
+
+test("fatura bilgilerini yalnız sahip/yönetici okur; çalışan ve yabancı okuyamaz, kimse istemciden yazamaz", async () => {
+  const path = `businesses/${BIZ}/billing/profile`;
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), path), { type: "individual", taxId: "10000000146" }));
+  await assertSucceeds(getDoc(doc(as("owner"), path)));
+  await assertSucceeds(getDoc(doc(as("manager"), path)));
+  await assertFails(getDoc(doc(as("staff1"), path)));
+  await assertFails(getDoc(doc(as("attacker"), path)));
+  await assertFails(setDoc(doc(as("owner"), path), { type: "individual", taxId: "10000000146" }));
 });
