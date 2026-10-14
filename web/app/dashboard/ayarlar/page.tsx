@@ -166,6 +166,7 @@ export default function SettingsPage() {
           reminder: biz.smsPreferences?.reminder !== false,
           cancellation: biz.smsPreferences?.cancellation !== false,
           reschedule: biz.smsPreferences?.reschedule !== false,
+          whatsappFirst: biz.smsPreferences?.whatsappFirst === true,
         },
       };
       setRules(nextRules);
@@ -623,7 +624,13 @@ export default function SettingsPage() {
                     <ToggleRow key={key} icon={MessageSquareText} title={label} note={note} checked={rules.smsPreferences[key] !== false} onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, [key]: checked })} />
                   ))}
                 </div>
-                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır.</p>
+                <div className={k.group}>
+                  <ToggleRow icon={MessageSquareText} title="Önce WhatsApp'tan gönder"
+                    note="Açık bildirimler önce WhatsApp'tan gider ve SMS kotanızdan düşmez; WhatsApp'ı olmayan müşteriye otomatik SMS gönderilir."
+                    checked={rules.smsPreferences.whatsappFirst === true}
+                    onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, whatsappFirst: checked })} />
+                </div>
+                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır. WhatsApp kanalı platformda etkinleştirilene kadar tüm bildirimler SMS ile gider.</p>
 
                 <div className={st.rulePreview}>
                   <Clock3 size={20} aria-hidden />

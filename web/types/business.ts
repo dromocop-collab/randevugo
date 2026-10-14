@@ -38,6 +38,8 @@ export interface SmsPreferences {
   reminder?: boolean;
   cancellation?: boolean;
   reschedule?: boolean;
+  /** true: bildirimler önce WhatsApp'tan gider; ulaşmazsa otomatik SMS (platform WhatsApp kanalı açıksa). */
+  whatsappFirst?: boolean;
 }
 
 export interface DaySchedule {

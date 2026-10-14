@@ -27,6 +27,7 @@ import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
+import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
@@ -5926,6 +5927,117 @@ async function recordBusinessSmsUsage(businessId: string, credits: number, quota
   if (warning && quota !== null) await notifySmsQuota(businessId, warning, periodKey, quota);
 }
 
+// ── WhatsApp Cloud API (Meta) ──
+const WHATSAPP_SETTINGS_PATH = "platformPrivateSettings/whatsapp";
+let whatsappConfigCache: { at: number; value: WhatsAppConfig | null } | null = null;
+
+async function loadWhatsAppConfig(): Promise<WhatsAppConfig | null> {
+  if (whatsappConfigCache && Date.now() - whatsappConfigCache.at < 5 * 60_000) return whatsappConfigCache.value;
+  const value = parseWhatsAppConfig((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data());
+  whatsappConfigCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Şablon mesajı gönderir; Meta kabul ederse kaydı yazıp true döner. Kanal kapalı / numara uygun değil / hata → false (SMS'e düşer). */
+async function trySendAppointmentWhatsApp(input: {
+  businessId: string; appointmentId: string; type: AppointmentSmsJobType;
+  appointment: FirebaseFirestore.DocumentData; business: FirebaseFirestore.DocumentData; startAt: Timestamp;
+}): Promise<boolean> {
+  const config = await loadWhatsAppConfig();
+  const to = toWhatsAppPhone(input.appointment.customerPhone);
+  if (!config || !to) return false;
+  const timeZone = typeof input.business.timeZone === "string" ? input.business.timeZone : "Europe/Istanbul";
+  const payload = buildTemplateMessage(input.type as AppointmentMessageType, to, {
+    businessName: String(input.business.name ?? "İşletme").slice(0, 70),
+    serviceName: String(input.appointment.serviceName ?? "Randevu").slice(0, 70),
+    dateText: appointmentSmsDate(input.startAt, timeZone),
+    detailsUrl: input.appointment.publicToken ? `https://seninrandevun.com/randevu/${String(input.appointment.publicToken)}` : "https://seninrandevun.com",
+  }, config);
+  const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = await response.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string } } | null;
+  const messageId = body?.messages?.[0]?.id;
+  if (!response.ok || !messageId) {
+    logger.warn("WhatsApp API reddetti", { businessId: input.businessId, type: input.type, status: response.status, code: body?.error?.code, message: shortText(body?.error?.message, 200) });
+    return false;
+  }
+  const batch = db.batch();
+  batch.update(db.doc(`businesses/${input.businessId}/appointments/${input.appointmentId}`), {
+    [`sms.${input.type}.status`]: "sent",
+    [`sms.${input.type}.channel`]: "whatsapp",
+    [`sms.${input.type}.providerMessageId`]: messageId,
+    [`sms.${input.type}.sentAt`]: FieldValue.serverTimestamp(),
+    ...(input.type === "reminder" ? { "sms.reminder.forStartAt": input.startAt.toMillis() } : {}),
+  });
+  // Webhook "failed" derse SMS'e düşmek için bağlam.
+  batch.set(db.doc(`whatsappMessages/${createHash("sha256").update(messageId).digest("hex").slice(0, 40)}`), {
+    messageId, businessId: input.businessId, appointmentId: input.appointmentId, type: input.type,
+    phoneMasked: `******${to.slice(-4)}`, status: "accepted", createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+  });
+  batch.set(db.doc(`smsOperationsLogs/${createHash("sha256").update(`wa:${messageId}`).digest("hex").slice(0, 40)}`), {
+    businessId: input.businessId, appointmentId: input.appointmentId, type: input.type, channel: "whatsapp", providerMessageId: messageId,
+    phoneMasked: `******${to.slice(-4)}`, status: "accepted", statusLabel: "WhatsApp'a iletildi", credits: 0,
+    sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 90 * 86_400_000),
+  });
+  batch.set(db.doc(`smsUsage/${input.businessId}`), { businessId: input.businessId, whatsappSent: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await batch.commit();
+  return true;
+}
+
+/**
+ * Meta WhatsApp webhook'u (Meta App › WhatsApp › Configuration › Callback URL).
+ * GET: doğrulama (hub.verify_token). POST: imzalı durum bildirimleri; "failed" olan randevu mesajı SMS olarak yeniden kuyruğa alınır.
+ */
+export const whatsappWebhook = onRequest(
+  { region: "europe-west1", memory: "256MiB", maxInstances: 10 },
+  async (req, res) => {
+    const config = await loadWhatsAppConfig();
+    if (!config) { res.status(503).send("not configured"); return; }
+    if (req.method === "GET") {
+      if (req.query["hub.mode"] === "subscribe" && req.query["hub.verify_token"] === config.verifyToken) {
+        res.status(200).send(String(req.query["hub.challenge"] ?? ""));
+      } else res.status(403).send("forbidden");
+      return;
+    }
+    if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    if (!verifyWebhookSignature(req.rawBody ?? Buffer.from(""), req.get("x-hub-signature-256"), config.appSecret)) {
+      logger.warn("WhatsApp webhook imzası geçersiz");
+      res.status(401).send("bad signature");
+      return;
+    }
+    for (const status of extractStatuses(req.body)) {
+      const ref = db.doc(`whatsappMessages/${createHash("sha256").update(status.messageId).digest("hex").slice(0, 40)}`);
+      const fallback = await db.runTransaction(async (tx) => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists) return null;
+        const row = snapshot.data()!;
+        if (row.status === "failed") return null; // tekrar gelen bildirim
+        tx.set(ref, { status: status.status, errorCode: status.errorCode, errorTitle: status.errorTitle, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        return status.status === "failed" ? row : null;
+      });
+      if (!fallback) continue;
+      const type = String(fallback.type) as AppointmentSmsJobType;
+      const appointmentRef = db.doc(`businesses/${fallback.businessId}/appointments/${fallback.appointmentId}`);
+      const appointment = await appointmentRef.get();
+      if (!appointment.exists) continue;
+      await appointmentRef.update({ [`sms.${type}.status`]: "whatsapp_failed", [`sms.${type}.whatsappError`]: status.errorCode ?? null });
+      // Aynı iş belgesi yeniden açılır; channel "sms" → bu kez doğrudan SMS (kota kuralları geçerli).
+      await appointmentSmsJobRef(String(fallback.businessId), String(fallback.appointmentId), type).set({
+        businessId: fallback.businessId, appointmentId: fallback.appointmentId,
+        appointmentPath: appointmentRef.path, phone: appointment.data()?.customerPhone ?? "",
+        type, channel: "sms", status: "pending", attempts: 0,
+        scheduledAt: Timestamp.now(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    res.status(200).send("OK");
+  }
+);
+
 async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference) {
   let job: FirebaseFirestore.DocumentData | null = null;
   await db.runTransaction(async (tx) => {
@@ -5990,6 +6102,13 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
     if (smsPreferences[type] === false) {
       await ref.delete();
       return;
+    }
+    // WhatsApp önce (işletme açtıysa ve platform kanalı kuruluysa); SMS kotasından düşmez.
+    // Meta mesajı sonradan "teslim edilemedi" bildirirse whatsappWebhook aynı bildirimi SMS olarak kuyruğa alır.
+    if (data.channel !== "sms" && smsPreferences.whatsappFirst === true) {
+      const sent = await trySendAppointmentWhatsApp({ businessId, appointmentId, type, appointment, business, startAt })
+        .catch((error) => { logger.warn("WhatsApp gönderilemedi, SMS'e geçiliyor", { businessId, appointmentId, type, error: String(error) }); return false; });
+      if (sent) { await ref.delete(); return; }
     }
     const smsQuota = await businessSmsQuota(businessId);
     const usage = normalizeSmsUsage((await db.doc(`smsUsage/${businessId}`).get()).data(), smsPeriodKey());
