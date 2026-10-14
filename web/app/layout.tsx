@@ -109,12 +109,10 @@ export const metadata: Metadata = {
     yandex: process.env.NEXT_PUBLIC_YANDEX_SITE_VERIFICATION || undefined,
     ...(Object.keys(verificationOther).length ? { other: verificationOther } : {}),
   },
+  // appleWebApp alanıyla (elle meta değil): panel/yönetim layout'ları kendi PWA adlarıyla bunu ezebilsin.
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
   other: {
     "msapplication-TileColor": "#0b6b45",
-    "mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "default",
-    "apple-mobile-web-app-title": SITE_NAME,
     "apple-itunes-app": `app-id=${APP_STORE_ID}, app-argument=${SITE_URL}`,
   },
 };

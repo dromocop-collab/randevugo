@@ -1,0 +1,26 @@
+{
+  "id": "/dashboard",
+  "name": "SeninRandevun İşletme",
+  "short_name": "SR İşletme",
+  "description": "Randevularınızı, takviminizi ve işletmenizi yönetin.",
+  "lang": "tr-TR",
+  "dir": "ltr",
+  "start_url": "/dashboard?kaynak=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f3f6f4",
+  "theme_color": "#0b6b45",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Bugün", "url": "/dashboard?kaynak=pwa", "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Takvim", "url": "/dashboard/takvim?kaynak=pwa", "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Yeni randevu", "url": "/dashboard?yeniRandevu=1&kaynak=pwa", "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,0 +1,27 @@
+.card {
+  --pwa-ink: var(--k-ink, var(--dui-ink, var(--ink, #10241c)));
+  --pwa-muted: var(--k-muted, var(--dui-ink-2, var(--muted, #4b5d54)));
+  --pwa-line: var(--k-line, var(--dui-line, var(--line, rgb(16 40 29 / 0.1))));
+  --pwa-card: var(--k-card, var(--dui-card, var(--card, #fff)));
+  --pwa-core: var(--k-core, var(--dash-core, var(--green-2, #0b6b45)));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 14px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--pwa-line);
+  border-radius: 18px;
+  background: var(--pwa-card);
+  color: var(--pwa-ink);
+}
+.icon { flex: none; border-radius: 12px; box-shadow: 0 0 0 1px var(--pwa-line); }
+.text { display: grid; flex: 1 1 220px; gap: 2px; min-width: 0; }
+.text b { font-size: 14.5px; font-weight: 800; }
+.text span { color: var(--pwa-muted); font-size: 13px; line-height: 1.5; }
+.steps { display: grid; gap: 4px; margin: 8px 0 0; padding-left: 18px; color: var(--pwa-muted); font-size: 13px; line-height: 1.5; }
+.steps svg { display: inline-block; vertical-align: -2px; }
+.actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.primary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 11px; background: var(--pwa-core); color: #fff; font: inherit; font-size: 13.5px; font-weight: 750; cursor: pointer; }
+.close { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--pwa-line); border-radius: 11px; background: transparent; color: var(--pwa-muted); cursor: pointer; }
+.primary:focus-visible, .close:focus-visible { outline: 3px solid color-mix(in srgb, var(--pwa-core) 40%, transparent); outline-offset: 2px; }

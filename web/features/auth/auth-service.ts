@@ -100,10 +100,22 @@ function credentialFromError(provider: SocialProvider, error: unknown) {
   return provider === "google" ? GoogleAuthProvider.credentialFromError(firebaseError) : OAuthProvider.credentialFromError(firebaseError);
 }
 
+function isIosStandalone() {
+  if (typeof window === "undefined") return false;
+  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  return standalone && /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
 export async function signInWithSocial(provider: SocialProvider): Promise<{ isNewUser: boolean; redirected: boolean; linked: SocialProvider | null; email: string | null }> {
   const auth = getAuthInstance();
   await setPersistence(auth, browserLocalPersistence);
   const authProvider = socialAuthProvider(provider);
+  // iPhone'da ana ekrana eklenmiş uygulamada (PWA) açılır pencere oturumu geri getiremeyebilir; yönlendirme kullanılır.
+  // Yönlendirme yalnız auth alan adı sitenin kendisiyken güvenilir (Safari üçüncü taraf depolamayı engeller).
+  if (isIosStandalone() && process.env.NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN === "1") {
+    await signInWithRedirect(auth, authProvider);
+    return { isNewUser: false, redirected: true, linked: null, email: null };
+  }
   try {
     const result = await signInWithPopup(auth, authProvider);
     const linked = await consumePendingLink(result.user);
