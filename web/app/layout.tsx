@@ -23,6 +23,8 @@ const spaceGrotesk = Space_Grotesk({
 
 const verificationOther: Record<string, string> = {};
 if (process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION) verificationOther["msvalidate.01"] = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
+// Meta (Senin Randevun işletme portföyü) alan adı doğrulaması — WhatsApp Business / işletme doğrulaması için.
+verificationOther["facebook-domain-verification"] = "90se8e7m21rozro5ah9pavq07zbc17";
 
 export const viewport: Viewport = {
   width: "device-width",
