@@ -24,8 +24,8 @@ export function ContactPage() {
           <div className={s.heroCopy}>
             <Crumbs items={[{ href: "/", label: "Ana Sayfa" }, { label: "İletişim" }]} />
             <span className={cx(mp.eyebrow, mp.rise)}><Headphones size={13} aria-hidden="true" /> Bize ulaşın</span>
-            <h1 className={cx(mp.title, mp.rise)} style={{ "--i": 1 } as CSSProperties}>Sorunuz varsa<br /><em>gerçek bir insan burada.</em></h1>
-            <p className={cx(mp.lead, mp.rise)} style={{ "--i": 2 } as CSSProperties}>Kurulum, özellikler, ödeme veya işletmenize özel kullanım senaryoları için bize ulaşabilirsiniz.</p>
+            <h1 className={cx(mp.title, mp.rise)} style={{ "--i": 1 } as CSSProperties}>Bir mesaj<br /><em>uzağınızdayız.</em></h1>
+            <p className={cx(mp.lead, mp.rise)} style={{ "--i": 2 } as CSSProperties}>Kurulumdan ödemeye, işletmenize özel ihtiyaçlara kadar her sorunuzda ekibimiz yanınızda. Size en uygun kanaldan yazın, hızlıca dönelim.</p>
             <div className={mp.pills}>
               <span className={mp.pill}><Clock3 size={13} aria-hidden="true" /> Hafta içi 09:00–18:00</span>
               <span className={mp.pill}><ShieldCheck size={13} aria-hidden="true" /> Bilgileriniz yalnızca talebiniz için kullanılır</span>

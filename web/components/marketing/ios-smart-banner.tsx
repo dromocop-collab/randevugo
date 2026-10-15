@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Apple, ArrowUpRight, X } from "lucide-react";
 import { APP_STORE_URL } from "@/lib/app-store";
 
@@ -25,6 +25,7 @@ function isMobileSafari() {
 export function IosSmartBanner() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
+  const bannerRef = useRef<HTMLElement>(null);
   const hiddenOnRoute = PRIVATE_ROUTES.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
@@ -36,6 +37,20 @@ export function IosSmartBanner() {
     return () => window.clearTimeout(timer);
   }, [hiddenOnRoute, pathname]);
 
+  // Bant görünürken alttaki yüzen düğmeler (Sıram, Rovi destek) üst üste binmesin diye
+  // bandın yüksekliği CSS değişkenine yazılır; globals.css bu değer kadar onları yukarı kaydırır.
+  const shown = visible && !hiddenOnRoute;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!shown || !bannerRef.current) { root.style.removeProperty("--sr-app-banner-h"); return; }
+    const element = bannerRef.current;
+    const update = () => root.style.setProperty("--sr-app-banner-h", `${element.offsetHeight + 10}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => { observer.disconnect(); root.style.removeProperty("--sr-app-banner-h"); };
+  }, [shown]);
+
   function dismiss() {
     try { window.localStorage.setItem(HIDDEN_KEY, String(Date.now() + 7 * 86_400_000)); } catch { /* depolama kapalı olabilir */ }
     setVisible(false);
@@ -43,7 +58,7 @@ export function IosSmartBanner() {
 
   if (hiddenOnRoute || !visible) return null;
 
-  return <aside className="ios-smart-banner" aria-label="SeninRandevun iOS uygulamasını indir">
+  return <aside ref={bannerRef} className="ios-smart-banner" aria-label="SeninRandevun iOS uygulamasını indir">
     <span className="ios-smart-banner-shine"/>
     <button type="button" onClick={dismiss} aria-label="Uygulama önerisini kapat"><X size={15}/></button>
     <Image src="/icon-192.png" width={52} height={52} alt="SeninRandevun uygulama ikonu"/>
