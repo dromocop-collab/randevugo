@@ -609,6 +609,12 @@ service cloud.firestore {
         allow create, update, delete: if (canManage(businessId) && hasPlanEntitlement(businessId, "automations")) || isPlatformAdmin();
       }
 
+      // Otomasyon çalışma geçmişi yalnız sunucu (Admin SDK) tarafından yazılır.
+      match /automationRuns/{runId} {
+        allow read: if canOperate(businessId) || isPlatformAdmin();
+        allow write: if false;
+      }
+
       // Products and package templates are business-managed catalog data.
       match /products/{productId} {
         allow read: if canOperate(businessId) || isPlatformAdmin();

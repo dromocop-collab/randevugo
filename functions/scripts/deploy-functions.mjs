@@ -33,7 +33,7 @@ export const GROUPS = {
     "cancelCustomerAppointment", "rescheduleAppointment", "rescheduleCustomerAppointment", "manageAppointmentByToken", "getAvailableSlots",
     "getAvailableDates", "joinWaitlist", "createAppointment", "createDashboardAppointment", "updateAppointmentServices", "updateDashboardAppointment",
     "claimGuestAppointments", "getAppointmentByPublicToken", "appointmentPass", "sendAppointmentPushReminders", "appointmentCreated",
-    "appointmentAutomationUpdated", "waitlistAutomationCreated", "getBookingFieldSettings", "submitBookingFieldRequest",
+    "appointmentAutomationUpdated", "waitlistAutomationCreated", "testBusinessAutomation", "getBookingFieldSettings", "submitBookingFieldRequest",
     "reviewBookingFieldRequest", "updateBookingFieldSettings",
   ],
   isletme: [

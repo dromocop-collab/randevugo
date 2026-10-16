@@ -196,3 +196,13 @@ test("fatura bilgilerini yalnız sahip/yönetici okur; çalışan ve yabancı ok
   await assertFails(getDoc(doc(as("attacker"), path)));
   await assertFails(setDoc(doc(as("owner"), path), { type: "individual", taxId: "10000000146" }));
 });
+
+test("otomasyon çalışma geçmişini ekip okur; kimse istemciden yazamaz", async () => {
+  const path = `businesses/${BIZ}/automationRuns/r1`;
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), path), { ruleId: "x", trigger: "appointment_created" }));
+  await assertSucceeds(getDoc(doc(as("owner"), path)));
+  await assertSucceeds(getDoc(doc(as("staff1"), path)));
+  await assertFails(getDoc(doc(as("attacker"), path)));
+  await assertFails(setDoc(doc(as("owner"), `businesses/${BIZ}/automationRuns/r2`), { ruleId: "x" }));
+  await assertFails(deleteDoc(doc(as("owner"), path)));
+});

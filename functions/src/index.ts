@@ -30,6 +30,7 @@ import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-doma
 import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
+import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
 
@@ -4596,42 +4597,133 @@ export const updateDashboardAppointment = onCall(
   },
 );
 
-type BusinessAutomationTrigger = "appointment_created" | "appointment_cancelled" | "appointment_completed" | "waitlist_created";
+type AutomationEventPayload = Record<string, unknown> & { appointmentId?: string; waitlistId?: string };
 
-function renderAutomationText(template: unknown, payload: Record<string, unknown>) {
-  return String(template ?? "").replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key: string) => String(payload[key] ?? "—")).slice(0, 500);
+async function automationVariablesFor(businessId: string, payload: AutomationEventPayload, businessData?: FirebaseFirestore.DocumentData) {
+  const business = businessData ?? (await db.doc(`businesses/${businessId}`).get()).data() ?? {};
+  const startAt = payload.startAt instanceof Timestamp ? payload.startAt.toMillis() : null;
+  const computed = automationVariables({
+    customerName: payload.customerName, serviceName: payload.serviceName, staffName: payload.staffName, customerPhone: payload.customerPhone,
+    servicePrice: payload.servicePrice, preferredDate: payload.preferredDate, startMs: startAt, businessName: business.name,
+    timeZone: typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul",
+  });
+  return { business, vars: computed as Record<string, unknown> };
 }
 
-async function runBusinessAutomations(businessId: string, trigger: BusinessAutomationTrigger, eventId: string, payload: Record<string, unknown>) {
+/**
+ * Olay → koşullar → aksiyonlar. Her (olay, kural) çifti yalnız bir kez çalışır (deterministik kimlik).
+ * Aksiyonlar: panel bildirimi (her zaman), ekibe push, müşteriye push (yalnız uygulamalı müşteri).
+ * Çalışma geçmişi automationRuns altında 30 gün tutulur (panelde "Son çalışmalar").
+ */
+async function runBusinessAutomations(businessId: string, trigger: BusinessAutomationTrigger, eventId: string, payload: AutomationEventPayload) {
   const snapshot = await db.collection(`businesses/${businessId}/automationRules`).where("enabled", "==", true).limit(50).get();
-  const rules = snapshot.docs.filter((item) => item.data().trigger === trigger).slice(0, 20);
+  const rules = snapshot.docs
+    .map((doc) => ({ doc, config: parseAutomationRule(doc.data()) }))
+    .filter((item): item is { doc: FirebaseFirestore.QueryDocumentSnapshot; config: NonNullable<ReturnType<typeof parseAutomationRule>> } => Boolean(item.config && automationRuleMatches(item.config, trigger, payload)))
+    .slice(0, 20);
   if (!rules.length) return;
   // Paket düşürülünce eski kurallar çalışmaya devam etmesin (kural yazma zaten firestore.rules'ta kısıtlı).
   try { await requirePlanEntitlement(businessId, "automations"); } catch { return; }
-  const notificationRefs = rules.map((rule) => {
-    const executionId = createHash("sha256").update(`${eventId}:${rule.id}`).digest("hex").slice(0, 32);
-    return db.doc(`businesses/${businessId}/notifications/automation_${executionId}`);
-  });
-  await db.runTransaction(async (tx) => {
-    const existing = await tx.getAll(...notificationRefs);
-    rules.forEach((rule, index) => {
-      if (existing[index].exists) return;
-      const data = rule.data();
+  const { business, vars } = await automationVariablesFor(businessId, payload);
+  const executions = rules.map(({ doc }) => createHash("sha256").update(`${eventId}:${doc.id}`).digest("hex").slice(0, 32));
+  const notificationRefs = executions.map((id) => db.doc(`businesses/${businessId}/notifications/automation_${id}`));
+  const runRefs = executions.map((id) => db.doc(`businesses/${businessId}/automationRuns/${id}`));
+  const fresh = await db.runTransaction(async (tx) => {
+    const existing = await tx.getAll(...runRefs, ...notificationRefs);
+    const created: number[] = [];
+    rules.forEach(({ doc, config }, index) => {
+      if (existing[index].exists || existing[rules.length + index].exists) return;
+      const title = renderAutomationText(config.title, vars, 120) || "Otomasyon bildirimi";
+      const body = renderAutomationText(config.message, vars) || "İşletmenizde yeni bir olay gerçekleşti.";
       tx.set(notificationRefs[index], {
         type: "system",
-        automationRuleId: rule.id,
+        automationRuleId: doc.id,
         automationEventId: eventId,
-        title: renderAutomationText(data.title, payload) || "Otomasyon bildirimi",
-        body: renderAutomationText(data.message, payload) || "İşletmenizde yeni bir olay gerçekleşti.",
+        title,
+        body,
         relatedAppointmentId: payload.appointmentId ?? null,
         isRead: false,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      tx.update(rule.ref, { runs: FieldValue.increment(1), lastRunAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      tx.set(runRefs[index], {
+        ruleId: doc.id,
+        ruleName: String(doc.data().name ?? "Otomasyon").slice(0, 80),
+        trigger,
+        title,
+        body,
+        customerName: String(vars.customerName ?? "").slice(0, 80),
+        channels: { panel: true, teamPush: config.channels.teamPush, customerPush: config.channels.customerPush && typeof payload.customerId === "string" && !String(payload.customerId).startsWith("guest_") },
+        relatedAppointmentId: payload.appointmentId ?? null,
+        test: false,
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+      });
+      tx.update(doc.ref, { runs: FieldValue.increment(1), lastRunAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      created.push(index);
     });
+    return created;
   });
+  // Push gönderimleri işlem dışında: hata randevu akışını bozmaz (pushToUsers hatayı yutar).
+  const staffId = typeof payload.staffId === "string" && payload.staffId ? payload.staffId : null;
+  const customerId = typeof payload.customerId === "string" && payload.customerId && !payload.customerId.startsWith("guest_") ? payload.customerId : "";
+  const data = { businessId, route: payload.appointmentId ? "appointment" : "notifications", ...(payload.appointmentId ? { appointmentId: String(payload.appointmentId) } : {}) };
+  const tasks: Promise<void>[] = [];
+  for (const index of fresh) {
+    const { config } = rules[index];
+    if (config.channels.teamPush) {
+      const title = renderAutomationText(config.title, vars, 120) || "Otomasyon bildirimi";
+      const body = renderAutomationText(config.message, vars, 240);
+      tasks.push(businessRecipientIds(businessId, business, staffId)
+        .then((ids) => pushToUsers(ids.filter((id) => id !== customerId), title, body, { ...data, kind: "automation", audience: "business" }, `automation-${executions[index]}`)));
+    }
+    if (config.channels.customerPush && customerId && config.customerMessage.trim()) {
+      const title = renderAutomationText(config.customerTitle, vars, 120) || String(vars.businessName ?? "Senin Randevun");
+      const body = renderAutomationText(config.customerMessage, vars, 240);
+      tasks.push(pushToUsers([customerId], title, body, { ...data, kind: "automation", audience: "customer" }, `automation-${executions[index]}-c`));
+    }
+  }
+  await Promise.all(tasks);
 }
+
+/** "Deneme gönder": kuralı örnek verilerle çalıştırır; yalnız yöneticiye panel bildirimi + (varsa) push. Sayaç artmaz. */
+export const testBusinessAutomation = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const ruleId = requireString(request.data?.ruleId, "ruleId");
+    const business = await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "automations");
+    await consumeSecurityLimit(`automation-test:${businessId}`, 20, 60 * 60_000);
+    const rule = await db.doc(`businesses/${businessId}/automationRules/${ruleId}`).get();
+    const config = parseAutomationRule(rule.data());
+    if (!rule.exists || !config) throw new HttpsError("not-found", "Kural bulunamadı.");
+    const { vars } = await automationVariablesFor(businessId, {
+      customerName: "Örnek Müşteri", serviceName: "Örnek hizmet", staffName: "Örnek personel", customerPhone: "0555 000 00 00",
+      servicePrice: 500, preferredDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10), startAt: Timestamp.fromMillis(Date.now() + 86_400_000),
+    }, business);
+    const title = `Deneme · ${renderAutomationText(config.title, vars, 110) || "Otomasyon bildirimi"}`;
+    const body = renderAutomationText(config.message, vars) || "İşletmenizde yeni bir olay gerçekleşti.";
+    const id = randomUUID().replace(/-/g, "").slice(0, 32);
+    await db.doc(`businesses/${businessId}/notifications/automation_test_${id}`).set({
+      type: "system", automationRuleId: rule.id, title, body, relatedAppointmentId: null, isRead: false,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    await db.doc(`businesses/${businessId}/automationRuns/test_${id}`).set({
+      ruleId: rule.id, ruleName: String(rule.data()?.name ?? "Otomasyon").slice(0, 80), trigger: config.trigger, title, body,
+      customerName: "Örnek Müşteri", channels: { panel: true, teamPush: config.channels.teamPush, customerPush: false }, relatedAppointmentId: null,
+      test: true, createdAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 7 * 86_400_000),
+    });
+    // Deneme push'u yalnız denemeyi yapan kişiye gider; müşteriye asla gitmez.
+    const customerPreview = config.channels.customerPush && config.customerMessage.trim()
+      ? { title: renderAutomationText(config.customerTitle, vars, 120) || String(vars.businessName), body: renderAutomationText(config.customerMessage, vars, 240) }
+      : null;
+    if (config.channels.teamPush) await pushToUsers([uid], title, renderAutomationText(config.message, vars, 240), { businessId, route: "notifications", kind: "automation_test", audience: "business" });
+    return { success: true, title, body, customerPreview };
+  },
+);
 
 /**
  * Misafir olarak alınmış randevuları giriş yapan kullanıcının hesabına aktarır.
@@ -5293,10 +5385,10 @@ export const appointmentAutomationUpdated = onDocumentUpdated(
     } else if (beforeStart !== afterStart && ["pending", "confirmed"].includes(String(after.status))) {
       await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "reschedule");
     }
-    if (before.status === after.status) return;
-    const trigger = after.status === "cancelled" ? "appointment_cancelled" : after.status === "completed" ? "appointment_completed" : null;
-    if (!trigger) return;
-    await runBusinessAutomations(event.params.businessId, trigger, event.id, { ...after, appointmentId: event.params.appointmentId });
+    // Aynı güncellemede birden fazla olay olabilir (ör. iptal + saat değişimi); her biri ayrı kimlikle bir kez çalışır.
+    for (const trigger of appointmentTransitionTriggers({ status: before.status, startMs: beforeStart }, { status: after.status, startMs: afterStart })) {
+      await runBusinessAutomations(event.params.businessId, trigger, `${event.id}:${trigger}`, { ...after, appointmentId: event.params.appointmentId });
+    }
   }
 );
 
