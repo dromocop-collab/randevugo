@@ -9,6 +9,7 @@ import {
   AdminPage, Btn, Card, Chips, CopyButton, DetailList, EmptyState, HeroStat, PageHeader, Pill, ResponsiveTable, SearchField, Sheet, SkeletonList,
   StatCard, StatGrid, downloadCsv, type Tone,
 } from "../_pages-ui";
+import { GibAssistant } from "./gib-assistant";
 import s from "./odemeler.module.css";
 
 type Filter = "pending" | "issued" | "paid" | "failed" | "test";
@@ -109,7 +110,7 @@ export default function PaymentsPage() {
       {!provider ? (
         <div className={s.notice} role="status">
           <CircleAlert size={18} aria-hidden />
-          <p><b>e-Arşiv entegratörü bağlı değil.</b> Faturayı GİB e-Arşiv portalında veya muhasebecinizde kesin, sonra ödemenin detayından &quot;Faturalandı&quot; olarak işaretleyin. Entegratör bağlanınca bu sayfadan tek tıkla kesilecek.</p>
+          <p><b>e-Arşiv entegratörü bağlı değil.</b> Ödemenin detayını açın: GİB asistanı alanları portaldaki sırayla tek tıkla kopyalar. Faturayı kesince numarasını girip &quot;Faturalandı&quot; olarak işaretleyin. Entegratör bağlanınca bu sayfadan tek tıkla kesilecek.</p>
         </div>
       ) : null}
 
@@ -183,6 +184,7 @@ function PaymentSheet({ row, onClose, onChanged }: { row: AdminPaymentRow; onClo
         ? <><Btn onClick={onClose} disabled={saving}>Kapat</Btn><Btn icon={Undo2} loading={saving} onClick={() => void submit(true)}>İşareti kaldır</Btn></>
         : <><Btn onClick={onClose} disabled={saving}>Kapat</Btn><Btn variant="primary" icon={FileCheck2} loading={saving} onClick={() => void submit()}>Faturalandı olarak işaretle</Btn></>)
         : <Btn onClick={onClose}>Kapat</Btn>}>
+      {billing && row.status === "paid" && !issued ? <GibAssistant row={row} item={itemText(row)} /> : null}
       <h3 className={s.sheetTitle}>Faturaya yazılacaklar</h3>
       {billing ? (
         <DetailList rows={[
