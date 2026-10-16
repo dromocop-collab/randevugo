@@ -11,8 +11,8 @@ type Module = { id: string; enabled: boolean };
 type Meta = { id: string; label: string; note: string; size: "full" | "wide" | "side" };
 
 const PRESETS: Array<{ id: string; label: string; order: string[]; hidden?: string[] }> = [
-  { id: "recommended", label: "Önerilen", order: ["command", "insights", "profile", "kpis", "operations"] },
-  { id: "operations", label: "Operasyon", order: ["operations", "command", "insights", "kpis", "profile"] },
+  { id: "recommended", label: "Önerilen", order: ["operations", "command", "insights", "kpis", "profile"] },
+  { id: "operations", label: "Operasyon", order: ["operations", "command", "kpis", "insights", "profile"] },
   { id: "numbers", label: "Rakamlar", order: ["kpis", "operations", "insights", "command", "profile"] },
   { id: "minimal", label: "Sade", order: ["kpis", "operations", "command", "insights", "profile"], hidden: ["insights", "profile"] },
 ];

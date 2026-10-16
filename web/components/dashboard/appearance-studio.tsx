@@ -49,11 +49,11 @@ type AppearanceSection = "colors" | "behavior" | "cursor" | "sound" | "layout";
 
 /** Ana panel (Bugün) modülleri; sırası/görünürlüğü burada düzenlenir, app/dashboard/page.tsx uygular. */
 export const defaultDashboardModules = [
+  { id: "operations", label: "Bugünün akışı", size: "wide", note: "Geniş sütun" },
   { id: "command", label: "Hızlı işlemler", size: "side", note: "Yan sütun" },
   { id: "insights", label: "Uyarılar ve fırsatlar", size: "side", note: "Yan sütun" },
-  { id: "profile", label: "Kurulum rehberi", size: "full", note: "Tam genişlik" },
   { id: "kpis", label: "Günün performansı", size: "full", note: "Tam genişlik" },
-  { id: "operations", label: "Bugünün akışı", size: "wide", note: "Geniş sütun" },
+  { id: "profile", label: "Kurulum rehberi", size: "full", note: "Tam genişlik" },
 ] as const;
 
 export function dashboardModuleSize(id: string): ModuleSize {

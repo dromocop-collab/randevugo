@@ -13,19 +13,22 @@ test("default order: full, then wide+sides side by side, then full", () => {
   ]);
 });
 
-test("column modules gather in one block at the first one's position, even across full rows", () => {
+test("order is respected: only consecutive column modules share a row; a lone one is full width", () => {
   assert.deepEqual(buildDashboardRows(["command", "insights", "operations", "kpis"], size), [
     { kind: "split", left: ["operations"], right: ["command", "insights"], index: 0 },
     { kind: "full", id: "kpis", index: 3 },
   ]);
-  assert.deepEqual(buildDashboardRows(["operations", "kpis", "command", "profile", "insights"], size), [
-    { kind: "split", left: ["operations"], right: ["command", "insights"], index: 0 },
+  // Ekran görüntüsündeki sıra: Bugünün akışı aşağı indirilince gerçekten aşağıda kalmalı.
+  assert.deepEqual(buildDashboardRows(["insights", "kpis", "profile", "operations", "command"], size), [
+    { kind: "full", id: "insights", index: 0 },
     { kind: "full", id: "kpis", index: 1 },
-    { kind: "full", id: "profile", index: 3 },
+    { kind: "full", id: "profile", index: 2 },
+    { kind: "split", left: ["operations"], right: ["command"], index: 3 },
   ]);
-  assert.deepEqual(buildDashboardRows(["kpis", "command"], size), [
-    { kind: "full", id: "kpis", index: 0 },
-    { kind: "full", id: "command", index: 1 },
+  assert.deepEqual(buildDashboardRows(["operations", "kpis", "command"], size), [
+    { kind: "full", id: "operations", index: 0 },
+    { kind: "full", id: "kpis", index: 1 },
+    { kind: "full", id: "command", index: 2 },
   ]);
 });
 

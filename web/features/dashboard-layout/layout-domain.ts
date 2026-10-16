@@ -1,8 +1,8 @@
 // Ana panel (Bugün) modül yerleşimi — saf mantık. Test: layout-domain.test.mjs
 // 12 sütunlu "dense" ızgara, kısa bir geniş kartın yanında ve altında boşluk bırakıyordu.
-// Bunun yerine: tam genişlik modüller sıralarına göre tek başına satır olur; geniş/yan modüllerin hepsi
-// ilkinin bulunduğu yerde TEK bir iki sütunlu blokta toplanır (sol: geniş, sağ: yan; kendi sıralarıyla).
-// Her sütunun son kartı kalan yüksekliği doldurur; böylece hiçbir sırada boşluk kalmaz.
+// Bunun yerine sıra birebir korunur: tam genişlik modüller tek başına satır olur; aralarındaki ARDIŞIK
+// geniş/yan modüller iki bağımsız sütunlu bir satırda toplanır (sol: geniş, sağ: yan). Tek kalan modül tam
+// genişlik olur. Her sütunun son kartı kalan yüksekliği doldurur; böylece hiçbir sırada boşluk kalmaz.
 
 export type ModuleSize = "full" | "wide" | "side";
 
@@ -12,20 +12,25 @@ export type LayoutRow =
 
 export function buildDashboardRows(ids: readonly string[], sizeOf: (id: string) => ModuleSize): LayoutRow[] {
   const rows: LayoutRow[] = [];
-  const columns = ids.map((id, index) => ({ id, index })).filter((item) => sizeOf(item.id) !== "full");
-  const first = columns[0]?.index ?? -1;
-  ids.forEach((id, index) => {
-    if (sizeOf(id) === "full") { rows.push({ kind: "full", id, index }); return; }
-    if (index !== first) return;
-    if (columns.length === 1) {
-      rows.push({ kind: "full", id, index });
-    } else if (columns.some((item) => sizeOf(item.id) === "wide")) {
-      rows.push({ kind: "split", left: columns.filter((item) => sizeOf(item.id) === "wide").map((item) => item.id), right: columns.filter((item) => sizeOf(item.id) !== "wide").map((item) => item.id), index });
+  let group: Array<{ id: string; index: number }> = [];
+  const flush = () => {
+    if (!group.length) return;
+    const index = group[0].index;
+    if (group.length === 1) {
+      rows.push({ kind: "full", id: group[0].id, index });
+    } else if (group.some((item) => sizeOf(item.id) === "wide")) {
+      rows.push({ kind: "split", left: group.filter((item) => sizeOf(item.id) === "wide").map((item) => item.id), right: group.filter((item) => sizeOf(item.id) !== "wide").map((item) => item.id), index });
     } else {
       // Yalnız yan kartlar: sırayla iki sütuna dağıtılır (1. sol, 2. sağ, 3. sol…).
-      rows.push({ kind: "split", left: columns.filter((_, i) => i % 2 === 0).map((item) => item.id), right: columns.filter((_, i) => i % 2 === 1).map((item) => item.id), index });
+      rows.push({ kind: "split", left: group.filter((_, i) => i % 2 === 0).map((item) => item.id), right: group.filter((_, i) => i % 2 === 1).map((item) => item.id), index });
     }
+    group = [];
+  };
+  ids.forEach((id, index) => {
+    if (sizeOf(id) === "full") { flush(); rows.push({ kind: "full", id, index }); }
+    else group.push({ id, index });
   });
+  flush();
   return rows;
 }
 
