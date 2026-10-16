@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Cloud, CloudOff, Eye, EyeOff, Gauge, LayoutPanelTop, LoaderCircle, MousePointer2, Palette, RotateCcw, Zap } from "lucide-react";
+import { ArrowDown, BellRing, Check, Cloud, CloudOff, Gauge, LayoutPanelTop, LoaderCircle, MousePointer2, Palette, Play, RotateCcw, Zap } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getDashboardAppearancePreferences, saveDashboardAppearancePreferences } from "@/features/users/appearance-preferences-repository";
-import { Button, SegmentedControl, Sheet } from "@/components/dashboard/ui";
+import { Button, SegmentedControl, Sheet, Switch } from "@/components/dashboard/ui";
+import { ModuleOrderEditor } from "@/components/dashboard/module-order-editor";
+import { playNotificationChime, setSoundPreference, unlockNotificationAudio } from "@/features/push/notification-sound";
+import { NotificationSoundGrid, SoundVolumeSlider, useSoundPreference } from "@/features/push/notification-sound-picker";
+import { getSoundPreset } from "@/features/push/notification-sound-presets";
 import { cn } from "@/lib/utils/cn";
+import type { ModuleSize } from "@/features/dashboard-layout/layout-domain";
 import styles from "./topbar.module.css";
 
 /* Android uygulamasıyla senkron temalar (users/{uid}/preferences/dashboardAppearance.skin).
@@ -40,16 +45,20 @@ const dashboardCursors = [
 
 type DashboardCursor = (typeof dashboardCursors)[number]["id"];
 type AppearanceSyncState = "loading" | "saved" | "offline";
-type AppearanceSection = "colors" | "behavior" | "cursor" | "layout";
+type AppearanceSection = "colors" | "behavior" | "cursor" | "sound" | "layout";
 
 /** Ana panel (Bugün) modülleri; sırası/görünürlüğü burada düzenlenir, app/dashboard/page.tsx uygular. */
 export const defaultDashboardModules = [
-  { id: "command", label: "Hızlı işlemler" },
-  { id: "insights", label: "Uyarılar ve fırsatlar" },
-  { id: "profile", label: "Kurulum rehberi" },
-  { id: "kpis", label: "Günün performansı" },
-  { id: "operations", label: "Bugünün akışı" },
+  { id: "command", label: "Hızlı işlemler", size: "side", note: "Yan sütun" },
+  { id: "insights", label: "Uyarılar ve fırsatlar", size: "side", note: "Yan sütun" },
+  { id: "profile", label: "Kurulum rehberi", size: "full", note: "Tam genişlik" },
+  { id: "kpis", label: "Günün performansı", size: "full", note: "Tam genişlik" },
+  { id: "operations", label: "Bugünün akışı", size: "wide", note: "Geniş sütun" },
 ] as const;
+
+export function dashboardModuleSize(id: string): ModuleSize {
+  return defaultDashboardModules.find((item) => item.id === id)?.size ?? "side";
+}
 
 export type DashboardModuleId = (typeof defaultDashboardModules)[number]["id"];
 export type DashboardModulePreference = { id: DashboardModuleId; enabled: boolean };
@@ -75,6 +84,7 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
   const [motion, setMotion] = useState<DashboardMotion>("alive");
   const [cursor, setCursor] = useState<DashboardCursor>("orbit");
   const [syncState, setSyncState] = useState<AppearanceSyncState>("loading");
+  const soundPreference = useSoundPreference();
   const [modulePreferences, setModulePreferences] = useState<DashboardModulePreference[]>(defaultDashboardModules.map((item) => ({ id: item.id, enabled: true })));
   const skinReadyRef = useRef(false);
   const accountReadyRef = useRef(false);
@@ -188,16 +198,6 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
     setModulePreferences(defaultDashboardModules.map((item) => ({ id: item.id, enabled: true })));
   }
 
-  function moveModule(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= modulePreferences.length) return;
-    setModulePreferences((items) => {
-      const next = [...items];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  }
-
   const activeSkin = dashboardSkins.find((item) => item.id === skin);
   // Oturum yoksa tercih yalnızca bu cihazda tutulur.
   const shownSync: AppearanceSyncState = user?.uid ? syncState : "offline";
@@ -269,24 +269,19 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
               ))}
             </div>
           ))}
+          {section("sound", BellRing, "Bildirim sesi", soundPreference.muted ? "Kapalı · yalnız görsel bildirim" : `${getSoundPreset(soundPreference.soundId).name} · %${Math.round(soundPreference.volume * 100)}`, (
+            <div className={styles.soundBody}>
+              <div className={styles.soundTop}>
+                <Switch checked={soundPreference.muted} onChange={(muted) => setSoundPreference({ muted })} label="Sesi kapat" description="Kapalıyken bildirim yine görünür, yalnız ses çalmaz." />
+                <Button size="sm" variant="primary" icon={Play} disabled={soundPreference.muted || soundPreference.volume === 0} onClick={() => { unlockNotificationAudio(); playNotificationChime({ force: true }); }}>Test et</Button>
+              </div>
+              <SoundVolumeSlider preference={soundPreference} compact />
+              <NotificationSoundGrid preference={soundPreference} />
+              <p className={styles.soundNote}>Yeni randevu geldiğinde panelde çalar; seçim hesabına kaydedilir. Telefon uygulaması bildirimleri telefonun kendi sesini kullanır.</p>
+            </div>
+          ))}
           {section("layout", LayoutPanelTop, "Ana panel düzeni", "Bugün ekranındaki modülleri sırala veya gizle", (
-            <ol className={styles.moduleList}>
-              {modulePreferences.map((item, index) => {
-                const label = defaultDashboardModules.find((module) => module.id === item.id)?.label;
-                return (
-                  <li key={item.id} className={cn(!item.enabled && styles.moduleOff)}>
-                    <button type="button" className={styles.moduleToggle} onClick={() => setModulePreferences((items) => items.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={`${label} modülünü ${item.enabled ? "gizle" : "göster"}`} aria-pressed={item.enabled}>
-                      {item.enabled ? <Eye size={15} aria-hidden /> : <EyeOff size={15} aria-hidden />}
-                    </button>
-                    <span>{label}</span>
-                    <div>
-                      <button type="button" disabled={index === 0} onClick={() => moveModule(index, -1)} aria-label={`${label} yukarı taşı`}><ArrowUp size={14} aria-hidden /></button>
-                      <button type="button" disabled={index === modulePreferences.length - 1} onClick={() => moveModule(index, 1)} aria-label={`${label} aşağı taşı`}><ArrowDown size={14} aria-hidden /></button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
+            <ModuleOrderEditor modules={modulePreferences} meta={defaultDashboardModules} onChange={(next) => setModulePreferences(normalizeDashboardModules(next))} />
           ))}
         </div>
       </Sheet>

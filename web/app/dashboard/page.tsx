@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,9 @@ import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-opera
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { SetupAssistant, type SetupAssistantStep } from "@/components/dashboard/setup-assistant";
 import { APPOINTMENTS_CHANGED_EVENT, openQuickAppointment } from "@/components/dashboard/dashboard-events";
-import { normalizeDashboardModules, type DashboardModuleId, type DashboardModulePreference } from "@/components/dashboard/appearance-studio";
+import { dashboardModuleSize, normalizeDashboardModules, type DashboardModuleId, type DashboardModulePreference } from "@/components/dashboard/appearance-studio";
+import { buildDashboardRows } from "@/features/dashboard-layout/layout-domain";
+import { captureRects, playFlip, type RectMap } from "@/features/dashboard-layout/flip";
 import {
   Badge, Button, Callout, DashPage, EmptyState, PageHeader, Panel, Skeleton, StatCard, StatGrid, StatusPill, percentChange,
 } from "@/components/dashboard/ui";
@@ -73,11 +75,23 @@ export default function DashboardHomePage() {
   const [ready, setReady] = useState(false);
   const [modules, setModules] = useState<DashboardModulePreference[]>(() => normalizeDashboardModules(null));
   const [now, setNow] = useState(() => Date.now());
+  const gridRef = useRef<HTMLDivElement>(null);
+  const flipRef = useRef<RectMap | null>(null);
+
+  useLayoutEffect(() => {
+    if (!flipRef.current) return;
+    playFlip(gridRef.current, flipRef.current);
+    flipRef.current = null;
+  }, [modules]);
 
   // Ana panel düzeni (Görünüm stüdyosu → Ana panel düzeni).
   useEffect(() => {
     queueMicrotask(() => setModules(readModules()));
-    const onChange = (event: Event) => setModules(normalizeDashboardModules((event as CustomEvent).detail));
+    const onChange = (event: Event) => {
+      // Yer değiştiren kartlar eski konumlarından kayarak gelsin (FLIP).
+      flipRef.current = captureRects(gridRef.current);
+      setModules(normalizeDashboardModules((event as CustomEvent).detail));
+    };
     window.addEventListener("sr-dashboard-layout-change", onChange);
     return () => window.removeEventListener("sr-dashboard-layout-change", onChange);
   }, []);
@@ -210,9 +224,95 @@ export default function DashboardHomePage() {
   if (stats && !stats.isOpenToday && setupDone("hours")) alerts.push({ key: "closed", tone: "blue", icon: CalendarDays, title: "Bugün kapalı görünüyorsunuz", text: "Çalışma saatlerinize göre bugün online randevu alınmıyor.", href: "/dashboard/calisma-saatleri", cta: "Saatler" });
 
   const loading = !ready;
-  const order = (id: DashboardModuleId) => modules.findIndex((item) => item.id === id);
-  const enabled = (id: DashboardModuleId) => modules.find((item) => item.id === id)?.enabled !== false;
-  const moduleStyle = (id: DashboardModuleId) => ({ order: order(id) } as CSSProperties);
+  const blocks: Partial<Record<DashboardModuleId, ReactNode>> = {
+    kpis: (
+      <StatGrid columns={4}>
+        <StatCard accent label="Bugünkü randevu" icon={CalendarDays} href="/dashboard/randevular" loading={loading}
+          value={(stats?.todayActive.length ?? 0).toLocaleString("tr-TR")}
+          trend={stats?.countTrend != null ? { value: stats.countTrend, label: "düne göre" } : null}
+          hint={stats ? `${stats.completedToday} tamamlandı` : undefined} />
+        <StatCard label="Bugünkü gelir" icon={CircleDollarSign} tone="green" href={can("checkout") ? "/dashboard/operasyon" : undefined} loading={loading}
+          value={money(stats?.revenueToday ?? 0)}
+          trend={stats?.revenueTrend != null ? { value: stats.revenueTrend, label: "düne göre" } : null}
+          hint={stats?.expectedToday ? `+${money(stats.expectedToday)} beklenen` : "Tamamlanan işlemler"} />
+        <StatCard label="Doluluk" icon={Gauge} tone="blue" href="/dashboard/takvim" loading={loading}
+          value={stats?.occupancy == null ? "—" : `%${stats.occupancy}`}
+          progress={stats?.occupancy ?? null}
+          hint={stats ? (stats.capacity > 0 ? `${Math.round(stats.bookedMinutes / 60 * 10) / 10} / ${Math.round(stats.capacity / 60)} saat dolu` : stats.isOpenToday ? "Kapasite hesaplanamadı" : "Bugün kapalı") : undefined} />
+        <StatCard label="Yeni müşteri" icon={UsersRound} tone="violet" href={can("customers") ? "/dashboard/musteriler" : undefined} loading={loading}
+          value={(stats?.newCustomersToday ?? 0).toLocaleString("tr-TR")}
+          trend={stats?.customerTrend != null ? { value: stats.customerTrend, label: "düne göre" } : null}
+          hint={data ? `Toplam ${data.customerCount.toLocaleString("tr-TR")}` : undefined} />
+      </StatGrid>
+    ),
+    operations: (
+      <Panel
+        className={styles.fill}
+        title="Bugünün akışı"
+        description={stats ? `${stats.today.length} kayıt · ${stats.pendingToday} bekleyen` : "Yükleniyor"}
+        icon={CalendarCheck2}
+        actions={<Button size="sm" variant="ghost" href="/dashboard/randevular" trailingIcon={ArrowRight}>Tümü</Button>}
+        flush
+      >
+        {loading ? (
+          <div className={styles.timelineLoading}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={62} radius={16} />)}</div>
+        ) : stats && stats.today.length > 0 ? (
+          <Timeline items={stats.today} now={now} />
+        ) : (
+          <>
+            <EmptyState mascot="happy" compact title="Bugün randevu yok" description="Boş bir gün! Hızlı randevu ekleyebilir ya da mağaza linkini paylaşabilirsiniz." action={<Button variant="primary" size="sm" icon={CalendarPlus} onClick={() => openQuickAppointment()}>Randevu ekle</Button>} />
+            {stats && stats.upcoming.length > 0 && (
+              <div className={styles.upcoming}>
+                <p className={styles.upcomingLabel}>Yaklaşan</p>
+                {stats.upcoming.slice(0, 3).map((item) => (
+                  <Link key={item.id} href={`/dashboard/randevular?appointment=${encodeURIComponent(item.id)}`} className={styles.upcomingRow}>
+                    <time>{new Date(item.startAt).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}<b>{timeOf(item.startAt)}</b></time>
+                    <span><b>{item.customerName}</b><small>{item.serviceName ?? "Hizmet"}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
+                    <StatusPill status={item.status} size="sm" />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </Panel>
+    ),
+    command: (
+      <Panel className={styles.fill} title="Hızlı işlemler" icon={Zap}>
+        <div className={styles.actions}>
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            const body = <><span className={styles.actionIcon}><Icon size={19} aria-hidden /></span><span className={styles.actionText}><b>{action.label}</b><small>{action.text}</small></span></>;
+            return action.href
+              ? <Link key={action.key} href={action.href} className={styles.action}>{body}</Link>
+              : <button key={action.key} type="button" onClick={action.onClick} className={cn(styles.action, action.primary && styles.actionPrimary)}>{body}</button>;
+          })}
+        </div>
+      </Panel>
+    ),
+    insights: (
+      <Panel className={styles.fill} title="Uyarılar" icon={Sparkles} description={alerts.length ? `${alerts.length} konu dikkatinizi bekliyor` : "Her şey yolunda görünüyor"}>
+        {loading ? <Skeleton height={64} radius={16} /> : alerts.length ? (
+          <div className={styles.alerts}>
+            {alerts.map((alert) => (
+              <Callout key={alert.key} tone={alert.tone} icon={alert.icon} title={alert.title}
+                action={alert.href ? <Button size="sm" variant="secondary" href={alert.href}>{alert.cta ?? "Aç"}</Button> : undefined}>
+                <span className={styles.alertText}>{alert.text}</span>
+              </Callout>
+            ))}
+          </div>
+        ) : (
+          <Callout tone="green" icon={PartyPopper} title="Bekleyen iş yok">
+            <span className={styles.alertText}>Onay bekleyen randevu veya eksik ayar bulunmuyor.</span>
+          </Callout>
+        )}
+      </Panel>
+    ),
+  };
+  if (access?.role !== "staff" && completedSteps < setupItems.length) blocks.profile = <SetupAssistant businessId={businessId ?? ""} ready={ready} steps={assistantSteps} />;
+  const visibleIds = modules.filter((item) => item.enabled && blocks[item.id]).map((item) => item.id);
+  const rows = buildDashboardRows(visibleIds, dashboardModuleSize);
+  const cell = (id: DashboardModuleId) => <div key={id} className={styles.cell} data-flip-id={id} style={{ order: visibleIds.indexOf(id) }}>{blocks[id]}</div>;
 
   return (
     <DashPage>
@@ -233,102 +333,15 @@ export default function DashboardHomePage() {
 
       {loadError && <Callout tone="red" title="Veriler yüklenemedi">{loadError}</Callout>}
 
-      <div className={styles.grid}>
-        {enabled("kpis") && (
-          <div className={cn(styles.cell, styles.full)} style={moduleStyle("kpis")}>
-            <StatGrid columns={4}>
-              <StatCard accent label="Bugünkü randevu" icon={CalendarDays} href="/dashboard/randevular" loading={loading}
-                value={(stats?.todayActive.length ?? 0).toLocaleString("tr-TR")}
-                trend={stats?.countTrend != null ? { value: stats.countTrend, label: "düne göre" } : null}
-                hint={stats ? `${stats.completedToday} tamamlandı` : undefined} />
-              <StatCard label="Bugünkü gelir" icon={CircleDollarSign} tone="green" href={can("checkout") ? "/dashboard/operasyon" : undefined} loading={loading}
-                value={money(stats?.revenueToday ?? 0)}
-                trend={stats?.revenueTrend != null ? { value: stats.revenueTrend, label: "düne göre" } : null}
-                hint={stats?.expectedToday ? `+${money(stats.expectedToday)} beklenen` : "Tamamlanan işlemler"} />
-              <StatCard label="Doluluk" icon={Gauge} tone="blue" href="/dashboard/takvim" loading={loading}
-                value={stats?.occupancy == null ? "—" : `%${stats.occupancy}`}
-                progress={stats?.occupancy ?? null}
-                hint={stats ? (stats.capacity > 0 ? `${Math.round(stats.bookedMinutes / 60 * 10) / 10} / ${Math.round(stats.capacity / 60)} saat dolu` : stats.isOpenToday ? "Kapasite hesaplanamadı" : "Bugün kapalı") : undefined} />
-              <StatCard label="Yeni müşteri" icon={UsersRound} tone="violet" href={can("customers") ? "/dashboard/musteriler" : undefined} loading={loading}
-                value={(stats?.newCustomersToday ?? 0).toLocaleString("tr-TR")}
-                trend={stats?.customerTrend != null ? { value: stats.customerTrend, label: "düne göre" } : null}
-                hint={data ? `Toplam ${data.customerCount.toLocaleString("tr-TR")}` : undefined} />
-            </StatGrid>
-          </div>
-        )}
-
-        {enabled("operations") && (
-          <Panel
-            className={cn(styles.cell, styles.wide)}
-            style={moduleStyle("operations")}
-            title="Bugünün akışı"
-            description={stats ? `${stats.today.length} kayıt · ${stats.pendingToday} bekleyen` : "Yükleniyor"}
-            icon={CalendarCheck2}
-            actions={<Button size="sm" variant="ghost" href="/dashboard/randevular" trailingIcon={ArrowRight}>Tümü</Button>}
-            flush
-          >
-            {loading ? (
-              <div className={styles.timelineLoading}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={62} radius={16} />)}</div>
-            ) : stats && stats.today.length > 0 ? (
-              <Timeline items={stats.today} now={now} />
-            ) : (
-              <>
-                <EmptyState mascot="happy" compact title="Bugün randevu yok" description="Boş bir gün! Hızlı randevu ekleyebilir ya da mağaza linkini paylaşabilirsiniz." action={<Button variant="primary" size="sm" icon={CalendarPlus} onClick={() => openQuickAppointment()}>Randevu ekle</Button>} />
-                {stats && stats.upcoming.length > 0 && (
-                  <div className={styles.upcoming}>
-                    <p className={styles.upcomingLabel}>Yaklaşan</p>
-                    {stats.upcoming.slice(0, 3).map((item) => (
-                      <Link key={item.id} href={`/dashboard/randevular?appointment=${encodeURIComponent(item.id)}`} className={styles.upcomingRow}>
-                        <time>{new Date(item.startAt).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}<b>{timeOf(item.startAt)}</b></time>
-                        <span><b>{item.customerName}</b><small>{item.serviceName ?? "Hizmet"}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
-                        <StatusPill status={item.status} size="sm" />
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </Panel>
-        )}
-
-        {enabled("command") && (
-          <Panel className={cn(styles.cell, styles.side)} style={moduleStyle("command")} title="Hızlı işlemler" icon={Zap}>
-            <div className={styles.actions}>
-              {quickActions.map((action) => {
-                const Icon = action.icon;
-                const body = <><span className={styles.actionIcon}><Icon size={19} aria-hidden /></span><span className={styles.actionText}><b>{action.label}</b><small>{action.text}</small></span></>;
-                return action.href
-                  ? <Link key={action.key} href={action.href} className={styles.action}>{body}</Link>
-                  : <button key={action.key} type="button" onClick={action.onClick} className={cn(styles.action, action.primary && styles.actionPrimary)}>{body}</button>;
-              })}
+      <div ref={gridRef} className={styles.grid}>
+        {rows.map((row) => row.kind === "full"
+          ? cell(row.id as DashboardModuleId)
+          : (
+            <div key={`split-${row.index}`} className={styles.split} style={{ order: row.index }}>
+              <div className={styles.column}>{row.left.map((id) => cell(id as DashboardModuleId))}</div>
+              <div className={styles.column}>{row.right.map((id) => cell(id as DashboardModuleId))}</div>
             </div>
-          </Panel>
-        )}
-
-        {enabled("insights") && (
-          <Panel className={cn(styles.cell, styles.side)} style={moduleStyle("insights")} title="Uyarılar" icon={Sparkles} description={alerts.length ? `${alerts.length} konu dikkatinizi bekliyor` : "Her şey yolunda görünüyor"}>
-            {loading ? <Skeleton height={64} radius={16} /> : alerts.length ? (
-              <div className={styles.alerts}>
-                {alerts.map((alert) => (
-                  <Callout key={alert.key} tone={alert.tone} icon={alert.icon} title={alert.title}
-                    action={alert.href ? <Button size="sm" variant="secondary" href={alert.href}>{alert.cta ?? "Aç"}</Button> : undefined}>
-                    <span className={styles.alertText}>{alert.text}</span>
-                  </Callout>
-                ))}
-              </div>
-            ) : (
-              <Callout tone="green" icon={PartyPopper} title="Bekleyen iş yok">
-                <span className={styles.alertText}>Onay bekleyen randevu veya eksik ayar bulunmuyor.</span>
-              </Callout>
-            )}
-          </Panel>
-        )}
-
-        {enabled("profile") && access?.role !== "staff" && completedSteps < setupItems.length && (
-          <div className={cn(styles.cell, styles.full)} style={moduleStyle("profile")}>
-            <SetupAssistant businessId={businessId ?? ""} ready={ready} steps={assistantSteps} />
-          </div>
-        )}
+          ))}
       </div>
     </DashPage>
   );
