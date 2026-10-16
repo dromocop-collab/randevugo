@@ -273,6 +273,13 @@
 }
 :global(:root[data-theme="dark"]) .quickBtn { color: #9fe3b9; }
 .quickOn { border-style: solid; background: rgb(31 122 74 / 0.1); }
+.quickNear { font-weight: 800; }
+.quickBtn:disabled { cursor: progress; opacity: 0.75; }
+.spin { animation: discoverSpin 0.9s linear infinite; }
+@keyframes discoverSpin { to { transform: rotate(360deg); } }
+.locateError { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.locateError svg { flex: none; margin-top: 2px; }
+.distance { flex: none; color: var(--green-2, #1f7a4a); font-weight: 800; }
 
 /* ── Sonuç başlığı ── */
 .resultsHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 22px 0 12px; }

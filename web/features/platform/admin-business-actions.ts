@@ -41,3 +41,9 @@ export async function reviewBusiness(businessId: string, decision: "approved" | 
   )({ businessId, decision, ...(note ? { note } : {}) });
   return result.data;
 }
+
+/** Konumu olmayan/adresi değişen yayındaki işletmelerin konumunu bulur (çağrı başına en fazla 40). */
+export async function backfillBusinessGeo() {
+  const result = await callable<Record<string, never>, { updated: number; failed: number; remaining: number }>("backfillBusinessGeo")({});
+  return result.data;
+}

@@ -14,7 +14,7 @@ import {
   DEFAULT_PLATFORM_PLAN_ID, isLegacyPlanId, listPlatformPlansWithSource, planDisplayLabel, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import {
-  assignBusinessPlan, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
+  assignBusinessPlan, backfillBusinessGeo, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
 } from "@/features/platform/admin-business-actions";
 import {
   AdminButton, AdminPage, Badge, Callout, ConfirmSheet, DataTable, EmptyState, KeyValueList, PageHeader, Panel,
@@ -256,6 +256,20 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
   const filtersActive = statusFilter !== "all" || planFilter !== "all" || visibilityFilter !== "all" || cityFilter !== "all" || searchText.trim() !== "";
   function resetFilters() { setStatusFilter("all"); setPlanFilter("all"); setVisibilityFilter("all"); setCityFilter("all"); setSearchText(""); }
 
+  const [geoBusy, setGeoBusy] = useState(false);
+  // Keşfet "Yakınımdaki işletmeler" için: adresten konum bulunur (1 işletme/sn, çağrı başına 40).
+  async function runGeoBackfill() {
+    setGeoBusy(true);
+    try {
+      const result = await backfillBusinessGeo();
+      toast.success(`${result.updated} işletmenin konumu bulundu.`, {
+        description: [result.failed ? `${result.failed} adres bulunamadı (işletme adresi düzeltince otomatik denenir).` : "", result.remaining ? `${result.remaining} işletme kaldı, tekrar basın.` : "Tüm işletmeler güncel."].filter(Boolean).join(" "),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Konumlar güncellenemedi.");
+    } finally { setGeoBusy(false); }
+  }
+
   function exportBusinesses() {
     const rows = [
       ["İşletme", "Firma", "Şehir", "İlçe", "Kategori", "Paket", "Durum", "Keşifte", "Oluşturulma", "İşletme ID", "Sahip UID"],
@@ -303,6 +317,7 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
         description="Onay, paket, keşif görünürlüğü ve askı durumlarını tek yerden yönetin. Tüm işlemler sunucu tarafında doğrulanır."
         icon={Building2}
         actions={<>
+          <AdminButton variant="glass" icon={MapPin} loading={geoBusy} onClick={() => void runGeoBackfill()}>Konumları güncelle</AdminButton>
           <AdminButton variant="glass" icon={Download} onClick={exportBusinesses} disabled={filtered.length === 0}>CSV</AdminButton>
           <AdminButton variant="lime" icon={RefreshCw} loading={loading} onClick={() => void loadBusinesses()}>Yenile</AdminButton>
         </>}

@@ -206,3 +206,8 @@ test("otomasyon çalışma geçmişini ekip okur; kimse istemciden yazamaz", asy
   await assertFails(setDoc(doc(as("owner"), `businesses/${BIZ}/automationRuns/r2`), { ruleId: "x" }));
   await assertFails(deleteDoc(doc(as("owner"), path)));
 });
+
+test("işletme sahibi konumu (geo) istemciden değiştiremez", async () => {
+  await assertFails(updateDoc(doc(as("owner"), `businesses/${BIZ}`), { geo: { lat: 41, lng: 29, precision: "address", fingerprint: "x" } }));
+  await assertFails(updateDoc(doc(as("manager"), `businesses/${BIZ}`), { geoAttemptFingerprint: "x" }));
+});

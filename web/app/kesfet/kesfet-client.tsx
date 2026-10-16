@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { BadgeCheck, Check, ChevronDown, ChevronRight, Clock3, Heart, History, MapPin, RefreshCw, Scale, Search, SlidersHorizontal, Sparkles, Star, TrendingUp, X, Zap } from "lucide-react";
+import { BadgeCheck, Check, ChevronDown, ChevronRight, Clock3, Heart, History, LoaderCircle, LocateFixed, MapPin, RefreshCw, Scale, Search, SlidersHorizontal, Sparkles, Star, TrendingUp, X, Zap } from "lucide-react";
 import { getDiscoveryFacets, searchBusinesses, type BusinessSearchResult, type DiscoveryFacets } from "@/features/discovery/search-repository";
 import { listDynamicCategories, type DynamicCategory } from "@/features/categories/category-request-repository";
 import { addFavoriteBusiness, listFavoriteBusinesses, removeFavoriteBusiness } from "@/features/customers/favorite-repository";
@@ -22,7 +22,19 @@ interface DiscoveryCategory {
   imageUrl?: string;
 }
 
-type SortKey = "recommended" | "rating" | "reviews" | "name";
+type SortKey = "recommended" | "distance" | "rating" | "reviews" | "name";
+type Point = { lat: number; lng: number };
+
+/** Kuş uçuşu mesafe (km). Sunucudaki functions/src/geo-domain.ts distanceKm ile aynı. */
+function distanceKm(a: Point, b: Point) {
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function distanceText(km: number) {
+  return km < 1 ? `${Math.max(50, Math.round(km * 1000 / 50) * 50)} m` : `${km.toLocaleString("tr-TR", { maximumFractionDigits: km < 10 ? 1 : 0 })} km`;
+}
 
 const DEFAULT_CATEGORIES: DiscoveryCategory[] = [
   { value: "", label: "Tümü", icon: "✨" },
@@ -59,6 +71,7 @@ const CATEGORY_VISUALS: Record<string, string> = {
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "recommended", label: "Önerilen" },
+  { value: "distance", label: "En yakın" },
   { value: "rating", label: "En yüksek puan" },
   { value: "reviews", label: "En çok yorum" },
   { value: "name", label: "A → Z" },
@@ -110,6 +123,10 @@ export function DiscoverInteractive() {
   const [recent, setRecent] = useState<string[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [stuck, setStuck] = useState(false);
+  // Konum yalnız bu oturumda bellekte tutulur; URL'ye ve sunucuya gönderilmez.
+  const [near, setNear] = useState<Point | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState("");
 
   const rootRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -140,7 +157,7 @@ export function DiscoverInteractive() {
     setOrDelete("q", debouncedKeyword);
     setOrDelete("category", category);
     setOrDelete("city", city);
-    setOrDelete("sort", sort === "recommended" ? "" : sort);
+    setOrDelete("sort", sort === "recommended" || sort === "distance" ? "" : sort);
     setOrDelete("verified", verifiedOnly ? "1" : "");
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${params.size ? `?${params.toString()}` : ""}`);
   }, [category, city, debouncedKeyword, sort, urlReady, verifiedOnly]);
@@ -261,7 +278,36 @@ export function DiscoverInteractive() {
     setResultLimit(24);
   }
 
+  function locate() {
+    if (near) {
+      setNear(null);
+      setSort((current) => current === "distance" ? "recommended" : current);
+      return;
+    }
+    if (!("geolocation" in navigator)) { setLocateError("Tarayıcın konum özelliğini desteklemiyor. Filtrele'den şehir seçebilirsin."); return; }
+    setLocating(true);
+    setLocateError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setNear({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setSort("distance");
+        setCity("");
+        setResultLimit(100);
+        setLocating(false);
+        revealResults();
+      },
+      (error) => {
+        setLocating(false);
+        setLocateError(error.code === error.PERMISSION_DENIED
+          ? "Konum izni verilmedi. Tarayıcı ayarlarından izin verebilir ya da Filtrele'den şehir seçebilirsin."
+          : "Konumun alınamadı. Biraz sonra tekrar dene ya da Filtrele'den şehir seçebilirsin.");
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 10 * 60_000 },
+    );
+  }
+
   function clearFilters() {
+    setNear(null);
     setKeyword(""); setDebouncedKeyword(""); setCategory(""); setCity(""); setVerifiedOnly(false); setSort("recommended"); setResultLimit(24);
   }
 
@@ -284,12 +330,17 @@ export function DiscoverInteractive() {
   const visibleResults = useMemo(() => {
     const rows = verifiedOnly ? results.filter((business) => business.isVerified) : [...results];
     const score = (business: Business) => (business.rating ?? 0) * 18 + Math.log10((business.reviewCount ?? 0) + 1) * 8 + (business.isVerified ? 6 : 0) + (business.coverUrl ? 2 : 0);
-    if (sort === "recommended") rows.sort((a, b) => score(b) - score(a));
+    if (sort === "recommended" || (sort === "distance" && !near)) rows.sort((a, b) => score(b) - score(a));
+    if (sort === "distance" && near) {
+      // Konumu olan işletmeler mesafeye göre, olmayanlar sonda (önerilen sırayla).
+      const km = (business: Business) => business.geo ? distanceKm(near, business.geo) : Number.POSITIVE_INFINITY;
+      rows.sort((a, b) => km(a) - km(b) || score(b) - score(a));
+    }
     if (sort === "rating") rows.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     if (sort === "reviews") rows.sort((a, b) => (b.reviewCount ?? 0) - (a.reviewCount ?? 0));
     if (sort === "name") rows.sort((a, b) => a.name.localeCompare(b.name, "tr"));
     return rows;
-  }, [results, sort, verifiedOnly]);
+  }, [results, sort, verifiedOnly, near]);
 
   const availableCategories = useMemo(
     () => categories.filter((item) => item.value === "" || (facets.categoryCounts[item.value] ?? 0) > 0 || item.value === category),
@@ -370,20 +421,26 @@ export function DiscoverInteractive() {
 
       {/* Hızlı kısayollar */}
       <div className={styles.quick}>
+        <button type="button" className={cx(styles.quickBtn, styles.quickNear, near && styles.quickOn)} onClick={locate} aria-pressed={Boolean(near)} disabled={locating}>
+          {locating ? <LoaderCircle size={14} className={styles.spin} /> : <LocateFixed size={14} />} {near ? "Yakınımdakiler açık" : locating ? "Konum alınıyor…" : "Yakınımdaki işletmeler"}
+          {near ? <X size={12} /> : null}
+        </button>
         <button type="button" className={cx(styles.quickBtn, sort === "rating" && styles.quickOn)} onClick={() => setSort((current) => current === "rating" ? "recommended" : "rating")}><Star size={14} /> En yüksek puan</button>
         <button type="button" className={cx(styles.quickBtn, verifiedOnly && styles.quickOn)} onClick={() => setVerifiedOnly((value) => !value)}><BadgeCheck size={14} /> Doğrulanmış</button>
         <Link href="/simdi-musait" className={styles.quickBtn}><Zap size={14} /> Şimdi müsait</Link>
         <Link href="/siram" className={styles.quickBtn}><Clock3 size={14} /> Canlı sıra</Link>
       </div>
 
+      {locateError ? <p className={styles.locateError} role="status"><MapPin size={14} /> {locateError}</p> : null}
+
       {/* Sonuç başlığı */}
       <div ref={resultsHeadRef} className={styles.resultsHead}>
         <div>
-          <h2>{category ? categoryLabel(category) : debouncedKeyword ? `“${debouncedKeyword}”` : "Sana uygun yerler"}</h2>
+          <h2>{near ? `Yakınındaki ${category ? `${categoryLabel(category)} işletmeleri` : "işletmeler"}` : category ? categoryLabel(category) : debouncedKeyword ? `“${debouncedKeyword}”` : "Sana uygun yerler"}</h2>
           <p className={cx(styles.live, refreshing && styles.busy)} aria-live="polite"><i /> {loadError ? "Bağlantı sorunu" : initialLoading || refreshing ? "Eşleştiriliyor…" : `${visibleResults.length} işletme${city ? ` · ${city}` : ""}`}</p>
         </div>
         <div className={styles.sortInline} role="radiogroup" aria-label="Sıralama">
-          {SORT_OPTIONS.map((option) => <button key={option.value} type="button" role="radio" aria-checked={sort === option.value} className={cx(sort === option.value && styles.sortOn)} onClick={() => setSort(option.value)}>{option.label}</button>)}
+          {SORT_OPTIONS.filter((option) => option.value !== "distance" || near).map((option) => <button key={option.value} type="button" role="radio" aria-checked={sort === option.value} className={cx(sort === option.value && styles.sortOn)} onClick={() => setSort(option.value)}>{option.label}</button>)}
         </div>
       </div>
 
@@ -426,6 +483,7 @@ export function DiscoverInteractive() {
               business={business}
               index={index}
               categoryLabel={categoryLabel(business.category)}
+              distance={near && business.geo ? { km: distanceKm(near, business.geo), approximate: business.geo.precision !== "address" } : null}
               favorite={favoriteIds.has(business.id)}
               compared={compareIds.includes(business.id)}
               compareFull={compareIds.length >= 3}
@@ -458,10 +516,11 @@ export function DiscoverInteractive() {
   );
 }
 
-function BusinessResultCard({ business, index, categoryLabel, favorite, compared, compareFull, onFavorite, onCompare }: {
+function BusinessResultCard({ business, index, categoryLabel, distance, favorite, compared, compareFull, onFavorite, onCompare }: {
   business: BusinessSearchResult;
   index: number;
   categoryLabel: string;
+  distance: { km: number; approximate: boolean } | null;
   favorite: boolean;
   compared: boolean;
   compareFull: boolean;
@@ -492,7 +551,7 @@ function BusinessResultCard({ business, index, categoryLabel, favorite, compared
         <span className={styles.logo}>{business.logoUrl ? <Image src={business.logoUrl} alt="" fill sizes="52px" /> : business.name.charAt(0)}</span>
         <div style={{ minWidth: 0 }}>
           <h3 className={styles.name}>{business.name}</h3>
-          {location && <p className={styles.meta}><MapPin size={13} /> {location}</p>}
+          {(location || distance) && <p className={styles.meta}><MapPin size={13} />{distance ? <b className={styles.distance} title={distance.approximate ? "Yaklaşık (ilçe/il merkezine göre)" : undefined}>{distance.approximate ? "~" : ""}{distanceText(distance.km)}</b> : null} {location}</p>}
         </div>
       </div>
       {business.matchedServiceName && <div className={styles.tags}><span className={cx(styles.tag, styles.tagMatch)}><Sparkles size={11} /> {business.matchedServiceName}</span></div>}
@@ -536,7 +595,7 @@ function FilterSheet({ cities, city, sort, verifiedOnly, resultCount, onApply, o
         <div className={styles.sheetBody}>
           <div className={styles.group}>
             <b>SIRALAMA</b>
-            <div className={styles.options}>{SORT_OPTIONS.map((option) => <button key={option.value} type="button" className={cx(styles.option, draftSort === option.value && styles.optionOn)} onClick={() => setDraftSort(option.value)}>{draftSort === option.value ? <Check size={15} /> : <Sparkles size={15} />} {option.label}</button>)}</div>
+            <div className={styles.options}>{SORT_OPTIONS.filter((option) => option.value !== "distance" || sort === "distance").map((option) => <button key={option.value} type="button" className={cx(styles.option, draftSort === option.value && styles.optionOn)} onClick={() => setDraftSort(option.value)}>{draftSort === option.value ? <Check size={15} /> : <Sparkles size={15} />} {option.label}</button>)}</div>
           </div>
           <div className={styles.group}>
             <b>KONUM</b>

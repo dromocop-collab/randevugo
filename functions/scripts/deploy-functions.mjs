@@ -41,6 +41,7 @@ export const GROUPS = {
     "reviewBusinessProfileChange", "deleteBusinessPermanently", "createStaffMember", "archiveStaff", "linkStaffAccount", "upsertCustomer",
     "renameCustomer", "getRewardProgramSettings", "updateRewardProgramSettings", "finalizeAppointmentCheckout", "sellServicePackage",
     "redeemServicePackage", "getMyCustomerBenefits", "updateLiveFeatureFlags", "submitReview", "moderateReview", "autoPublishPendingReviews",
+    "businessGeocode", "backfillBusinessGeo",
   ],
   bildirim: [
     "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendBusinessPush",

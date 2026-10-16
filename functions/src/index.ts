@@ -30,6 +30,7 @@ import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-doma
 import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
+import { addressFingerprint, geocodeQueries, parseNominatim, type BusinessGeo } from "./geo-domain.js";
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
@@ -8900,3 +8901,71 @@ export const callNextCustomer = onCall(protectedCallableOptions, async (request)
     return { entryId: entryRef.id, status: "called" };
   });
 });
+
+// ── İşletme konumu (Keşfet → Yakınımdaki işletmeler) ──
+// Adres değişince OpenStreetMap Nominatim ile konum bulunur. Kullanım koşulu: saniyede en fazla 1 istek,
+// tanımlı User-Agent. Yazımlar seyrek olduğundan tetikleyici bu sınırın çok altında kalır.
+const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_USER_AGENT = "SeninRandevun/1.0 (+https://seninrandevun.com; info@seninrandevun.com)";
+
+async function geocodeBusinessAddress(business: FirebaseFirestore.DocumentData): Promise<BusinessGeo | null> {
+  const fingerprint = addressFingerprint(business);
+  for (const { q, precision } of geocodeQueries(business)) {
+    const url = `${NOMINATIM_URL}?${new URLSearchParams({ q, format: "jsonv2", limit: "1", countrycodes: "tr", "accept-language": "tr" })}`;
+    try {
+      const response = await fetch(url, { headers: { "User-Agent": NOMINATIM_USER_AGENT }, signal: AbortSignal.timeout(8000) });
+      if (response.ok) {
+        const point = parseNominatim(await response.json());
+        if (point) return { ...point, precision, fingerprint };
+      } else if (response.status === 429) {
+        return null;
+      }
+    } catch (error) {
+      logger.warn("Geocode failed", { precision, error: error instanceof Error ? error.message : String(error) });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+  }
+  return null;
+}
+
+export const businessGeocode = onDocumentWritten(
+  { region: "europe-west1", document: "businesses/{businessId}" },
+  async (event) => {
+    const after = event.data?.after.data();
+    if (!after) return;
+    const fingerprint = addressFingerprint(after);
+    const current = after.geo as { fingerprint?: string } | undefined;
+    // Kendi yazımımız tekrar tetikler; parmak izi aynıysa (veya bu adres için zaten denendiyse) dur.
+    if (current?.fingerprint === fingerprint || after.geoAttemptFingerprint === fingerprint) return;
+    if (!geocodeQueries(after).length) return;
+    const geo = await geocodeBusinessAddress(after);
+    await event.data!.after.ref.update(geo
+      ? { geo: { ...geo, updatedAt: FieldValue.serverTimestamp() }, geoAttemptFingerprint: fingerprint }
+      : { geoAttemptFingerprint: fingerprint });
+  }
+);
+
+/** Süper admin: konumu olmayan işletmeleri sırayla (1 istek/sn) doldurur. Her çağrı en fazla 40 işletme. */
+export const backfillBusinessGeo = onCall(
+  { region: "europe-west1", timeoutSeconds: 300 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const snapshot = await db.collection("businesses").where("isPublished", "==", true).limit(1000).get();
+    const pending = snapshot.docs.filter((document) => {
+      const data = document.data();
+      return (data.geo as { fingerprint?: string } | undefined)?.fingerprint !== addressFingerprint(data) && geocodeQueries(data).length > 0;
+    });
+    let updated = 0;
+    let failed = 0;
+    for (const document of pending.slice(0, 40)) {
+      const geo = await geocodeBusinessAddress(document.data());
+      const fingerprint = addressFingerprint(document.data());
+      await document.ref.update(geo ? { geo: { ...geo, updatedAt: FieldValue.serverTimestamp() }, geoAttemptFingerprint: fingerprint } : { geoAttemptFingerprint: fingerprint });
+      if (geo) updated += 1; else failed += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    }
+    return { updated, failed, remaining: Math.max(0, pending.length - 40) };
+  }
+);

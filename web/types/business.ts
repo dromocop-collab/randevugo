@@ -80,6 +80,8 @@ export interface Business extends EntityBase {
   address: string;
   city: string;
   district: string;
+  /** Adresten sunucuda bulunur (functions businessGeocode); istemci yazamaz. */
+  geo?: { lat: number; lng: number; precision: "address" | "district" | "city" };
   logoUrl?: string;
   coverUrl?: string;
   galleryUrls?: string[];
