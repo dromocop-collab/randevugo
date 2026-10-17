@@ -483,7 +483,7 @@ export function DiscoverInteractive() {
               business={business}
               index={index}
               categoryLabel={categoryLabel(business.category)}
-              distance={near && business.geo ? { km: distanceKm(near, business.geo), approximate: business.geo.precision !== "address" } : null}
+              distance={near && business.geo ? { km: distanceKm(near, business.geo), approximate: business.geo.precision === "district" || business.geo.precision === "city" } : null}
               favorite={favoriteIds.has(business.id)}
               compared={compareIds.includes(business.id)}
               compareFull={compareIds.length >= 3}

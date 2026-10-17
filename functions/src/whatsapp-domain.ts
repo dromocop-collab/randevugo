@@ -118,3 +118,61 @@ export function extractStatuses(body: unknown): WebhookStatus[] {
   }
   return out;
 }
+
+export type ReadinessCheck = { key: string; label: string; ok: boolean; blocking: boolean; detail: string };
+
+/**
+ * Kanalı açmadan önce kontrol listesi (süper admin WhatsApp paneli). blocking=true olanlar tamamlanmadan kanal açılmaz.
+ * Görünen ad onayı engel değildir: Meta onay beklerken de şablon mesajlarını iletir (başlıkta numara görünür).
+ */
+export function whatsappReadiness(input: {
+  settings: Record<string, unknown> | null | undefined;
+  phone: { status?: string; name_status?: string; code_verification_status?: string } | null;
+  templates: Array<{ name: string; status: string; language: string }> | null;
+  requiredTemplates: string[];
+  language: string;
+}): { ready: boolean; checks: ReadinessCheck[] } {
+  const s = input.settings ?? {};
+  const has = (key: string, min = 1) => String(s[key] ?? "").trim().length >= min;
+  const approved = new Set((input.templates ?? []).filter((t) => t.status === "APPROVED" && t.language === input.language).map((t) => t.name));
+  const missingTemplates = input.requiredTemplates.filter((name) => !approved.has(name));
+  const checks: ReadinessCheck[] = [
+    { key: "phoneNumberId", label: "Telefon numarası kimliği", ok: /^\d{6,}$/.test(String(s.phoneNumberId ?? "")), blocking: true, detail: "Firestore: phoneNumberId" },
+    { key: "accessToken", label: "Kalıcı erişim anahtarı", ok: has("accessToken", 20), blocking: true, detail: "Sistem kullanıcısı token'ı (accessToken)" },
+    { key: "appSecret", label: "Uygulama gizli anahtarı", ok: /^[0-9a-f]{32}$/.test(String(s.appSecret ?? "").trim()), blocking: true, detail: "Webhook imza doğrulaması (appSecret, 32 karakter)" },
+    { key: "verifyToken", label: "Webhook doğrulama kelimesi", ok: has("verifyToken", 8), blocking: true, detail: "verifyToken" },
+    {
+      key: "phone", label: "Numara Meta'ya bağlı", ok: input.phone?.status === "CONNECTED", blocking: true,
+      detail: input.phone ? `Durum: ${input.phone.status ?? "?"}` : "Meta'dan numara bilgisi alınamadı (token veya kimlik hatalı olabilir)",
+    },
+    {
+      key: "templates", label: "Şablonlar onaylı", ok: missingTemplates.length === 0, blocking: true,
+      detail: missingTemplates.length ? `Onay bekleyen/eksik: ${missingTemplates.join(", ")}` : `${input.requiredTemplates.length} şablon onaylı`,
+    },
+    {
+      key: "displayName", label: "Görünen ad onayı", ok: input.phone?.name_status === "APPROVED", blocking: false,
+      detail: input.phone?.name_status === "APPROVED" ? "Müşteriler işletme adını görür" : "Onay bekleniyor; bu sürede sohbet başlığında numara görünür",
+    },
+  ];
+  return { ready: checks.every((check) => check.ok || !check.blocking), checks };
+}
+
+export type WhatsAppMessageRow = { status?: unknown; type?: unknown; errorCode?: unknown };
+
+/** whatsappMessages kayıtlarından durum/tür dağılımı ve iletim oranı. */
+export function summarizeWhatsAppMessages(rows: WhatsAppMessageRow[]) {
+  const byStatus: Record<string, number> = { accepted: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+  const byType: Record<string, number> = {};
+  const errors: Record<string, number> = {};
+  for (const row of rows) {
+    const status = String(row.status ?? "accepted");
+    byStatus[status] = (byStatus[status] ?? 0) + 1;
+    const type = String(row.type ?? "other");
+    byType[type] = (byType[type] ?? 0) + 1;
+    if (status === "failed" && row.errorCode !== null && row.errorCode !== undefined) errors[String(row.errorCode)] = (errors[String(row.errorCode)] ?? 0) + 1;
+  }
+  const total = rows.length;
+  const reached = byStatus.delivered + byStatus.read;
+  const settled = reached + byStatus.failed;
+  return { total, byStatus, byType, errors, deliveryRate: settled ? Math.round((reached / settled) * 1000) / 10 : null, readRate: reached ? Math.round((byStatus.read / reached) * 1000) / 10 : null };
+}

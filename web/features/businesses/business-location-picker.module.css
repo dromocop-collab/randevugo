@@ -1,0 +1,29 @@
+/* İşletme konumu seçici — renkler _studio (--k-*) token'larından, yoksa güvenli varsayılan. */
+.picker { display: grid; gap: 12px; margin-top: 14px; }
+.status { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--k-soft, #f3f6f4); color: var(--k-ink, #10241c); }
+.status svg { flex: none; margin-top: 1px; }
+.status > span { display: grid; gap: 2px; min-width: 0; }
+.status b { font-size: 14px; font-weight: 750; }
+.status small { color: var(--k-muted, #4b5d54); font-size: 12.5px; line-height: 1.45; }
+.status[data-tone="ok"] { background: var(--k-ok-bg, rgb(22 163 74 / 0.1)); }
+.status[data-tone="ok"] svg { color: var(--k-ok, #15803d); }
+.status[data-tone="warn"] { background: var(--k-warn-bg, rgb(245 158 11 / 0.14)); }
+.status[data-tone="warn"] svg { color: var(--k-warn, #b45309); }
+.status[data-tone="info"] svg { color: var(--k-core, #0b6b45); }
+.mapWrap { position: relative; overflow: hidden; height: 320px; border: 1px solid var(--k-line, rgb(16 40 29 / 0.12)); border-radius: 16px; background: var(--k-soft, #eef2ef); }
+@media (min-width: 900px) { .mapWrap { height: 380px; } }
+.map { position: absolute; inset: 0; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: color-mix(in srgb, var(--k-card, #fff) 80%, transparent); color: var(--k-muted, #4b5d54); font-size: 13.5px; font-weight: 650; text-align: center; }
+.hint { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--k-faint, #6b7a72); font-size: 12.5px; line-height: 1.45; }
+.hint svg { flex: none; margin-top: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ghost, .primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 0 14px; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.ghost { border: 1px solid var(--k-line, rgb(16 40 29 / 0.14)); background: var(--k-card, #fff); color: var(--k-ink, #10241c); }
+.primary { margin-left: auto; border: 0; background: var(--k-core, #0b6b45); color: #fff; }
+.ghost:disabled, .primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.ghost:focus-visible, .primary:focus-visible { outline: 3px solid color-mix(in srgb, var(--k-core, #0b6b45) 40%, transparent); outline-offset: 2px; }
+.coords { margin: 0; color: var(--k-faint, #6b7a72); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.spin { animation: locSpin 0.9s linear infinite; }
+@keyframes locSpin { to { transform: rotate(360deg); } }
+@media (max-width: 520px) { .primary { margin-left: 0; flex: 1 1 100%; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

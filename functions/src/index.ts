@@ -27,10 +27,10 @@ import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
-import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
+import { DEFAULT_TEMPLATES, buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, toWhatsAppPhone, verifyWebhookSignature, whatsappReadiness, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
-import { addressFingerprint, geocodeQueries, parseNominatim, type BusinessGeo } from "./geo-domain.js";
+import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 initializeApp();
@@ -6115,7 +6115,8 @@ export const whatsappWebhook = onRequest(
         tx.set(ref, { status: status.status, errorCode: status.errorCode, errorTitle: status.errorTitle, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         return status.status === "failed" ? row : null;
       });
-      if (!fallback) continue;
+      // Panelden gönderilen test mesajlarının randevusu yoktur; SMS'e düşürülmez.
+      if (!fallback || !fallback.businessId || !fallback.appointmentId) continue;
       const type = String(fallback.type) as AppointmentSmsJobType;
       const appointmentRef = db.doc(`businesses/${fallback.businessId}/appointments/${fallback.appointmentId}`);
       const appointment = await appointmentRef.get();
@@ -8970,4 +8971,205 @@ export const backfillBusinessGeo = onCall(
     }
     return { updated, failed, remaining: Math.max(0, pending.length - 40) };
   }
+);
+
+/** Adres alanlarından yalnız ilçe/il merkezini bulur (pin doğrulaması için referans). */
+async function geocodeDistrictCenter(business: FirebaseFirestore.DocumentData): Promise<{ lat: number; lng: number } | null> {
+  const query = geocodeQueries(business).find((item) => item.precision === "district") ?? geocodeQueries(business).find((item) => item.precision === "city");
+  if (!query) return null;
+  try {
+    const url = `${NOMINATIM_URL}?${new URLSearchParams({ q: query.q, format: "jsonv2", limit: "1", countrycodes: "tr", "accept-language": "tr" })}`;
+    const response = await fetch(url, { headers: { "User-Agent": NOMINATIM_USER_AGENT }, signal: AbortSignal.timeout(8000) });
+    return response.ok ? parseNominatim(await response.json()) : null;
+  } catch { return null; }
+}
+
+/**
+ * İşletme yöneticisi haritada kendi kapısını işaretler (Keşfet → yakınımdaki mesafeleri metre hassasiyetinde olur).
+ * reset: true → elle konum kaldırılır, adres yeniden otomatik aranır.
+ */
+export const setBusinessLocation = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Giriş yapmalısınız.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const business = await requireBusinessManager(uid, businessId);
+    await consumeSecurityLimit(`business-location:${businessId}`, 20, 60 * 60_000);
+    const ref = db.doc(`businesses/${businessId}`);
+    if (request.data?.reset === true) {
+      // geo ve deneme izi silinince businessGeocode tetikleyicisi adresi baştan arar.
+      await ref.update({ geo: FieldValue.delete(), geoAttemptFingerprint: FieldValue.delete() });
+      return { success: true, reset: true };
+    }
+    const reference = await geocodeDistrictCenter(business);
+    const pin = validateOwnerPin({ lat: request.data?.lat, lng: request.data?.lng }, reference);
+    if (typeof pin === "string") throw new HttpsError("invalid-argument", pin);
+    const fingerprint = addressFingerprint(business);
+    await ref.update({
+      geo: { ...pin, precision: "pin", fingerprint, setByUid: uid, updatedAt: FieldValue.serverTimestamp() },
+      geoAttemptFingerprint: fingerprint,
+    });
+    return { success: true, lat: pin.lat, lng: pin.lng };
+  },
+);
+
+// ── Süper admin › WhatsApp paneli ──
+type MetaPhone = { display_phone_number?: string; verified_name?: string; name_status?: string; code_verification_status?: string; quality_rating?: string; status?: string; messaging_limit_tier?: string; throughput?: { level?: string } };
+type MetaTemplate = { name: string; status: string; language: string; category?: string; rejected_reason?: string };
+
+async function metaGet<T>(url: string, token: string): Promise<{ data: T | null; error: string | null }> {
+  try {
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
+    const body = await response.json().catch(() => null) as (T & { error?: { message?: string; code?: number } }) | null;
+    if (!response.ok || !body || body.error) return { data: null, error: shortText(body?.error?.message ?? `HTTP ${response.status}`, 200) };
+    return { data: body, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? shortText(error.message, 200) : "Meta'ya ulaşılamadı" };
+  }
+}
+
+/** Ayar + Meta canlı durumu + hazır olma listesi. Gizli değerler asla döndürülmez. */
+async function loadWhatsAppOverview() {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const parsed = parseWhatsAppConfig({ ...raw, enabled: true });
+  const templateNames = parsed?.templates ?? DEFAULT_TEMPLATES;
+  const language = parsed?.language ?? "tr";
+  const apiBase = parsed?.apiBase ?? "https://graph.facebook.com";
+  const apiVersion = parsed?.apiVersion ?? "v21.0";
+  const token = String(raw.accessToken ?? "").trim();
+  const phoneNumberId = String(raw.phoneNumberId ?? "").trim();
+  const wabaId = String(raw.wabaId ?? "").trim();
+  let phone: MetaPhone | null = null;
+  let templates: MetaTemplate[] | null = null;
+  const metaErrors: string[] = [];
+  if (token && phoneNumberId) {
+    const [phoneResult, templateResult] = await Promise.all([
+      metaGet<MetaPhone>(`${apiBase}/${apiVersion}/${phoneNumberId}?fields=display_phone_number,verified_name,name_status,code_verification_status,quality_rating,status,messaging_limit_tier,throughput`, token),
+      /^\d{6,}$/.test(wabaId)
+        ? metaGet<{ data: MetaTemplate[] }>(`${apiBase}/${apiVersion}/${wabaId}/message_templates?fields=name,status,language,category,rejected_reason&limit=100`, token)
+        : Promise.resolve({ data: null, error: "WhatsApp hesap kimliği (wabaId) ayarlı değil" }),
+    ]);
+    phone = phoneResult.data;
+    templates = templateResult.data?.data ?? null;
+    if (phoneResult.error) metaErrors.push(`Numara: ${phoneResult.error}`);
+    if (templateResult.error) metaErrors.push(`Şablonlar: ${templateResult.error}`);
+  }
+  const requiredTemplates = [...new Set(Object.values(templateNames))];
+  const readiness = whatsappReadiness({ settings: raw, phone, templates, requiredTemplates, language });
+  return {
+    raw, parsed, phone, templates, readiness, metaErrors, language, templateNames,
+    settings: {
+      enabled: raw.enabled === true, phoneNumberId, wabaId, language, templates: templateNames,
+      hasAccessToken: token.length >= 20, hasAppSecret: Boolean(String(raw.appSecret ?? "").trim()), hasVerifyToken: Boolean(String(raw.verifyToken ?? "").trim()),
+      updatedAt: raw.updatedAt instanceof Timestamp ? raw.updatedAt.toDate().toISOString() : null,
+    },
+  };
+}
+
+export const getWhatsAppOperations = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const since = Timestamp.fromMillis(Date.now() - 30 * 86_400_000);
+    const [overview, messages, optIn] = await Promise.all([
+      loadWhatsAppOverview(),
+      db.collection("whatsappMessages").where("createdAt", ">=", since).orderBy("createdAt", "desc").limit(2000).get(),
+      db.collection("businesses").where("smsPreferences.whatsappFirst", "==", true).count().get().then((snap) => snap.data().count).catch(() => null),
+    ]);
+    const rows = messages.docs.map((document) => document.data());
+    const recentDocs = messages.docs.slice(0, 50);
+    const businessIds = [...new Set(recentDocs.map((document) => String(document.data().businessId ?? "")).filter(Boolean))];
+    const businessDocs = businessIds.length ? await db.getAll(...businessIds.map((id) => db.doc(`businesses/${id}`))) : [];
+    const names = new Map(businessDocs.map((document) => [document.id, String(document.data()?.name ?? "Silinmiş işletme")]));
+    const iso = (value: unknown) => value instanceof Timestamp ? value.toDate().toISOString() : null;
+    return {
+      settings: overview.settings,
+      phone: overview.phone,
+      templates: overview.templates,
+      readiness: overview.readiness,
+      metaErrors: overview.metaErrors,
+      webhookUrl: "https://europe-west1-randevugo-d1d2e.cloudfunctions.net/whatsappWebhook",
+      optInBusinesses: optIn,
+      stats: summarizeWhatsAppMessages(rows),
+      recent: recentDocs.map((document) => {
+        const data = document.data();
+        return {
+          id: document.id,
+          type: String(data.type ?? ""),
+          businessId: String(data.businessId ?? ""),
+          businessName: data.businessId ? names.get(String(data.businessId)) ?? "—" : "Panel testi",
+          phoneMasked: String(data.phoneMasked ?? ""),
+          status: String(data.status ?? "accepted"),
+          errorCode: typeof data.errorCode === "number" ? data.errorCode : null,
+          errorTitle: typeof data.errorTitle === "string" ? data.errorTitle : null,
+          createdAt: iso(data.createdAt),
+          updatedAt: iso(data.updatedAt),
+        };
+      }),
+    };
+  },
+);
+
+/** Kanalı aç/kapat. Açarken engelleyici kontrollerin hepsi tamam olmalı. */
+export const updateWhatsAppChannel = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const enabled = request.data?.enabled === true;
+    if (enabled) {
+      const { readiness } = await loadWhatsAppOverview();
+      const blocking = readiness.checks.filter((check) => check.blocking && !check.ok);
+      if (blocking.length) throw new HttpsError("failed-precondition", `Kanal açılamaz: ${blocking.map((check) => `${check.label} (${check.detail})`).join("; ")}`);
+    }
+    await db.doc(WHATSAPP_SETTINGS_PATH).set({ enabled, updatedAt: FieldValue.serverTimestamp(), updatedByUid: uid }, { merge: true });
+    whatsappConfigCache = null;
+    logger.info("WhatsApp kanalı güncellendi", { enabled, uid });
+    // Diğer sunucu örnekleri ayarı en geç 5 dakikada yeniden okur.
+    return { success: true, enabled };
+  },
+);
+
+/** Panelden tek bir şablonu örnek bilgilerle bir numaraya gönderir (kanal kapalıyken de). */
+export const sendWhatsAppTest = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    await consumeSecurityLimit(`whatsapp-test:${uid}`, 10, 60 * 60_000);
+    const to = toWhatsAppPhone(request.data?.phone);
+    if (!to) throw new HttpsError("invalid-argument", "Geçerli bir Türkiye cep numarası girin (05XX…).");
+    const type = String(request.data?.type ?? "confirmation") as AppointmentMessageType;
+    if (!(type in DEFAULT_TEMPLATES)) throw new HttpsError("invalid-argument", "Bilinmeyen şablon.");
+    const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+    const config = parseWhatsAppConfig({ ...raw, enabled: true });
+    if (!config) throw new HttpsError("failed-precondition", "WhatsApp ayarları eksik (numara kimliği, token, app secret, verify token).");
+    const startAt = Timestamp.fromMillis(Date.now() + 2 * 86_400_000);
+    const payload = buildTemplateMessage(type, to, {
+      businessName: "Erdem Kuaför", serviceName: "Saç kesimi", dateText: appointmentSmsDate(startAt, "Europe/Istanbul"), detailsUrl: "https://seninrandevun.com",
+    }, config);
+    const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = await response.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string; error_data?: { details?: string } } } | null;
+    const messageId = body?.messages?.[0]?.id;
+    if (!response.ok || !messageId) {
+      const detail = body?.error?.error_data?.details ?? body?.error?.message ?? `HTTP ${response.status}`;
+      throw new HttpsError("failed-precondition", `Meta reddetti${body?.error?.code ? ` (${body.error.code})` : ""}: ${shortText(detail, 240)}`);
+    }
+    await db.doc(`whatsappMessages/${createHash("sha256").update(messageId).digest("hex").slice(0, 40)}`).set({
+      messageId, businessId: null, appointmentId: null, type, test: true, sentByUid: uid,
+      phoneMasked: `******${to.slice(-4)}`, status: "accepted", createdAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+    });
+    return { success: true, messageId };
+  },
 );

@@ -1,0 +1,53 @@
+/* Süper admin › WhatsApp kanalı. Renkler _pages-ui (ui.module.css) değişkenlerinden. */
+.banner { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 14px; padding: 16px 18px; border: 1px solid transparent; border-radius: 20px; }
+.banner > svg { flex: none; margin-top: 2px; }
+.banner > div { flex: 1 1 260px; min-width: 0; }
+.banner b { display: block; font-size: 15px; }
+.banner p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; opacity: 0.9; }
+.banner > button { align-self: center; }
+.banner-success { border-color: color-mix(in srgb, var(--green-2) 30%, transparent); background: var(--green-soft); color: var(--green-2); }
+.banner-ready { border-color: color-mix(in srgb, var(--green-2) 22%, transparent); background: var(--card); color: var(--ink); }
+.banner-ready > svg { color: var(--green-2); }
+.banner-warn { border-color: color-mix(in srgb, var(--amber) 30%, transparent); background: var(--amber-soft); color: var(--amber); }
+.banner-danger { border-color: color-mix(in srgb, var(--red) 30%, transparent); background: var(--red-soft); color: var(--red); }
+:global(:root[data-theme="dark"]) .banner-success { color: #8fe0b2; }
+
+.checks { display: grid; gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--line); }
+@media (min-width: 768px) { .checks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .checks { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.check { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--card); }
+.check b { display: block; font-size: 13px; font-weight: 720; }
+.check em { color: var(--faint); font-style: normal; font-weight: 600; }
+.check small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.checkIcon { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 9px; }
+.ok .checkIcon { background: var(--green-soft); color: var(--green-2); }
+.bad .checkIcon { background: var(--red-soft); color: var(--red); }
+.soft .checkIcon { background: var(--amber-soft); color: var(--amber); }
+
+.grid { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1200px) { .grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr); } }
+.side { display: grid; gap: 16px; min-width: 0; }
+.inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.wrap { overflow-wrap: anywhere; }
+.muted { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.note { display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.note svg { flex: none; margin-top: 2px; }
+
+.templates { display: grid; gap: 8px; margin: 0 0 6px; padding: 0; list-style: none; }
+.templates li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card-2); }
+.templates li > span { display: grid; gap: 2px; min-width: 0; }
+.templates b { font-size: 13.5px; }
+.templates code { color: var(--muted); font-size: 12px; }
+.templates small { color: var(--red); font-size: 12px; }
+.templates li > :last-child { flex: none; white-space: nowrap; }
+
+.form { display: grid; gap: 12px; }
+.bars { display: grid; gap: 10px; margin-top: 12px; }
+.errors { display: grid; gap: 4px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--red-soft); font-size: 12.5px; }
+.errors b { font-size: 12.5px; }
+.errors p { margin: 0; color: var(--ink); }
+.status { display: grid; gap: 3px; justify-items: start; }
+.status small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.rowCard { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; text-align: left; }
+.rowCard > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.rowCard small { color: var(--muted); font-size: 12px; }

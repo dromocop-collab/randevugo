@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addressFingerprint, distanceKm, geocodeQueries, parseNominatim } from "../lib/geo-domain.js";
+import { addressFingerprint, distanceKm, geocodeQueries, parseNominatim, validateOwnerPin } from "../lib/geo-domain.js";
 
 test("queries go from address to district to city", () => {
   assert.deepEqual(geocodeQueries({ address: " Akarca Mah. Yunus Nadi Cad. No 8 ", district: "Fethiye", city: "Muğla" }), [
@@ -30,4 +30,13 @@ test("distance", () => {
   const mugla = { lat: 37.2153, lng: 28.3636 };
   assert.ok(Math.abs(distanceKm(fethiye, mugla) - 94) < 5);
   assert.equal(distanceKm(fethiye, fethiye), 0);
+});
+
+test("owner pin must be in Turkey and near the address district", () => {
+  const fethiye = { lat: 36.6214, lng: 29.1164 };
+  assert.deepEqual(validateOwnerPin({ lat: "36.65341234", lng: 29.12241 }, fethiye), { lat: 36.653412, lng: 29.12241 });
+  assert.match(validateOwnerPin({ lat: 41.0082, lng: 28.9784 }, fethiye), /40 km/);
+  assert.match(validateOwnerPin({ lat: 48.85, lng: 2.35 }, null), /Türkiye/);
+  assert.match(validateOwnerPin({ lat: "x", lng: 29 }, null), /Türkiye/);
+  assert.deepEqual(validateOwnerPin({ lat: 41.0082, lng: 28.9784 }, null), { lat: 41.0082, lng: 28.9784 });
 });

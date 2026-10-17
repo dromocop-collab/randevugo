@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, toWhatsAppPhone, verifyWebhookSignature } from "../lib/whatsapp-domain.js";
+import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, whatsappReadiness, toWhatsAppPhone, verifyWebhookSignature } from "../lib/whatsapp-domain.js";
 
 const base = { enabled: true, phoneNumberId: "123456789012345", accessToken: "EAAG" + "x".repeat(40), appSecret: "secret", verifyToken: "verify" };
 
@@ -63,4 +63,37 @@ test("statuses are extracted from webhook body", () => {
 test("webhook secrets work while the channel is disabled", () => {
   assert.deepEqual(parseWhatsAppWebhookSecrets({ enabled: false, verifyToken: " v ", appSecret: "s" }), { verifyToken: "v", appSecret: "s" });
   assert.deepEqual(parseWhatsAppWebhookSecrets(undefined), { verifyToken: "", appSecret: "" });
+});
+
+test("readiness: blocking checks gate the channel, display name does not", () => {
+  const settings = { phoneNumberId: "1358994567304129", accessToken: "EAA" + "x".repeat(50), appSecret: "a".repeat(32), verifyToken: "v".repeat(48) };
+  const required = ["randevu_onay", "randevu_iptal"];
+  const templates = [{ name: "randevu_onay", status: "APPROVED", language: "tr" }, { name: "randevu_iptal", status: "PENDING", language: "tr" }];
+  let r = whatsappReadiness({ settings, phone: { status: "CONNECTED", name_status: "PENDING_REVIEW" }, templates, requiredTemplates: required, language: "tr" });
+  assert.equal(r.ready, false);
+  assert.match(r.checks.find((c) => c.key === "templates").detail, /randevu_iptal/);
+  templates[1].status = "APPROVED";
+  r = whatsappReadiness({ settings, phone: { status: "CONNECTED", name_status: "PENDING_REVIEW" }, templates, requiredTemplates: required, language: "tr" });
+  assert.equal(r.ready, true, "görünen ad bekliyor olsa da hazır");
+  assert.equal(r.checks.find((c) => c.key === "displayName").ok, false);
+  r = whatsappReadiness({ settings: { ...settings, appSecret: "123456" }, phone: { status: "CONNECTED" }, templates, requiredTemplates: required, language: "tr" });
+  assert.equal(r.ready, false);
+  r = whatsappReadiness({ settings, phone: null, templates, requiredTemplates: required, language: "tr" });
+  assert.equal(r.ready, false);
+  // Başka dilde onaylı şablon sayılmaz.
+  r = whatsappReadiness({ settings, phone: { status: "CONNECTED" }, templates: templates.map((t) => ({ ...t, language: "en" })), requiredTemplates: required, language: "tr" });
+  assert.equal(r.ready, false);
+});
+
+test("message summary", () => {
+  const sum = summarizeWhatsAppMessages([
+    { status: "read", type: "reminder" }, { status: "delivered", type: "confirmation" }, { status: "failed", type: "reminder", errorCode: 131026 },
+    { status: "accepted", type: "confirmation" },
+  ]);
+  assert.equal(sum.total, 4);
+  assert.equal(sum.byStatus.failed, 1);
+  assert.equal(sum.deliveryRate, 66.7);
+  assert.equal(sum.readRate, 50);
+  assert.deepEqual(sum.errors, { 131026: 1 });
+  assert.equal(summarizeWhatsAppMessages([]).deliveryRate, null);
 });

@@ -53,6 +53,7 @@ const STATIC_PAGES: [string, number, MetadataRoute.Sitemap[number]["changeFreque
   ["/iletisim", 0.4, "yearly"],
   ["/guvenlik", 0.3, "yearly"],
   ["/kvkk", 0.2, "yearly"],
+  ["/hesap-silme", 0.2, "yearly"],
   ["/gizlilik", 0.2, "yearly"],
   ["/kullanim-kosullari", 0.2, "yearly"],
   ["/mesafeli-satis-sozlesmesi", 0.2, "yearly"],

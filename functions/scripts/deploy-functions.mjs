@@ -25,7 +25,7 @@ export const GROUPS = {
     "ensureAdminOwnedBusinessesLifetime", "backfillLegacyBusinessSubscriptions", "expireBusinessSubscriptions", "syncBusinessPlanFromSubscription",
   ],
   sms: [
-    "whatsappWebhook", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
+    "whatsappWebhook", "getWhatsAppOperations", "updateWhatsAppChannel", "sendWhatsAppTest", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
     "adjustBusinessSmsCredits", "getMutlucellSettings", "updateMutlucellSettings", "testMutlucellSettings",
   ],
   dogrulama: ["sendVerificationCode", "verifyPhoneCode", "sendEmailVerificationCode", "verifyEmailCode", "sendPasswordResetCode", "resetPasswordWithCode"],
@@ -41,7 +41,7 @@ export const GROUPS = {
     "reviewBusinessProfileChange", "deleteBusinessPermanently", "createStaffMember", "archiveStaff", "linkStaffAccount", "upsertCustomer",
     "renameCustomer", "getRewardProgramSettings", "updateRewardProgramSettings", "finalizeAppointmentCheckout", "sellServicePackage",
     "redeemServicePackage", "getMyCustomerBenefits", "updateLiveFeatureFlags", "submitReview", "moderateReview", "autoPublishPendingReviews",
-    "businessGeocode", "backfillBusinessGeo",
+    "businessGeocode", "backfillBusinessGeo", "setBusinessLocation",
   ],
   bildirim: [
     "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendBusinessPush",

@@ -27,6 +27,7 @@ import { InstagramGlyph } from "@/features/share/instagram-glyph";
 import { InstagramShareSheet } from "@/features/share/instagram-share-sheet";
 import st from "./settings.module.css";
 import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
+import { BusinessLocationPicker } from "@/features/businesses/business-location-picker";
 
 const DEFAULT_CATEGORY_OPTIONS = [
   { value: "kuafor", label: "Kuaför" },
@@ -484,6 +485,12 @@ export default function SettingsPage() {
                       <DistrictSelect id="settings-district" city={info.city} value={info.district} onChange={(district) => setInfoField("district", district)} placeholder="İlçe seç veya yaz" inputClassName={k.input} />
                     </div>
                   </div>
+                  {business ? (
+                    <BusinessLocationPicker
+                      business={business}
+                      onSaved={(geo) => setBusiness((prev) => prev ? { ...prev, geo } : prev)}
+                    />
+                  ) : null}
                 </div>
                 <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Profil değişiklikleri süper admin onayından sonra yayınlanır; o zamana kadar mevcut profil yayında kalır.</p>
               </form>
