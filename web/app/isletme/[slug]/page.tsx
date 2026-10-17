@@ -72,6 +72,7 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
       email: business.email,
       website: business.website,
       address: business.address,
+      geo: business.geo ?? null,
       city: cityName,
       district: displayPlace(business.district),
       logoUrl: business.logoUrl,

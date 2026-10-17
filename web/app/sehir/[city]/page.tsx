@@ -11,7 +11,7 @@ import { LocalBusinessGrid } from "@/components/seo/local-business-grid";
 import { SeoFaq } from "@/components/seo/seo-faq";
 import { createPublicMetadata } from "@/lib/seo/metadata";
 import { breadcrumbJsonLd, faqJsonLd, graph, itemListJsonLd, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
-import { categoryCounts, districtRanking, getCity, getSeoIndex, groupByCity, sortForListing, topRated } from "@/lib/seo/seo-data";
+import { categoryCounts, districtRanking, getCity, getSeoIndex, groupByCity, groupByDistrict, isLegacyFethiye, sortForListing, topRated } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { buildAreaFaq, buildAreaIntro, composeDescription, joinTurkish, locative, locativeAdjective, type AreaListingFacts } from "@/lib/seo/text";
 
@@ -79,6 +79,7 @@ export default async function CityPage({ params }: Props) {
   const categories = categoryCounts(city.businesses);
   const businesses = sortForListing(city.businesses);
   const otherCities = groupByCity(index).filter((item) => item.slug !== city.slug).slice(0, 20);
+  const districts = groupByDistrict(city.businesses);
   const crumbs: Crumb[] = [{ name: "Ana Sayfa", path: "/" }, { name: "Keşfet", path: "/kesfet" }, { name: city.city, path }];
   const title = `${locative(city.city)} online randevu`;
 
@@ -125,6 +126,13 @@ export default async function CityPage({ params }: Props) {
           </header>
           <LocalBusinessGrid businesses={businesses} />
         </section>
+
+        <LinkCloud
+          id="city-districts-title"
+          kicker="İLÇEYE GÖRE"
+          title={`${locativeAdjective(city.city)} ilçeler`}
+          links={districts.map((item) => ({ href: isLegacyFethiye(city.slug, item.slug) ? "/mugla/fethiye" : `/sehir/${city.slug}/ilce/${item.slug}`, label: `${locative(item.district)} online randevu`, meta: `${item.businesses.length} işletme` }))}
+        />
 
         <LinkCloud
           id="other-cities-title"

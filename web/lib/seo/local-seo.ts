@@ -41,3 +41,11 @@ export function isLocalCategory(value: string): value is LocalCategorySlug {
 export function jsonLd(value: unknown) {
   return serializeJsonLd(value);
 }
+
+/** Kanonik kategori → Fethiye'nin eski yerel adresi ("guzellik" → "/mugla/fethiye/guzellik-merkezi"). */
+export function legacyFethiyePath(canonicalCategory?: string): string {
+  const legacy = canonicalCategory
+    ? (Object.entries(LEGACY_LOCAL_CATEGORIES) as Array<[LocalCategorySlug, string]>).find(([, canonical]) => canonical === canonicalCategory)?.[0]
+    : undefined;
+  return legacy ? `/mugla/fethiye/${legacy}` : "/mugla/fethiye";
+}

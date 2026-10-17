@@ -160,6 +160,8 @@ export type StorefrontSchemaInput = {
   services: { name: string; description?: string; price?: number; currency?: string; durationMinutes?: number }[];
   reviews: { customerName?: string; rating: number; comment?: string; createdAt?: string; isVisible?: boolean; status?: string }[];
   allowOnlineBooking?: boolean;
+  /** Yalnız güvenilir konum (haritada işaretli veya tam adres) yazılır; ilçe/il merkezi yazılmaz. */
+  geo?: { lat: number; lng: number; precision?: string } | null;
 };
 
 function isoDuration(minutes?: number): string | undefined {
@@ -217,6 +219,10 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
       ...(input.city?.trim() ? { addressRegion: input.city.trim() } : {}),
       addressCountry: "TR",
     },
+    ...(input.geo && (input.geo.precision === "pin" || input.geo.precision === "address") && Number.isFinite(input.geo.lat) && Number.isFinite(input.geo.lng) ? {
+      geo: { "@type": "GeoCoordinates", latitude: Math.round(input.geo.lat * 1e6) / 1e6, longitude: Math.round(input.geo.lng * 1e6) / 1e6 },
+      hasMap: `https://www.openstreetmap.org/?mlat=${input.geo.lat.toFixed(6)}&mlon=${input.geo.lng.toFixed(6)}#map=18/${input.geo.lat.toFixed(6)}/${input.geo.lng.toFixed(6)}`,
+    } : {}),
     ...(input.city?.trim() ? { areaServed: { "@type": "City", name: input.city.trim() } } : {}),
     ...(openingHours.length ? { openingHoursSpecification: openingHours } : {}),
     ...(priceRange ? { priceRange, currenciesAccepted: "TRY" } : {}),

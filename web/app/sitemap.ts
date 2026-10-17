@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SEO_CATEGORIES } from "@/lib/seo/categories";
 import { LOCAL_CATEGORIES, businessesForCategory, type LocalCategorySlug } from "@/lib/seo/local-seo";
-import { categoryCounts, getSeoIndex, groupByCity, type SeoBusiness } from "@/lib/seo/seo-data";
+import { categoryCounts, getSeoIndex, groupByCity, groupByDistrict, isLegacyFethiye, type SeoBusiness } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { seoSlug } from "@/lib/seo/text";
 
@@ -86,6 +86,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const rows = city.businesses.filter((row) => row.category === item.slug);
       const image = SEO_CATEGORIES[item.slug]?.image;
       urls.push(entry(`/sehir/${city.slug}/${item.slug}`, { priority: 0.8, changeFrequency: "daily", lastModified: latest(rows), images: image ? [image] : undefined }));
+    }
+  }
+
+  // İlçe ve ilçe × kategori sayfaları (Fethiye kendi yerel adresleriyle aşağıda)
+  for (const city of cities) {
+    for (const district of groupByDistrict(city.businesses)) {
+      if (isLegacyFethiye(city.slug, district.slug)) continue;
+      urls.push(entry(`/sehir/${city.slug}/ilce/${district.slug}`, { priority: 0.75, changeFrequency: "daily", lastModified: latest(district.businesses) }));
+      for (const item of categoryCounts(district.businesses)) {
+        const rows = district.businesses.filter((row) => row.category === item.slug);
+        urls.push(entry(`/sehir/${city.slug}/ilce/${district.slug}/${item.slug}`, { priority: 0.7, changeFrequency: "daily", lastModified: latest(rows) }));
+      }
     }
   }
 

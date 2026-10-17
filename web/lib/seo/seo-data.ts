@@ -23,6 +23,7 @@ export type SeoBusiness = {
   city: string;
   citySlug: string;
   district: string;
+  districtSlug: string;
   description: string;
   rating: number;
   reviewCount: number;
@@ -64,6 +65,7 @@ export function toSeoBusiness(business: Business): SeoBusiness | null {
     city: displayPlace(business.city),
     citySlug: seoSlug(business.city),
     district: displayPlace(business.district),
+    districtSlug: seoSlug(business.district ?? ""),
     description: (business.description ?? "").trim().slice(0, 400),
     rating: Number.isFinite(rating) ? rating : 0,
     reviewCount: Math.max(0, Math.floor(Number(business.reviewCount ?? 0)) || 0),
@@ -80,7 +82,7 @@ const loadSeoIndex = unstable_cache(
     const rows = await withTimeout(searchBusinesses({ maxResults: 1000 }), 8_000, "SEO işletme dizini");
     return rows.map(toSeoBusiness).filter((row): row is SeoBusiness => Boolean(row));
   },
-  ["seo-business-index-v1"],
+  ["seo-business-index-v2"],
   { revalidate: 900, tags: ["seo-business-index"] },
 );
 
@@ -114,6 +116,33 @@ export function groupByCity(rows: SeoBusiness[]): CitySummary[] {
 export async function getCity(citySlug: string): Promise<CitySummary | null> {
   const rows = await getSeoIndex();
   return groupByCity(rows).find((item) => item.slug === citySlug) ?? null;
+}
+
+export type DistrictSummary = { district: string; slug: string; city: string; citySlug: string; businesses: SeoBusiness[] };
+
+/** Şehir içindeki ilçeler (en çok işletmesi olandan aza). */
+export function groupByDistrict(rows: SeoBusiness[]): DistrictSummary[] {
+  const map = new Map<string, DistrictSummary>();
+  for (const row of rows) {
+    if (!row.districtSlug || !row.citySlug) continue;
+    const key = `${row.citySlug}/${row.districtSlug}`;
+    const entry = map.get(key) ?? { district: row.district, slug: row.districtSlug, city: row.city, citySlug: row.citySlug, businesses: [] };
+    entry.businesses.push(row);
+    map.set(key, entry);
+  }
+  return [...map.values()].sort((a, b) => b.businesses.length - a.businesses.length || a.district.localeCompare(b.district, "tr"));
+}
+
+export async function getDistrict(citySlug: string, districtSlug: string): Promise<DistrictSummary | null> {
+  const city = await getCity(citySlug);
+  if (!city) return null;
+  return groupByDistrict(city.businesses).find((item) => item.slug === districtSlug) ?? null;
+}
+
+/** Fethiye'nin elle hazırlanmış yerel sayfaları (/mugla/fethiye) kanoniktir; genel ilçe sayfası oraya yönlenir. */
+export function isLegacyFethiye(citySlug: string, districtSlug: string) {
+  // /mugla/fethiye ile aynı seçim kuralı (local-seo.ts › getFethiyeBusinesses).
+  return citySlug === "mugla" && districtSlug.includes("fethiye");
 }
 
 export type CategoryCount = { slug: string; label: string; count: number };

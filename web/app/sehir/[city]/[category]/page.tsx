@@ -11,7 +11,8 @@ import { SeoFaq } from "@/components/seo/seo-faq";
 import { SEO_CATEGORIES, isSeoCategory } from "@/lib/seo/categories";
 import { createPublicMetadata } from "@/lib/seo/metadata";
 import { breadcrumbJsonLd, faqJsonLd, graph, itemListJsonLd, serviceJsonLd, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
-import { categoryCounts, districtRanking, getCity, getSeoIndex, groupByCity, sortForListing, summarizeServices, topRated, type SeoBusiness } from "@/lib/seo/seo-data";
+import { categoryCounts, districtRanking, getCity, getSeoIndex, groupByCity, groupByDistrict, isLegacyFethiye, sortForListing, summarizeServices, topRated, type SeoBusiness } from "@/lib/seo/seo-data";
+import { legacyFethiyePath } from "@/lib/seo/local-seo";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { buildAreaFaq, buildAreaIntro, capitalizeTr, composeDescription, formatTry, locative, locativeAdjective, type AreaListingFacts } from "@/lib/seo/text";
 
@@ -93,6 +94,7 @@ export default async function CityCategoryPage({ params }: Props) {
     { name: `${city.city} ${item.label}`, path },
   ];
   const otherCategories = categoryCounts(city.businesses).filter((entry) => entry.slug !== category);
+  const categoryDistricts = groupByDistrict(rows);
   const sameCategoryElsewhere = groupByCity(index.filter((row) => row.category === category)).filter((entry) => entry.slug !== city.slug).slice(0, 16);
 
   const jsonLd = graph(
@@ -122,6 +124,12 @@ export default async function CityCategoryPage({ params }: Props) {
           <LocalBusinessGrid businesses={businesses} />
         </section>
 
+        <LinkCloud
+          id="area-districts"
+          kicker="İLÇEYE GÖRE"
+          title={`İlçe ilçe ${city.city} ${item.noun}`}
+          links={categoryDistricts.map((entry) => ({ href: isLegacyFethiye(city.slug, entry.slug) ? legacyFethiyePath(category) : `/sehir/${city.slug}/ilce/${entry.slug}/${category}`, label: `${locative(entry.district)} ${item.noun}`, meta: `${entry.businesses.length} işletme` }))}
+        />
         <LinkCloud
           id="area-other-categories"
           kicker="BU BÖLGEDE"
