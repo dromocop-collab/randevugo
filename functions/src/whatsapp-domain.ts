@@ -42,6 +42,14 @@ export function parseWhatsAppConfig(data: Record<string, unknown> | null | undef
   return { phoneNumberId, accessToken, appSecret, verifyToken, apiVersion, apiBase, language, templates };
 }
 
+/**
+ * Webhook için yalnız doğrulama sırları: kanal kapalıyken (enabled=false, şablonlar onay beklerken) de
+ * Meta'nın webhook doğrulaması ve durum bildirimleri çalışsın diye gönderim ayarlarından bağımsızdır.
+ */
+export function parseWhatsAppWebhookSecrets(data: Record<string, unknown> | null | undefined): { verifyToken: string; appSecret: string } {
+  return { verifyToken: String(data?.verifyToken ?? "").trim(), appSecret: String(data?.appSecret ?? "").trim() };
+}
+
 /** "+90 555 111 22 33" / "05551112233" / "5551112233" → "905551112233"; Türkiye cep dışı numara → null. */
 export function toWhatsAppPhone(value: unknown): string | null {
   let digits = String(value ?? "").replace(/\D/g, "");

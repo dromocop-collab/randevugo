@@ -27,7 +27,7 @@ import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
-import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
+import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, toWhatsAppPhone, verifyWebhookSignature, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { addressFingerprint, geocodeQueries, parseNominatim, type BusinessGeo } from "./geo-domain.js";
@@ -6089,15 +6089,17 @@ async function trySendAppointmentWhatsApp(input: {
 export const whatsappWebhook = onRequest(
   { region: "europe-west1", memory: "256MiB", maxInstances: 10 },
   async (req, res) => {
-    const config = await loadWhatsAppConfig();
-    if (!config) { res.status(503).send("not configured"); return; }
+    // Doğrulama yalnız verifyToken/appSecret ister; WhatsApp gönderimi kapalıyken de çalışır.
+    const config = parseWhatsAppWebhookSecrets((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data());
     if (req.method === "GET") {
+      if (!config.verifyToken) { res.status(503).send("not configured"); return; }
       if (req.query["hub.mode"] === "subscribe" && req.query["hub.verify_token"] === config.verifyToken) {
         res.status(200).send(String(req.query["hub.challenge"] ?? ""));
       } else res.status(403).send("forbidden");
       return;
     }
     if (req.method !== "POST") { res.status(405).send("Method not allowed"); return; }
+    if (!config.appSecret) { res.status(503).send("not configured"); return; }
     if (!verifyWebhookSignature(req.rawBody ?? Buffer.from(""), req.get("x-hub-signature-256"), config.appSecret)) {
       logger.warn("WhatsApp webhook imzası geçersiz");
       res.status(401).send("bad signature");

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, toWhatsAppPhone, verifyWebhookSignature } from "../lib/whatsapp-domain.js";
+import { buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, toWhatsAppPhone, verifyWebhookSignature } from "../lib/whatsapp-domain.js";
 
 const base = { enabled: true, phoneNumberId: "123456789012345", accessToken: "EAAG" + "x".repeat(40), appSecret: "secret", verifyToken: "verify" };
 
@@ -58,4 +58,9 @@ test("statuses are extracted from webhook body", () => {
     { messageId: "wamid.B", status: "failed", errorCode: 131026, errorTitle: "Message undeliverable" },
   ]);
   assert.deepEqual(extractStatuses({}), []);
+});
+
+test("webhook secrets work while the channel is disabled", () => {
+  assert.deepEqual(parseWhatsAppWebhookSecrets({ enabled: false, verifyToken: " v ", appSecret: "s" }), { verifyToken: "v", appSecret: "s" });
+  assert.deepEqual(parseWhatsAppWebhookSecrets(undefined), { verifyToken: "", appSecret: "" });
 });
