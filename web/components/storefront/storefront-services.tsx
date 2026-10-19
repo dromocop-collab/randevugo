@@ -18,6 +18,8 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import { useIntlLocale, useT } from "@/i18n/client";
+import type { TFunction } from "@/i18n/config";
 
 interface Props {
   services: Service[];
@@ -37,6 +39,7 @@ type ServiceGroup = {
 const DEFAULT_CATEGORY_COLOR = "#0b6b45";
 
 export function StorefrontServices({ services, categories = [], onSelectService }: Props) {
+  const t = useT();
   const [activeCat, setActiveCat] = useState("all");
   const [serviceQuery, setServiceQuery] = useState("");
   const categoryRailRef = useRef<HTMLDivElement>(null);
@@ -72,7 +75,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     if (uncategorized.length > 0) {
       categoryGroups.push({
         id: "uncategorized",
-        name: "Diğer hizmetler",
+        name: t("Diğer hizmetler"),
         icon: "✦",
         color: DEFAULT_CATEGORY_COLOR,
         items: uncategorized,
@@ -80,7 +83,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     }
 
     return categoryGroups;
-  }, [bookableServices, categories]);
+  }, [bookableServices, categories, t]);
 
   if (bookableServices.length === 0) {
     return null;
@@ -126,32 +129,32 @@ export function StorefrontServices({ services, categories = [], onSelectService 
     <section className="storefront-services-v3" aria-labelledby="service-menu-title">
       <header className="storefront-services-hero">
         <div className="storefront-services-title">
-          <span><WandSparkles size={17} /> HİZMET MENÜSÜ</span>
-          <h2 id="service-menu-title">Sana uygun deneyimi seç.</h2>
-          <p>Hizmetleri karşılaştır, detayları incele ve uygun saatini ayır.</p>
+          <span><WandSparkles size={17} /> {t("HİZMET MENÜSÜ")}</span>
+          <h2 id="service-menu-title">{t("Sana uygun deneyimi seç.")}</h2>
+          <p>{t("Hizmetleri karşılaştır, detayları incele ve uygun saatini ayır.")}</p>
         </div>
-        <div className="storefront-services-count" aria-label={`${bookableServices.length} online hizmet`}>
-          <small>AKTİF MENÜ</small>
+        <div className="storefront-services-count" aria-label={t("{count} online hizmet", { count: bookableServices.length })}>
+          <small>{t("AKTİF MENÜ")}</small>
           <strong>{String(bookableServices.length).padStart(2, "0")}</strong>
-          <span>hizmet</span>
+          <span>{t("hizmet")}</span>
         </div>
       </header>
 
       {groups.length > 1 && (
         <div className="storefront-category-shell">
           <div className="storefront-category-intro">
-            <span><Tag size={13} /> KATEGORİLER</span>
+            <span><Tag size={13} /> {t("KATEGORİLER")}</span>
             <div className="storefront-category-controls">
-              <small>Kaydır veya seç</small>
-              <button type="button" onClick={() => scrollCategories(-1)} aria-label="Önceki kategoriler"><ChevronLeft size={17} /></button>
-              <button type="button" onClick={() => scrollCategories(1)} aria-label="Sonraki kategoriler"><ChevronRight size={17} /></button>
+              <small>{t("Kaydır veya seç")}</small>
+              <button type="button" onClick={() => scrollCategories(-1)} aria-label={t("Önceki kategoriler")}><ChevronLeft size={17} /></button>
+              <button type="button" onClick={() => scrollCategories(1)} aria-label={t("Sonraki kategoriler")}><ChevronRight size={17} /></button>
             </div>
           </div>
           <div
             ref={categoryRailRef}
             className="storefront-category-rail"
             role="tablist"
-            aria-label="Hizmet kategorileri"
+            aria-label={t("Hizmet kategorileri")}
             onWheel={(event) => {
               if (!categoryRailRef.current || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
               event.preventDefault();
@@ -168,7 +171,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
               }}
             >
               <i><Layers3 size={18} /></i>
-              <span><small>TÜM MENÜ</small><strong>Tümü</strong></span>
+              <span><small>{t("TÜM MENÜ")}</small><strong>{t("Tümü")}</strong></span>
               <b>{bookableServices.length}</b>
             </button>
 
@@ -188,7 +191,7 @@ export function StorefrontServices({ services, categories = [], onSelectService 
                   }}
                 >
                   <i aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={23} /></i>
-                  <span><small>KATEGORİ</small><strong>{group.name}</strong></span>
+                  <span><small>{t("KATEGORİ")}</small><strong>{group.name}</strong></span>
                   <b>{group.items.length}</b>
                 </button>
               );
@@ -200,13 +203,13 @@ export function StorefrontServices({ services, categories = [], onSelectService 
       <div className="storefront-service-finder" role="search">
         <Search size={21} aria-hidden="true" />
         <label htmlFor="storefront-service-search">
-          <span>HİZMET ARA</span>
+          <span>{t("HİZMET ARA")}</span>
           <input
             id="storefront-service-search"
             type="search"
             value={serviceQuery}
             onChange={(event) => setServiceQuery(event.target.value)}
-            placeholder="Örn. saç kesimi, manikür veya bakım"
+            placeholder={t("Örn. saç kesimi, manikür veya bakım")}
             autoComplete="off"
           />
         </label>
@@ -215,13 +218,13 @@ export function StorefrontServices({ services, categories = [], onSelectService 
             type="button"
             className="storefront-service-search-clear"
             onClick={() => setServiceQuery("")}
-            aria-label="Hizmet aramasını temizle"
+            aria-label={t("Hizmet aramasını temizle")}
           >
             <X size={18} />
           </button>
         )}
         <span className="storefront-service-search-count" aria-live="polite">
-          <b>{visibleServiceCount}</b> sonuç
+          {t("{count} sonuç", { count: visibleServiceCount })}
         </span>
       </div>
 
@@ -238,10 +241,10 @@ export function StorefrontServices({ services, categories = [], onSelectService 
               <header className="storefront-service-group-head">
                 <div className="storefront-service-group-icon" aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={23} /></div>
                 <div>
-                  <span>SEÇİLİ KATEGORİ</span>
+                  <span>{t("SEÇİLİ KATEGORİ")}</span>
                   <h3 id={`service-group-${group.id}`}>{group.name}</h3>
                 </div>
-                <b>{group.items.length} hizmet</b>
+                <b>{t("{count} hizmet", { count: group.items.length })}</b>
               </header>
 
               <div className="storefront-service-list">
@@ -264,18 +267,18 @@ export function StorefrontServices({ services, categories = [], onSelectService 
           <div className="storefront-service-no-results">
             <span><Search size={23} /></span>
             <div>
-              <strong>Bu aramayla eşleşen hizmet bulunamadı.</strong>
-              <p>Hizmet adını daha kısa yazarak tekrar deneyebilirsin.</p>
+              <strong>{t("Bu aramayla eşleşen hizmet bulunamadı.")}</strong>
+              <p>{t("Hizmet adını daha kısa yazarak tekrar deneyebilirsin.")}</p>
             </div>
-            <button type="button" onClick={() => setServiceQuery("")}>Aramayı temizle</button>
+            <button type="button" onClick={() => setServiceQuery("")}>{t("Aramayı temizle")}</button>
           </div>
         )}
       </div>
 
       <footer className="storefront-services-assurance">
-        <span><CheckCircle2 size={15} /> Şeffaf fiyat</span>
-        <span><CalendarCheck2 size={15} /> Anlık uygunluk</span>
-        <span><Sparkles size={15} /> Güvenli randevu</span>
+        <span><CheckCircle2 size={15} /> {t("Şeffaf fiyat")}</span>
+        <span><CalendarCheck2 size={15} /> {t("Anlık uygunluk")}</span>
+        <span><Sparkles size={15} /> {t("Güvenli randevu")}</span>
       </footer>
     </section>
   );
@@ -294,6 +297,8 @@ function ServiceItem({
   index: number;
   onSelect?: (id: string) => void;
 }) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const style = {
     "--category-color": categoryColor,
     animationDelay: `${index * 55}ms`,
@@ -316,14 +321,14 @@ function ServiceItem({
       </div>
 
       <div className="storefront-service-row-meta">
-        <span><Clock3 size={15} /> {formatDuration(service.durationMinutes)}</span>
-        {service.requiresDeposit && <span><CheckCircle2 size={15} /> Ön ödeme</span>}
-        {service.isBookableOnline && <span className="is-available"><i /> Online uygun</span>}
+        <span><Clock3 size={15} /> {formatDuration(service.durationMinutes, t)}</span>
+        {service.requiresDeposit && <span><CheckCircle2 size={15} /> {t("Ön ödeme")}</span>}
+        {service.isBookableOnline && <span className="is-available"><i /> {t("Online uygun")}</span>}
       </div>
 
       <div className="storefront-service-row-price">
-        <small>HİZMET BEDELİ</small>
-        <strong>{formatPrice(service.price, service.currency)}</strong>
+        <small>{t("HİZMET BEDELİ")}</small>
+        <strong>{formatPrice(service.price, service.currency, intlLocale)}</strong>
       </div>
 
       {onSelect && service.isBookableOnline && (
@@ -331,9 +336,9 @@ function ServiceItem({
           type="button"
           className="storefront-service-row-select"
           onClick={() => onSelect(service.id)}
-          aria-label={`${service.name} hizmeti için randevu seç`}
+          aria-label={t("{name} hizmeti için randevu seç", { name: service.name })}
         >
-          <span>Randevu seç</span>
+          <span>{t("Randevu seç")}</span>
           <i><ArrowUpRight size={17} /></i>
         </button>
       )}
@@ -344,23 +349,24 @@ function ServiceItem({
 function normalizeSearchText(value: string) {
   return value
     .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
+    .replace(/ı/g, "i") // i18n-ignore — arama normalleştirmesi
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 }
 
-function formatPrice(price: number, currency: Service["currency"]) {
-  return new Intl.NumberFormat("tr-TR", {
+function formatPrice(price: number, currency: Service["currency"], locale: string) {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
+    currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 0,
   }).format(price);
 }
 
-function formatDuration(totalMinutes: number) {
-  if (totalMinutes < 60) return `${totalMinutes} dk`;
+function formatDuration(totalMinutes: number, t: TFunction) {
+  if (totalMinutes < 60) return t("{count} dk", { count: totalMinutes });
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return minutes > 0 ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+  return minutes > 0 ? t("{hours} sa {minutes} dk", { hours, minutes }) : t("{hours} sa", { hours });
 }

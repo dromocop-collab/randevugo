@@ -12,6 +12,7 @@ import {
   type QueryConstraint,
 } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/firestore";
+import { tk } from "@/i18n/config";
 import {
   pickNewArrivals,
   toCompanionAppointment,
@@ -70,7 +71,7 @@ export function useCompanionFeed(input: {
       if (!alive) return;
       setFeed((current) => ({ ...(current.key === key ? current : { ...EMPTY, key }), ...patch, key }));
     };
-    const fail = () => update({ error: "Randevular şu anda alınamadı.", ready: true });
+    const fail = () => update({ error: tk("Randevular şu anda alınamadı."), ready: true }); // gösterirken t(feed.error)
 
     const unsubscribers = [
       onSnapshot(

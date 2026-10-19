@@ -20,16 +20,17 @@ const ICON_MAP: Record<string, IconComponent> = {
   "📊": ChartNoAxesCombined, "🌍": Globe2, "💻": Laptop, "📝": FileText,
 };
 
+// Kategori adındaki Türkçe anahtar kelimelerden simge seçer (veri eşleştirme, görünen metin değil).
 function iconForName(name: string): IconComponent {
   const normalized = name.toLocaleLowerCase("tr-TR");
-  if (normalized.includes("web") || normalized.includes("yazılım") || normalized.includes("mobil")) return Laptop;
+  if (normalized.includes("web") || normalized.includes("yazılım") || normalized.includes("mobil")) return Laptop; // i18n-ignore
   if (normalized.includes("spor") || normalized.includes("fitness")) return Dumbbell;
-  if (normalized.includes("sağlık") || normalized.includes("klinik")) return Stethoscope;
+  if (normalized.includes("sağlık") || normalized.includes("klinik")) return Stethoscope; // i18n-ignore
   if (normalized.includes("veteriner")) return PawPrint;
-  if (normalized.includes("eğitim")) return GraduationCap;
-  if (normalized.includes("danış")) return BriefcaseBusiness;
-  if (normalized.includes("güzellik") || normalized.includes("bakım")) return Sparkles;
-  if (normalized.includes("saç") || normalized.includes("berber") || normalized.includes("kuaför")) return Scissors;
+  if (normalized.includes("eğitim")) return GraduationCap; // i18n-ignore
+  if (normalized.includes("danış")) return BriefcaseBusiness; // i18n-ignore
+  if (normalized.includes("güzellik") || normalized.includes("bakım")) return Sparkles; // i18n-ignore
+  if (normalized.includes("saç") || normalized.includes("berber") || normalized.includes("kuaför")) return Scissors; // i18n-ignore
   return Sparkles;
 }
 

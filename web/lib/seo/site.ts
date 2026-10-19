@@ -2,12 +2,13 @@
  * Sitenin kanonik adresi ve marka bilgileri. Saf modül: Next.js veya Firebase içe aktarmaz,
  * böylece birim testlerinden de kullanılabilir.
  */
+import { tk } from "../../i18n/config.ts";
+
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://seninrandevun.com").replace(/\/+$/, "");
 export const SITE_NAME = "SeninRandevun";
 export const SITE_LOCALE = "tr_TR";
 export const SITE_LANGUAGE = "tr-TR";
-export const SITE_DESCRIPTION =
-  "Yakınınızdaki kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; müsait saatleri karşılaştırıp saniyeler içinde online randevu alın.";
+export const SITE_DESCRIPTION = tk("Yakınınızdaki kuaför, berber, güzellik, sağlık, spor ve bakım işletmelerini keşfedin; müsait saatleri karşılaştırıp saniyeler içinde online randevu alın.");
 export const SITE_LOGO_PATH = "/logo.png";
 export const SITE_CONTACT = {
   telephone: "+90-530-478-8298",

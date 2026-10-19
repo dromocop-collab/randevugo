@@ -1,7 +1,7 @@
 "use client";
 
 import { getAuth } from "firebase/auth";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDoc, collection, collectionGroup, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";

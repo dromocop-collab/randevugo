@@ -11,23 +11,25 @@ import { NotificationSoundGrid, SoundVolumeSlider, useSoundPreference } from "@/
 import { getSoundPreset } from "@/features/push/notification-sound-presets";
 import { cn } from "@/lib/utils/cn";
 import type { ModuleSize } from "@/features/dashboard-layout/layout-domain";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./topbar.module.css";
 
 /* Android uygulamasıyla senkron temalar (users/{uid}/preferences/dashboardAppearance.skin).
    Renk değişkenleri globals.css :root[data-dashboard-skin] altında. */
 export const dashboardSkins = [
-  { id: "emerald", name: "Aurora", note: "Canlı ve enerjik", colors: ["#061d15", "#0b6b45", "#39c98b", "#bdf65e"] },
-  { id: "midnight", name: "Gece", note: "Odaklı ve güçlü", colors: ["#07152f", "#2563eb", "#22d3ee"] },
-  { id: "pearl", name: "İnci", note: "Sade ve premium", colors: ["#18202b", "#64748b", "#f5b942", "#fffdf8"] },
-  { id: "ocean", name: "Okyanus", note: "Ferah ve berrak", colors: ["#083344", "#0891b2", "#67e8f9"] },
-  { id: "violet", name: "Lavanta", note: "Yaratıcı ve seçkin", colors: ["#2e1065", "#7c3aed", "#9f7aea", "#c4b5fd"] },
-  { id: "sunset", name: "Gün Batımı", note: "Sıcak ve iddialı", colors: ["#431407", "#ea580c", "#fde047"] },
-  { id: "rose", name: "Gül", note: "Zarif ve modern", colors: ["#4c0519", "#be123c", "#e11d48", "#fda4af"] },
-  { id: "graphite", name: "Grafit", note: "Kurumsal ve net", colors: ["#0f172a", "#334155", "#38bdf8"] },
-  { id: "champagne", name: "Şampanya", note: "Sıcak ve sofistike", colors: ["#422006", "#a16207", "#f5b942", "#fde68a"] },
-  { id: "forest", name: "Orman", note: "Doğal ve prestijli", colors: ["#052e16", "#166534", "#86efac"] },
-  { id: "ruby", name: "Yakut", note: "Güçlü ve seçkin", colors: ["#4c0519", "#9f1239", "#e11d48", "#fbbf24"] },
-  { id: "indigo", name: "İndigo", note: "Teknolojik ve sakin", colors: ["#1e1b4b", "#4338ca", "#a5b4fc"] },
+  { id: "emerald", name: tk("Aurora"), note: tk("Canlı ve enerjik"), colors: ["#061d15", "#0b6b45", "#39c98b", "#bdf65e"] },
+  { id: "midnight", name: tk("Gece"), note: tk("Odaklı ve güçlü"), colors: ["#07152f", "#2563eb", "#22d3ee"] },
+  { id: "pearl", name: tk("İnci"), note: tk("Sade ve premium"), colors: ["#18202b", "#64748b", "#f5b942", "#fffdf8"] },
+  { id: "ocean", name: tk("Okyanus"), note: tk("Ferah ve berrak"), colors: ["#083344", "#0891b2", "#67e8f9"] },
+  { id: "violet", name: tk("Lavanta"), note: tk("Yaratıcı ve seçkin"), colors: ["#2e1065", "#7c3aed", "#9f7aea", "#c4b5fd"] },
+  { id: "sunset", name: tk("Gün Batımı"), note: tk("Sıcak ve iddialı"), colors: ["#431407", "#ea580c", "#fde047"] },
+  { id: "rose", name: tk("Gül"), note: tk("Zarif ve modern"), colors: ["#4c0519", "#be123c", "#e11d48", "#fda4af"] },
+  { id: "graphite", name: tk("Grafit"), note: tk("Kurumsal ve net"), colors: ["#0f172a", "#334155", "#38bdf8"] },
+  { id: "champagne", name: tk("Şampanya"), note: tk("Sıcak ve sofistike"), colors: ["#422006", "#a16207", "#f5b942", "#fde68a"] },
+  { id: "forest", name: tk("Orman"), note: tk("Doğal ve prestijli"), colors: ["#052e16", "#166534", "#86efac"] },
+  { id: "ruby", name: tk("Yakut"), note: tk("Güçlü ve seçkin"), colors: ["#4c0519", "#9f1239", "#e11d48", "#fbbf24"] },
+  { id: "indigo", name: tk("İndigo"), note: tk("Teknolojik ve sakin"), colors: ["#1e1b4b", "#4338ca", "#a5b4fc"] },
 ] as const;
 
 type DashboardSkin = (typeof dashboardSkins)[number]["id"];
@@ -35,12 +37,12 @@ type DashboardDensity = "comfortable" | "compact";
 type DashboardMotion = "alive" | "calm";
 
 const dashboardCursors = [
-  { id: "normal", name: "Normal", note: "Klasik sistem imleci" },
-  { id: "orbit", name: "Yörünge", note: "Marka halkası" },
-  { id: "aurora", name: "Aurora", note: "Turkuaz parıltı" },
-  { id: "neon", name: "Neon", note: "Canlı ve enerjik" },
-  { id: "pearl", name: "İnci", note: "Sade ve premium" },
-  { id: "comet", name: "Kuyruklu yıldız", note: "Hareketli ışık izi" },
+  { id: "normal", name: tk("Normal"), note: tk("Klasik sistem imleci") },
+  { id: "orbit", name: tk("Yörünge"), note: tk("Marka halkası") },
+  { id: "aurora", name: tk("Aurora"), note: tk("Turkuaz parıltı") },
+  { id: "neon", name: tk("Neon"), note: tk("Canlı ve enerjik") },
+  { id: "pearl", name: tk("İnci"), note: tk("Sade ve premium") },
+  { id: "comet", name: tk("Kuyruklu yıldız"), note: tk("Hareketli ışık izi") },
 ] as const;
 
 type DashboardCursor = (typeof dashboardCursors)[number]["id"];
@@ -49,11 +51,11 @@ type AppearanceSection = "colors" | "behavior" | "cursor" | "sound" | "layout";
 
 /** Ana panel (Bugün) modülleri; sırası/görünürlüğü burada düzenlenir, app/dashboard/page.tsx uygular. */
 export const defaultDashboardModules = [
-  { id: "operations", label: "Bugünün akışı", size: "wide", note: "Geniş sütun" },
-  { id: "command", label: "Hızlı işlemler", size: "side", note: "Yan sütun" },
-  { id: "insights", label: "Uyarılar ve fırsatlar", size: "side", note: "Yan sütun" },
-  { id: "kpis", label: "Günün performansı", size: "full", note: "Tam genişlik" },
-  { id: "profile", label: "Kurulum rehberi", size: "full", note: "Tam genişlik" },
+  { id: "operations", label: tk("Bugünün akışı"), size: "wide", note: tk("Geniş sütun") },
+  { id: "command", label: tk("Hızlı işlemler"), size: "side", note: tk("Yan sütun") },
+  { id: "insights", label: tk("Uyarılar ve fırsatlar"), size: "side", note: tk("Yan sütun") },
+  { id: "kpis", label: tk("Günün performansı"), size: "full", note: tk("Tam genişlik") },
+  { id: "profile", label: tk("Kurulum rehberi"), size: "full", note: tk("Tam genişlik") },
 ] as const;
 
 export function dashboardModuleSize(id: string): ModuleSize {
@@ -76,6 +78,7 @@ export function normalizeDashboardModules(value: unknown): DashboardModulePrefer
 
 /** Görünüm stüdyosu: tema, yoğunluk, hareket, imleç ve ana panel düzeni. Hesaba (ve Android'e) senkron. */
 export function AppearanceStudio({ triggerClassName, showLabel = false }: { triggerClassName?: string; showLabel?: boolean }) {
+  const t = useT();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [appearanceSection, setAppearanceSection] = useState<AppearanceSection | null>("colors");
@@ -218,69 +221,69 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
 
   return (
     <>
-      <button type="button" className={triggerClassName} onClick={() => setOpen(true)} aria-label="Panel görünümünü değiştir" title="Görünüm">
-        <Palette size={18} aria-hidden />{showLabel && <span>Görünüm</span>}
+      <button type="button" className={triggerClassName} onClick={() => setOpen(true)} aria-label={t("Panel görünümünü değiştir")} title={t("Görünüm")}>
+        <Palette size={18} aria-hidden />{showLabel && <span>{t("Görünüm")}</span>}
       </button>
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
         placement="side"
-        title="Görünüm stüdyosu"
-        description="Tercihlerin hesabına kaydedilir; web ve mobil uygulamada aynı görünürsün."
+        title={t("Görünüm stüdyosu")}
+        description={t("Tercihlerin hesabına kaydedilir; web ve mobil uygulamada aynı görünürsün.")}
         footer={<>
           <span className={cn(styles.syncState, styles[`sync-${shownSync}`])}>
             {shownSync === "loading" ? <LoaderCircle size={13} className={styles.spin} aria-hidden /> : shownSync === "offline" ? <CloudOff size={13} aria-hidden /> : <Cloud size={13} aria-hidden />}
-            {shownSync === "loading" ? "Hesaba kaydediliyor" : shownSync === "offline" ? "Yerelde saklandı" : "Hesabınla senkronize"}
+            {shownSync === "loading" ? t("Hesaba kaydediliyor") : shownSync === "offline" ? t("Yerelde saklandı") : t("Hesabınla senkronize")}
           </span>
-          <Button size="sm" variant="ghost" icon={RotateCcw} onClick={resetAppearance}>Sıfırla</Button>
+          <Button size="sm" variant="ghost" icon={RotateCcw} onClick={resetAppearance}>{t("Sıfırla")}</Button>
         </>}
       >
         <div className={styles.skinPreview} aria-hidden="true">
           <i />
-          <span><b>{activeSkin?.name}</b><small>Canlı panel önizlemesi</small></span>
+          <span><b>{activeSkin ? t(activeSkin.name) : null}</b><small>{t("Canlı panel önizlemesi")}</small></span>
           <em><i /><i /><i /></em>
         </div>
         <div className={styles.accordions}>
-          {section("colors", Palette, "Renk atmosferi", `${dashboardSkins.length} paletten görünümünü seç`, (
+          {section("colors", Palette, t("Renk atmosferi"), t("{count} paletten görünümünü seç", { count: dashboardSkins.length }), (
             <div className={styles.skinGrid}>
               {dashboardSkins.map((item) => (
                 <button type="button" key={item.id} onClick={() => setSkin(item.id)} className={cn(styles.skinOption, skin === item.id && styles.skinOptionActive)} aria-pressed={skin === item.id}>
                   <i>{item.colors.map((color) => <b key={color} style={{ background: color }} />)}</i>
-                  <span>{item.name}<small>{item.note}</small></span>
+                  <span>{t(item.name)}<small>{t(item.note)}</small></span>
                   {skin === item.id && <Check size={15} aria-hidden />}
                 </button>
               ))}
             </div>
           ))}
-          {section("behavior", Gauge, "Panel davranışı", "Yerleşim ve hareket yoğunluğu", (
+          {section("behavior", Gauge, t("Panel davranışı"), t("Yerleşim ve hareket yoğunluğu"), (
             <div className={styles.behavior}>
-              <div><span><Gauge size={13} aria-hidden /> Yerleşim</span><SegmentedControl stretch ariaLabel="Yerleşim yoğunluğu" value={density} onChange={setDensity} options={[{ value: "comfortable", label: "Rahat" }, { value: "compact", label: "Kompakt" }]} /></div>
-              <div><span><Zap size={13} aria-hidden /> Hareket</span><SegmentedControl stretch ariaLabel="Hareket" value={motion} onChange={setMotion} options={[{ value: "alive", label: "Canlı" }, { value: "calm", label: "Sakin" }]} /></div>
+              <div><span><Gauge size={13} aria-hidden /> {t("Yerleşim")}</span><SegmentedControl stretch ariaLabel={t("Yerleşim yoğunluğu")} value={density} onChange={setDensity} options={[{ value: "comfortable", label: t("Rahat") }, { value: "compact", label: t("Kompakt") }]} /></div>
+              <div><span><Zap size={13} aria-hidden /> {t("Hareket")}</span><SegmentedControl stretch ariaLabel={t("Hareket")} value={motion} onChange={setMotion} options={[{ value: "alive", label: t("Canlı") }, { value: "calm", label: t("Sakin") }]} /></div>
             </div>
           ))}
-          {section("cursor", MousePointer2, "Mouse imleci", "Normal ve 5 özel imleç", (
+          {section("cursor", MousePointer2, t("Mouse imleci"), t("Normal ve 5 özel imleç"), (
             <div className={styles.skinGrid}>
               {dashboardCursors.map((item) => (
                 <button type="button" key={item.id} className={cn(styles.skinOption, cursor === item.id && styles.skinOptionActive)} onClick={() => setCursor(item.id)} aria-pressed={cursor === item.id}>
                   <i data-cursor-preview={item.id} className={styles.cursorPreview}><b /><em /></i>
-                  <span>{item.name}<small>{item.note}</small></span>
+                  <span>{t(item.name)}<small>{t(item.note)}</small></span>
                   {cursor === item.id && <Check size={14} aria-hidden />}
                 </button>
               ))}
             </div>
           ))}
-          {section("sound", BellRing, "Bildirim sesi", soundPreference.muted ? "Kapalı · yalnız görsel bildirim" : `${getSoundPreset(soundPreference.soundId).name} · %${Math.round(soundPreference.volume * 100)}`, (
+          {section("sound", BellRing, t("Bildirim sesi"), soundPreference.muted ? t("Kapalı · yalnız görsel bildirim") : t("{sound} · %{volume}", { sound: t(getSoundPreset(soundPreference.soundId).name), volume: Math.round(soundPreference.volume * 100) }), (
             <div className={styles.soundBody}>
               <div className={styles.soundTop}>
-                <Switch checked={soundPreference.muted} onChange={(muted) => setSoundPreference({ muted })} label="Sesi kapat" description="Kapalıyken bildirim yine görünür, yalnız ses çalmaz." />
-                <Button size="sm" variant="primary" icon={Play} disabled={soundPreference.muted || soundPreference.volume === 0} onClick={() => { unlockNotificationAudio(); playNotificationChime({ force: true }); }}>Test et</Button>
+                <Switch checked={soundPreference.muted} onChange={(muted) => setSoundPreference({ muted })} label={t("Sesi kapat")} description={t("Kapalıyken bildirim yine görünür, yalnız ses çalmaz.")} />
+                <Button size="sm" variant="primary" icon={Play} disabled={soundPreference.muted || soundPreference.volume === 0} onClick={() => { unlockNotificationAudio(); playNotificationChime({ force: true }); }}>{t("Test et")}</Button>
               </div>
               <SoundVolumeSlider preference={soundPreference} compact />
               <NotificationSoundGrid preference={soundPreference} />
-              <p className={styles.soundNote}>Yeni randevu geldiğinde panelde çalar; seçim hesabına kaydedilir. Telefon uygulaması bildirimleri telefonun kendi sesini kullanır.</p>
+              <p className={styles.soundNote}>{t("Yeni randevu geldiğinde panelde çalar; seçim hesabına kaydedilir. Telefon uygulaması bildirimleri telefonun kendi sesini kullanır.")}</p>
             </div>
           ))}
-          {section("layout", LayoutPanelTop, "Ana panel düzeni", "Bugün ekranındaki modülleri sırala veya gizle", (
+          {section("layout", LayoutPanelTop, t("Ana panel düzeni"), t("Bugün ekranındaki modülleri sırala veya gizle"), (
             <ModuleOrderEditor modules={modulePreferences} meta={defaultDashboardModules} onChange={(next) => setModulePreferences(normalizeDashboardModules(next))} />
           ))}
         </div>

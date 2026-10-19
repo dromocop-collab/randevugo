@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { useT } from "@/i18n/client";
 
 interface ImageUploaderProps {
   /** Current image URL (if any) */
@@ -27,6 +28,7 @@ export function ImageUploader({
   shape = "square",
   accept = "image/png,image/jpeg,image/webp",
 }: ImageUploaderProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -35,11 +37,11 @@ export function ImageUploader({
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
-      toast.error("Sadece resim dosyaları yüklenebilir.");
+      toast.error(t("Sadece resim dosyaları yüklenebilir."));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Dosya boyutu 5MB'dan küçük olmalıdır.");
+      toast.error(t("Dosya boyutu 5MB'dan küçük olmalıdır."));
       return;
     }
 
@@ -51,9 +53,9 @@ export function ImageUploader({
     try {
       const url = await uploadFn(file);
       onUpload(url);
-      toast.success(`${label} yüklendi.`);
+      toast.success(t("{label} yüklendi.", { label }));
     } catch {
-      toast.error(`${label} yüklenemedi.`);
+      toast.error(t("{label} yüklenemedi.", { label }));
       setPreview(null);
     } finally {
       setUploading(false);
@@ -91,7 +93,7 @@ export function ImageUploader({
             />
             {/* Overlay on hover */}
             <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 opacity-0 transition group-hover:opacity-100">
-              <span className="text-xs font-medium text-white">Değiştir</span>
+              <span className="text-xs font-medium text-white">{t("Değiştir")}</span>
             </div>
           </>
         ) : (
@@ -104,7 +106,7 @@ export function ImageUploader({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
                 <span className="text-[10px] text-[var(--text-3)] group-hover:text-[var(--accent)]">
-                  Yükle veya sürükle
+                  {t("Yükle veya sürükle")}
                 </span>
               </>
             )}
@@ -132,7 +134,7 @@ export function ImageUploader({
       />
 
       <p className="mt-1 text-[10px] text-[var(--text-3)]">
-        PNG, JPEG veya WebP · Maks. 5MB
+        {t("PNG, JPEG veya WebP · Maks. 5MB")}
       </p>
     </div>
   );

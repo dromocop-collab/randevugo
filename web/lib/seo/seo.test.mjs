@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { displayPlace, locative, locativeAdjective, fitDescription, composeDescription, joinTurkish, seoSlug, shortPersonName, rankByFrequency, buildAreaIntro, buildAreaFaq } from "./text.ts";
+import { displayPlace, locative, locativeAdjective, fitDescription, composeDescription, joinTurkish, joinEnglish, joinList, placeVars, formatTry, seoSlug, shortPersonName, rankByFrequency, buildAreaIntro, buildAreaFaq } from "./text.ts";
 import { schemaTypeForCategory, categoryDisplayName, isSeoCategory } from "./categories.ts";
 import { breadcrumbJsonLd, faqJsonLd, itemListJsonLd, openingHoursJsonLd, priceRangeText, storefrontJsonLd, serializeJsonLd, websiteJsonLd } from "./schema.ts";
 import { absoluteUrl, businessPath } from "./site.ts";
@@ -167,4 +167,31 @@ test("büyük harfli yer adları düzeltilir, karışık yazım korunur", () => 
   assert.equal(displayPlace("Muğla"), "Muğla");
   assert.equal(displayPlace("iZmir"), "iZmir");
   assert.equal(displayPlace(undefined), "");
+});
+
+test("İngilizce: yer adı eki uygulanmaz, liste ve para biçimi dile göre", () => {
+  assert.deepEqual(placeVars("Muğla", "en"), { place: "Muğla", inPlace: "Muğla", placeAdj: "Muğla" });
+  assert.deepEqual(placeVars("Muğla"), { place: "Muğla", inPlace: "Muğla'da", placeAdj: "Muğla'daki" });
+  assert.equal(joinEnglish(["a", "b"]), "a and b");
+  assert.equal(joinEnglish(["a", "b", "c"]), "a, b, and c");
+  assert.equal(joinList(["a", "b", "c"], "tr"), "a, b ve c");
+  assert.equal(formatTry(1250), "1.250 ₺");
+  assert.equal(formatTry(1250, "en"), "1,250 ₺");
+});
+
+test("İngilizce giriş metni ve SSS doğal cümlelerle, Türkçe ek olmadan üretilir", () => {
+  const facts = { place: "Muğla", noun: "hair salon", plural: "Hair Salons", businessCount: 3, districts: [{ name: "Fethiye", count: 2 }, { name: "Bodrum", count: 1 }], verifiedCount: 1 };
+  const intro = buildAreaIntro(facts, "en");
+  assert.match(intro[0], /^SeninRandevun lists 3 hair salons in Muğla that you can book online\./);
+  assert.match(intro[0], /led by Fethiye \(2\) and Bodrum \(1\)/);
+  assert.match(intro[1], /1 business profile has been verified/);
+  assert.ok(!intro.join(" ").includes("'da"));
+  const single = buildAreaIntro({ place: "Fethiye", businessCount: 1, districts: [] }, "en");
+  assert.equal(single[0], "SeninRandevun lists 1 business in Fethiye that you can book online.");
+  const faq = buildAreaFaq({ ...facts, minPrice: 200, maxPrice: 1500, topRated: { name: "Erdem Kuaför", rating: 4.9, reviewCount: 1 } }, "en");
+  assert.equal(faq[0].question, "How many hair salons in Muğla take online bookings?");
+  assert.ok(faq.some((f) => f.question === "How much do hair salons in Muğla charge?" && /200 ₺ to 1,500 ₺/.test(f.answer)));
+  assert.ok(faq.some((f) => f.question === "What is the highest-rated hair salon in Muğla?" && /4\.9 out of 5 from 1 review\./.test(f.answer)));
+  assert.ok(faq.some((f) => /Fethiye and Bodrum/.test(f.answer)));
+  assert.equal(faq[faq.length - 1].question, "Is online booking free?");
 });

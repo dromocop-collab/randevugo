@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import {
   useEffect, useId, useRef,
   type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type KeyboardEvent, type ReactNode,
@@ -14,6 +14,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { RoviMascot, type RoviMood } from "@/components/brand/rovi-mascot";
 import type { AppointmentStatus } from "@/types/appointments";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./dash-ui.module.css";
 
 export type DashTone = "neutral" | "accent" | "green" | "amber" | "red" | "blue" | "violet";
@@ -157,10 +159,11 @@ export function StatCard({
 }
 
 export function TrendPill({ value, label, inverse = false }: StatTrend) {
+  const locale = useIntlLocale();
   const up = value >= 0;
   const good = inverse ? !up : up;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
-  const text = `${up ? "+" : "−"}%${Math.abs(value).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}`;
+  const text = `${up ? "+" : "−"}%${Math.abs(value).toLocaleString(locale, { maximumFractionDigits: 1 })}`;
   return (
     <span className={cn(styles.trend, toneClassName(value === 0 ? "neutral" : good ? "green" : "red"))} title={label}>
       <Icon size={12} strokeWidth={2.4} aria-hidden />{text}{label ? <span className="sr-only"> {label}</span> : null}
@@ -191,18 +194,19 @@ export function Badge({
   );
 }
 
-/** Randevu durumları için tek kaynak: etiket, ton, ikon. */
+/** Randevu durumları için tek kaynak: etiket (tk anahtarı; gösterirken t(meta.label)), ton, ikon. */
 export const appointmentStatusMeta: Record<AppointmentStatus, { label: string; tone: DashTone; icon: LucideIcon }> = {
-  pending: { label: "Onay bekliyor", tone: "amber", icon: CircleDashed },
-  confirmed: { label: "Onaylandı", tone: "accent", icon: CalendarCheck2 },
-  completed: { label: "Tamamlandı", tone: "green", icon: CheckCircle2 },
-  cancelled: { label: "İptal", tone: "red", icon: XCircle },
-  no_show: { label: "Gelmedi", tone: "neutral", icon: UserX },
+  pending: { label: tk("Onay bekliyor"), tone: "amber", icon: CircleDashed },
+  confirmed: { label: tk("Onaylandı"), tone: "accent", icon: CalendarCheck2 },
+  completed: { label: tk("Tamamlandı"), tone: "green", icon: CheckCircle2 },
+  cancelled: { label: tk("İptal"), tone: "red", icon: XCircle },
+  no_show: { label: tk("Gelmedi"), tone: "neutral", icon: UserX },
 };
 
 export function StatusPill({ status, size = "md", className }: { status: AppointmentStatus | string; size?: "sm" | "md"; className?: string }) {
+  const t = useT();
   const meta = appointmentStatusMeta[status as AppointmentStatus] ?? { label: status, tone: "neutral" as DashTone, icon: CircleDashed };
-  return <Badge tone={meta.tone} icon={status === "pending" ? undefined : meta.icon} size={size} pulse={status === "pending"} className={className}>{meta.label}</Badge>;
+  return <Badge tone={meta.tone} icon={status === "pending" ? undefined : meta.icon} size={size} pulse={status === "pending"} className={className}>{t(meta.label)}</Badge>;
 }
 
 /* ── Buton ── */
@@ -246,7 +250,7 @@ export function Toolbar({ children, className }: { children: ReactNode; classNam
 }
 
 export function SearchField({
-  value, onChange, placeholder = "Ara…", ariaLabel, autoFocus, className, inputRef,
+  value, onChange, placeholder: placeholderProp, ariaLabel, autoFocus, className, inputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -256,6 +260,8 @@ export function SearchField({
   className?: string;
   inputRef?: React.Ref<HTMLInputElement>;
 }) {
+  const t = useT();
+  const placeholder = placeholderProp ?? t("Ara…");
   return (
     <label className={cn(styles.search, className)}>
       <Search size={16} aria-hidden />
@@ -269,7 +275,7 @@ export function SearchField({
         autoFocus={autoFocus}
         enterKeyHint="search"
       />
-      {value && <button type="button" className={styles.searchClear} onClick={() => onChange("")} aria-label="Aramayı temizle"><X size={13} /></button>}
+      {value && <button type="button" className={styles.searchClear} onClick={() => onChange("")} aria-label={t("Aramayı temizle")}><X size={13} /></button>}
     </label>
   );
 }
@@ -443,9 +449,10 @@ export function Skeleton({ width = "100%", height = 16, radius, className }: { w
   return <span aria-hidden className={cn(styles.skeleton, className)} style={{ width, height, borderRadius: radius }} />;
 }
 
-export function SkeletonList({ rows = 4, height = 64, label = "Yükleniyor" }: { rows?: number; height?: number; label?: string }) {
+export function SkeletonList({ rows = 4, height = 64, label }: { rows?: number; height?: number; label?: string }) {
+  const t = useT();
   return (
-    <div className={styles.skeletonStack} role="status" aria-label={label}>
+    <div className={styles.skeletonStack} role="status" aria-label={label ?? t("Yükleniyor")}>
       {Array.from({ length: rows }).map((_, index) => <Skeleton key={index} height={height} radius={16} />)}
     </div>
   );
@@ -540,8 +547,9 @@ export function DataTable<T>({
   /** Erişilebilir satır adı (tıklanabilir satırlar için). */
   rowLabel?: (row: T) => string;
 }) {
+  const t = useT();
   if (loading) return <div className="px-3 pb-3"><SkeletonList rows={5} height={58} /></div>;
-  if (rows.length === 0) return <>{empty ?? <EmptyState title="Kayıt yok" compact mascot />}</>;
+  if (rows.length === 0) return <>{empty ?? <EmptyState title={t("Kayıt yok")} compact mascot />}</>;
   const primary = columns.find((column) => column.primary) ?? columns[0];
   const align = (value?: string) => value === "right" ? styles.alignRight : value === "center" ? styles.alignCenter : undefined;
   return (
@@ -658,6 +666,7 @@ export function Sheet({
   headerExtra?: ReactNode;
   className?: string;
 }) {
+  const t = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const close = () => { if (dismissible) onClose(); };
@@ -683,7 +692,7 @@ export function Sheet({
             <h2 id={titleId} className={styles.sheetTitle}>{title}</h2>
             {description && <div className={styles.sheetDesc}>{description}</div>}
           </div>
-          <button type="button" className={styles.closeBtn} onClick={close} disabled={!dismissible} aria-label="Kapat"><X size={17} /></button>
+          <button type="button" className={styles.closeBtn} onClick={close} disabled={!dismissible} aria-label={t("Kapat")}><X size={17} /></button>
         </div>
         {headerExtra}
         <div className={styles.sheetBody}>{children}</div>
@@ -695,7 +704,7 @@ export function Sheet({
 }
 
 export function ConfirmSheet({
-  open, title, description, confirmLabel = "Onayla", cancelLabel = "Vazgeç", tone = "danger", busy = false,
+  open, title, description, confirmLabel, cancelLabel, tone = "danger", busy = false,
   icon: Icon = AlertTriangle, onConfirm, onClose, children,
 }: {
   open: boolean;
@@ -710,6 +719,7 @@ export function ConfirmSheet({
   onClose: () => void;
   children?: ReactNode;
 }) {
+  const t = useT();
   return (
     <Sheet
       open={open}
@@ -718,8 +728,8 @@ export function ConfirmSheet({
       size="sm"
       title={title}
       footer={<>
-        <Button variant="secondary" onClick={onClose} disabled={busy}>{cancelLabel}</Button>
-        <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm} loading={busy} data-autofocus>{confirmLabel}</Button>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>{cancelLabel ?? t("Vazgeç")}</Button>
+        <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm} loading={busy} data-autofocus>{confirmLabel ?? t("Onayla")}</Button>
       </>}
     >
       <span className={cn(styles.confirmIcon, toneClassName(tone === "danger" ? "red" : "accent"))}><Icon size={22} aria-hidden /></span>

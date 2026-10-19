@@ -20,7 +20,7 @@ export async function listFavoriteBusinesses(userId: string): Promise<FavoriteBu
     return {
       id: item.id,
       businessId: String(data.businessId ?? item.id),
-      name: String(data.name ?? "İşletme"),
+      name: String(data.name ?? "İşletme"), // i18n-ignore (veri yedeği)
       slug: String(data.slug ?? ""),
       logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : undefined,
       category: String(data.category ?? ""),

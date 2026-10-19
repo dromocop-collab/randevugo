@@ -3,13 +3,17 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Download, Share, SquarePlus, X } from "lucide-react";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./install-app.module.css";
 
 type PwaApp = "isletme" | "yonetim";
 
 const COPY: Record<PwaApp, { name: string; text: string }> = {
-  isletme: { name: "SR İşletme", text: "Paneli uygulama gibi tam ekran açın; yeni randevu bildirimleri telefonunuza gelsin." },
-  yonetim: { name: "SR Yönetim", text: "Yönetim panelini uygulama gibi açın; uyarı ve ödeme bildirimlerini kaçırmayın." },
+  isletme: { name: "SR İşletme", // i18n-ignore (uygulama adı)
+    text: tk("Paneli uygulama gibi tam ekran açın; yeni randevu bildirimleri telefonunuza gelsin.") },
+  yonetim: { name: "SR Yönetim", // i18n-ignore (uygulama adı)
+    text: tk("Yönetim panelini uygulama gibi açın; uyarı ve ödeme bildirimlerini kaçırmayın.") },
 };
 
 const SW_SCOPE: Record<PwaApp, string> = { isletme: "/dashboard", yonetim: "/super-admin" };
@@ -40,6 +44,7 @@ function dismissedRecently(app: PwaApp) {
  * Uygulama içinde (standalone) açıldıysa veya kısa süre önce kapatıldıysa hiçbir şey göstermez.
  */
 export function InstallAppPrompt({ app }: { app: PwaApp }) {
+  const t = useT();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [mode, setMode] = useState<"hidden" | "prompt" | "ios">("hidden");
   const [iosHelp, setIosHelp] = useState(false);
@@ -81,24 +86,24 @@ export function InstallAppPrompt({ app }: { app: PwaApp }) {
   }
 
   return (
-    <aside className={styles.card} aria-label={`${copy.name} uygulamasını yükle`}>
+    <aside className={styles.card} aria-label={t("{name} uygulamasını yükle", { name: copy.name })}>
       <Image src="/pwa/icon-192.png" alt="" width={44} height={44} className={styles.icon} />
       <div className={styles.text}>
-        <b>{copy.name} uygulamasını yükleyin</b>
-        <span>{copy.text}</span>
+        <b>{t("{name} uygulamasını yükleyin", { name: copy.name })}</b>
+        <span>{t(copy.text)}</span>
         {mode === "ios" && iosHelp ? (
           <ol className={styles.steps}>
-            <li>Safari&apos;de alttaki <Share size={14} aria-label="Paylaş" /> <b>Paylaş</b> düğmesine dokunun.</li>
-            <li><SquarePlus size={14} aria-hidden /> <b>Ana Ekrana Ekle</b>&apos;yi seçin, sonra <b>Ekle</b>.</li>
-            <li>Ana ekrandaki <b>{copy.name}</b> simgesinden açıp bildirimlere izin verin (iPhone&apos;da web bildirimleri yalnız bu şekilde çalışır).</li>
+            <li>{t("Safari'de alttaki Paylaş düğmesine dokunun.")} <Share size={14} aria-label={t("Paylaş")} /></li>
+            <li><SquarePlus size={14} aria-hidden /> {t("Ana Ekrana Ekle'yi seçin, sonra Ekle'ye dokunun.")}</li>
+            <li>{t("Ana ekrandaki {name} simgesinden açıp bildirimlere izin verin (iPhone'da web bildirimleri yalnız bu şekilde çalışır).", { name: copy.name })}</li>
           </ol>
         ) : null}
       </div>
       <div className={styles.actions}>
         {mode === "prompt"
-          ? <button type="button" className={styles.primary} onClick={() => void install()}><Download size={15} aria-hidden /> Yükle</button>
-          : !iosHelp ? <button type="button" className={styles.primary} onClick={() => setIosHelp(true)}><SquarePlus size={15} aria-hidden /> Nasıl?</button> : null}
-        <button type="button" className={styles.close} onClick={dismiss} aria-label="Şimdi değil"><X size={16} aria-hidden /></button>
+          ? <button type="button" className={styles.primary} onClick={() => void install()}><Download size={15} aria-hidden /> {t("Yükle")}</button>
+          : !iosHelp ? <button type="button" className={styles.primary} onClick={() => setIosHelp(true)}><SquarePlus size={15} aria-hidden /> {t("Nasıl?")}</button> : null}
+        <button type="button" className={styles.close} onClick={dismiss} aria-label={t("Şimdi değil")}><X size={16} aria-hidden /></button>
       </div>
     </aside>
   );

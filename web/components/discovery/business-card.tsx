@@ -1,24 +1,26 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { Business } from "@/types/business";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
+import { tk } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  kuafor: "Kuaför",
-  berber: "Berber",
-  guzellik: "Güzellik Merkezi",
-  nail: "Nail Studio",
-  spor: "Spor / PT",
-  danismanlik: "Danışmanlık",
-  veteriner: "Veteriner",
-  servis: "Servis",
-  saglik: "Sağlık",
-  spa: "Spa & Masaj",
-  yazilim: "Yazılım",
-  egitim: "Eğitim",
-  diger: "Diğer",
+  kuafor: tk("Kuaför"),
+  berber: tk("Berber"),
+  guzellik: tk("Güzellik Merkezi"),
+  nail: tk("Nail Studio"),
+  spor: tk("Spor / PT"),
+  danismanlik: tk("Danışmanlık"),
+  veteriner: tk("Veteriner"),
+  servis: tk("Servis"),
+  saglik: tk("Sağlık"),
+  spa: tk("Spa & Masaj"),
+  yazilim: tk("Yazılım"),
+  egitim: tk("Eğitim"),
+  diger: tk("Diğer"),
 };
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -51,8 +53,9 @@ interface BusinessCardProps {
 }
 
 export function BusinessCard({ business }: BusinessCardProps) {
+  const t = useT();
   const categoryLabel =
-    CATEGORY_LABELS[canonicalBusinessCategory(business.category)] ?? business.category;
+    t(CATEGORY_LABELS[canonicalBusinessCategory(business.category)] ?? business.category);
 
   return (
     <Link href={`/isletme/${business.slug}`} className="group block">
@@ -101,7 +104,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
           </h3>
 
           <div className="mt-1.5 flex items-center gap-2">
-            {(business.reviewCount ?? 0) > 0 ? <StarRating rating={business.rating ?? 0} /> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">Yeni</span>}
+            {(business.reviewCount ?? 0) > 0 ? <StarRating rating={business.rating ?? 0} /> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">{t("Yeni")}</span>}
             {(business.reviewCount ?? 0) > 0 && (
               <span className="text-xs text-[var(--text-3)]">
                 ({business.reviewCount})
@@ -136,7 +139,7 @@ export function BusinessCard({ business }: BusinessCardProps) {
           {/* CTA */}
           <div className="mt-4 flex items-center justify-between">
             <span className="rounded-lg bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-              Randevu Al
+              {t("Randevu Al")}
             </span>
             <svg
               className="h-4 w-4 text-[var(--text-3)] transition-transform duration-300 group-hover:translate-x-1"

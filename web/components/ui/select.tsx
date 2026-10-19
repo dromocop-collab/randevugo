@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useT } from "@/i18n/client";
 import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type SelectHTMLAttributes } from "react";
 
 export interface SelectOption {
@@ -17,6 +18,7 @@ interface Props extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "children"
 }
 
 export function Select({ label, options, value, defaultValue, onChange, disabled, required, name, id, inlineMenu = false, ...props }: Props) {
+  const t = useT();
   const generatedId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -133,7 +135,7 @@ export function Select({ label, options, value, defaultValue, onChange, disabled
         onClick={() => open ? setOpen(false) : openMenu()}
         onKeyDown={handleKeyDown}
       >
-        <span><strong>{selected?.label ?? "Seçim yapın"}</strong>{selected?.description && <small>{selected.description}</small>}</span>
+        <span><strong>{selected?.label ?? t("Seçim yapın")}</strong>{selected?.description && <small>{selected.description}</small>}</span>
         <ChevronDown size={18} className={open ? "is-open" : ""}/>
       </button>
       {inlineMenu ? menu : open && typeof document !== "undefined" ? createPortal(menu, document.body) : null}

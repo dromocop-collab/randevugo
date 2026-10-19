@@ -51,7 +51,7 @@ export async function uploadReviewImage(
   file: File
 ): Promise<string> {
   const user = getAuth(getFirebaseApp()).currentUser;
-  if (!user) throw new Error("Yorum fotoğrafı yüklemek için giriş yapmalısınız.");
+  if (!user) throw new Error("Yorum fotoğrafı yüklemek için giriş yapmalısınız."); // i18n-ignore — arayüzde gösterilmez
   const ext = file.name.split(".").pop() ?? "jpg";
   const fileName = `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const path = `businesses/${businessId}/public/reviews/${user.uid}/${fileName}`;

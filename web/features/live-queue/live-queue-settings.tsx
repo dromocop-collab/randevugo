@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,10 @@ import { useBusinessContext } from "@/features/businesses/business-context";
 import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
 import { listLiveDiscovery } from "@/features/live-queue/customer-queue-repository";
 import type { Business } from "@/types/business";
+import { useT } from "@/i18n/client";
 
 export function LiveQueueSettings({ business, onChanged }: { business: Business; onChanged: (enabled: boolean) => void }) {
+  const t = useT();
   const { refreshBusinesses, access } = useBusinessContext();
   const [globallyAvailable, setGloballyAvailable] = useState(false);
   const [discoveryAvailable, setDiscoveryAvailable] = useState(false);
@@ -44,42 +46,42 @@ export function LiveQueueSettings({ business, onChanged }: { business: Business;
       await updateBusiness(business.id, { liveQueueEnabled: enabled });
       onChanged(enabled);
       refreshBusinesses();
-      toast.success(enabled ? "Canlı Sıra açıldı." : "Yeni canlı sıra katılımı kapatıldı. Mevcut kayıtlar korunur.");
+      toast.success(enabled ? t("Canlı Sıra açıldı.") : t("Yeni canlı sıra katılımı kapatıldı. Mevcut kayıtlar korunur."));
     } catch {
-      toast.error("Canlı Sıra ayarı kaydedilemedi. Önceki durum korundu.");
+      toast.error(t("Canlı Sıra ayarı kaydedilemedi. Önceki durum korundu."));
     } finally {
       setSaving(false);
     }
   }
 
-  return <Card title="Canlı Sıra" description="Yeni müşteri katılımını işletmeniz için yönetin.">
+  return <Card title={t("Canlı Sıra")} description={t("Yeni müşteri katılımını işletmeniz için yönetin.")}>
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <div><strong className="text-sm text-[var(--text-1)]">{business.liveQueueEnabled === true ? "Açık" : "Kapalı"}</strong>
+      <div><strong className="text-sm text-[var(--text-1)]">{business.liveQueueEnabled === true ? t("Açık") : t("Kapalı")}</strong>
         <p className="mt-1 text-xs text-[var(--text-3)]">{globallyAvailable
-          ? "Kapatıldığında mevcut sıra kayıtları silinmez; Canlı Operasyon ekranında tamamlanabilir."
-          : "Canlı Sıra platform genelinde şu anda kullanılamıyor."}</p></div>
+          ? t("Kapatıldığında mevcut sıra kayıtları silinmez; Canlı Operasyon ekranında tamamlanabilir.")
+          : t("Canlı Sıra platform genelinde şu anda kullanılamıyor.")}</p></div>
       <Button type="button" variant={business.liveQueueEnabled ? "secondary" : "primary"}
         disabled={!globallyAvailable || saving || access?.role === "staff"} loading={saving}
         onClick={() => void change(business.liveQueueEnabled !== true)}>
-        {business.liveQueueEnabled ? "Canlı Sırayı Kapat" : "Canlı Sırayı Aç"}
+        {business.liveQueueEnabled ? t("Canlı Sırayı Kapat") : t("Canlı Sırayı Aç")}
       </Button>
     </div>
     {business.liveQueueEnabled === true && globallyAvailable && <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm" role="status">
-      <strong className="text-[var(--text-1)]">Şimdi Müsait görünürlüğü</strong>
-      <p className="mt-1 text-[var(--text-2)]">{!discoveryAvailable ? "Şimdi Müsait genel kontrolü kapalı. Süper Admin bu özelliği açmalı." :
-        business.liveQueueIntakePaused ? "Yeni müşteri alımı duraklatılmış. Canlı Operasyon'dan devam ettir." :
-        business.status !== "active" || business.isPublished !== true ? "İşletme aktif ve yayında olmalı." :
-        checking ? "Müşteri listesi kontrol ediliyor…" : listed === true ? "İşletmen şu anda müşteri listesinde görünüyor." :
-        listed === false ? "İşletmen şu anda listede görünmüyor. İşletme ve hizmeti verecek personelin çalışma saatleri aynı anda açık olmalı; uygun, online randevuya açık bir hizmet de bulunmalı. Ayarı yeni açtıysan birkaç saniye sonra yenile." :
-        "Liste durumu alınamadı. Tekrar kontrol et."}</p>
+      <strong className="text-[var(--text-1)]">{t("Şimdi Müsait görünürlüğü")}</strong>
+      <p className="mt-1 text-[var(--text-2)]">{!discoveryAvailable ? t("Şimdi Müsait genel kontrolü kapalı. Süper Admin bu özelliği açmalı.") :
+        business.liveQueueIntakePaused ? t("Yeni müşteri alımı duraklatılmış. Canlı Operasyon'dan devam ettir.") :
+        business.status !== "active" || business.isPublished !== true ? t("İşletme aktif ve yayında olmalı.") :
+        checking ? t("Müşteri listesi kontrol ediliyor…") : listed === true ? t("İşletmen şu anda müşteri listesinde görünüyor.") :
+        listed === false ? t("İşletmen şu anda listede görünmüyor. İşletme ve hizmeti verecek personelin çalışma saatleri aynı anda açık olmalı; uygun, online randevuya açık bir hizmet de bulunmalı. Ayarı yeni açtıysan birkaç saniye sonra yenile.") :
+        t("Liste durumu alınamadı. Tekrar kontrol et.")}</p>
       {discoveryAvailable && !business.liveQueueIntakePaused && business.status === "active" && business.isPublished === true &&
         <button type="button" className="mt-2 text-xs font-semibold text-[var(--accent)] disabled:opacity-50" disabled={checking}
-          onClick={() => setCheckVersion((value) => value + 1)}>Görünürlüğü yenile</button>}
+          onClick={() => setCheckVersion((value) => value + 1)}>{t("Görünürlüğü yenile")}</button>}
       {listed === false && <div className="mt-2 flex gap-4 text-xs font-semibold text-[var(--accent)]">
-        <Link href="/dashboard/calisma-saatleri">İşletme saatleri →</Link><Link href="/dashboard/calisanlar">Personel saatleri →</Link><Link href="/dashboard/hizmetler">Hizmetler →</Link>
+        <Link href="/dashboard/calisma-saatleri">{t("İşletme saatleri →")}</Link><Link href="/dashboard/calisanlar">{t("Personel saatleri →")}</Link><Link href="/dashboard/hizmetler">{t("Hizmetler →")}</Link>
       </div>}
     </div>}
     {globallyAvailable && <Link className="mt-4 inline-block text-sm font-semibold text-[var(--accent)]" href="/dashboard/canli-operasyon">
-      {business.liveQueueEnabled ? "Canlı Operasyona git →" : "Mevcut sırayı yönet →"}</Link>}
+      {business.liveQueueEnabled ? t("Canlı Operasyona git →") : t("Mevcut sırayı yönet →")}</Link>}
   </Card>;
 }

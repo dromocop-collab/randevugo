@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getBusinessesForUser } from "@/features/businesses/business-repository";
 import type { Business } from "@/types/business";
 import { userFacingError } from "@/lib/errors/user-facing-error";
+import { useT } from "@/i18n/client";
 
 interface BusinessContextValue {
   businesses: Business[];
@@ -38,6 +39,7 @@ function getStoredBusinessId(): string | null {
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { user, status } = useAuth();
+  const t = useT();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessIdState] = useState<string | null>(getStoredBusinessId);
   const [loading, setLoading] = useState(false);
@@ -73,8 +75,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         if (code === "permission-denied" || code === "PERMISSION_DENIED") {
           return;
         }
-        const message = userFacingError(error, "İşletme listeniz şu anda alınamadı. Lütfen yeniden deneyin.");
-        toast.error(message);
+        const message = userFacingError(error, t("İşletme listeniz şu anda alınamadı. Lütfen yeniden deneyin."));
+        toast.error(t(message));
       })
       .finally(() => {
         if (!alive) return;
@@ -84,7 +86,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [status, user, refreshCounter]);
+  }, [status, user, refreshCounter, t]);
 
   const setBusinessId = useCallback((id: string) => {
     window.localStorage.setItem(STORAGE_KEY, id);

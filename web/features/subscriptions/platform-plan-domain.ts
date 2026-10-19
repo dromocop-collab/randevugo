@@ -6,6 +6,9 @@
  */
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, type SubscriptionEntitlement } from "../../constants/subscription-entitlements.ts";
 import { PLAN_FEATURE_LIST, PLAN_FEATURES, PLAN_LABEL, PLAN_PRICE } from "../../constants/plans.ts";
+import { interpolate, tk, type TFunction } from "../../i18n/config.ts";
+
+const identityT: TFunction = (source, vars) => interpolate(source, vars);
 
 export interface PlatformPlan {
   id: string;
@@ -49,7 +52,8 @@ export function defaultPlatformPlan(): PlatformPlan {
     isActive: true,
     isRecommended: true,
     sortOrder: null,
-    description: "Tüm randevu operasyonunu tek merkezden yönetin.",
+    // Türkçe anahtar; gösterirken t(plan.description).
+    description: tk("Tüm randevu operasyonunu tek merkezden yönetin."),
     features: [...PLAN_FEATURE_LIST],
     entitlements: [...ALL_SUBSCRIPTION_ENTITLEMENTS],
     isFallback: true,
@@ -79,8 +83,8 @@ function toFlag(value: unknown): boolean | null {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
     const text = value.trim().toLowerCase();
-    if (["true", "1", "active", "aktif", "published", "yayında", "satışta", "visible", "public"].includes(text)) return true;
-    if (["false", "0", "inactive", "pasif", "draft", "taslak", "archived", "hidden", "private", "kapalı"].includes(text)) return false;
+    if (["true", "1", "active", "aktif", "published", "yayında", "satışta", "visible", "public"].includes(text)) return true; // i18n-ignore (veri değeri)
+    if (["false", "0", "inactive", "pasif", "draft", "taslak", "archived", "hidden", "private", "kapalı"].includes(text)) return false; // i18n-ignore (veri değeri)
   }
   if (typeof value === "number") return value !== 0;
   return null;
@@ -140,17 +144,17 @@ function smsQuotaOf(value: unknown): number | null {
   return quota !== null && quota >= 0 ? Math.floor(quota) : null;
 }
 
-/** Kartlardaki çalışan sınırı: 100 ve üstü pratikte sınırsız gösterilir. */
-export function staffLimitLabel(maxStaff: number): string {
-  return maxStaff >= 100 ? "Sınırsız çalışan" : `${maxStaff} çalışan`;
+/** Kartlardaki çalışan sınırı: 100 ve üstü pratikte sınırsız gösterilir. Çeviri için t verin (varsayılan Türkçe). */
+export function staffLimitLabel(maxStaff: number, t: TFunction = identityT): string {
+  return maxStaff >= 100 ? t("Sınırsız çalışan") : t("{count} çalışan", { count: maxStaff });
 }
 
-export function storeLimitLabel(maxStores: number): string {
-  return maxStores <= 1 ? "1 şube" : `${maxStores} şubeye kadar`;
+export function storeLimitLabel(maxStores: number, t: TFunction = identityT): string {
+  return maxStores <= 1 ? t("1 şube") : t("{count} şubeye kadar", { count: maxStores });
 }
 
-export function smsQuotaLabel(quota: number | null): string | null {
-  return quota === null ? null : `Ayda ${quota.toLocaleString("tr-TR")} SMS`;
+export function smsQuotaLabel(quota: number | null, t: TFunction = identityT, locale = "tr-TR"): string | null {
+  return quota === null ? null : t("Ayda {count} SMS", { count: quota.toLocaleString(locale) });
 }
 
 /** Görüntüleme sırası: sortOrder (tanımlılar önce) → aylık fiyat → ad. */

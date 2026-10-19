@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { Review } from "@/types/review";
 import { MessageCircleMore, PenLine, Scissors } from "lucide-react";
+import { useIntlLocale, useT } from "@/i18n/client";
 
 interface Props {
   reviews: Review[];
@@ -46,6 +47,8 @@ export function StorefrontReviews({
   averageRating,
   totalReviews,
 }: Props) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
@@ -76,7 +79,7 @@ export function StorefrontReviews({
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-lg shadow-[var(--shadow-soft)] backdrop-blur-xl">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[var(--text-1)]">Değerlendirmeler</h2>
+            <h2 className="text-lg font-bold text-[var(--text-1)]">{t("Değerlendirmeler")}</h2>
             {totalReviews > 0 && (
               <div className="mt-2 flex items-center gap-3">
                 <span className="text-4xl font-extrabold bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] bg-clip-text text-transparent">
@@ -85,7 +88,7 @@ export function StorefrontReviews({
                 <div>
                   <StarRating rating={averageRating} size={18} />
                   <p className="mt-0.5 text-xs text-[var(--text-3)]">
-                    {totalReviews} değerlendirme
+                    {t("{count} değerlendirme", { count: totalReviews })}
                   </p>
                 </div>
               </div>
@@ -96,7 +99,7 @@ export function StorefrontReviews({
             href="/hesabim"
             className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-3))] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition hover:shadow-xl hover:brightness-110 active:scale-[0.97]"
           >
-            <PenLine size={15}/> Randevunu değerlendir
+            <PenLine size={15}/> {t("Randevunu değerlendir")}
           </Link>
         </div>
 
@@ -127,17 +130,17 @@ export function StorefrontReviews({
       {reviews.length > 0 && (
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-[var(--text-2)]">
-            {reviews.length} yorum
+            {t("{count} yorum", { count: reviews.length })}
           </span>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
             className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-1.5 text-xs font-medium text-[var(--text-2)] outline-none transition focus:border-[var(--accent)]"
           >
-            <option value="newest">En Yeni</option>
-            <option value="oldest">En Eski</option>
-            <option value="highest">En Yüksek Puan</option>
-            <option value="lowest">En Düşük Puan</option>
+            <option value="newest">{t("En Yeni")}</option>
+            <option value="oldest">{t("En Eski")}</option>
+            <option value="highest">{t("En Yüksek Puan")}</option>
+            <option value="lowest">{t("En Düşük Puan")}</option>
           </select>
         </div>
       )}
@@ -147,10 +150,10 @@ export function StorefrontReviews({
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-10 text-center">
           <MessageCircleMore className="mx-auto text-[var(--accent)]" size={37}/>
           <p className="mt-3 text-sm font-medium text-[var(--text-1)]">
-            Henüz değerlendirme yapılmamış
+            {t("Henüz değerlendirme yapılmamış")}
           </p>
           <p className="mt-1 text-xs text-[var(--text-3)]">
-            Tamamlanan randevunuzdan sonra ilk doğrulanmış yorumu siz bırakın.
+            {t("Tamamlanan randevunuzdan sonra ilk doğrulanmış yorumu siz bırakın.")}
           </p>
         </div>
       ) : (
@@ -174,7 +177,7 @@ export function StorefrontReviews({
                     </p>
                     <div className="flex items-center gap-2">
                       <p className="text-[10px] text-[var(--text-3)]">
-                        {new Date(review.createdAt).toLocaleDateString("tr-TR", {
+                        {new Date(review.createdAt).toLocaleDateString(intlLocale, {
                           day: "numeric",
                           month: "long",
                           year: "numeric",
@@ -209,7 +212,7 @@ export function StorefrontReviews({
                     >
                       <Image
                         src={url}
-                        alt={`Yorum fotoğrafı ${i + 1}`}
+                        alt={t("Yorum fotoğrafı {index}", { index: i + 1 })}
                         width={80}
                         height={80}
                         className="h-full w-full object-cover"
@@ -240,12 +243,12 @@ export function StorefrontReviews({
                   <div className="flex items-center gap-2">
                     <MessageCircleMore size={14}/>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent)]">
-                      İşletme Yanıtı
+                      {t("İşletme Yanıtı")}
                     </p>
                     {review.ownerReplyAt && (
                       <span className="text-[9px] text-[var(--text-3)]">
                         ·{" "}
-                        {new Date(review.ownerReplyAt).toLocaleDateString("tr-TR")}
+                        {new Date(review.ownerReplyAt).toLocaleDateString(intlLocale)}
                       </span>
                     )}
                   </div>
@@ -273,7 +276,7 @@ export function StorefrontReviews({
           </button>
           <Image
             src={lightboxUrl}
-            alt="Büyütülmüş fotoğraf"
+            alt={t("Büyütülmüş fotoğraf")}
             width={1400}
             height={1000}
             className="max-h-[85vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"

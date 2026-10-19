@@ -10,11 +10,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startOfLocalDay, type CompanionAppointment } from "@/features/business-companion/companion-domain";
 import { CompanionView, useArrivalQueue, useNow } from "@/features/business-companion/companion-view";
 import { dashTokensClassName } from "@/components/dashboard/ui";
-import { NotificationSoundSection } from "@/app/dashboard/ayarlar/notification-sound-section";
+import { NotificationSoundSection } from "@/app/[lang]/dashboard/ayarlar/notification-sound-section";
 import styles from "./business-companion.module.css";
 
+// i18n-ignore (yalnızca geliştirme önizlemesi; sahte veri)
 const NAMES = ["Ayşe Yılmaz", "Mehmet Kaya", "Zeynep Demir", "Can Öztürk", "Elif Şahin", "Burak Arslan"];
+// i18n-ignore
 const SERVICES = ["Saç kesimi", "Fön", "Sakal tıraşı", "Manikür", "Cilt bakımı"];
+// i18n-ignore
 const STAFF = ["Mert", "Selin", "Deniz"];
 
 function mockDay(nowMs: number): CompanionAppointment[] {
@@ -23,11 +26,11 @@ function mockDay(nowMs: number): CompanionAppointment[] {
   const nowHour = new Date(nowMs).getHours();
   const base = Math.min(Math.max(nowHour, 9), 20);
   return [
-    { id: "p1", customerName: "Selin Koç", serviceName: "Saç boyama", staffName: "Selin", startAtMs: slot(base - 2, 0), endAtMs: slot(base - 1, 0), status: "completed" },
-    { id: "p2", customerName: "Ali Can", serviceName: "Sakal tıraşı", staffName: "Mert", startAtMs: slot(base, 0) - 10 * 60_000, endAtMs: slot(base, 0) + 20 * 60_000, status: "confirmed" },
-    { id: "p3", customerName: "Ayşe Yılmaz", serviceName: "Saç kesimi", staffName: "Mert", startAtMs: slot(base, 40), endAtMs: slot(base + 1, 10), status: "confirmed" },
-    { id: "p4", customerName: "Deniz Ak", serviceName: "Manikür", staffName: "Deniz", startAtMs: slot(base + 1, 30), endAtMs: slot(base + 2, 15), status: "pending" },
-    { id: "p5", customerName: "Kerem Ateş", serviceName: "Fön", staffName: "Selin", startAtMs: slot(base + 2, 30), endAtMs: slot(base + 3, 0), status: "confirmed" },
+    { id: "p1", customerName: "Selin Koç", serviceName: "Saç boyama", staffName: "Selin", startAtMs: slot(base - 2, 0), endAtMs: slot(base - 1, 0), status: "completed" }, // i18n-ignore
+    { id: "p2", customerName: "Ali Can", serviceName: "Sakal tıraşı", staffName: "Mert", startAtMs: slot(base, 0) - 10 * 60_000, endAtMs: slot(base, 0) + 20 * 60_000, status: "confirmed" }, // i18n-ignore
+    { id: "p3", customerName: "Ayşe Yılmaz", serviceName: "Saç kesimi", staffName: "Mert", startAtMs: slot(base, 40), endAtMs: slot(base + 1, 10), status: "confirmed" }, // i18n-ignore
+    { id: "p4", customerName: "Deniz Ak", serviceName: "Manikür", staffName: "Deniz", startAtMs: slot(base + 1, 30), endAtMs: slot(base + 2, 15), status: "pending" }, // i18n-ignore
+    { id: "p5", customerName: "Kerem Ateş", serviceName: "Fön", staffName: "Selin", startAtMs: slot(base + 2, 30), endAtMs: slot(base + 3, 0), status: "confirmed" }, // i18n-ignore
   ];
 }
 
@@ -36,10 +39,10 @@ export default function CompanionPreview() {
   const [today, setToday] = useState<CompanionAppointment[]>(() => mockDay(Date.now()));
   const [pending, setPending] = useState<CompanionAppointment[]>(() => [
     ...mockDay(Date.now()).filter((item) => item.status === "pending"),
-    { id: "p6", customerName: "Burak Arslan", serviceName: "Cilt bakımı", staffName: "Deniz", startAtMs: startOfLocalDay(Date.now()) + 34 * 3_600_000, status: "pending" },
+    { id: "p6", customerName: "Burak Arslan", serviceName: "Cilt bakımı", staffName: "Deniz", startAtMs: startOfLocalDay(Date.now()) + 34 * 3_600_000, status: "pending" }, // i18n-ignore
   ]);
   const counter = useRef(0);
-  const arrivals = useArrivalQueue({ businessName: "Şık Saçlar Kuaför", shouldNotifyNatively: () => false });
+  const arrivals = useArrivalQueue({ businessName: "Şık Saçlar Kuaför", shouldNotifyNatively: () => false }); // i18n-ignore
   const { push } = arrivals;
 
   const simulate = useCallback(() => {
@@ -65,8 +68,8 @@ export default function CompanionPreview() {
   }, [simulate]);
 
   const businesses = useMemo(() => [
-    { id: "demo-1", name: "Şık Saçlar Kuaför", slug: "sik-saclar" },
-    { id: "demo-2", name: "Şık Saçlar Bodrum", slug: "sik-saclar-bodrum" },
+    { id: "demo-1", name: "Şık Saçlar Kuaför", slug: "sik-saclar" }, // i18n-ignore
+    { id: "demo-2", name: "Şık Saçlar Bodrum", slug: "sik-saclar-bodrum" }, // i18n-ignore
   ], []);
   const [activeId, setActiveId] = useState("demo-1");
   const activeBusiness = businesses.find((business) => business.id === activeId) ?? businesses[0];
@@ -101,8 +104,9 @@ export default function CompanionPreview() {
       onConfirm={confirm}
       devTools={
         <div className={styles.devTools}>
+          {/* i18n-ignore (yalnızca geliştirme) */}
           <span>Önizleme (yalnızca geliştirme) · {new Date(now).toLocaleTimeString("tr-TR")}</span>
-          <button type="button" onClick={simulate}>Yeni randevu simüle et</button>
+          <button type="button" onClick={simulate}>Yeni randevu simüle et</button>{/* i18n-ignore */}
         </div>
       }
     />

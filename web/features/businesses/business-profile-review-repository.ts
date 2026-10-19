@@ -43,7 +43,7 @@ export async function listBusinessProfileChangeRequests(): Promise<BusinessProfi
     return {
       id: item.id,
       businessId: String(data.businessId ?? ""),
-      businessName: String(data.businessName ?? "İşletme"),
+      businessName: String(data.businessName ?? "İşletme"), // i18n-ignore — veri yedeği (süper admin)
       ownerUid: String(data.ownerUid ?? ""),
       submittedBy: String(data.submittedBy ?? ""),
       status: data.status === "approved" || data.status === "rejected" ? data.status : "pending",

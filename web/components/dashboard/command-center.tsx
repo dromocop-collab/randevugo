@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ElementType } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
@@ -15,13 +15,15 @@ import {
   Activity, BarChart3, BellRing, Bot, CalendarDays, CalendarPlus, Clipboard, Clock3, CornerDownLeft, CreditCard, Headphones, House,
   LayoutPanelTop, ListChecks, Palette, Plus, ReceiptText, Scissors, Search, Settings2, Share2, Star, UserPlus, UsersRound, WandSparkles, X,
 } from "lucide-react";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./command-center.module.css";
 
 type PaletteCommand = {
   id: string;
   label: string;
   description: string;
-  group: "Hızlı işlemler" | "Sayfalar" | "Kişiselleştirme";
+  group: "Hızlı işlemler" | "Sayfalar" | "Kişiselleştirme"; // i18n-ignore (anahtar; gösterirken t())
   icon: ElementType;
   keywords: string;
   /** Sayfa komutlarında paket/yetki filtrelemesi bu rotaya göre yapılır. */
@@ -32,6 +34,7 @@ type PaletteCommand = {
 const STAFF_BASE = ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek"];
 
 export function DashboardCommandCenter() {
+  const t = useT();
   const router = useRouter();
   const { businesses, businessId, access } = useBusinessContext();
   const { can } = useSubscriptionPlan();
@@ -48,40 +51,40 @@ export function DashboardCommandCenter() {
 
   const go = (href: string) => () => router.push(href);
   const commands: PaletteCommand[] = [
-    { id: "new-appointment", label: "Yeni randevu oluştur", description: "Tarih ve saat seçerek hızlı kayıt aç", group: "Hızlı işlemler", icon: CalendarPlus, keywords: "randevu ekle yeni kayıt rezervasyon", href: "/dashboard/takvim", run: () => openQuickAppointment() },
-    { id: "new-customer", label: "Müşteri ekle", description: "Yeni müşteri kaydı oluştur", group: "Hızlı işlemler", icon: UserPlus, keywords: "müşteri ekle yeni kişi crm", href: "/dashboard/musteriler", run: go("/dashboard/musteriler?new=1") },
-    { id: "live-queue", label: "Sıradaki müşteriyi çağır", description: "Canlı sıra ekranını aç", group: "Hızlı işlemler", icon: Activity, keywords: "sıra çağır canlı kuyruk bekleyen", href: "/dashboard/canli-operasyon", run: go("/dashboard/canli-operasyon") },
-    { id: "assistant", label: "İşletme asistanına sor", description: "Canlı işletme verileriyle analiz başlat", group: "Hızlı işlemler", icon: Bot, keywords: "asistan yapay zeka analiz sor rovi", href: "/dashboard/asistan", run: go("/dashboard/asistan") },
-    { id: "automation", label: "Yeni otomasyon oluştur", description: "Tekrarlanan operasyonları otomatikleştir", group: "Hızlı işlemler", icon: WandSparkles, keywords: "otomasyon kural bildirim akış", href: "/dashboard/otomasyonlar", run: go("/dashboard/otomasyonlar?create=1") },
-    { id: "new-store", label: "Yeni şube kur", description: "Firma ağına yeni bir şube ekle", group: "Hızlı işlemler", icon: Plus, keywords: "şube mağaza işletme ekle", href: "/dashboard/subeler", run: go("/dashboard/subeler") },
-    { id: "copy-store", label: "Mağaza linkini kopyala", description: activeBusiness?.slug ? `seninrandevun.com/isletme/${activeBusiness.slug}` : "Önce mağaza profilini tamamlayın", group: "Hızlı işlemler", icon: Clipboard, keywords: "link url mağaza kopyala paylaş", run: async () => {
-      if (!activeBusiness?.slug) { toast.error("Mağaza bağlantısı henüz hazır değil."); return; }
+    { id: "new-appointment", label: tk("Yeni randevu oluştur"), description: tk("Tarih ve saat seçerek hızlı kayıt aç"), group: tk("Hızlı işlemler"), icon: CalendarPlus, keywords: tk("randevu ekle yeni kayıt rezervasyon"), href: "/dashboard/takvim", run: () => openQuickAppointment() },
+    { id: "new-customer", label: tk("Müşteri ekle"), description: tk("Yeni müşteri kaydı oluştur"), group: tk("Hızlı işlemler"), icon: UserPlus, keywords: tk("müşteri ekle yeni kişi crm"), href: "/dashboard/musteriler", run: go("/dashboard/musteriler?new=1") },
+    { id: "live-queue", label: tk("Sıradaki müşteriyi çağır"), description: tk("Canlı sıra ekranını aç"), group: tk("Hızlı işlemler"), icon: Activity, keywords: tk("sıra çağır canlı kuyruk bekleyen"), href: "/dashboard/canli-operasyon", run: go("/dashboard/canli-operasyon") },
+    { id: "assistant", label: tk("İşletme asistanına sor"), description: tk("Canlı işletme verileriyle analiz başlat"), group: tk("Hızlı işlemler"), icon: Bot, keywords: tk("asistan yapay zeka analiz sor rovi"), href: "/dashboard/asistan", run: go("/dashboard/asistan") },
+    { id: "automation", label: tk("Yeni otomasyon oluştur"), description: tk("Tekrarlanan operasyonları otomatikleştir"), group: tk("Hızlı işlemler"), icon: WandSparkles, keywords: tk("otomasyon kural bildirim akış"), href: "/dashboard/otomasyonlar", run: go("/dashboard/otomasyonlar?create=1") },
+    { id: "new-store", label: tk("Yeni şube kur"), description: tk("Firma ağına yeni bir şube ekle"), group: tk("Hızlı işlemler"), icon: Plus, keywords: tk("şube mağaza işletme ekle"), href: "/dashboard/subeler", run: go("/dashboard/subeler") },
+    { id: "copy-store", label: tk("Mağaza linkini kopyala"), description: activeBusiness?.slug ? `seninrandevun.com/isletme/${activeBusiness.slug}` : tk("Önce mağaza profilini tamamlayın"), group: tk("Hızlı işlemler"), icon: Clipboard, keywords: tk("link url mağaza kopyala paylaş"), run: async () => {
+      if (!activeBusiness?.slug) { toast.error(t("Mağaza bağlantısı henüz hazır değil.")); return; }
       try {
         await navigator.clipboard.writeText(`${window.location.origin}/isletme/${activeBusiness.slug}`);
-        toast.success("Mağaza linki kopyalandı.");
-      } catch { toast.error("Bağlantı kopyalanamadı."); }
+        toast.success(t("Mağaza linki kopyalandı."));
+      } catch { toast.error(t("Bağlantı kopyalanamadı.")); }
     } },
-    { id: "instagram-share", label: "Instagram için görsel", description: "Hikâye/gönderi görseli: hizmetler, fiyatlar ve QR kod", group: "Hızlı işlemler", icon: Share2, keywords: "instagram hikaye story gönderi paylaş görsel qr reklam", run: () => {
-      if (!activeBusiness?.slug) { toast.error("Mağaza bağlantısı henüz hazır değil."); return; }
+    { id: "instagram-share", label: tk("Instagram için görsel"), description: tk("Hikâye/gönderi görseli: hizmetler, fiyatlar ve QR kod"), group: tk("Hızlı işlemler"), icon: Share2, keywords: tk("instagram hikaye story gönderi paylaş görsel qr reklam"), run: () => {
+      if (!activeBusiness?.slug) { toast.error(t("Mağaza bağlantısı henüz hazır değil.")); return; }
       router.push(`/isletme/${encodeURIComponent(activeBusiness.slug)}?paylas=instagram`);
     } },
-    { id: "home", label: "Bugün", description: "Günün özeti ve sıradaki randevular", group: "Sayfalar", icon: House, keywords: "ana sayfa genel bakış özet bugün", href: "/dashboard", run: go("/dashboard") },
-    { id: "calendar", label: "Takvim", description: "Günlük ve haftalık programı görüntüle", group: "Sayfalar", icon: CalendarDays, keywords: "takvim randevu program gün hafta", href: "/dashboard/takvim", run: go("/dashboard/takvim") },
-    { id: "appointments", label: "Randevular", description: "Tüm kayıtları ve durumları yönet", group: "Sayfalar", icon: ListChecks, keywords: "randevular müşteri rezervasyon liste onay", href: "/dashboard/randevular", run: go("/dashboard/randevular") },
-    { id: "pending", label: "Onay bekleyen randevular", description: "Bekleyen kayıtları tek tek onaylayın", group: "Sayfalar", icon: Clock3, keywords: "bekleyen onay pending", href: "/dashboard/randevular", run: go("/dashboard/randevular?status=pending") },
-    { id: "operations", label: "Kasa ve operasyon", description: "Adisyon, stok, paket, finans ve sadakati yönet", group: "Sayfalar", icon: ReceiptText, keywords: "kasa adisyon stok ürün paket finans gelir gider sadakat", href: "/dashboard/operasyon", run: go("/dashboard/operasyon") },
-    { id: "customers", label: "Müşteriler", description: "Müşteri 360 profillerini görüntüle", group: "Sayfalar", icon: UsersRound, keywords: "müşteri crm kişi", href: "/dashboard/musteriler", run: go("/dashboard/musteriler") },
-    { id: "waitlist", label: "Bekleme listesi", description: "Boşalan saatler için bekleyen müşteriler", group: "Sayfalar", icon: BellRing, keywords: "bekleme liste waitlist", href: "/dashboard/bekleme-listesi", run: go("/dashboard/bekleme-listesi") },
-    { id: "services", label: "Hizmetler", description: "Kategori, süre ve fiyatları düzenle", group: "Sayfalar", icon: Scissors, keywords: "hizmet kategori fiyat süre", href: "/dashboard/hizmetler", run: go("/dashboard/hizmetler") },
-    { id: "staff", label: "Çalışanlar", description: "Ekip ve uzmanlıkları yönet", group: "Sayfalar", icon: UsersRound, keywords: "çalışan personel ekip", href: "/dashboard/calisanlar", run: go("/dashboard/calisanlar") },
-    { id: "hours", label: "Çalışma saatleri", description: "Açık günler, molalar ve özel günler", group: "Sayfalar", icon: Clock3, keywords: "saat mesai mola tatil", href: "/dashboard/calisma-saatleri", run: go("/dashboard/calisma-saatleri") },
-    { id: "analytics", label: "Analiz & Büyüme", description: "Gelir, performans ve büyüme fırsatları", group: "Sayfalar", icon: BarChart3, keywords: "analiz büyüme gelir fırsat rapor performans", href: "/dashboard/analitik", run: go("/dashboard/analitik") },
-    { id: "reviews", label: "Yorumlar", description: "Müşteri değerlendirmelerini yönet", group: "Sayfalar", icon: Star, keywords: "yorum puan değerlendirme", href: "/dashboard/yorumlar", run: go("/dashboard/yorumlar") },
-    { id: "subscription", label: "Abonelik", description: "Paketinizi ve ödemeleri yönetin", group: "Sayfalar", icon: CreditCard, keywords: "abonelik paket ödeme fatura", href: "/dashboard/abonelik", run: go("/dashboard/abonelik") },
-    { id: "support", label: "Destek", description: "Ekibimize yazın", group: "Sayfalar", icon: Headphones, keywords: "destek yardım talep", href: "/dashboard/destek", run: go("/dashboard/destek") },
-    { id: "settings", label: "İşletme ayarları", description: "Profil ve çalışma ayarlarını düzenle", group: "Sayfalar", icon: Settings2, keywords: "ayar profil işletme logo", href: "/dashboard/ayarlar", run: go("/dashboard/ayarlar") },
-    { id: "appearance", label: "Görünüm stüdyosunu aç", description: "Renk, yoğunluk ve hareketi değiştir", group: "Kişiselleştirme", icon: Palette, keywords: "tema renk görünüm atmosfer koyu", run: () => { window.dispatchEvent(new Event("sr-dashboard-open-appearance")); } },
-    { id: "layout", label: "Ana paneli düzenle", description: "Bugün ekranındaki modülleri sırala veya gizle", group: "Kişiselleştirme", icon: LayoutPanelTop, keywords: "panel kart modül düzen gizle", run: () => { window.dispatchEvent(new Event("sr-dashboard-open-layout")); } },
+    { id: "home", label: tk("Bugün"), description: tk("Günün özeti ve sıradaki randevular"), group: tk("Sayfalar"), icon: House, keywords: tk("ana sayfa genel bakış özet bugün"), href: "/dashboard", run: go("/dashboard") },
+    { id: "calendar", label: tk("Takvim"), description: tk("Günlük ve haftalık programı görüntüle"), group: tk("Sayfalar"), icon: CalendarDays, keywords: tk("takvim randevu program gün hafta"), href: "/dashboard/takvim", run: go("/dashboard/takvim") },
+    { id: "appointments", label: tk("Randevular"), description: tk("Tüm kayıtları ve durumları yönet"), group: tk("Sayfalar"), icon: ListChecks, keywords: tk("randevular müşteri rezervasyon liste onay"), href: "/dashboard/randevular", run: go("/dashboard/randevular") },
+    { id: "pending", label: tk("Onay bekleyen randevular"), description: tk("Bekleyen kayıtları tek tek onaylayın"), group: tk("Sayfalar"), icon: Clock3, keywords: tk("bekleyen onay pending"), href: "/dashboard/randevular", run: go("/dashboard/randevular?status=pending") },
+    { id: "operations", label: tk("Kasa ve operasyon"), description: tk("Adisyon, stok, paket, finans ve sadakati yönet"), group: tk("Sayfalar"), icon: ReceiptText, keywords: tk("kasa adisyon stok ürün paket finans gelir gider sadakat"), href: "/dashboard/operasyon", run: go("/dashboard/operasyon") },
+    { id: "customers", label: tk("Müşteriler"), description: tk("Müşteri 360 profillerini görüntüle"), group: tk("Sayfalar"), icon: UsersRound, keywords: tk("müşteri crm kişi"), href: "/dashboard/musteriler", run: go("/dashboard/musteriler") },
+    { id: "waitlist", label: tk("Bekleme listesi"), description: tk("Boşalan saatler için bekleyen müşteriler"), group: tk("Sayfalar"), icon: BellRing, keywords: tk("bekleme liste waitlist"), href: "/dashboard/bekleme-listesi", run: go("/dashboard/bekleme-listesi") },
+    { id: "services", label: tk("Hizmetler"), description: tk("Kategori, süre ve fiyatları düzenle"), group: tk("Sayfalar"), icon: Scissors, keywords: tk("hizmet kategori fiyat süre"), href: "/dashboard/hizmetler", run: go("/dashboard/hizmetler") },
+    { id: "staff", label: tk("Çalışanlar"), description: tk("Ekip ve uzmanlıkları yönet"), group: tk("Sayfalar"), icon: UsersRound, keywords: tk("çalışan personel ekip"), href: "/dashboard/calisanlar", run: go("/dashboard/calisanlar") },
+    { id: "hours", label: tk("Çalışma saatleri"), description: tk("Açık günler, molalar ve özel günler"), group: tk("Sayfalar"), icon: Clock3, keywords: tk("saat mesai mola tatil"), href: "/dashboard/calisma-saatleri", run: go("/dashboard/calisma-saatleri") },
+    { id: "analytics", label: tk("Analiz & Büyüme"), description: tk("Gelir, performans ve büyüme fırsatları"), group: tk("Sayfalar"), icon: BarChart3, keywords: tk("analiz büyüme gelir fırsat rapor performans"), href: "/dashboard/analitik", run: go("/dashboard/analitik") },
+    { id: "reviews", label: tk("Yorumlar"), description: tk("Müşteri değerlendirmelerini yönet"), group: tk("Sayfalar"), icon: Star, keywords: tk("yorum puan değerlendirme"), href: "/dashboard/yorumlar", run: go("/dashboard/yorumlar") },
+    { id: "subscription", label: tk("Abonelik"), description: tk("Paketinizi ve ödemeleri yönetin"), group: tk("Sayfalar"), icon: CreditCard, keywords: tk("abonelik paket ödeme fatura"), href: "/dashboard/abonelik", run: go("/dashboard/abonelik") },
+    { id: "support", label: tk("Destek"), description: tk("Ekibimize yazın"), group: tk("Sayfalar"), icon: Headphones, keywords: tk("destek yardım talep"), href: "/dashboard/destek", run: go("/dashboard/destek") },
+    { id: "settings", label: tk("İşletme ayarları"), description: tk("Profil ve çalışma ayarlarını düzenle"), group: tk("Sayfalar"), icon: Settings2, keywords: tk("ayar profil işletme logo"), href: "/dashboard/ayarlar", run: go("/dashboard/ayarlar") },
+    { id: "appearance", label: tk("Görünüm stüdyosunu aç"), description: tk("Renk, yoğunluk ve hareketi değiştir"), group: tk("Kişiselleştirme"), icon: Palette, keywords: tk("tema renk görünüm atmosfer koyu"), run: () => { window.dispatchEvent(new Event("sr-dashboard-open-appearance")); } },
+    { id: "layout", label: tk("Ana paneli düzenle"), description: tk("Bugün ekranındaki modülleri sırala veya gizle"), group: tk("Kişiselleştirme"), icon: LayoutPanelTop, keywords: tk("panel kart modül düzen gizle"), run: () => { window.dispatchEvent(new Event("sr-dashboard-open-layout")); } },
   ];
 
   const filtered = (() => {
@@ -94,11 +97,13 @@ export function DashboardCommandCenter() {
       if (item.id === "new-customer" && isStaff) return false;
       const entitlement = item.href ? DASHBOARD_ROUTE_ENTITLEMENTS[item.href] : undefined;
       if (entitlement && !can(entitlement)) return false;
-      if (isStaff) return item.href ? staffAllowed.has(item.href) : item.group === "Kişiselleştirme";
+      if (isStaff) return item.href ? staffAllowed.has(item.href) : item.group === "Kişiselleştirme"; // i18n-ignore
       return true;
     });
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
-    const matches = normalized ? available.filter((item) => `${item.label} ${item.description} ${item.keywords}`.toLocaleLowerCase("tr-TR").includes(normalized)) : available;
+    // Arama hem Türkçe anahtar kelimelerle hem de etkin dildeki metinlerle eşleşir.
+    const haystack = (item: PaletteCommand) => `${item.label} ${t(item.label)} ${item.description} ${t(item.description)} ${item.keywords} ${t(item.keywords)}`;
+    const matches = normalized ? available.filter((item) => haystack(item).toLocaleLowerCase("tr-TR").includes(normalized)) : available;
     return [...matches].sort((a, b) => Number(recent.includes(b.id)) - Number(recent.includes(a.id)));
   })();
 
@@ -174,9 +179,9 @@ export function DashboardCommandCenter() {
   const activeId = filtered[activeIndex] ? `cmd-${filtered[activeIndex].id}` : undefined;
 
   return <>
-    <button type="button" className={styles.trigger} onClick={openPalette} aria-label="Ara veya komut çalıştır (⌘K)">
+    <button type="button" className={styles.trigger} onClick={openPalette} aria-label={t("Ara veya komut çalıştır (⌘K)")}>
       <Search size={17} aria-hidden />
-      <span className={styles.triggerText}>Ara veya komut çalıştır…</span>
+      <span className={styles.triggerText}>{t("Ara veya komut çalıştır…")}</span>
       <kbd className={styles.triggerKbd}>⌘K</kbd>
     </button>
     {open && typeof document !== "undefined" && createPortal(
@@ -186,7 +191,7 @@ export function DashboardCommandCenter() {
           className={styles.palette}
           role="dialog"
           aria-modal="true"
-          aria-label="İşletme komuta merkezi"
+          aria-label={t("İşletme komuta merkezi")}
           onKeyDown={(event) => {
             if (event.key === "Escape") { event.preventDefault(); closePalette(); }
             if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((value) => Math.min(value + 1, filtered.length - 1)); }
@@ -209,7 +214,7 @@ export function DashboardCommandCenter() {
               ref={inputRef}
               value={query}
               onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
-              placeholder="Sayfa, işlem veya komut ara…"
+              placeholder={t("Sayfa, işlem veya komut ara…")}
               role="combobox"
               aria-expanded="true"
               aria-controls="dashboard-command-list"
@@ -218,16 +223,16 @@ export function DashboardCommandCenter() {
               enterKeyHint="go"
             />
             <kbd className={styles.esc}>ESC</kbd>
-            <button type="button" className={styles.close} onClick={closePalette} aria-label="Kapat"><X size={17} /></button>
+            <button type="button" className={styles.close} onClick={closePalette} aria-label={t("Kapat")}><X size={17} /></button>
           </header>
-          <div className={styles.results} ref={listRef} id="dashboard-command-list" role="listbox" aria-label="Komutlar">
+          <div className={styles.results} ref={listRef} id="dashboard-command-list" role="listbox" aria-label={t("Komutlar")}>
             {filtered.length ? filtered.map((command, index) => {
               const Icon = command.icon;
               const showGroup = index === 0 || filtered[index - 1].group !== command.group || (recent.includes(filtered[index - 1].id) && !recent.includes(command.id) && !query);
               const isRecent = recent.includes(command.id) && !query;
               return (
                 <div key={command.id} role="presentation">
-                  {showGroup && <p className={styles.group}>{isRecent ? "Son kullanılanlar" : command.group}</p>}
+                  {showGroup && <p className={styles.group}>{isRecent ? t("Son kullanılanlar") : t(command.group)}</p>}
                   <button
                     id={`cmd-${command.id}`}
                     data-index={index}
@@ -240,16 +245,16 @@ export function DashboardCommandCenter() {
                     onClick={() => void execute(command)}
                   >
                     <i className={styles.itemIcon}><Icon size={18} aria-hidden /></i>
-                    <span className={styles.itemText}><b>{command.label}</b><small>{command.description}</small></span>
+                    <span className={styles.itemText}><b>{t(command.label)}</b><small>{t(command.description)}</small></span>
                     {index === activeIndex && <em className={styles.itemEnter}><CornerDownLeft size={13} aria-hidden /></em>}
                   </button>
                 </div>
               );
             }) : (
-              <div className={styles.empty}><Search size={26} aria-hidden /><b>Sonuç bulunamadı</b><span>Başka bir ifade veya sayfa adı deneyin.</span></div>
+              <div className={styles.empty}><Search size={26} aria-hidden /><b>{t("Sonuç bulunamadı")}</b><span>{t("Başka bir ifade veya sayfa adı deneyin.")}</span></div>
             )}
           </div>
-          <footer className={styles.foot}><span><kbd>↑</kbd><kbd>↓</kbd> gezin</span><span><kbd>↵</kbd> çalıştır</span><span><kbd>⌘K</kbd> aç/kapat</span></footer>
+          <footer className={styles.foot}><span><kbd>↑</kbd><kbd>↓</kbd> {t("gezin")}</span><span><kbd>↵</kbd> {t("çalıştır")}</span><span><kbd>⌘K</kbd> {t("aç/kapat")}</span></footer>
         </section>
       </div>,
       document.body,

@@ -79,7 +79,7 @@ export function toSeoBusiness(business: Business): SeoBusiness | null {
 const loadSeoIndex = unstable_cache(
   async (): Promise<SeoBusiness[]> => {
     // Hata fırlatılırsa önbelleğe boş liste yazılmaz; çağıran taraf yakalar.
-    const rows = await withTimeout(searchBusinesses({ maxResults: 1000 }), 8_000, "SEO işletme dizini");
+    const rows = await withTimeout(searchBusinesses({ maxResults: 1000 }), 8_000, "SEO işletme dizini"); // i18n-ignore
     return rows.map(toSeoBusiness).filter((row): row is SeoBusiness => Boolean(row));
   },
   ["seo-business-index-v2"],
@@ -170,7 +170,7 @@ export type ServiceSummary = { minPrice: number | null; maxPrice: number | null;
 
 const loadServiceSummary = unstable_cache(
   async (businessId: string): Promise<ServiceSummary> => {
-    const services = await withTimeout(listBookableServices(businessId), 8_000, "Hizmet özeti");
+    const services = await withTimeout(listBookableServices(businessId), 8_000, "Hizmet özeti"); // i18n-ignore
     const prices = services.map((service) => Number(service.price)).filter((price) => Number.isFinite(price) && price > 0);
     return {
       minPrice: prices.length ? Math.min(...prices) : null,

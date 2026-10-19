@@ -6,6 +6,8 @@ export interface CalendarEventInput {
   description?: string;
   location?: string;
   url?: string;
+  /** Hatırlatma (VALARM) metni; çağıran çevirip verir. */
+  reminder?: string;
 }
 
 function utcStamp(date: Date) {
@@ -49,7 +51,7 @@ export function buildIcs(event: CalendarEventInput) {
     event.url ? `URL:${event.url}` : "",
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
-    "DESCRIPTION:Randevu hatırlatması",
+    `DESCRIPTION:${escapeIcsText(event.reminder || "Randevu hatırlatması")}`, // i18n-ignore — varsayılan; çeviri event.reminder ile gelir
     "TRIGGER:-PT1H",
     "END:VALARM",
     "END:VEVENT",

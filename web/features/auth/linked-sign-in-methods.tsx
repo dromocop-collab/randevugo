@@ -7,26 +7,29 @@ import { getAuth, onIdTokenChanged, type User } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { linkSocialProvider, unlinkProvider, type SocialProvider } from "@/features/auth/auth-service";
 import styles from "./linked-sign-in-methods.module.css";
+import { useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 
 const METHODS: Array<{ id: string; provider?: SocialProvider; title: string; note: string }> = [
-  { id: "google.com", provider: "google", title: "Google", note: "Google hesabınla tek dokunuşla gir." },
-  { id: "apple.com", provider: "apple", title: "Apple", note: "\"E-postamı gizle\" seçsen bile bu hesaba girer." },
-  { id: "password", title: "E-posta ve şifre", note: "Şifreyi yenile ile oluşturabilirsin." },
+  { id: "google.com", provider: "google", title: "Google", note: tk("Google hesabınla tek dokunuşla gir.") },
+  { id: "apple.com", provider: "apple", title: "Apple", note: tk("\"E-postamı gizle\" seçsen bile bu hesaba girer.") },
+  { id: "password", title: tk("E-posta ve şifre"), note: tk("Şifreyi yenile ile oluşturabilirsin.") },
 ];
 
-function linkError(error: unknown) {
+function linkError(error: unknown, t: TFunction) {
   const code = (error as { code?: string } | null)?.code;
   if (code === "auth/credential-already-in-use" || code === "auth/email-already-in-use") {
-    return "Bu hesap başka bir SeninRandevun hesabına bağlı. Önce o hesaptan kaldırılması gerekir; destekten yardım isteyebilirsin.";
+    return t("Bu hesap başka bir SeninRandevun hesabına bağlı. Önce o hesaptan kaldırılması gerekir; destekten yardım isteyebilirsin.");
   }
-  if (code === "auth/provider-already-linked") return "Bu yöntem zaten bağlı.";
-  if (code === "auth/requires-recent-login") return "Güvenlik için çıkış yapıp tekrar giriş yap, sonra yeniden dene.";
-  if (code === "auth/popup-blocked") return "Açılır pencere engellendi. Tarayıcıda açılır pencerelere izin verip tekrar dene.";
-  return error instanceof Error && error.message && !error.message.startsWith("Firebase") ? error.message : "İşlem tamamlanamadı. Lütfen tekrar dene.";
+  if (code === "auth/provider-already-linked") return t("Bu yöntem zaten bağlı.");
+  if (code === "auth/requires-recent-login") return t("Güvenlik için çıkış yapıp tekrar giriş yap, sonra yeniden dene.");
+  if (code === "auth/popup-blocked") return t("Açılır pencere engellendi. Tarayıcıda açılır pencerelere izin verip tekrar dene.");
+  return error instanceof Error && error.message && !error.message.startsWith("Firebase") ? t(error.message) : t("İşlem tamamlanamadı. Lütfen tekrar dene.");
 }
 
 /** Hesaba bağlı giriş yöntemleri: Google / Apple bağla-kaldır, böylece her yöntem aynı hesaba girer. */
 export function LinkedSignInMethods() {
+  const t = useT();
   const [user, setUser] = useState<User | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [, setVersion] = useState(0);
@@ -43,25 +46,26 @@ export function LinkedSignInMethods() {
       await linkSocialProvider(provider);
       await user?.reload();
       setVersion((value) => value + 1);
-      toast.success(`${provider === "apple" ? "Apple" : "Google"} girişi hesabına bağlandı.`);
+      toast.success(t("{provider} girişi hesabına bağlandı.", { provider: provider === "apple" ? "Apple" : "Google" }));
     } catch (error) {
       const code = (error as { code?: string } | null)?.code;
-      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") toast.error(linkError(error));
+      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") toast.error(linkError(error, t));
     } finally {
       setBusy(null);
     }
   }
 
-  async function remove(id: string, title: string) {
-    if (!window.confirm(`${title} girişi bu hesaptan kaldırılsın mı? Diğer yöntemlerle girmeye devam edebilirsin.`)) return;
+  async function remove(id: string, rawTitle: string) {
+    const title = t(rawTitle);
+    if (!window.confirm(t("{title} girişi bu hesaptan kaldırılsın mı? Diğer yöntemlerle girmeye devam edebilirsin.", { title }))) return;
     setBusy(id);
     try {
       await unlinkProvider(id);
       await user?.reload();
       setVersion((value) => value + 1);
-      toast.success(`${title} girişi kaldırıldı.`);
+      toast.success(t("{title} girişi kaldırıldı.", { title }));
     } catch (error) {
-      toast.error(linkError(error));
+      toast.error(linkError(error, t));
     } finally {
       setBusy(null);
     }
@@ -78,15 +82,15 @@ export function LinkedSignInMethods() {
               {method.id === "google.com" ? <GoogleMark /> : method.id === "apple.com" ? <AppleMark /> : <KeyRound size={17} />}
             </span>
             <span className={styles.text}>
-              <b>{method.title}{on && <em className={styles.on}><Check size={12} /> Bağlı</em>}</b>
-              <small>{on ? (email.endsWith("privaterelay.appleid.com") ? "Gizli Apple e-postası" : email || "Bağlı") : method.note}</small>
+              <b>{t(method.title)}{on && <em className={styles.on}><Check size={12} /> {t("Bağlı")}</em>}</b>
+              <small>{on ? (email.endsWith("privaterelay.appleid.com") ? t("Gizli Apple e-postası") : email || t("Bağlı")) : t(method.note)}</small>
             </span>
             {method.provider && (on
-              ? linked.size > 1 && <button type="button" className={styles.ghost} onClick={() => remove(method.id, method.title)} disabled={busy !== null} aria-label={`${method.title} bağlantısını kaldır`}>
+              ? linked.size > 1 && <button type="button" className={styles.ghost} onClick={() => remove(method.id, method.title)} disabled={busy !== null} aria-label={t("{title} bağlantısını kaldır", { title: t(method.title) })}>
                   {busy === method.id ? <LoaderCircle size={15} className={styles.spin} /> : <Unlink size={15} />}
                 </button>
               : <button type="button" className={styles.link} onClick={() => link(method.provider!, method.id)} disabled={busy !== null}>
-                  {busy === method.id ? <LoaderCircle size={15} className={styles.spin} /> : <Link2 size={15} />} Bağla
+                  {busy === method.id ? <LoaderCircle size={15} className={styles.spin} /> : <Link2 size={15} />} {t("Bağla")}
                 </button>)}
           </div>
         );

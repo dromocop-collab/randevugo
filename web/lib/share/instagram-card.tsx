@@ -106,7 +106,10 @@ function CalendarIcon({ size }: { size: number }) {
   );
 }
 
-/** Instagram Hikâye (1080×1920) veya dikey gönderi (1080×1350) tanıtım kartı. */
+/**
+ * Instagram Hikâye (1080×1920) veya dikey gönderi (1080×1350) tanıtım kartı.
+ * Görsel işletmenin Türkçe Instagram paylaşımı içindir; üzerindeki metinler bilerek Türkçe kalır (i18n-ignore).
+ */
 export async function renderInstagramCard(input: InstagramCardInput, init?: { headers?: Record<string, string> }): Promise<ImageResponse> {
   const [fonts, icon] = await Promise.all([loadFonts(), loadBrandIcon()]);
   const d = DIMS[input.format];
@@ -168,6 +171,7 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
             <div style={{ position: "absolute", left: 0, top: 0, width: contentW, height: d.coverH, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(4,20,13,0.35) 0%, rgba(4,20,13,0) 30%, rgba(4,20,13,0) 60%, rgba(4,20,13,0.55) 100%)" }} />
             {input.onlineBooking ? <div style={{ position: "absolute", left: 28, top: 28, display: "flex", alignItems: "center", gap: 12, padding: chip.padding, borderRadius: 999, background: "rgba(4,20,13,0.62)", border: "1.5px solid rgba(255,255,255,0.18)", fontSize: chip.fontSize, fontWeight: 600 }}>
               <div style={{ display: "flex", width: 14, height: 14, borderRadius: 14, background: C.lime }} />
+              {/* i18n-ignore: görsel Türkçe kalır */}
               Online randevu açık
             </div> : null}
           </div>
@@ -209,6 +213,7 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
             {input.verified ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: chip.padding, borderRadius: 999, background: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.16)", fontSize: chip.fontSize, fontWeight: 600 }}>
                 <CheckIcon size={chip.fontSize + 4} />
+                {/* i18n-ignore: görsel Türkçe kalır */}
                 Doğrulanmış
               </div>
             ) : null}
@@ -241,7 +246,9 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: d.rowPad - 4 }}>
+            {/* i18n-ignore: görsel Türkçe kalır */}
             <div style={{ display: "flex", color: C.lime, fontSize: d.serviceMeta, fontWeight: 700, letterSpacing: 3 }}>HİZMETLER</div>
+            {/* i18n-ignore: görsel Türkçe kalır */}
             <div style={{ display: "flex", color: C.faint, fontSize: d.serviceMeta, fontWeight: 600 }}>{input.services.some((item) => item.priceLabel) ? "başlayan fiyatlarla" : "online randevu"}</div>
           </div>
           {input.services.length > 0 ? (
@@ -251,11 +258,13 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
                   <div style={{ display: "flex", fontSize: d.serviceName, fontWeight: 600, lineHeight: 1.2 }}>{service.name}</div>
                   {service.durationLabel ? <div style={{ display: "flex", fontSize: d.serviceMeta, fontWeight: 600, color: C.faint, marginTop: 2 }}>{service.durationLabel}</div> : null}
                 </div>
+                {/* i18n-ignore: görsel Türkçe kalır */}
                 <div style={{ display: "flex", fontSize: service.priceLabel ? d.servicePrice : d.serviceMeta, fontWeight: 700, color: service.priceLabel ? C.white : C.muted }}>{service.priceLabel ?? "Fiyat için sor"}</div>
               </div>
             ))
           ) : (
             <div style={{ display: "flex", padding: `${d.rowPad}px 0 4px`, borderTop: `1.5px solid ${C.line}`, fontSize: d.serviceName, fontWeight: 600, color: C.muted, lineHeight: 1.35 }}>
+              {/* i18n-ignore: görsel Türkçe kalır */}
               Hizmetleri, fiyatları ve müsait saatleri incele; uygun saati seç.
             </div>
           )}
@@ -272,6 +281,7 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
               <ArrowIcon size={d.cta + 2} />
             </div>
             <div style={{ display: "flex", marginTop: 22, fontSize: urlSize, fontWeight: 700, color: C.white }}>{input.displayUrl}</div>
+            {/* i18n-ignore: görsel Türkçe kalır */}
             <div style={{ display: "flex", marginTop: 6, fontSize: d.serviceMeta, fontWeight: 600, color: C.faint }}>Bağlantıya dokun ya da QR kodu okut</div>
           </div>
           <div style={{ display: "flex", padding: 16, borderRadius: 30, background: C.white, boxShadow: "0 18px 44px rgba(0,0,0,0.3)" }}>
@@ -291,6 +301,7 @@ export async function renderInstagramCard(input: InstagramCardInput, init?: { he
               <span style={{ color: C.lime }}>Randevun</span>
               <span style={{ color: C.muted, fontWeight: 600, marginLeft: 10 }}>ile online randevu</span>
             </div>
+            {/* i18n-ignore: görsel Türkçe kalır */}
             <div style={{ display: "flex", fontSize: d.footerSub, fontWeight: 600, color: C.faint }}>seninrandevun.com · Ücretsiz, 7/24 randevu</div>
           </div>
         </div>

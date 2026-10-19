@@ -6,8 +6,11 @@ import { useBusiness } from "@/hooks/use-business";
 import { getBusinessSubscription } from "@/features/subscriptions/subscription-repository";
 import { subscriptionAccessState, type Subscription } from "@/types/subscription";
 import { Button, Callout } from "@/components/dashboard/ui";
+import { useIntlLocale, useT } from "@/i18n/client";
 
 export function SubscriptionStatusBanner() {
+  const t = useT();
+  const locale = useIntlLocale();
   const { businessId, access } = useBusiness();
   const [result, setResult] = useState<{ businessId: string; subscription: Subscription | null } | null>(null);
 
@@ -31,16 +34,16 @@ export function SubscriptionStatusBanner() {
   if (state === "active") return null;
   const expired = state === "expired" || state === "loading";
   const endValue = subscription?.status === "trialing" ? subscription.trialEndsAt : subscription?.subscriptionEndsAt;
-  const endLabel = endValue ? new Date(endValue).toLocaleDateString("tr-TR") : null;
+  const endLabel = endValue ? new Date(endValue).toLocaleDateString(locale) : null;
 
   return (
     <Callout
       tone={expired ? "red" : "amber"}
       icon={expired ? AlertTriangle : CreditCard}
-      title={expired ? "Randevu kabulü durduruldu" : "Ücretsiz kullanım süreniz yakında doluyor"}
-      action={<Button href="/dashboard/abonelik" variant={expired ? "danger" : "primary"} size="sm" trailingIcon={ArrowRight}>Ödeme yap</Button>}
+      title={expired ? t("Randevu kabulü durduruldu") : t("Ücretsiz kullanım süreniz yakında doluyor")}
+      action={<Button href="/dashboard/abonelik" variant={expired ? "danger" : "primary"} size="sm" trailingIcon={ArrowRight}>{t("Ödeme yap")}</Button>}
     >
-      <span className="block text-xs opacity-80">{expired ? "Yeni randevu alınamaz; mevcut randevularınız ve verileriniz korunur." : `${endLabel ?? "Yakında"} tarihine kadar ödeme yaparak kesintisiz devam edin.`}</span>
+      <span className="block text-xs opacity-80">{expired ? t("Yeni randevu alınamaz; mevcut randevularınız ve verileriniz korunur.") : endLabel ? t("{date} tarihine kadar ödeme yaparak kesintisiz devam edin.", { date: endLabel }) : t("Yakında ödeme yaparak kesintisiz devam edin.")}</span>
     </Callout>
   );
 }

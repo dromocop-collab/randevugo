@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { toast } from "sonner";
 import { BellRing } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
 import { createAvailabilityAlert } from "./availability-repository";
+import { useT } from "@/i18n/client";
 
 function minute(value: string) {
   const [hour, minutes] = value.split(":").map(Number);
@@ -16,6 +17,7 @@ function minute(value: string) {
 export function AvailabilityAlertAction({ businessId, serviceId, staffId, dateKey, businessEnabled }: {
   businessId: string; serviceId: string; staffId: string | null; dateKey: string; businessEnabled: boolean;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [start, setStart] = useState("09:00");
@@ -29,29 +31,29 @@ export function AvailabilityAlertAction({ businessId, serviceId, staffId, dateKe
 
   async function subscribe() {
     if (!user || busy) return;
-    if (minute(start) >= minute(end)) { toast.error("Saat aralığını kontrol edin."); return; }
+    if (minute(start) >= minute(end)) { toast.error(t("Saat aralığını kontrol edin.")); return; }
     setBusy(true);
     try {
       const result = await createAvailabilityAlert({ businessId, serviceId, staffId, dateKey,
         startMinute: minute(start), endMinute: minute(end) });
       setDoneScope(scope);
-      toast.success(result.alreadyExists ? "Bu bildirim zaten açık." : "Müsaitlik bildirimi açıldı.");
+      toast.success(result.alreadyExists ? t("Bu bildirim zaten açık.") : t("Müsaitlik bildirimi açıldı."));
     } catch {
-      toast.error("Bildirim oluşturulamadı. Tarih ve işletme ayarlarını kontrol edin.");
+      toast.error(t("Bildirim oluşturulamadı. Tarih ve işletme ayarlarını kontrol edin."));
     } finally { setBusy(false); }
   }
 
-  return <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4" aria-label="Müsaitlik bildirimi">
+  return <section className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-4" aria-label={t("Müsaitlik bildirimi")}>
     <div className="flex items-start gap-3"><BellRing size={20} aria-hidden="true" className="text-[var(--accent)]" />
-      <div><h3 className="font-semibold text-[var(--text-1)]">Müsait Olunca Haber Ver</h3>
-        <p className="text-xs text-[var(--text-3)]">{dateKey} için istediğin saat aralığı açılırsa haber verelim. Bildirim rezervasyon yapmaz. Mobil uygulamada veya tarayıcıda bildirimlere izin verdiysen sana iletilir; durumunu Hesabım’da da görebilirsin.</p></div></div>
+      <div><h3 className="font-semibold text-[var(--text-1)]">{t("Müsait Olunca Haber Ver")}</h3>
+        <p className="text-xs text-[var(--text-3)]">{t("{date} için istediğin saat aralığı açılırsa haber verelim. Bildirim rezervasyon yapmaz. Mobil uygulamada veya tarayıcıda bildirimlere izin verdiysen sana iletilir; durumunu Hesabım’da da görebilirsin.", { date: dateKey })}</p></div></div>
     <div className="mt-3 flex flex-wrap items-end gap-3 text-sm text-[var(--text-2)]">
-      <label>Başlangıç<input type="time" value={start} onChange={(event) => setStart(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>
-      <label>Bitiş<input type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>
+      <label>{t("Başlangıç")}<input type="time" value={start} onChange={(event) => setStart(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>
+      <label>{t("Bitiş")}<input type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="ml-2 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] p-2" /></label>
       {user ? <button type="button" disabled={busy || done} onClick={() => void subscribe()}
         className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-semibold text-white disabled:opacity-60">
-        {busy ? "Kaydediliyor…" : done ? "Bildirim açık" : "Bana haber ver"}</button>
-        : <Link href="/musteri/giris" className="rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-white">Giriş yap ve bildirimi aç</Link>}
+        {busy ? t("Kaydediliyor…") : done ? t("Bildirim açık") : t("Bana haber ver")}</button>
+        : <Link href="/musteri/giris" className="rounded-xl bg-[var(--accent)] px-4 py-3 font-semibold text-white">{t("Giriş yap ve bildirimi aç")}</Link>}
     </div>
   </section>;
 }

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   createAppointment,
@@ -61,6 +60,9 @@ import {
   normalizeTurkishPhone,
   publicStaffBio,
 } from "./booking-utils";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useDateFnsLocale, useDatePatterns } from "@/i18n/date";
+import { localizeHref, tk } from "@/i18n/config";
 import s from "./booking.module.css";
 
 interface Props {
@@ -92,23 +94,23 @@ type WizardStep =
   | "success";
 
 const STEP_LABELS: Record<WizardStep, string> = {
-  service: "Hizmet",
-  staff: "Uzman",
-  datetime: "Tarih",
-  info: "Bilgiler",
-  verify: "Doğrula",
-  summary: "Özet",
-  success: "Tamamlandı",
+  service: tk("Hizmet"),
+  staff: tk("Uzman"),
+  datetime: tk("Tarih"),
+  info: tk("Bilgiler"),
+  verify: tk("Doğrula"),
+  summary: tk("Özet"),
+  success: tk("Tamamlandı"),
 };
 
 const STEP_TITLES: Record<WizardStep, string> = {
-  service: "Hizmet seçin",
-  staff: "Uzman seçin",
-  datetime: "Tarih ve saat",
-  info: "İletişim bilgileri",
-  verify: "Telefon doğrulama",
-  summary: "Randevu özeti",
-  success: "Tamamlandı",
+  service: tk("Hizmet seçin"),
+  staff: tk("Uzman seçin"),
+  datetime: tk("Tarih ve saat"),
+  info: tk("İletişim bilgileri"),
+  verify: tk("Telefon doğrulama"),
+  summary: tk("Randevu özeti"),
+  success: tk("Tamamlandı"),
 };
 
 const STEPS: WizardStep[] = [
@@ -137,6 +139,15 @@ function canServe(member: Staff, service: Service | undefined) {
 }
 
 export function BookingWizard(props: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const intlLocale = useIntlLocale();
+  const dateLocale = useDateFnsLocale();
+  const datePatterns = useDatePatterns();
+  const dayPattern = datePatterns.dayLong;
+  // Veri yükleyen efektler sözlük değişince yeniden çalışmasın diye t ref üzerinden okunur.
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
   const { user, status: authStatus } = useAuth();
   const [step, setStep] = useState<WizardStep>("service");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
@@ -273,7 +284,7 @@ export function BookingWizard(props: Props) {
       // Yalnızca seçili hizmeti verebilen personel seçilir; aksi halde saatler yüklenemiyordu.
       const preselected = props.preselectedStaffId ? staffRows.find((staff) => staff.id === props.preselectedStaffId && canServe(staff, initialService)) : undefined;
       setStaffId((preselected ?? staffRows.find((staff) => canServe(staff, initialService)))?.id ?? "");
-    }).catch(() => toast.error("Randevu seçenekleri yüklenemedi."))
+    }).catch(() => { const t = tRef.current; toast.error(t("Randevu seçenekleri yüklenemedi.")); })
       .finally(() => setCatalogLoading(false));
   }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
 
@@ -307,13 +318,13 @@ export function BookingWizard(props: Props) {
         if (props.preselectedStartAtMillis && appointmentsDate === props.preselectedDate) {
           const selected = rows.find((item) => item.startAtMillis === props.preselectedStartAtMillis);
           if (selected) setSlot(selected.label);
-          else toast.info("Bu saat artık uygun değil. Diğer uygun saatleri görebilirsin.");
+          else { const t = tRef.current; toast.info(t("Bu saat artık uygun değil. Diğer uygun saatleri görebilirsin.")); }
         }
       } })
       .catch((error) => {
         if (!cancelled) {
           setAvailableSlots([]);
-          toast.error(userFacingError(error, "Uygun saatler alınamadı."));
+          toast.error(tRef.current(userFacingError(error, tk("Uygun saatler alınamadı."))));
         }
       })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
@@ -354,7 +365,7 @@ export function BookingWizard(props: Props) {
     } catch (error) {
       requestedRangesRef.current.delete(requestKey);
       if (availabilitySelectionRef.current !== key) return;
-      toast.error(userFacingError(error, "Takvim müsaitliği alınamadı."));
+      toast.error(tRef.current(userFacingError(error, tk("Takvim müsaitliği alınamadı."))));
     } finally {
       setDatesLoadingCount((count) => Math.max(0, count - 1));
     }
@@ -383,9 +394,9 @@ export function BookingWizard(props: Props) {
   );
   const customErrors = useMemo(() => {
     const errors: Record<string, string | null> = {};
-    for (const field of customFieldsForService) errors[field.id] = validateFieldValue(field, customValues[field.id]);
+    for (const field of customFieldsForService) errors[field.id] = validateFieldValue(field, customValues[field.id], t);
     return errors;
-  }, [customFieldsForService, customValues]);
+  }, [customFieldsForService, customValues, t]);
   const firstInvalidCustomField = customFieldsForService.find((field) => customErrors[field.id]);
   const customValid = !firstInvalidCustomField;
   const visibleCustomErrors = useMemo(() => {
@@ -394,8 +405,8 @@ export function BookingWizard(props: Props) {
     return visible;
   }, [customErrors, customFieldsForService, customTouched]);
   const customSummary = useMemo(
-    () => summarizeFieldValues(bookingFields.customFields, serviceId, customValues),
-    [bookingFields.customFields, customValues, serviceId]
+    () => summarizeFieldValues(bookingFields.customFields, serviceId, customValues, t, intlLocale),
+    [bookingFields.customFields, customValues, serviceId, t, intlLocale]
   );
   const infoValid = phoneValid && emailValid && privacyAccepted && nameValid && customValid;
   const availableDateCounts = dateAvailability.key === selectionKey ? dateAvailability.counts : {};
@@ -421,15 +432,15 @@ export function BookingWizard(props: Props) {
 
   async function joinWaitlist() {
     if (!selectedService || customerName.trim().length < 2 || (!customerPhone.trim() && !customerEmail.trim())) {
-      toast.error("Bekleme listesi için adınızı ve telefon veya e-postanızı girin.");
+      toast.error(t("Bekleme listesi için adınızı ve telefon veya e-postanızı girin."));
       return;
     }
     setWaitlistBusy(true);
     try {
       const result = await joinAppointmentWaitlist({ businessId: props.businessId, serviceId: selectedService.id, staffId: staffId || undefined, preferredDate: appointmentsDate, customerName: customerName.trim(), customerPhone: normalizedCustomerPhone, customerEmail: customerEmail.trim() });
       setWaitlistDone(true);
-      toast.success(result.alreadyJoined ? "Bu tarih için zaten bekleme listesindesiniz." : "Bekleme listesine eklendiniz. Yer açıldığında işletme sizinle iletişime geçecek.");
-    } catch (error) { toast.error(userFacingError(error, "Bekleme listesine eklenemediniz.")); }
+      toast.success(result.alreadyJoined ? t("Bu tarih için zaten bekleme listesindesiniz.") : t("Bekleme listesine eklendiniz. Yer açıldığında işletme sizinle iletişime geçecek."));
+    } catch (error) { toast.error(t(userFacingError(error, tk("Bekleme listesine eklenemediniz.")))); }
     finally { setWaitlistBusy(false); }
   }
 
@@ -498,29 +509,29 @@ export function BookingWizard(props: Props) {
       const result = await sendCode({ phone: normalizedCustomerPhone });
       if (result.data.smsDelivered === false) {
         // SMS gitmediyse kod giriş adımına geçilmez; kullanıcı boşuna beklemez.
-        toast.error(result.data.message || "SMS şu anda iletilemedi. Lütfen birkaç dakika sonra tekrar deneyin.");
+        toast.error(result.data.message ? t(result.data.message) : t("SMS şu anda iletilemedi. Lütfen birkaç dakika sonra tekrar deneyin."));
       } else {
         setCodeSent(true);
         setCodeSentPhone(normalizedCustomerPhone);
         setCountdown(60);
-        toast.success("Doğrulama kodu gönderildi!");
+        toast.success(t("Doğrulama kodu gönderildi!"));
         window.setTimeout(() => pinRefs.current[0]?.focus(), 60);
       }
     } catch (error: unknown) {
       console.error("sendVerificationCode error:", error);
       const firebaseError = error as { code?: string; message?: string };
-      let msg = "Kod gönderilemedi.";
-      if (firebaseError.message?.includes("bekleyin")) {
+      let msg: string = tk("Kod gönderilemedi.");
+      if (firebaseError.message?.includes("bekleyin")) { // i18n-ignore — sunucu mesajı denetimi
         msg = firebaseError.message;
       } else if (firebaseError.code === "functions/resource-exhausted") {
-        msg = "Çok sık deneme. Lütfen biraz bekleyin.";
+        msg = tk("Çok sık deneme. Lütfen biraz bekleyin.");
       }
       setVerifyError(msg);
-      toast.error(msg);
+      toast.error(t(msg));
     } finally {
       setSendingCode(false);
     }
-  }, [normalizedCustomerPhone, phoneValid, sendingCode]);
+  }, [normalizedCustomerPhone, phoneValid, sendingCode, t]);
 
   // Countdown timer
   useEffect(() => {
@@ -587,13 +598,13 @@ export function BookingWizard(props: Props) {
       const verify = httpsCallable(functions, "verifyPhoneCode");
       await verify({ phone: normalizedCustomerPhone, code });
       setPhoneVerified(true);
-      toast.success("Telefon numarası doğrulandı!");
+      toast.success(t("Telefon numarası doğrulandı!"));
       // Auto-advance to summary after short delay
       setTimeout(() => {
         if (stepRef.current === "verify") changeStep("summary", "forward");
       }, 1200);
     } catch (error: unknown) {
-      const msg = (error as { message?: string }).message ?? "Doğrulama başarısız.";
+      const msg = (error as { message?: string }).message ?? tk("Doğrulama başarısız.");
       setVerifyError(msg);
       setVerificationCode(["", "", "", "", "", ""]);
       pinRefs.current[0]?.focus();
@@ -610,7 +621,7 @@ export function BookingWizard(props: Props) {
     const selectedSlot = availableSlots.find((item) => item.label === slot);
     if (!selectedSlot) {
       setSubmitting(false);
-      toast.error("Seçtiğiniz saat artık müsait değil. Lütfen yeni bir saat seçin.");
+      toast.error(t("Seçtiğiniz saat artık müsait değil. Lütfen yeni bir saat seçin."));
       return;
     }
 
@@ -642,7 +653,7 @@ export function BookingWizard(props: Props) {
         publicToken: createdAppointment.publicToken,
         isGuest,
         serviceName: selectedService.name,
-        staffName: staffForSlot ? displayName(staffForSlot.fullName) : "İşletme",
+        staffName: staffForSlot ? displayName(staffForSlot.fullName) : t("İşletme"),
         date: format(dateBase, "dd.MM.yyyy"),
         time: slot,
         startAtMillis: selectedSlot.startAtMillis,
@@ -652,7 +663,7 @@ export function BookingWizard(props: Props) {
       setDirection("forward");
       setStep("success");
       window.scrollTo({ top: 0, behavior: "auto" });
-      toast.success("Randevunuz başarıyla oluşturuldu!");
+      toast.success(t("Randevunuz başarıyla oluşturuldu!"));
     } catch (error) {
       const failure = error as { code?: string; message?: string } | null;
       const fieldMessage = String(failure?.message ?? "");
@@ -660,10 +671,10 @@ export function BookingWizard(props: Props) {
         && customFieldsForService.some((field) => fieldMessage.includes(`"${field.label}"`));
       if (customFieldError) {
         // İşletme alanları bu arada değiştiyse müşteri bilgiler adımına döner ve sunucunun mesajını görür.
-        toast.error(fieldMessage);
+        toast.error(t(fieldMessage));
         jumpTo("info");
       } else {
-        toast.error(userFacingError(error, "Randevunuz oluşturulamadı. Lütfen tekrar deneyin."));
+        toast.error(t(userFacingError(error, tk("Randevunuz oluşturulamadı. Lütfen tekrar deneyin."))));
       }
     } finally {
       setSubmitting(false);
@@ -703,9 +714,10 @@ export function BookingWizard(props: Props) {
       title: `${props.businessName} — ${displayName(successData.serviceName)}`,
       start,
       end: new Date(successData.startAtMillis + Math.max(successData.durationMinutes, 15) * 60000),
-      description: [`Hizmet: ${displayName(successData.serviceName)}`, `Uzman: ${successData.staffName}`, props.businessPhone ? `İşletme telefonu: ${props.businessPhone}` : ""].filter(Boolean).join("\n"),
+      description: [t("Hizmet: {service}", { service: displayName(successData.serviceName) }), t("Uzman: {name}", { name: successData.staffName }), props.businessPhone ? t("İşletme telefonu: {phone}", { phone: props.businessPhone }) : ""].filter(Boolean).join("\n"),
+      reminder: t("Randevu hatırlatması"),
       location: props.businessAddress || props.businessName,
-      url: successData.publicToken && typeof window !== "undefined" ? `${window.location.origin}/randevu/${encodeURIComponent(successData.publicToken)}` : undefined,
+      url: successData.publicToken && typeof window !== "undefined" ? `${window.location.origin}${localizeHref(`/randevu/${encodeURIComponent(successData.publicToken)}`, locale)}` : undefined,
     };
     const dateObj = dateFromIso(appointmentsDate);
     return (
@@ -715,58 +727,58 @@ export function BookingWizard(props: Props) {
             <div className={s.confetti} aria-hidden="true">
               {CONFETTI.map((item, index) => <i key={index} style={{ "--x": item.x, "--d": item.d, "--r": item.r } as React.CSSProperties} />)}
             </div>
-            <span className={s.successEyebrow}><CheckCircle2 size={13} /> RANDEVU OLUŞTURULDU</span>
-            <div className={s.mascot}><RoviMascot size={132} mood="happy" alt="Rovi randevunu kutluyor" priority /></div>
-            <h2>Randevunuz Onaylandı!</h2>
-            <p>{props.businessName} sizi bekliyor. Detaylar aşağıda; değişiklik için güvenli bağlantınızı kullanabilirsiniz.</p>
+            <span className={s.successEyebrow}><CheckCircle2 size={13} /> {t("RANDEVU OLUŞTURULDU")}</span>
+            <div className={s.mascot}><RoviMascot size={132} mood="happy" alt={t("Rovi randevunu kutluyor")} priority /></div>
+            <h2>{t("Randevunuz Onaylandı!")}</h2>
+            <p>{t("{name} sizi bekliyor. Detaylar aşağıda; değişiklik için güvenli bağlantınızı kullanabilirsiniz.", { name: props.businessName })}</p>
           </section>
 
-          <section className={s.ticket} aria-label="Randevu detayları">
+          <section className={s.ticket} aria-label={t("Randevu detayları")}>
             <div className={s.ticketDate}>
-              <div className={s.ticketCal}><small>{format(dateObj, "MMM", { locale: tr })}</small><b>{format(dateObj, "d")}</b></div>
+              <div className={s.ticketCal}><small>{format(dateObj, "MMM", { locale: dateLocale })}</small><b>{format(dateObj, "d")}</b></div>
               <div>
-                <strong>{format(dateObj, "d MMMM EEEE", { locale: tr })}</strong>
-                <span>Saat <b>{successData.time}</b> · {formatServiceDuration(successData.durationMinutes)}</span>
+                <strong>{format(dateObj, dayPattern, { locale: dateLocale })}</strong>
+                <span>{t("Saat")} <b>{successData.time}</b> · {formatServiceDuration(successData.durationMinutes, t)}</span>
               </div>
             </div>
             <div className={s.perforation} aria-hidden="true" />
             <div className={s.rows}>
-              <SummaryRow icon={Building2} label="İşletme" value={props.businessName} index={0} />
-              <SummaryRow icon={WandSparkles} label="Hizmet" value={displayName(successData.serviceName)} index={1} />
-              <SummaryRow icon={UserRound} label="Uzman" value={successData.staffName} index={2} />
-              <SummaryRow icon={Navigation} label="Adres" value={props.businessAddress} index={3} />
+              <SummaryRow icon={Building2} label={t("İşletme")} value={props.businessName} index={0} />
+              <SummaryRow icon={WandSparkles} label={t("Hizmet")} value={displayName(successData.serviceName)} index={1} />
+              <SummaryRow icon={UserRound} label={t("Uzman")} value={successData.staffName} index={2} />
+              <SummaryRow icon={Navigation} label={t("Adres")} value={props.businessAddress} index={3} />
             </div>
-            <div className={s.total}><span>Toplam tutar</span><b>{formatPrice(successData.price)}</b></div>
+            <div className={s.total}><span>{t("Toplam tutar")}</span><b>{formatPrice(successData.price, intlLocale)}</b></div>
           </section>
 
           {successData.publicToken && (
-            <a href={`/randevu/${encodeURIComponent(successData.publicToken)}`} className={`${s.linkCard} ${s.linkCardPrimary}`} style={{ "--i": 2 } as React.CSSProperties}>
+            <a href={localizeHref(`/randevu/${encodeURIComponent(successData.publicToken)}`, locale)} className={`${s.linkCard} ${s.linkCardPrimary}`} style={{ "--i": 2 } as React.CSSProperties}>
               <i><ShieldCheck size={20} /></i>
-              <span><small>GÜVENLİ RANDEVU BAĞLANTISI</small>Randevuyu görüntüle, saatini değiştir veya iptal et</span>
+              <span><small>{t("GÜVENLİ RANDEVU BAĞLANTISI")}</small>{t("Randevuyu görüntüle, saatini değiştir veya iptal et")}</span>
               <ArrowRight size={18} />
             </a>
           )}
 
           {successData.isGuest && successData.publicToken && authStatus !== "authenticated" && (
-            <a href={`/musteri/giris?next=${encodeURIComponent("/hesabim")}`} className={s.linkCard} style={{ "--i": 3 } as React.CSSProperties}>
+            <a href={localizeHref(`/musteri/giris?next=${encodeURIComponent("/hesabim")}`, locale)} className={s.linkCard} style={{ "--i": 3 } as React.CSSProperties}>
               <i><UserRound size={20} /></i>
-              <span><small>HESABIMA KAYDET</small>Giriş yapın, bu randevu Randevularım listenize eklensin</span>
+              <span><small>{t("HESABIMA KAYDET")}</small>{t("Giriş yapın, bu randevu Randevularım listenize eklensin")}</span>
               <ArrowRight size={18} />
             </a>
           )}
 
           <div className={s.actionsGrid}>
             <button type="button" className={s.linkCard} style={{ "--i": 4 } as React.CSSProperties} onClick={() => addToDeviceCalendar(calendarEvent, { publicToken: successData.publicToken || undefined, fileName: `randevu-${appointmentsDate}.ics` })}>
-              <i><Download size={19} /></i><span>Takvime ekle</span>
+              <i><Download size={19} /></i><span>{t("Takvime ekle")}</span>
             </button>
             <a className={s.linkCard} style={{ "--i": 5 } as React.CSSProperties} href={googleCalendarUrl(calendarEvent)} target="_blank" rel="noopener noreferrer">
-              <i><CalendarPlus size={19} /></i><span>Google Takvim</span>
+              <i><CalendarPlus size={19} /></i><span>{t("Google Takvim")}</span>
             </a>
             <a className={s.linkCard} style={{ "--i": 6 } as React.CSSProperties} href={`tel:${props.businessPhone}`}>
-              <i><Phone size={19} /></i><span>İşletmeyi ara</span>
+              <i><Phone size={19} /></i><span>{t("İşletmeyi ara")}</span>
             </a>
             <a className={s.linkCard} style={{ "--i": 7 } as React.CSSProperties} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(props.businessAddress)}`} target="_blank" rel="noopener noreferrer">
-              <i><Navigation size={19} /></i><span>Yol tarifi</span>
+              <i><Navigation size={19} /></i><span>{t("Yol tarifi")}</span>
             </a>
           </div>
         </div>
@@ -775,38 +787,38 @@ export function BookingWizard(props: Props) {
   }
 
   /* ━━━ Alt çubuk bilgileri ━━━ */
-  const dateShort = format(dateFromIso(appointmentsDate), "d MMM EEE", { locale: tr });
+  const dateShort = format(dateFromIso(appointmentsDate), datePatterns.dayShort, { locale: dateLocale });
   let blockReason = "";
-  if (step === "service" && !serviceId) blockReason = "Devam etmek için bir hizmet seçin";
-  else if (step === "staff" && !staffId && !anyStaff) blockReason = "Bir uzman seçin";
-  else if (step === "datetime" && !slot) blockReason = slotsLoading ? "Saatler yükleniyor…" : "Uygun bir saat seçin";
+  if (step === "service" && !serviceId) blockReason = t("Devam etmek için bir hizmet seçin");
+  else if (step === "staff" && !staffId && !anyStaff) blockReason = t("Bir uzman seçin");
+  else if (step === "datetime" && !slot) blockReason = slotsLoading ? t("Saatler yükleniyor…") : t("Uygun bir saat seçin");
   else if (step === "info" && !infoValid) {
-    blockReason = !nameValid ? "Adınızı girin" : !phoneValid ? "Geçerli bir telefon girin" : !emailValid ? "E-posta adresini kontrol edin"
-      : firstInvalidCustomField ? `${firstInvalidCustomField.label}: ${customErrors[firstInvalidCustomField.id]}` : "Aydınlatma metnini onaylayın";
-  } else if (step === "verify" && !phoneVerified) blockReason = "SMS ile gelen kodu girin";
+    blockReason = !nameValid ? t("Adınızı girin") : !phoneValid ? t("Geçerli bir telefon girin") : !emailValid ? t("E-posta adresini kontrol edin")
+      : firstInvalidCustomField ? `${firstInvalidCustomField.label}: ${customErrors[firstInvalidCustomField.id]}` : t("Aydınlatma metnini onaylayın");
+  } else if (step === "verify" && !phoneVerified) blockReason = t("SMS ile gelen kodu girin");
   const nextDisabled = Boolean(blockReason);
   const staffLabel = anyStaff
-    ? assignedStaff ? `${displayName(assignedStaff.fullName)} (ilk müsait)` : "Fark etmez · ilk müsait uzman"
+    ? assignedStaff ? t("{name} (ilk müsait)", { name: displayName(assignedStaff.fullName) }) : t("Fark etmez · ilk müsait uzman")
     : selectedStaff ? displayName(selectedStaff.fullName) : "";
 
   return (
     <div ref={rootRef} className={`${s.root} ${s.tokens}`}>
       {/* ━━━ Adım göstergesi ━━━ */}
-      <nav className={s.stepper} aria-label="Randevu adımları">
+      <nav className={s.stepper} aria-label={t("Randevu adımları")}>
         <div className={s.stepperTop}>
           <div className={s.stepMeta}>
-            <span className={s.stepCount}>Adım {currentStepIndex + 1} / {activeSteps.length}</span>
-            <span className={s.stepTitle}>{STEP_TITLES[step]}</span>
+            <span className={s.stepCount}>{t("Adım {current} / {total}", { current: currentStepIndex + 1, total: activeSteps.length })}</span>
+            <span className={s.stepTitle}>{t(STEP_TITLES[step], { ctx: "adim" })}</span>
           </div>
-          <span className={s.stepPercent} aria-hidden="true">%{progressPercent}</span>
+          <span className={s.stepPercent} aria-hidden="true">{t("%{percent}", { percent: progressPercent })}</span>
         </div>
         <ol className={s.steps}>
           {activeSteps.map((item, index) => {
             const state = index < currentStepIndex ? s.stepDone : index === currentStepIndex ? s.stepCurrent : "";
             return <li key={item} className={`${s.stepItem} ${state}`} aria-current={index === currentStepIndex ? "step" : undefined}>
-              <button type="button" className={s.stepBtn} disabled={index >= currentStepIndex || submitting} onClick={() => jumpTo(item)} aria-label={`${index + 1}. adım: ${STEP_LABELS[item]}${index < currentStepIndex ? " (tamamlandı, düzenlemek için dokunun)" : ""}`}>
+              <button type="button" className={s.stepBtn} disabled={index >= currentStepIndex || submitting} onClick={() => jumpTo(item)} aria-label={index < currentStepIndex ? t("{number}. adım: {label} (tamamlandı, düzenlemek için dokunun)", { number: index + 1, label: t(STEP_LABELS[item], { ctx: "adim" }) }) : t("{number}. adım: {label}", { number: index + 1, label: t(STEP_LABELS[item], { ctx: "adim" }) })}>
                 <span className={s.stepBar} />
-                <span className={s.stepLabel}>{index < currentStepIndex && <Check size={11} strokeWidth={3} />}{STEP_LABELS[item]}</span>
+                <span className={s.stepLabel}>{index < currentStepIndex && <Check size={11} strokeWidth={3} />}{t(STEP_LABELS[item], { ctx: "adim" })}</span>
               </button>
             </li>;
           })}
@@ -818,17 +830,17 @@ export function BookingWizard(props: Props) {
         {/* ── Hizmet ── */}
         {step === "service" && (
           <div>
-            <StepHead headingRef={headingRef} icon={WandSparkles} title="Hangi hizmeti almak istersiniz?" text="Süre ve fiyatları karşılaştırın, size uygun olanı seçin." badge={services.length ? `${services.length} hizmet` : undefined} />
+            <StepHead headingRef={headingRef} icon={WandSparkles} title={t("Hangi hizmeti almak istersiniz?")} text={t("Süre ve fiyatları karşılaştırın, size uygun olanı seçin.")} badge={services.length ? t("{count} hizmet", { count: services.length }) : undefined} />
             {services.length > 6 && (
               <label className={s.searchBox}>
                 <Search size={18} />
-                <span className={s.srOnly}>Hizmet ara</span>
-                <input type="search" value={serviceQuery} onChange={(event) => setServiceQuery(event.target.value)} placeholder="Hizmet ara…" enterKeyHint="search" />
+                <span className={s.srOnly}>{t("Hizmet ara")}</span>
+                <input type="search" value={serviceQuery} onChange={(event) => setServiceQuery(event.target.value)} placeholder={t("Hizmet ara…")} enterKeyHint="search" />
               </label>
             )}
-            <div className={s.list} role="radiogroup" aria-label="Hizmetler">
+            <div className={s.list} role="radiogroup" aria-label={t("Hizmetler")}>
               {catalogLoading && Array.from({ length: 3 }).map((_, index) => <div key={index} className={s.skeletonCard} aria-hidden="true" />)}
-              {!catalogLoading && visibleServices.length === 0 && <div className={s.empty}><b>Sonuç bulunamadı</b>Farklı bir kelimeyle aramayı deneyin.</div>}
+              {!catalogLoading && visibleServices.length === 0 && <div className={s.empty}><b>{t("Sonuç bulunamadı")}</b>{t("Farklı bir kelimeyle aramayı deneyin.")}</div>}
               {visibleServices.map((service, idx) => {
                 const on = serviceId === service.id;
                 return <label key={service.id} className={`${s.choice} ${on ? s.choiceOn : ""}`} style={{ "--i": idx } as React.CSSProperties}>
@@ -838,12 +850,12 @@ export function BookingWizard(props: Props) {
                     <span className={s.choiceName}>{displayName(service.name)}</span>
                     {service.description?.trim() && <span className={s.choiceDesc}>{service.description.trim()}</span>}
                     <span className={s.choiceMeta}>
-                      <span className={s.metaChip}><Clock3 size={12} /> {formatServiceDuration(service.durationMinutes)}</span>
-                      {service.requiresDeposit && service.depositAmount > 0 && <span className={`${s.metaChip} ${s.metaChipLime}`}>Kapora {formatPrice(service.depositAmount)}</span>}
+                      <span className={s.metaChip}><Clock3 size={12} /> {formatServiceDuration(service.durationMinutes, t)}</span>
+                      {service.requiresDeposit && service.depositAmount > 0 && <span className={`${s.metaChip} ${s.metaChipLime}`}>{t("Kapora {amount}", { amount: formatPrice(service.depositAmount, intlLocale) })}</span>}
                     </span>
                   </span>
                   <span className={s.choiceSide}>
-                    <span className={s.price}>{formatPrice(service.price)}</span>
+                    <span className={s.price}>{formatPrice(service.price, intlLocale)}</span>
                     <span className={s.check} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
                   </span>
                 </label>;
@@ -855,9 +867,9 @@ export function BookingWizard(props: Props) {
         {/* ── Uzman ── */}
         {step === "staff" && (
           <div>
-            <StepHead headingRef={headingRef} icon={UsersRound} title="Kiminle randevu almak istersiniz?" text="Dilerseniz uzman seçimini bize bırakın; en erken müsait uzmanı atarız." badge={`${filteredStaff.length} uzman`} />
-            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes)}</span></div>}
-            <div className={s.staffGrid} role="radiogroup" aria-label="Uzmanlar">
+            <StepHead headingRef={headingRef} icon={UsersRound} title={t("Kiminle randevu almak istersiniz?")} text={t("Dilerseniz uzman seçimini bize bırakın; en erken müsait uzmanı atarız.")} badge={t("{count} uzman", { count: filteredStaff.length })} />
+            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes, t)}</span></div>}
+            <div className={s.staffGrid} role="radiogroup" aria-label={t("Uzmanlar")}>
               {filteredStaff.length > 1 && (
                 <label className={`${s.choice} ${anyStaff ? s.choiceOn : ""}`} style={{ "--i": 0 } as React.CSSProperties}>
                   <input type="radio" name="staff" value="" checked={anyStaff} onChange={() => { setAnyStaff(true); setStaffId(""); setSlot(""); }} className={s.srOnly} />
@@ -866,9 +878,9 @@ export function BookingWizard(props: Props) {
                     <span><Sparkles size={11} /></span>
                   </span>
                   <span className={s.choiceBody}>
-                    <span className={s.choiceName}>Fark etmez</span>
-                    <span className={s.staffRole}>İlk müsait uzman atanır</span>
-                    <span className={s.choiceMeta}><span className={`${s.metaChip} ${s.metaChipLime}`}>En çok saat seçeneği</span></span>
+                    <span className={s.choiceName}>{t("Fark etmez")}</span>
+                    <span className={s.staffRole}>{t("İlk müsait uzman atanır")}</span>
+                    <span className={s.choiceMeta}><span className={`${s.metaChip} ${s.metaChipLime}`}>{t("En çok saat seçeneği")}</span></span>
                   </span>
                   <span className={s.check} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
                 </label>
@@ -885,7 +897,7 @@ export function BookingWizard(props: Props) {
                   <span className={s.choiceBody}>
                     <span className={s.choiceName}>{displayName(member.fullName)}</span>
                     {member.position && <span className={s.staffRole}>{member.position}</span>}
-                    {(member.position ?? "").trim().toLocaleLowerCase("tr-TR") !== level.toLocaleLowerCase("tr-TR") && <span className={s.staffLevel}>{level}</span>}
+                    {(member.position ?? "").trim().toLocaleLowerCase("tr-TR") !== level.toLocaleLowerCase("tr-TR") && <span className={s.staffLevel}>{t(level)}</span>}
                     {bio && <span className={s.choiceDesc}>{bio}</span>}
                   </span>
                   <span className={s.check} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
@@ -898,60 +910,60 @@ export function BookingWizard(props: Props) {
         {/* ── Tarih & Saat ── */}
         {step === "datetime" && (
           <div>
-            <StepHead headingRef={headingRef} icon={CalendarDays} title="Ne zaman uygunsunuz?" text="Günü seçin, ardından size uyan saate dokunun." />
-            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes)}{staffLabel ? ` · ${staffLabel}` : ""}</span></div>}
+            <StepHead headingRef={headingRef} icon={CalendarDays} title={t("Ne zaman uygunsunuz?")} text={t("Günü seçin, ardından size uyan saate dokunun.")} />
+            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes, t)}{staffLabel ? ` · ${staffLabel}` : ""}</span></div>}
 
             <div className={s.section}>
               <div className={s.sectionHead}>
-                <span className={s.sectionTitle}>Tarih <b>{format(dateFromIso(appointmentsDate), "MMMM yyyy", { locale: tr })}</b></span>
-                <button type="button" className={s.pillBtn} onClick={() => setCalendarOpen(true)}><CalendarRange size={16} /> Takvim</button>
+                <span className={s.sectionTitle}>{t("Tarih")} <b>{format(dateFromIso(appointmentsDate), "MMMM yyyy", { locale: dateLocale })}</b></span>
+                <button type="button" className={s.pillBtn} onClick={() => setCalendarOpen(true)}><CalendarRange size={16} /> {t("Takvim")}</button>
               </div>
               <DateStrip days={stripDays} value={appointmentsDate} today={minDate} counts={availableDateCounts} loading={datesLoading} onSelect={selectDate} />
               <div className={s.legend} aria-hidden="true">
-                <span><i style={{ background: "#22c55e" }} />Müsait</span>
-                <span><i style={{ background: "var(--amber)" }} />Az yer</span>
-                <span><i style={{ background: "var(--line-strong)" }} />Dolu / kapalı</span>
+                <span><i style={{ background: "#22c55e" }} />{t("Müsait")}</span>
+                <span><i style={{ background: "var(--amber)" }} />{t("Az yer")}</span>
+                <span><i style={{ background: "var(--line-strong)" }} />{t("Dolu / kapalı")}</span>
               </div>
               {autoJump && autoJump.to === appointmentsDate && (
                 <div className={s.notice} role="status">
                   <Sparkles size={17} />
-                  <span>{autoJump.from === minDate ? "Bugün için uygun saat kalmadı" : `${format(dateFromIso(autoJump.from), "d MMMM", { locale: tr })} için uygun saat yok`}; ilk müsait gün olan <b>{format(dateFromIso(autoJump.to), "d MMMM EEEE", { locale: tr })}</b> seçildi.</span>
+                  <span>{autoJump.from === minDate ? t("Bugün için uygun saat kalmadı") : t("{date} için uygun saat yok", { date: format(dateFromIso(autoJump.from), "d MMMM", { locale: dateLocale }) })}; {t("ilk müsait gün olan")} <b>{format(dateFromIso(autoJump.to), dayPattern, { locale: dateLocale })}</b> {t("seçildi.")}</span>
                 </div>
               )}
             </div>
 
             <div className={s.section} aria-live="polite">
               <div className={s.sectionHead}>
-                <span className={s.sectionTitle}>Saat <b>{format(dateFromIso(appointmentsDate), "d MMMM EEEE", { locale: tr })}</b></span>
-                {!slotsLoading && availableSlots.length > 0 && <span className={s.badge}>{availableSlots.length} müsait</span>}
+                <span className={s.sectionTitle}>{t("Saat")} <b>{format(dateFromIso(appointmentsDate), dayPattern, { locale: dateLocale })}</b></span>
+                {!slotsLoading && availableSlots.length > 0 && <span className={s.badge}>{t("{count} müsait", { count: availableSlots.length })}</span>}
               </div>
 
               {slotsLoading ? (
-                <div className={s.skeletonGrid} aria-label="Müsait saatler yükleniyor">{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div>
+                <div className={s.skeletonGrid} aria-label={t("Müsait saatler yükleniyor")}>{Array.from({ length: 12 }).map((_, index) => <i key={index} />)}</div>
               ) : availableSlots.length === 0 ? (
                 <div className={s.noSlots}>
                   <i><CalendarDays size={24} /></i>
-                  <b>Bu tarihte müsait saat bulunmuyor</b>
-                  <p>Başka bir gün seçin{filteredStaff.length > 1 ? " veya farklı bir uzman deneyin" : ""}. Dilerseniz bekleme listesine katılın.</p>
+                  <b>{t("Bu tarihte müsait saat bulunmuyor")}</b>
+                  <p>{filteredStaff.length > 1 ? t("Başka bir gün seçin veya farklı bir uzman deneyin. Dilerseniz bekleme listesine katılın.") : t("Başka bir gün seçin. Dilerseniz bekleme listesine katılın.")}</p>
                   {!waitlistDone && !waitlistOpen && (
                     <div className={s.noSlotsActions}>
-                      <button type="button" onClick={() => setWaitlistOpen(true)} className={`${s.ghost} ${s.amberBtn}`}><BellRing size={16} /> Bekleme listesine katıl</button>
-                      {filteredStaff.length > 1 && activeSteps.includes("staff") && <button type="button" onClick={() => jumpTo("staff")} className={s.ghost}><UsersRound size={16} /> Uzmanı değiştir</button>}
+                      <button type="button" onClick={() => setWaitlistOpen(true)} className={`${s.ghost} ${s.amberBtn}`}><BellRing size={16} /> {t("Bekleme listesine katıl")}</button>
+                      {filteredStaff.length > 1 && activeSteps.includes("staff") && <button type="button" onClick={() => jumpTo("staff")} className={s.ghost}><UsersRound size={16} /> {t("Uzmanı değiştir")}</button>}
                     </div>
                   )}
                   {waitlistOpen && !waitlistDone && (
                     <div className={s.waitlist}>
-                      <div><b>Yer açılırsa haber verelim</b><p>İşletme talebinizi görecek ve uygunluk oluştuğunda sizinle iletişime geçecek.</p></div>
-                      <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Adınız soyadınız" maxLength={80} autoComplete="name" className={`${s.input} ${s.inputPlain}`} aria-label="Adınız soyadınız" />
-                      <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="05xx xxx xx xx" type="tel" inputMode="tel" autoComplete="tel" className={`${s.input} ${s.inputPlain}`} aria-label="Telefon" />
-                      <input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="E-posta (opsiyonel)" type="email" inputMode="email" autoComplete="email" className={`${s.input} ${s.inputPlain}`} aria-label="E-posta" />
+                      <div><b>{t("Yer açılırsa haber verelim")}</b><p>{t("İşletme talebinizi görecek ve uygunluk oluştuğunda sizinle iletişime geçecek.")}</p></div>
+                      <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder={t("Adınız soyadınız")} maxLength={80} autoComplete="name" className={`${s.input} ${s.inputPlain}`} aria-label={t("Adınız soyadınız")} />
+                      <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="05xx xxx xx xx" type="tel" inputMode="tel" autoComplete="tel" className={`${s.input} ${s.inputPlain}`} aria-label={t("Telefon")} />
+                      <input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder={t("E-posta (opsiyonel)")} type="email" inputMode="email" autoComplete="email" className={`${s.input} ${s.inputPlain}`} aria-label={t("E-posta")} />
                       <div className={s.noSlotsActions} style={{ justifyContent: "stretch" }}>
-                        <button type="button" onClick={() => void joinWaitlist()} disabled={waitlistBusy} className={s.primary} style={{ flex: 1 }}>{waitlistBusy ? <><LoaderCircle size={17} className={s.spin} /> Kaydediliyor…</> : "Talebi kaydet"}</button>
-                        <button type="button" onClick={() => setWaitlistOpen(false)} className={s.ghost}>Vazgeç</button>
+                        <button type="button" onClick={() => void joinWaitlist()} disabled={waitlistBusy} className={s.primary} style={{ flex: 1 }}>{waitlistBusy ? <><LoaderCircle size={17} className={s.spin} /> {t("Kaydediliyor…")}</> : t("Talebi kaydet")}</button>
+                        <button type="button" onClick={() => setWaitlistOpen(false)} className={s.ghost}>{t("Vazgeç")}</button>
                       </div>
                     </div>
                   )}
-                  {waitlistDone && <div className={s.done}><CheckCircle2 size={16} /> Bekleme listesi talebiniz alındı.</div>}
+                  {waitlistDone && <div className={s.done}><CheckCircle2 size={16} /> {t("Bekleme listesi talebiniz alındı.")}</div>}
                 </div>
               ) : (
                 <SlotGroups slots={availableSlots} value={slot} onSelect={(item) => setSlot(item.label)} />
@@ -968,12 +980,12 @@ export function BookingWizard(props: Props) {
         {/* ── Bilgiler ── */}
         {step === "info" && (
           <div>
-            <StepHead headingRef={headingRef} icon={UserRound} title="Size nasıl ulaşalım?" text={bookingFields.collectName || bookingFields.collectEmail || bookingFields.collectNotes ? "Randevu onayı ve hatırlatmalar için bilgilerinizi girin." : "Telefonunuzu doğrulayarak hızlıca randevu alın."} />
+            <StepHead headingRef={headingRef} icon={UserRound} title={t("Size nasıl ulaşalım?")} text={bookingFields.collectName || bookingFields.collectEmail || bookingFields.collectNotes ? t("Randevu onayı ve hatırlatmalar için bilgilerinizi girin.") : t("Telefonunuzu doğrulayarak hızlıca randevu alın.")} />
             <div className={s.form}>
-              {prefilled && authStatus === "authenticated" && <div className={s.prefill}><Sparkles size={16} /> Hesabınızdaki bilgiler dolduruldu, dilerseniz düzenleyin.</div>}
+              {prefilled && authStatus === "authenticated" && <div className={s.prefill}><Sparkles size={16} /> {t("Hesabınızdaki bilgiler dolduruldu, dilerseniz düzenleyin.")}</div>}
               {bookingFields.collectName && (
                 <div className={s.field}>
-                  <label htmlFor="booking-name" className={s.fieldLabel}>Ad Soyad <em>*</em></label>
+                  <label htmlFor="booking-name" className={s.fieldLabel}>{t("Ad Soyad")} <em>*</em></label>
                   <div className={s.inputWrap}>
                     <UserRound size={18} />
                     <input
@@ -982,7 +994,7 @@ export function BookingWizard(props: Props) {
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       onBlur={() => setInfoTouched(true)}
-                      placeholder="Adınız Soyadınız"
+                      placeholder={t("Adınız Soyadınız")}
                       autoComplete="name"
                       autoCapitalize="words"
                       enterKeyHint="next"
@@ -992,11 +1004,11 @@ export function BookingWizard(props: Props) {
                     />
                     {customerName.trim().length >= 2 && <CheckCircle2 size={18} className={s.inputOk} />}
                   </div>
-                  {infoTouched && !nameValid && <p className={s.error}><AlertCircle size={14} /> Adınızı ve soyadınızı girin.</p>}
+                  {infoTouched && !nameValid && <p className={s.error}><AlertCircle size={14} /> {t("Adınızı ve soyadınızı girin.")}</p>}
                 </div>
               )}
               <div className={s.field}>
-                <label htmlFor="booking-phone" className={s.fieldLabel}>Cep telefonu <em>*</em><small>SMS ile doğrulanır</small></label>
+                <label htmlFor="booking-phone" className={s.fieldLabel}>{t("Cep telefonu")} <em>*</em><small>{t("SMS ile doğrulanır")}</small></label>
                 <div className={s.inputWrap}>
                   <Phone size={18} />
                   <input
@@ -1016,11 +1028,11 @@ export function BookingWizard(props: Props) {
                   />
                   {phoneValid && <CheckCircle2 size={18} className={s.inputOk} />}
                 </div>
-                {infoTouched && !phoneValid && <p id="booking-phone-error" className={s.error}><AlertCircle size={14} /> 05XX XXX XX XX biçiminde geçerli bir Türkiye telefonu girin.</p>}
+                {infoTouched && !phoneValid && <p id="booking-phone-error" className={s.error}><AlertCircle size={14} /> {t("05XX XXX XX XX biçiminde geçerli bir Türkiye telefonu girin.")}</p>}
               </div>
               {bookingFields.collectEmail && (
                 <div className={s.field}>
-                  <label htmlFor="booking-email" className={s.fieldLabel}>E-posta <small>İsteğe bağlı</small></label>
+                  <label htmlFor="booking-email" className={s.fieldLabel}>{t("E-posta")} <small>{t("İsteğe bağlı")}</small></label>
                   <div className={s.inputWrap}>
                     <Mail size={18} />
                     <input
@@ -1033,13 +1045,13 @@ export function BookingWizard(props: Props) {
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
                       onBlur={() => setInfoTouched(true)}
-                      placeholder="ornek@mail.com"
+                      placeholder={t("ornek@mail.com")}
                       aria-invalid={infoTouched && !emailValid}
                       aria-describedby={infoTouched && !emailValid ? "booking-email-error" : undefined}
                       className={`${s.input} ${infoTouched && !emailValid ? s.inputError : ""}`}
                     />
                   </div>
-                  {infoTouched && !emailValid && <p id="booking-email-error" className={s.error}><AlertCircle size={14} /> Geçerli bir e-posta adresi girin veya alanı boş bırakın.</p>}
+                  {infoTouched && !emailValid && <p id="booking-email-error" className={s.error}><AlertCircle size={14} /> {t("Geçerli bir e-posta adresi girin veya alanı boş bırakın.")}</p>}
                 </div>
               )}
               {customFieldsForService.length > 0 && (
@@ -1061,14 +1073,14 @@ export function BookingWizard(props: Props) {
               )}
               {bookingFields.collectNotes && (
                 <div className={s.field}>
-                  <label htmlFor="booking-notes" className={s.fieldLabel}>İşletmeye not <small>İsteğe bağlı</small></label>
+                  <label htmlFor="booking-notes" className={s.fieldLabel}>{t("İşletmeye not")} <small>{t("İsteğe bağlı")}</small></label>
                   <div className={s.inputWrap}>
                     <textarea
                       id="booking-notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
-                      placeholder="Eklemek istediğiniz not..."
+                      placeholder={t("Eklemek istediğiniz not...")}
                       className={`${s.input} ${s.inputPlain}`}
                     />
                   </div>
@@ -1083,7 +1095,7 @@ export function BookingWizard(props: Props) {
                 />
                 <span className={s.consentBox} aria-hidden="true"><Check size={15} strokeWidth={3} /></span>
                 <span className={s.consentText}>
-                  <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPrivacyModalOpen(true); }} className={s.linkBtn}>Randevu Aydınlatma Metni</button>&apos;ni okudum ve bilgi edindim. Bu onay pazarlama izni değildir.
+                  <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPrivacyModalOpen(true); }} className={s.linkBtn}>{t("Randevu Aydınlatma Metni")}</button>{t("'ni okudum ve bilgi edindim. Bu onay pazarlama izni değildir.")}
                 </span>
               </label>
             </div>
@@ -1096,18 +1108,18 @@ export function BookingWizard(props: Props) {
             <div className={`${s.verifyIcon} ${phoneVerified ? s.verifyIconOk : ""}`} aria-hidden="true">
               {phoneVerified ? <Check size={36} strokeWidth={3} /> : <Smartphone size={32} />}
             </div>
-            <h2 ref={headingRef} tabIndex={-1}>{phoneVerified ? "Telefon doğrulandı!" : "Kodu girin"}</h2>
+            <h2 ref={headingRef} tabIndex={-1}>{phoneVerified ? t("Telefon doğrulandı!") : t("Kodu girin")}</h2>
             <p>
               {phoneVerified ? (
-                "Harika! Randevu özetine yönlendiriliyorsunuz…"
+                t("Harika! Randevu özetine yönlendiriliyorsunuz…")
               ) : (
-                <><b>{maskPhone(customerPhone)}</b> numarasına gönderilen 6 haneli kodu girin.</>
+                <><b>{maskPhone(customerPhone)}</b> {t("numarasına gönderilen 6 haneli kodu girin.")}</>
               )}
             </p>
 
             {!phoneVerified && (
               <>
-                <div className={`${s.otp} ${verifyError ? s.otpError : ""}`} role="group" aria-label="6 haneli doğrulama kodu">
+                <div className={`${s.otp} ${verifyError ? s.otpError : ""}`} role="group" aria-label={t("6 haneli doğrulama kodu")}>
                   {verificationCode.map((digit, idx) => (
                     <input
                       key={idx}
@@ -1123,27 +1135,27 @@ export function BookingWizard(props: Props) {
                       onPaste={handlePinPaste}
                       onFocus={(e) => e.currentTarget.select()}
                       disabled={verifying}
-                      aria-label={`${idx + 1}. hane`}
+                      aria-label={t("{number}. hane", { number: idx + 1 })}
                       className={`${s.otpBox} ${digit ? s.otpFilled : ""}`}
                     />
                   ))}
                 </div>
 
-                {verifyError && <p className={s.verifyError} role="alert"><AlertCircle size={15} /> {verifyError}</p>}
+                {verifyError && <p className={s.verifyError} role="alert"><AlertCircle size={15} /> {t(verifyError)}</p>}
 
                 {(verifying || sendingCode) && (
-                  <p className={s.verifyStatus} role="status"><LoaderCircle size={16} className={s.spin} /> {verifying ? "Doğrulanıyor…" : "Kod gönderiliyor…"}</p>
+                  <p className={s.verifyStatus} role="status"><LoaderCircle size={16} className={s.spin} /> {verifying ? t("Doğrulanıyor…") : t("Kod gönderiliyor…")}</p>
                 )}
 
                 <div className={s.verifyLinks}>
                   {countdown > 0 ? (
-                    <span className={s.countdown}><Clock3 size={15} /> Yeniden gönder <b>{countdown} sn</b></span>
+                    <span className={s.countdown}><Clock3 size={15} /> {t("Yeniden gönder")} <b>{t("{count} sn", { count: countdown })}</b></span>
                   ) : (
                     <button type="button" onClick={handleSendCode} disabled={sendingCode} className={s.pillBtn}>
-                      <Send size={15} /> {codeSent ? "Kodu tekrar gönder" : "Kodu gönder"}
+                      <Send size={15} /> {codeSent ? t("Kodu tekrar gönder") : t("Kodu gönder")}
                     </button>
                   )}
-                  <button type="button" className={s.pillBtn} onClick={() => jumpTo("info")}><Phone size={15} /> Numarayı değiştir</button>
+                  <button type="button" className={s.pillBtn} onClick={() => jumpTo("info")}><Phone size={15} /> {t("Numarayı değiştir")}</button>
                 </div>
               </>
             )}
@@ -1153,30 +1165,30 @@ export function BookingWizard(props: Props) {
         {/* ── Özet ── */}
         {step === "summary" && (
           <div>
-            <StepHead headingRef={headingRef} icon={CheckCircle2} title="Her şey hazır" text="Bilgilerinizi kontrol edin ve randevunuzu onaylayın." />
+            <StepHead headingRef={headingRef} icon={CheckCircle2} title={t("Her şey hazır")} text={t("Bilgilerinizi kontrol edin ve randevunuzu onaylayın.")} />
             <section className={s.summary}>
               <div className={s.summaryHero}>
                 <small>{props.businessName.toLocaleUpperCase("tr-TR")}</small>
-                <strong>{format(dateFromIso(appointmentsDate), "d MMMM EEEE", { locale: tr })}</strong>
-                <span>{selectedService ? `${displayName(selectedService.name)} · ${formatServiceDuration(selectedService.durationMinutes)}` : ""}</span>
+                <strong>{format(dateFromIso(appointmentsDate), dayPattern, { locale: dateLocale })}</strong>
+                <span>{selectedService ? `${displayName(selectedService.name)} · ${formatServiceDuration(selectedService.durationMinutes, t)}` : ""}</span>
                 <span className={s.summaryTime}>{slot}</span>
               </div>
               <div className={s.rows}>
-                <SummaryRow icon={WandSparkles} label="Hizmet" index={0}
-                  value={selectedService ? `${displayName(selectedService.name)} (${formatServiceDuration(selectedService.durationMinutes)})` : ""}
+                <SummaryRow icon={WandSparkles} label={t("Hizmet")} index={0}
+                  value={selectedService ? `${displayName(selectedService.name)} (${formatServiceDuration(selectedService.durationMinutes, t)})` : ""}
                   onEdit={() => jumpTo("service")} />
-                {activeSteps.includes("staff") && <SummaryRow icon={UserRound} label="Uzman" value={staffLabel || "İşletme"} index={1} onEdit={() => jumpTo("staff")} />}
-                <SummaryRow icon={CalendarDays} label="Tarih ve saat" value={`${appointmentsDate.split("-").reverse().join(".")} · ${slot}`} index={2} onEdit={() => jumpTo("datetime")} />
-                {bookingFields.collectName && <SummaryRow icon={UserRound} label="Ad Soyad" value={customerName} index={3} onEdit={() => jumpTo("info")} />}
-                <SummaryRow icon={Phone} label="Telefon" value={customerPhone} index={4} verified />
-                {bookingFields.collectEmail && customerEmail && <SummaryRow icon={Mail} label="E-posta" value={customerEmail} index={5} />}
+                {activeSteps.includes("staff") && <SummaryRow icon={UserRound} label={t("Uzman")} value={staffLabel || t("İşletme")} index={1} onEdit={() => jumpTo("staff")} />}
+                <SummaryRow icon={CalendarDays} label={t("Tarih ve saat")} value={`${appointmentsDate.split("-").reverse().join(".")} · ${slot}`} index={2} onEdit={() => jumpTo("datetime")} />
+                {bookingFields.collectName && <SummaryRow icon={UserRound} label={t("Ad Soyad")} value={customerName} index={3} onEdit={() => jumpTo("info")} />}
+                <SummaryRow icon={Phone} label={t("Telefon")} value={customerPhone} index={4} verified />
+                {bookingFields.collectEmail && customerEmail && <SummaryRow icon={Mail} label={t("E-posta")} value={customerEmail} index={5} />}
                 {customSummary.map((item) => <SummaryRow key={item.id} icon={ClipboardList} label={item.label} value={item.value} index={6} onEdit={() => jumpTo("info")} />)}
-                {bookingFields.collectNotes && notes && <SummaryRow icon={MessageSquareText} label="Not" value={notes} index={6} />}
-                <SummaryRow icon={Building2} label="Adres" value={props.businessAddress} index={7} />
+                {bookingFields.collectNotes && notes && <SummaryRow icon={MessageSquareText} label={t("Not")} value={notes} index={6} />}
+                <SummaryRow icon={Building2} label={t("Adres")} value={props.businessAddress} index={7} />
               </div>
-              <div className={s.total}><span><CircleDollarSign size={15} style={{ verticalAlign: -2, marginRight: 4 }} />Toplam tutar</span><b>{selectedService ? formatPrice(selectedService.price) : ""}</b></div>
+              <div className={s.total}><span><CircleDollarSign size={15} style={{ verticalAlign: -2, marginRight: 4 }} />{t("Toplam tutar")}</span><b>{selectedService ? formatPrice(selectedService.price, intlLocale) : ""}</b></div>
             </section>
-            <p className={s.secure}><ShieldCheck size={16} /> Ödeme işletmede yapılır. Onaydan sonra randevunuzu güvenli bağlantı ile yönetebilirsiniz.</p>
+            <p className={s.secure}><ShieldCheck size={16} /> {t("Ödeme işletmede yapılır. Onaydan sonra randevunuzu güvenli bağlantı ile yönetebilirsiniz.")}</p>
           </div>
         )}
       </div>
@@ -1185,26 +1197,26 @@ export function BookingWizard(props: Props) {
       <div className={s.actionBar}>
         <div className={s.actionInner}>
           {currentStepIndex > 0 && (
-            <button type="button" className={s.iconBtn} onClick={goBack} disabled={submitting} aria-label="Önceki adım"><ArrowLeft size={19} /></button>
+            <button type="button" className={s.iconBtn} onClick={goBack} disabled={submitting} aria-label={t("Önceki adım")}><ArrowLeft size={19} /></button>
           )}
           <div className={s.actionSummary} aria-live="polite">
-            <span className={s.actionTitle}>{selectedService ? displayName(selectedService.name) : catalogLoading ? "Yükleniyor…" : "Hizmet seçin"}</span>
+            <span className={s.actionTitle}>{selectedService ? displayName(selectedService.name) : catalogLoading ? t("Yükleniyor…") : t("Hizmet seçin")}</span>
             {nextDisabled && step !== "service" ? (
               <span className={s.actionHint}>{blockReason}</span>
             ) : (
               <span className={s.actionSub}>
-                {step === "service" || !slot ? (selectedService ? formatServiceDuration(selectedService.durationMinutes) : "") : `${dateShort} · ${slot}`}
-                {selectedService && <> · <b>{formatPrice(selectedService.price)}</b></>}
+                {step === "service" || !slot ? (selectedService ? formatServiceDuration(selectedService.durationMinutes, t) : "") : `${dateShort} · ${slot}`}
+                {selectedService && <> · <b>{formatPrice(selectedService.price, intlLocale)}</b></>}
               </span>
             )}
           </div>
           {step === "summary" ? (
             <button type="button" onClick={handleSubmit} disabled={submitting} className={`${s.primary} ${s.primaryLime}`}>
-              {submitting ? <><LoaderCircle size={18} className={s.spin} /> Oluşturuluyor</> : <><CheckCircle2 size={18} /> Onayla</>}
+              {submitting ? <><LoaderCircle size={18} className={s.spin} /> {t("Oluşturuluyor")}</> : <><CheckCircle2 size={18} /> {t("Onayla")}</>}
             </button>
           ) : (
             <button type="button" onClick={goNext} disabled={nextDisabled} className={s.primary}>
-              Devam <ArrowRight size={18} />
+              {t("Devam")} <ArrowRight size={18} />
             </button>
           )}
         </div>
@@ -1241,13 +1253,14 @@ function StepHead({ headingRef, icon: Icon, title, text, badge }: { headingRef: 
 }
 
 function SummaryRow({ icon: Icon, label, value, index = 0, onEdit, verified }: { icon: LucideIcon; label: string; value: string; index?: number; onEdit?: () => void; verified?: boolean }) {
+  const t = useT();
   if (!value) return null;
   return (
     <div className={s.row} style={{ "--i": index } as React.CSSProperties}>
       <i aria-hidden="true"><Icon size={17} /></i>
       <span><small>{label}</small><b>{value}</b></span>
-      {verified && <span className={s.badge}><ShieldCheck size={13} /> Doğrulandı</span>}
-      {onEdit && <button type="button" className={s.editBtn} onClick={onEdit} aria-label={`${label} düzenle`}>Düzenle</button>}
+      {verified && <span className={s.badge}><ShieldCheck size={13} /> {t("Doğrulandı")}</span>}
+      {onEdit && <button type="button" className={s.editBtn} onClick={onEdit} aria-label={t("{label} düzenle", { label })}>{t("Düzenle")}</button>}
     </div>
   );
 }

@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useDeferredValue, useEffect, useId, useMemo, useState, type CSSProperties } from "react";
 import { ArrowRight, ArrowUpRight, BookOpenCheck, CalendarCheck, ChartNoAxesCombined, ChevronDown, CircleHelp, Clock3, CreditCard, Heart, LifeBuoy, Mail, MessageCircleMore, MessagesSquare, Phone, Search, ShieldCheck, Store, UsersRound, WalletCards, X, type LucideIcon } from "lucide-react";
 import { SupportRequestModal } from "@/components/support/support-request-modal";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { businessTopics, customerTopics, helpSlug, normalizeQuery, quickStart, type HelpArticle, type HelpIconName, type HelpMode, type HelpTopic } from "./help-content";
 import { cx } from "./ui";
+import { useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 import mp from "./mp.module.css";
 import s from "./help-center.module.css";
 
@@ -16,24 +18,39 @@ const ICONS: Record<HelpIconName, LucideIcon> = {
 };
 
 const CHANNELS = [
-  { id: "whatsapp", icon: MessageCircleMore, label: "WhatsApp", value: "Hızlı mesaj", href: "https://wa.me/905304788298", external: true },
-  { id: "email", icon: Mail, label: "E-posta", value: "info@seninrandevun.com", href: "mailto:info@seninrandevun.com", external: false },
-  { id: "phone", icon: Phone, label: "Telefon", value: "0530 478 82 98", href: "tel:+905304788298", external: false },
+  { id: "whatsapp", icon: MessageCircleMore, label: "WhatsApp", value: tk("Hızlı mesaj"), href: "https://wa.me/905304788298", external: true },
+  { id: "email", icon: Mail, label: tk("E-posta"), value: "info@seninrandevun.com", href: "mailto:info@seninrandevun.com", external: false },
+  { id: "phone", icon: Phone, label: tk("Telefon"), value: "0530 478 82 98", href: "tel:+905304788298", external: false },
 ];
 
 type Entry = { topic: HelpTopic; article: HelpArticle; slug: string; haystack: string };
 
-function buildIndex(topics: HelpTopic[]): Entry[] {
-  return topics.flatMap((topic) => topic.articles.map((article) => ({
-    topic, article, slug: helpSlug(article.title),
-    haystack: normalizeQuery(`${topic.title} ${topic.description} ${article.title} ${article.answer.join(" ")}`),
-  })));
+/** Konuları etkin dile çevirir; çapa kimliği (slug) Türkçe kaynak başlıktan üretilir ki bağlantılar dilden bağımsız kalsın. */
+function buildIndex(topics: HelpTopic[], t: TFunction): Entry[] {
+  return topics.flatMap((source) => {
+    const topic = { ...source, title: t(source.title), description: t(source.description) };
+    return source.articles.map((sourceArticle) => {
+      const article: HelpArticle = {
+        title: t(sourceArticle.title),
+        answer: sourceArticle.answer.map((paragraph) => t(paragraph)),
+        links: sourceArticle.links?.map((link) => ({ ...link, label: t(link.label) })),
+      };
+      return {
+        topic, article, slug: helpSlug(sourceArticle.title),
+        haystack: normalizeQuery(`${topic.title} ${topic.description} ${article.title} ${article.answer.join(" ")}`),
+      };
+    });
+  });
 }
 
+const POPULAR_BUSINESS = [tk("Mağazayı yayına"), tk("Çalışan"), tk("Abonelik"), tk("Hatırlatma")];
+const POPULAR_CUSTOMER = [tk("İptal"), tk("Randevu"), tk("Şifre"), tk("Ödeme")];
+
 export function HelpCenter({ mode }: { mode: HelpMode }) {
+  const t = useT();
   const business = mode === "business";
   const topics = business ? businessTopics : customerTopics;
-  const index = useMemo(() => buildIndex(topics), [topics]);
+  const index = useMemo(() => buildIndex(topics, t), [topics, t]);
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const [category, setCategory] = useState<string | null>(null);
@@ -57,7 +74,7 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
     return () => window.removeEventListener("hashchange", open);
   }, [index]);
 
-  const popular = business ? ["Mağazayı yayına", "Çalışan", "Abonelik", "Hatırlatma"] : ["İptal", "Randevu", "Şifre", "Ödeme"];
+  const popular = (business ? POPULAR_BUSINESS : POPULAR_CUSTOMER).map((item) => t(item, { ctx: "konu" }));
   const activeTopic = topics.find((topic) => topic.id === category);
 
   return (
@@ -66,29 +83,29 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
         <div className={mp.heroGrid} aria-hidden="true" />
         <div className={cx(mp.shell, s.heroInner)}>
           <div className={s.heroCopy}>
-            <span className={cx(mp.eyebrow, mp.rise)}><LifeBuoy size={13} aria-hidden="true" /> {business ? "İşletme yardım merkezi" : "Müşteri yardım merkezi"}</span>
-            <h1 className={cx(mp.title, mp.rise)} style={{ "--i": 1 } as CSSProperties}>{business ? <>İşletmeniz için<br /><em>net cevaplar.</em></> : <>Randevunuz için<br /><em>yanınızdayız.</em></>}</h1>
-            <p className={cx(mp.lead, mp.rise)} style={{ "--i": 2 } as CSSProperties}>{business ? "Kurulumdan günlük operasyona kadar ekibinizin ihtiyaç duyduğu cevaplar tek yerde." : "Keşiften randevu yönetimine kadar tüm sorularınızın sade ve güvenilir cevapları."}</p>
+            <span className={cx(mp.eyebrow, mp.rise)}><LifeBuoy size={13} aria-hidden="true" /> {business ? t("İşletme yardım merkezi") : t("Müşteri yardım merkezi")}</span>
+            <h1 className={cx(mp.title, mp.rise)} style={{ "--i": 1 } as CSSProperties}>{business ? <>{t("İşletmeniz için")}<br /><em>{t("net cevaplar.")}</em></> : <>{t("Randevunuz için")}<br /><em>{t("yanınızdayız.")}</em></>}</h1>
+            <p className={cx(mp.lead, mp.rise)} style={{ "--i": 2 } as CSSProperties}>{business ? t("Kurulumdan günlük operasyona kadar ekibinizin ihtiyaç duyduğu cevaplar tek yerde.") : t("Keşiften randevu yönetimine kadar tüm sorularınızın sade ve güvenilir cevapları.")}</p>
             <form role="search" className={cx(s.search, mp.rise)} style={{ "--i": 3 } as CSSProperties} onSubmit={(event) => { event.preventDefault(); document.getElementById("yardim-sonuclar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-              <label htmlFor={searchId} className={mp.srOnly}>Yardım konularında ara</label>
+              <label htmlFor={searchId} className={mp.srOnly}>{t("Yardım konularında ara")}</label>
               <Search size={20} aria-hidden="true" />
-              <input id={searchId} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={business ? "Takvim, çalışan, abonelik…" : "İptal, randevu, şifre…"} autoComplete="off" enterKeyHint="search" />
-              {query && <button type="button" className={s.clear} onClick={() => setQuery("")} aria-label="Aramayı temizle"><X size={16} /></button>}
+              <input id={searchId} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={business ? t("Takvim, çalışan, abonelik…") : t("İptal, randevu, şifre…")} autoComplete="off" enterKeyHint="search" />
+              {query && <button type="button" className={s.clear} onClick={() => setQuery("")} aria-label={t("Aramayı temizle")}><X size={16} /></button>}
             </form>
             <div className={s.popular}>
-              <span>Popüler:</span>
+              <span>{t("Popüler:")}</span>
               {popular.map((item) => <button type="button" key={item} onClick={() => { setQuery(item); setCategory(null); }}>{item}</button>)}
             </div>
           </div>
           <div className={s.heroMascot} aria-hidden="true">
             <RoviMascot size={170} mood={searching ? "thinking" : "wave"} alt="" priority />
-            <div className={s.bubble}><b>Rovi</b><span>{searching ? `${results.length} cevap buldum` : business ? "Önce mağaza kurulumuna bak!" : "Ne arıyorsun? Yaz, bulalım."}</span></div>
+            <div className={s.bubble}><b>Rovi</b><span>{searching ? t("{count} cevap buldum", { count: results.length }) : business ? t("Önce mağaza kurulumuna bak!") : t("Ne arıyorsun? Yaz, bulalım.")}</span></div>
           </div>
         </div>
       </section>
 
       <div className={mp.shell}>
-        <section className={s.cats} aria-label="Konular">
+        <section className={s.cats} aria-label={t("Konular")}>
           <ul>
             {topics.map((topic, i) => {
               const Icon = ICONS[topic.icon];
@@ -97,9 +114,9 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
                 <li key={topic.id} className={mp.rise} style={{ "--i": i } as CSSProperties}>
                   <button type="button" className={s.cat} aria-pressed={active} onClick={() => { setCategory(active ? null : topic.id); setOpenSlug(null); }}>
                     <span className={s.catIcon}><Icon size={20} aria-hidden="true" /></span>
-                    <b>{topic.title}</b>
-                    <small>{topic.description}</small>
-                    <i>{topic.articles.length} makale</i>
+                    <b>{t(topic.title)}</b>
+                    <small>{t(topic.description)}</small>
+                    <i>{t("{count} makale", { count: topic.articles.length })}</i>
                   </button>
                 </li>
               );
@@ -110,12 +127,12 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
         <section id="yardim-sonuclar" className={cx(mp.section, s.results)} aria-labelledby="sonuc-baslik">
           <div className={s.resultsHead}>
             <div>
-              <span className={mp.kicker}><BookOpenCheck size={13} aria-hidden="true" /> {activeTopic ? activeTopic.title : "Sık sorulanlar"}</span>
-              <h2 className={mp.h2} id="sonuc-baslik">{searching ? `“${deferred.trim()}” için ${results.length} sonuç` : activeTopic ? activeTopic.description : "En çok sorulan sorular"}</h2>
+              <span className={mp.kicker}><BookOpenCheck size={13} aria-hidden="true" /> {activeTopic ? t(activeTopic.title) : t("Sık sorulanlar")}</span>
+              <h2 className={mp.h2} id="sonuc-baslik">{searching ? t("“{query}” için {count} sonuç", { query: deferred.trim(), count: results.length }) : activeTopic ? t(activeTopic.description) : t("En çok sorulan sorular")}</h2>
             </div>
-            {(searching || category) && <button type="button" className={cx(mp.btn, mp.btnOutline, s.reset)} onClick={() => { setQuery(""); setCategory(null); }}>Tümünü göster</button>}
+            {(searching || category) && <button type="button" className={cx(mp.btn, mp.btnOutline, s.reset)} onClick={() => { setQuery(""); setCategory(null); }}>{t("Tümünü göster")}</button>}
           </div>
-          <p className={mp.srOnly} aria-live="polite">{searching ? `${results.length} sonuç bulundu` : ""}</p>
+          <p className={mp.srOnly} aria-live="polite">{searching ? t("{count} sonuç bulundu", { count: results.length }) : ""}</p>
 
           {results.length ? (
             <ul className={s.faq}>
@@ -142,9 +159,9 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
           ) : (
             <div className={s.empty}>
               <CircleHelp size={34} aria-hidden="true" />
-              <h3>Bu aramayla eşleşen bir cevap bulamadık.</h3>
-              <p>Daha kısa bir ifade deneyin ya da aşağıdan bize doğrudan yazın.</p>
-              <button type="button" className={cx(mp.btn, mp.btnOutline)} onClick={() => { setQuery(""); setCategory(null); }}>Tüm konuları göster</button>
+              <h3>{t("Bu aramayla eşleşen bir cevap bulamadık.")}</h3>
+              <p>{t("Daha kısa bir ifade deneyin ya da aşağıdan bize doğrudan yazın.")}</p>
+              <button type="button" className={cx(mp.btn, mp.btnOutline)} onClick={() => { setQuery(""); setCategory(null); }}>{t("Tüm konuları göster")}</button>
             </div>
           )}
         </section>
@@ -152,30 +169,30 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
         <section className={cx(mp.section, s.steps)} aria-labelledby="baslangic-baslik">
           <div className={cx(s.stepsCard, mp.reveal)}>
             <div>
-              <span className={mp.kicker}>Hızlı başlangıç</span>
-              <h2 className={mp.h2} id="baslangic-baslik">{business ? "Çalışma alanınızı üç adımda hazırlayın." : "İlk randevunuzu üç adımda oluşturun."}</h2>
+              <span className={mp.kicker}>{t("Hızlı başlangıç")}</span>
+              <h2 className={mp.h2} id="baslangic-baslik">{business ? t("Çalışma alanınızı üç adımda hazırlayın.") : t("İlk randevunuzu üç adımda oluşturun.")}</h2>
             </div>
             <ol>
-              {quickStart[mode].map(([no, text]) => <li key={no}><b>{no}</b><span>{text}</span></li>)}
+              {quickStart[mode].map(([no, text]) => <li key={no}><b>{no}</b><span>{t(text)}</span></li>)}
             </ol>
-            <Link href={business ? "/isletmeler/kayit" : "/kesfet"} className={cx(mp.btn, mp.btnGreen)}>{business ? "İlk ay ücretsiz başla" : "İşletme keşfet"} <ArrowRight size={16} aria-hidden="true" /></Link>
+            <Link href={business ? "/isletmeler/kayit" : "/kesfet"} className={cx(mp.btn, mp.btnGreen)}>{business ? t("İlk ay ücretsiz başla") : t("İşletme keşfet")} <ArrowRight size={16} aria-hidden="true" /></Link>
           </div>
         </section>
 
         <section className={cx(mp.section, s.contact)} aria-labelledby="destek-baslik">
           <div className={cx(s.contactCard, mp.reveal)}>
             <div className={s.contactCopy}>
-              <span className={s.contactKicker}>Destek ekibi</span>
-              <h2 id="destek-baslik">Aradığınız cevabı bulamadınız mı?</h2>
-              <p>{business ? "Giriş yapmadan mesaj bırakın; ekibimiz verdiğiniz telefon üzerinden size dönsün. Panel kullanıcıları Destek bölümünden de talep açabilir." : "Randevu ve hesap sorularınız için mesaj bırakın; ekibimiz verdiğiniz telefon üzerinden size dönsün."}</p>
-              <SupportRequestModal audience={business ? "business" : "customer"} triggerLabel={business ? "Destek talebi oluştur" : "Bize mesaj gönder"} triggerClassName={s.supportBtn} />
+              <span className={s.contactKicker}>{t("Destek ekibi")}</span>
+              <h2 id="destek-baslik">{t("Aradığınız cevabı bulamadınız mı?")}</h2>
+              <p>{business ? t("Giriş yapmadan mesaj bırakın; ekibimiz verdiğiniz telefon üzerinden size dönsün. Panel kullanıcıları Destek bölümünden de talep açabilir.") : t("Randevu ve hesap sorularınız için mesaj bırakın; ekibimiz verdiğiniz telefon üzerinden size dönsün.")}</p>
+              <SupportRequestModal audience={business ? "business" : "customer"} triggerLabel={business ? t("Destek talebi oluştur") : t("Bize mesaj gönder")} triggerClassName={s.supportBtn} />
             </div>
             <ul className={s.channels}>
               {CHANNELS.map(({ id, icon: Icon, label, value, href, external }) => (
                 <li key={id}>
                   <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
                     <span><Icon size={18} aria-hidden="true" /></span>
-                    <div><small>{label}</small><b>{value}</b></div>
+                    <div><small>{t(label)}</small><b>{t(value)}</b></div>
                     <ArrowUpRight size={16} aria-hidden="true" />
                   </a>
                 </li>
@@ -183,8 +200,8 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
             </ul>
           </div>
           <p className={s.switch}>
-            {business ? <>Randevu alan bir müşteri misiniz? <Link href="/yardim-merkezi">Müşteri yardım merkezi</Link></> : <>İşletme sahibi misiniz? <Link href="/isletmeler/yardim">İşletme yardım merkezi</Link></>}
-            {" · "}<Link href="/iletisim">Tüm iletişim kanalları</Link>
+            {business ? <>{t("Randevu alan bir müşteri misiniz?")} <Link href="/yardim-merkezi">{t("Müşteri yardım merkezi")}</Link></> : <>{t("İşletme sahibi misiniz?")} <Link href="/isletmeler/yardim">{t("İşletme yardım merkezi")}</Link></>}
+            {" · "}<Link href="/iletisim">{t("Tüm iletişim kanalları")}</Link>
           </p>
         </section>
       </div>

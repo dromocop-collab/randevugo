@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import type { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import { createBusinessFromOnboarding, updateBusiness } from "@/features/businesses/business-repository";
@@ -33,44 +33,47 @@ import {
   type WorkingDay,
 } from "@/features/businesses/setup-helpers";
 import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
+import { tk } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 
-const DEFAULT_CATEGORIES = [
-  { value: "kuafor", label: "Kuaför" },
-  { value: "berber", label: "Berber" },
-  { value: "guzellik", label: "Güzellik Merkezi" },
-  { value: "nail", label: "Nail Studio" },
-  { value: "spa", label: "Spa & Masaj" },
-  { value: "spor", label: "Spor / Personal Training" },
-  { value: "danismanlik", label: "Danışmanlık" },
-  { value: "veteriner", label: "Veteriner" },
-  { value: "yazilim", label: "Yazılım" },
-  { value: "servis", label: "Servis İşletmesi" },
-  { value: "saglik", label: "Sağlık" },
-  { value: "egitim", label: "Eğitim" },
-  { value: "diger", label: "Diğer" },
+const DEFAULT_CATEGORIES: Array<{ value: string; label: string }> = [
+  { value: "kuafor", label: tk("Kuaför") },
+  { value: "berber", label: tk("Berber") },
+  { value: "guzellik", label: tk("Güzellik Merkezi") },
+  { value: "nail", label: tk("Nail Studio") },
+  { value: "spa", label: tk("Spa & Masaj") },
+  { value: "spor", label: tk("Spor / Personal Training") },
+  { value: "danismanlik", label: tk("Danışmanlık") },
+  { value: "veteriner", label: tk("Veteriner") },
+  { value: "yazilim", label: tk("Yazılım") },
+  { value: "servis", label: tk("Servis İşletmesi") },
+  { value: "saglik", label: tk("Sağlık") },
+  { value: "egitim", label: tk("Eğitim") },
+  { value: "diger", label: tk("Diğer") },
 ];
 
 const businessTypes = [
-  { value: "", label: "Seçiniz" },
-  { value: "kadin", label: "Kadın" },
-  { value: "erkek", label: "Erkek" },
+  { value: "", label: tk("Seçiniz") },
+  { value: "kadin", label: tk("Kadın") },
+  { value: "erkek", label: tk("Erkek") },
   { value: "unisex", label: "Unisex" },
 ];
 
+/** Metinler çeviri anahtarıdır; gösterirken t(). */
 const STEP_GUIDANCE = [
-  { title: "Markanı doğru konumlandır", text: "Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur.", items: ["Benzersiz mağaza adresi", "Doğru müşteri segmenti", "SEO uyumlu profil başlangıcı"] },
-  { title: "Müşterilerin sana ulaşsın", text: "İletişim ve konum bilgileri randevu güvenini yükseltir.", items: ["Türkiye telefon doğrulaması", "Şehir ve ilçe eşleşmesi", "Harita için hazır adres"] },
-  { title: "Randevuya hazır vitrin", text: "Hazır hizmet şablonları ve çalışma saatleriyle mağazan ilk günden randevu almaya başlar.", items: ["Kategorine özel hizmetler", "Önerilen fiyat aralıkları", "Tek tıkla çalışma saatleri"] },
-  { title: "Yayına hazırsın", text: "Bilgilerini son kez kontrol et; istersen logo ve kapak da ekle.", items: ["İlk ay ücretsiz kullanım", "Paylaşılabilir mağaza linki ve QR", "Çoklu mağaza onay güvencesi"] },
+  { title: tk("Markanı doğru konumlandır"), text: tk("Adın ve ana kategorin keşfet ekranındaki ilk izlenimi oluşturur."), items: [tk("Benzersiz mağaza adresi"), tk("Doğru müşteri segmenti"), tk("SEO uyumlu profil başlangıcı")] },
+  { title: tk("Müşterilerin sana ulaşsın"), text: tk("İletişim ve konum bilgileri randevu güvenini yükseltir."), items: [tk("Türkiye telefon doğrulaması"), tk("Şehir ve ilçe eşleşmesi"), tk("Harita için hazır adres")] },
+  { title: tk("Randevuya hazır vitrin"), text: tk("Hazır hizmet şablonları ve çalışma saatleriyle mağazan ilk günden randevu almaya başlar."), items: [tk("Kategorine özel hizmetler"), tk("Önerilen fiyat aralıkları"), tk("Tek tıkla çalışma saatleri")] },
+  { title: tk("Yayına hazırsın"), text: tk("Bilgilerini son kez kontrol et; istersen logo ve kapak da ekle."), items: [tk("İlk ay ücretsiz kullanım"), tk("Paylaşılabilir mağaza linki ve QR"), tk("Çoklu mağaza onay güvencesi")] },
 ] as const;
 
 
 function mapOnboardingError(error: unknown): string {
   const code = (error as FirebaseError | undefined)?.code;
   if (code === "permission-denied") {
-    return "Firestore yetkisi reddedildi. Sayfayı yenileyip tekrar deneyin.";
+    return tk("Firestore yetkisi reddedildi. Sayfayı yenileyip tekrar deneyin.");
   }
-  return (error as Error | undefined)?.message ?? "Kurulum sırasında beklenmeyen bir hata oluştu.";
+  return (error as Error | undefined)?.message ?? tk("Kurulum sırasında beklenmeyen bir hata oluştu.");
 }
 
 interface StepConfig {
@@ -80,13 +83,14 @@ interface StepConfig {
 }
 
 const STEPS: StepConfig[] = [
-  { title: "İşletme Bilgileri", subtitle: "Temel bilgilerinizi girin", icon: "🏢" },
-  { title: "Konum & İletişim", subtitle: "Müşterileriniz sizi bulsun", icon: "📍" },
-  { title: "Hizmetler & Saatler", subtitle: "Hazır şablonlardan seç, fiyatı ayarla", icon: "🗓️" },
-  { title: "Son Adım", subtitle: "Kontrol et, istersen logo ekle", icon: "🚀" },
+  { title: tk("İşletme Bilgileri"), subtitle: tk("Temel bilgilerinizi girin"), icon: "🏢" },
+  { title: tk("Konum & İletişim"), subtitle: tk("Müşterileriniz sizi bulsun"), icon: "📍" },
+  { title: tk("Hizmetler & Saatler"), subtitle: tk("Hazır şablonlardan seç, fiyatı ayarla"), icon: "🗓️" },
+  { title: tk("Son Adım"), subtitle: tk("Kontrol et, istersen logo ekle"), icon: "🚀" },
 ];
 
 export function OnboardingWizard() {
+  const t = useT();
   const { user } = useAuth();
   const { setBusinessId } = useBusiness();
   const router = useRouter();
@@ -107,7 +111,7 @@ export function OnboardingWizard() {
             merged.push({ value: dc.slug, label: dc.label });
           }
         });
-        merged.push({ value: "diger", label: "Diğer" });
+        merged.push({ value: "diger", label: tk("Diğer") });
         setCategories(merged);
       })
       .catch(() => {});
@@ -146,7 +150,7 @@ export function OnboardingWizard() {
   const selections = selectionsByCategory[category] ?? defaultStarterSelections(category);
   const [hours, setHours] = useState<WorkingDay[]>(() => createDefaultWorkingHours());
   const [hoursTouched, setHoursTouched] = useState(false);
-  const hoursError = hoursTouched ? validateWorkingHours(hours) : null;
+  const hoursError = hoursTouched ? validateWorkingHours(hours, t) : null;
 
   // Kurulum sonucu ("Mağazan hazır" ekranı)
   const [ready, setReady] = useState<null | {
@@ -186,23 +190,23 @@ export function OnboardingWizard() {
 
   function validateStep(s: number): boolean {
     if (s === 0) {
-      if (!name.trim()) { toast.error("İşletme adı zorunludur."); return false; }
+      if (!name.trim()) { toast.error(t("İşletme adı zorunludur.")); return false; }
       return true;
     }
     if (s === 1) {
-      if (!phone.trim()) { toast.error("Telefon zorunludur."); return false; }
-      if (!email.trim()) { toast.error("E-posta zorunludur."); return false; }
-      if (!address.trim()) { toast.error("Adres zorunludur."); return false; }
-      if (!city.trim()) { toast.error("Şehir zorunludur."); return false; }
-      if (!district.trim()) { toast.error("İlçe zorunludur."); return false; }
+      if (!phone.trim()) { toast.error(t("Telefon zorunludur.")); return false; }
+      if (!email.trim()) { toast.error(t("E-posta zorunludur.")); return false; }
+      if (!address.trim()) { toast.error(t("Adres zorunludur.")); return false; }
+      if (!city.trim()) { toast.error(t("Şehir zorunludur.")); return false; }
+      if (!district.trim()) { toast.error(t("İlçe zorunludur.")); return false; }
       return true;
     }
     if (s === 2) {
       setHoursTouched(true);
-      const hoursProblem = validateWorkingHours(hours);
+      const hoursProblem = validateWorkingHours(hours, t);
       if (hoursProblem) { toast.error(hoursProblem); return false; }
       const missingPrice = Object.entries(selections).some(([, choice]) => choice.selected && !(choice.price > 0));
-      if (missingPrice) { toast.error("Seçtiğin hizmetler için fiyat gir (ya da işaretini kaldır)."); return false; }
+      if (missingPrice) { toast.error(t("Seçtiğin hizmetler için fiyat gir (ya da işaretini kaldır).")); return false; }
       return true;
     }
     return true;
@@ -219,11 +223,11 @@ export function OnboardingWizard() {
 
   function selectImage(file: File, kind: "logo" | "cover") {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      toast.error("Lütfen PNG, JPEG veya WebP formatında bir görsel seçin.");
+      toast.error(t("Lütfen PNG, JPEG veya WebP formatında bir görsel seçin."));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Görsel boyutu en fazla 5 MB olabilir.");
+      toast.error(t("Görsel boyutu en fazla 5 MB olabilir."));
       return;
     }
     const preview = URL.createObjectURL(file);
@@ -257,11 +261,11 @@ export function OnboardingWizard() {
     });
 
     if (!validated.success) {
-      toast.error(firstErrorMessage(validated.error));
+      toast.error(t(firstErrorMessage(validated.error)));
       return;
     }
 
-    const hoursProblem = validateWorkingHours(hours);
+    const hoursProblem = validateWorkingHours(hours, t);
     if (hoursProblem) {
       setHoursTouched(true);
       setStep(2);
@@ -325,7 +329,7 @@ export function OnboardingWizard() {
           : Promise.resolve(undefined),
       ]);
 
-      if (mediaOutcome.warning) toast.warning("Bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin.", { duration: 9000 });
+      if (mediaOutcome.warning) toast.warning(t("Bazı görseller yüklenemedi. Panelde Ayarlar bölümünden tekrar ekleyebilirsin."), { duration: 9000 });
       setReady({
         businessId,
         name: payload.name,
@@ -340,7 +344,7 @@ export function OnboardingWizard() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       creatingRef.current = false;
-      toast.error(mapOnboardingError(error));
+      toast.error(t(mapOnboardingError(error)));
     } finally {
       setLoading(false);
     }
@@ -351,13 +355,15 @@ export function OnboardingWizard() {
     try {
       const result = await applyStarterServices(ready.businessId, ready.category, servicePlan);
       setReady((current) => current && { ...current, servicesCreated: current.servicesCreated + result.created, servicesFailed: false });
-      toast.success(result.created ? `${result.created} hizmet eklendi.` : "Hizmetlerin zaten ekli.");
+      toast.success(result.created ? t("{count} hizmet eklendi.", { count: result.created }) : t("Hizmetlerin zaten ekli."));
     } catch {
-      toast.error("Hizmetler yine eklenemedi. Panelde Hizmetler bölümünden ekleyebilirsin.");
+      toast.error(t("Hizmetler yine eklenemedi. Panelde Hizmetler bölümünden ekleyebilirsin."));
     }
   }
 
-  const categoryLabel = categories.find((c) => c.value === category)?.label ?? category;
+  const categoryOptions = categories.map((item) => ({ ...item, label: t(item.label) }));
+  const typeOptions = businessTypes.map((item) => ({ ...item, label: t(item.label) }));
+  const categoryLabel = categoryOptions.find((c) => c.value === category)?.label ?? category;
 
   if (ready) {
     return (
@@ -380,11 +386,11 @@ export function OnboardingWizard() {
       {/* Header */}
       <div className="onboarding-heading mb-8 text-center">
         <div className="onboarding-logo onboarding-rande-logo mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl">
-          <RoviMascot size={62} alt="Rovi kurulum koçu" priority />
+          <RoviMascot size={62} alt={t("Rovi kurulum koçu")} priority />
         </div>
-        <h1 className="text-2xl font-bold text-[var(--text-1)]">İşletme Kurulumu</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-1)]">{t("İşletme Kurulumu")}</h1>
         <p className="mt-1 text-sm text-[var(--text-3)]">
-          Birkaç adımda online randevuya hazır olun
+          {t("Birkaç adımda online randevuya hazır olun")}
         </p>
       </div>
 
@@ -396,7 +402,7 @@ export function OnboardingWizard() {
               <div className="flex flex-col items-center">
                 <button
                   type="button"
-                  aria-label={`${idx + 1}. adım: ${s.title}${idx === step ? ", şu an açık" : ""}`}
+                  aria-label={idx === step ? t("{step}. adım: {title}, şu an açık", { step: idx + 1, title: t(s.title) }) : t("{step}. adım: {title}", { step: idx + 1, title: t(s.title) })}
                   aria-current={idx === step ? "step" : undefined}
                   onClick={() => {
                     if (idx < step) setStep(idx);
@@ -420,7 +426,7 @@ export function OnboardingWizard() {
                 <span className={`mt-2 hidden text-[10px] font-medium sm:block ${
                   idx <= step ? "text-[var(--text-1)]" : "text-[var(--text-3)]"
                 }`}>
-                  {s.title}
+                  {t(s.title)}
                 </span>
               </div>
               {idx < STEPS.length - 1 && (
@@ -445,8 +451,8 @@ export function OnboardingWizard() {
             <div className="flex items-center gap-3">
               <span className="text-2xl">{STEPS[step]!.icon}</span>
               <div>
-                <h2 className="text-lg font-bold text-[var(--text-1)]">{STEPS[step]!.title}</h2>
-                <p className="text-sm text-[var(--text-3)]">{STEPS[step]!.subtitle}</p>
+                <h2 className="text-lg font-bold text-[var(--text-1)]">{t(STEPS[step]!.title)}</h2>
+                <p className="text-sm text-[var(--text-3)]">{t(STEPS[step]!.subtitle)}</p>
               </div>
             </div>
           </div>
@@ -458,38 +464,38 @@ export function OnboardingWizard() {
             {step === 0 && (
               <div className="space-y-5">
                 <Input
-                  label="İşletme Adı *"
+                  label={t("İşletme Adı *")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Örn: Güzel Saçlar Kuaförü"
+                  placeholder={t("Örn: Güzel Saçlar Kuaförü")}
                   required
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Select
-                    label="Kategori *"
+                    label={t("Kategori *")}
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    options={categories}
+                    options={categoryOptions}
                   />
                   <Select
-                    label="İşletme Tipi"
+                    label={t("İşletme Tipi")}
                     value={businessType}
                     onChange={(e) => setBusinessType(e.target.value)}
-                    options={businessTypes}
+                    options={typeOptions}
                   />
                 </div>
-                <p className="rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs leading-5 text-[var(--text-3)]">Kategori mağazanı doğru listelerde gösterir. İşletme tipi ise müşterilerin kendilerine uygun hizmeti daha hızlı bulmasına yardımcı olur.</p>
+                <p className="rounded-xl bg-[var(--surface-2)] px-3 py-2 text-xs leading-5 text-[var(--text-3)]">{t("Kategori mağazanı doğru listelerde gösterir. İşletme tipi ise müşterilerin kendilerine uygun hizmeti daha hızlı bulmasına yardımcı olur.")}</p>
                 {category === "diger" && (
                   <Input
-                    label="Kategorin (isteğe bağlı)"
+                    label={t("Kategorin (isteğe bağlı)")}
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value.slice(0, 60))}
-                    placeholder="Örn: Dövme stüdyosu"
+                    placeholder={t("Örn: Dövme stüdyosu")}
                   />
                 )}
                 <div>
                   <Input
-                    label="Mağaza adresi"
+                    label={t("Mağaza adresi")}
                     value={slug || computedSlug}
                     onChange={(e) => setSlug(slugifyBusinessName(e.target.value))}
                     onBlur={() => setSlug((current) => finalizeSlug(current))}
@@ -509,7 +515,7 @@ export function OnboardingWizard() {
               <div className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input
-                    label="Telefon *"
+                    label={t("Telefon *")}
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -517,7 +523,7 @@ export function OnboardingWizard() {
                     required
                   />
                   <Input
-                    label="E-posta *"
+                    label={t("E-posta *")}
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -526,20 +532,20 @@ export function OnboardingWizard() {
                   />
                 </div>
                 <Input
-                  label="Adres *"
+                  label={t("Adres *")}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Cadde / Sokak / No"
+                  placeholder={t("Cadde / Sokak / No")}
                   required
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="min-w-0">
-                    <label htmlFor="onboarding-city" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">Şehir *</label>
-                    <CitySelect id="onboarding-city" value={city} onChange={(next) => { if (next !== city) setDistrict(""); setCity(next); }} placeholder="Şehir seç veya yaz" inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
+                    <label htmlFor="onboarding-city" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">{t("Şehir *")}</label>
+                    <CitySelect id="onboarding-city" value={city} onChange={(next) => { if (next !== city) setDistrict(""); setCity(next); }} placeholder={t("Şehir seç veya yaz")} inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
                   </div>
                   <div className="min-w-0">
-                    <label htmlFor="onboarding-district" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">İlçe *</label>
-                    <DistrictSelect id="onboarding-district" city={city} value={district} onChange={setDistrict} placeholder="İlçe seç veya yaz" inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
+                    <label htmlFor="onboarding-district" className="mb-1.5 block text-sm font-medium text-[var(--text-1)]">{t("İlçe *")}</label>
+                    <DistrictSelect id="onboarding-district" city={city} value={district} onChange={setDistrict} placeholder={t("İlçe seç veya yaz")} inputClassName="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-base text-[var(--text-1)] transition focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-60" />
                   </div>
                 </div>
               </div>
@@ -561,69 +567,69 @@ export function OnboardingWizard() {
             {step === 3 && (
               <div className="space-y-4">
                 <p className="text-sm text-[var(--text-2)]">
-                  Aşağıdaki bilgileri kontrol edin. Her şey doğruysa kurulumu tamamlayabilirsiniz.
+                  {t("Aşağıdaki bilgileri kontrol edin. Her şey doğruysa kurulumu tamamlayabilirsiniz.")}
                 </p>
 
                 <div className="space-y-3">
                   {/* Business Info Summary */}
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🏢 İşletme Bilgileri</h4>
-                      <button type="button" onClick={() => setStep(0)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🏢 {t("İşletme Bilgileri")}</h4>
+                      <button type="button" onClick={() => setStep(0)} className="text-xs text-[var(--accent)] hover:underline">{t("Düzenle")}</button>
                     </div>
                     <div className="grid gap-1 text-sm">
-                      <SummaryRow label="İşletme Adı" value={name} />
-                      <SummaryRow label="Kategori" value={categoryLabel} />
-                      <SummaryRow label="Tip" value={businessType ? (businessType === "kadin" ? "Kadın" : businessType === "erkek" ? "Erkek" : "Unisex") : "Belirtilmemiş"} />
+                      <SummaryRow label={t("İşletme Adı")} value={name} />
+                      <SummaryRow label={t("Kategori")} value={categoryLabel} />
+                      <SummaryRow label={t("Tip")} value={businessType ? (businessType === "kadin" ? t("Kadın") : businessType === "erkek" ? t("Erkek") : "Unisex") : t("Belirtilmemiş")} />
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">📍 Konum & İletişim</h4>
-                      <button type="button" onClick={() => setStep(1)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">📍 {t("Konum & İletişim")}</h4>
+                      <button type="button" onClick={() => setStep(1)} className="text-xs text-[var(--accent)] hover:underline">{t("Düzenle")}</button>
                     </div>
                     <div className="grid gap-1 text-sm">
-                      <SummaryRow label="Telefon" value={phone} />
-                      <SummaryRow label="E-posta" value={email} />
-                      <SummaryRow label="Adres" value={`${address}, ${district}, ${city}`} />
+                      <SummaryRow label={t("Telefon")} value={phone} />
+                      <SummaryRow label={t("E-posta")} value={email} />
+                      <SummaryRow label={t("Adres")} value={`${address}, ${district}, ${city}`} />
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🗓️ Hizmetler &amp; Saatler</h4>
-                      <button type="button" onClick={() => setStep(2)} className="min-h-11 px-2 text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">🗓️ {t("Hizmetler & Saatler")}</h4>
+                      <button type="button" onClick={() => setStep(2)} className="min-h-11 px-2 text-xs text-[var(--accent)] hover:underline">{t("Düzenle")}</button>
                     </div>
                     <div className="grid gap-1 text-sm">
-                      <SummaryRow label="Hizmetler" value={servicePlan.length ? servicePlan.map((item) => item.name).join(", ") : "Panelden eklenecek"} />
-                      <SummaryRow label="Saatler" value={summarizeWorkingHours(hours)} />
+                      <SummaryRow label={t("Hizmetler")} value={servicePlan.length ? servicePlan.map((item) => item.name).join(", ") : t("Panelden eklenecek")} />
+                      <SummaryRow label={t("Saatler")} value={summarizeWorkingHours(hours, t)} />
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-[var(--text-1)]">✨ Profil</h4>
-                      <button type="button" onClick={() => setStep(2)} className="text-xs text-[var(--accent)] hover:underline">Düzenle</button>
+                      <h4 className="text-sm font-semibold text-[var(--text-1)]">✨ {t("Profil")}</h4>
+                      <button type="button" onClick={() => setStep(2)} className="text-xs text-[var(--accent)] hover:underline">{t("Düzenle")}</button>
                     </div>
                     <div className="grid gap-1 text-sm">
                       <SummaryRow label="URL" value={`/isletme/${finalSlug}`} />
-                      <SummaryRow label="Açıklama" value={description || "—"} />
-                      <SummaryRow label="Logo" value={logoFile ? "✅ Seçildi" : "Yok"} />
-                      <SummaryRow label="Kapak" value={coverFile ? "✅ Seçildi" : "Yok"} />
+                      <SummaryRow label={t("Açıklama")} value={description || "—"} />
+                      <SummaryRow label={t("Logo")} value={logoFile ? `✅ ${t("Seçildi")}` : t("Yok")} />
+                      <SummaryRow label={t("Kapak")} value={coverFile ? `✅ ${t("Seçildi")}` : t("Yok")} />
                     </div>
                   </div>
                 </div>
 
                 <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4" open={Boolean(description || logoFile || coverFile) || undefined}>
                   <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--text-1)]">
-                    <span>✨ Vitrinini güçlendir <span className="font-normal text-[var(--text-3)]">· isteğe bağlı (logo, kapak, açıklama)</span></span>
+                    <span>✨ {t("Vitrinini güçlendir")} <span className="font-normal text-[var(--text-3)]">· {t("isteğe bağlı (logo, kapak, açıklama)")}</span></span>
                     <span aria-hidden="true" className="transition group-open:rotate-180">⌄</span>
                   </summary>
               <div className="mt-4 space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
-                    İşletme Açıklaması
+                    {t("İşletme Açıklaması")}
                   </label>
                   <textarea
                     value={description}
@@ -631,14 +637,14 @@ export function OnboardingWizard() {
                     rows={3}
                     maxLength={600}
                     className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none transition hover:bg-[var(--field-bg-hover)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-                    placeholder="İşletmenizi kısaca tanıtın — müşterileriniz bu açıklamayı görecek."
+                    placeholder={t("İşletmenizi kısaca tanıtın — müşterileriniz bu açıklamayı görecek.")}
                   />
-                  <div className="mt-1 flex justify-between gap-3 text-[10px] text-[var(--text-3)]"><span>Uzmanlık alanını ve müşterinin neden seni seçmesi gerektiğini yaz.</span><span>{description.length}/600</span></div>
+                  <div className="mt-1 flex justify-between gap-3 text-[10px] text-[var(--text-3)]"><span>{t("Uzmanlık alanını ve müşterinin neden seni seçmesi gerektiğini yaz.")}</span><span>{description.length}/600</span></div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {/* Logo Upload */}
                   <div>
-                    <p className="mb-2 text-sm font-medium text-[var(--text-2)]">Logo</p>
+                    <p className="mb-2 text-sm font-medium text-[var(--text-2)]">{t("Logo")}</p>
                     <label
                       className={`group flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 ${
                         logoPreview
@@ -647,13 +653,13 @@ export function OnboardingWizard() {
                       }`}
                     >
                       {logoPreview ? (
-                        <Image src={logoPreview} alt="Logo önizlemesi" width={320} height={160} unoptimized className="h-full w-full object-cover" />
+                        <Image src={logoPreview} alt={t("Logo önizlemesi")} width={320} height={160} unoptimized className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex flex-col items-center gap-1 text-center">
                           <svg className="h-6 w-6 text-[var(--text-3)] group-hover:text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                           </svg>
-                          <span className="text-[10px] text-[var(--text-3)] group-hover:text-[var(--accent)]">Logo Yükle</span>
+                          <span className="text-[10px] text-[var(--text-3)] group-hover:text-[var(--accent)]">{t("Logo Yükle")}</span>
                         </div>
                       )}
                       <input
@@ -667,12 +673,12 @@ export function OnboardingWizard() {
                         }}
                       />
                     </label>
-                    <p className="mt-1 text-[10px] text-[var(--text-3)]">PNG, JPEG · Maks. 5MB</p>
+                    <p className="mt-1 text-[10px] text-[var(--text-3)]">{t("PNG, JPEG · Maks. 5MB")}</p>
                   </div>
 
                   {/* Cover Upload */}
                   <div>
-                    <p className="mb-2 text-sm font-medium text-[var(--text-2)]">Kapak Görseli</p>
+                    <p className="mb-2 text-sm font-medium text-[var(--text-2)]">{t("Kapak Görseli")}</p>
                     <label
                       className={`group flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 ${
                         coverPreview
@@ -681,13 +687,13 @@ export function OnboardingWizard() {
                       }`}
                     >
                       {coverPreview ? (
-                        <Image src={coverPreview} alt="Kapak görseli önizlemesi" width={640} height={320} unoptimized className="h-full w-full object-cover" />
+                        <Image src={coverPreview} alt={t("Kapak görseli önizlemesi")} width={640} height={320} unoptimized className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex flex-col items-center gap-1 text-center">
                           <svg className="h-6 w-6 text-[var(--text-3)] group-hover:text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                           </svg>
-                          <span className="text-[10px] text-[var(--text-3)] group-hover:text-[var(--accent)]">Kapak Yükle</span>
+                          <span className="text-[10px] text-[var(--text-3)] group-hover:text-[var(--accent)]">{t("Kapak Yükle")}</span>
                         </div>
                       )}
                       <input
@@ -701,7 +707,7 @@ export function OnboardingWizard() {
                         }}
                       />
                     </label>
-                    <p className="mt-1 text-[10px] text-[var(--text-3)]">PNG, JPEG · Maks. 5MB</p>
+                    <p className="mt-1 text-[10px] text-[var(--text-3)]">{t("PNG, JPEG · Maks. 5MB")}</p>
                   </div>
                 </div>
               </div>
@@ -711,11 +717,11 @@ export function OnboardingWizard() {
                   <div className="flex items-start gap-3">
                     <span className="text-xl">💡</span>
                     <div className="text-sm text-[var(--text-2)]">
-                      <p className="font-medium text-emerald-600">Kurulumdan sonra neler olacak?</p>
+                      <p className="font-medium text-emerald-600">{t("Kurulumdan sonra neler olacak?")}</p>
                       <ul className="mt-1.5 space-y-1 text-xs text-[var(--text-3)]">
-                        <li>• Çalışma saatlerin: {summarizeWorkingHours(hours)}</li>
-                        <li>• {servicePlan.length ? `${servicePlan.length} hizmet online randevuya açık olarak eklenecek` : "Hizmetlerini panelden ekleyebilirsin"}; çalışanlarını panelden davet edebilirsin</li>
-                        <li>• Her yeni şube Süper Admin onayından sonra yayınlanır; firma başına en fazla 10 şube açılabilir</li>
+                        <li>• {t("Çalışma saatlerin: {hours}", { hours: summarizeWorkingHours(hours, t) })}</li>
+                        <li>• {servicePlan.length ? t("{count} hizmet online randevuya açık olarak eklenecek; çalışanlarını panelden davet edebilirsin", { count: servicePlan.length }) : t("Hizmetlerini panelden ekleyebilirsin; çalışanlarını panelden davet edebilirsin")}</li>
+                        <li>• {t("Her yeni şube Süper Admin onayından sonra yayınlanır; firma başına en fazla 10 şube açılabilir")}</li>
                       </ul>
                     </div>
                   </div>
@@ -723,15 +729,15 @@ export function OnboardingWizard() {
               </div>
             )}
           </div>
-          <aside className="onboarding-sidecar" aria-label="Kurulum rehberi">
+          <aside className="onboarding-sidecar" aria-label={t("Kurulum rehberi")}>
             <div>
-              <div className="onboarding-rande-coach"><span><RoviMascot size={74} alt="" /></span><div><small>ROVİ · KURULUM KOÇUN</small><b>Bu adımda yanındayım</b></div></div>
-              <small>ADIM {step + 1} · AKILLI REHBER</small>
-              <h3>{STEP_GUIDANCE[step]!.title}</h3>
-              <p>{STEP_GUIDANCE[step]!.text}</p>
-              <ul>{STEP_GUIDANCE[step]!.items.map((item, index) => <li key={item}><b>{index + 1}</b><span>{item}</span></li>)}</ul>
+              <div className="onboarding-rande-coach"><span><RoviMascot size={74} alt="" /></span><div><small>{t("ROVİ · KURULUM KOÇUN")}</small><b>{t("Bu adımda yanındayım")}</b></div></div>
+              <small>{t("ADIM {step} · AKILLI REHBER", { step: step + 1 })}</small>
+              <h3>{t(STEP_GUIDANCE[step]!.title)}</h3>
+              <p>{t(STEP_GUIDANCE[step]!.text)}</p>
+              <ul>{STEP_GUIDANCE[step]!.items.map((item, index) => <li key={item}><b>{index + 1}</b><span>{t(item)}</span></li>)}</ul>
               <div className="onboarding-completion" style={{ "--onboarding-progress": `${((step + 1) / STEPS.length) * 100}%` } as CSSProperties}>
-                <span><b>Kurulum ilerlemesi</b><strong>%{Math.round(((step + 1) / STEPS.length) * 100)}</strong></span><i />
+                <span><b>{t("Kurulum ilerlemesi")}</b><strong>{t("%{percent}", { percent: Math.round(((step + 1) / STEPS.length) * 100) })}</strong></span><i />
               </div>
             </div>
           </aside>
@@ -749,7 +755,7 @@ export function OnboardingWizard() {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
-                  Geri
+                  {t("Geri")}
                 </button>
               )}
             </div>
@@ -760,17 +766,17 @@ export function OnboardingWizard() {
               </span>
               {step < STEPS.length - 1 ? (
                 <Button type="button" onClick={handleNext}>
-                  Devam Et →
+                  {t("Devam Et →")}
                 </Button>
               ) : (
                 <Button type="submit" disabled={loading}>
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Oluşturuluyor...
+                      {t("Oluşturuluyor...")}
                     </span>
                   ) : (
-                    "🚀 Kurulumu Tamamla"
+                    `🚀 ${t("Kurulumu Tamamla")}`
                   )}
                 </Button>
               )}
@@ -781,9 +787,9 @@ export function OnboardingWizard() {
 
       {/* Trust Badges */}
       <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-[var(--text-3)]">
-        <span className="flex items-center gap-1">🔒 SSL Korumalı</span>
-        <span className="flex items-center gap-1">⚡ 2 Dakikada Kurulum</span>
-        <span className="flex items-center gap-1">💳 Kredi Kartı Gerekmez</span>
+        <span className="flex items-center gap-1">🔒 {t("SSL Korumalı")}</span>
+        <span className="flex items-center gap-1">⚡ {t("2 Dakikada Kurulum")}</span>
+        <span className="flex items-center gap-1">💳 {t("Kredi Kartı Gerekmez")}</span>
       </div>
     </div>
   );

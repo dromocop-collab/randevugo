@@ -1,8 +1,9 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { useT } from "@/i18n/client";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 
 const ADMIN_EMAIL = "cihatwin@gmail.com";
@@ -10,6 +11,7 @@ const ADMIN_EMAIL = "cihatwin@gmail.com";
 const ALWAYS_ALLOWED_PREFIXES = ["/super-admin", "/giris"];
 
 export function MaintenanceGate({ children }: { children: ReactNode }) {
+  const t = useT();
   const pathname = usePathname();
   const { user } = useAuth();
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -29,10 +31,9 @@ export function MaintenanceGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--bg-1)] px-6 text-center">
         <span className="text-5xl">🛠️</span>
-        <h1 className="text-xl font-bold text-[var(--text-1)]">Bakım Çalışması</h1>
+        <h1 className="text-xl font-bold text-[var(--text-1)]">{t("Bakım Çalışması")}</h1>
         <p className="max-w-md text-sm text-[var(--text-3)]">
-          Platformumuzda kısa süreli bir bakım çalışması yapılıyor. Kısa süre içinde tekrar
-          hizmetinizdeyiz.
+          {t("Platformumuzda kısa süreli bir bakım çalışması yapılıyor. Kısa süre içinde tekrar hizmetinizdeyiz.")}
         </p>
       </div>
     );

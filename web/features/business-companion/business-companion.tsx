@@ -10,12 +10,14 @@ import { useNotificationSoundSync } from "@/features/push/notification-sound-syn
 import { canConfirmAppointments, startOfLocalDay } from "@/features/business-companion/companion-domain";
 import { useCompanionFeed } from "@/features/business-companion/use-companion-feed";
 import { CompanionView, useArrivalQueue, useNow } from "@/features/business-companion/companion-view";
+import { useT } from "@/i18n/client";
 
 /**
  * Herkese açık sayfalarda, işletme erişimi olan girişli kullanıcı için canlı mini panel.
  * BusinessCompanionGate tarafından yalnızca gerektiğinde (tembel) yüklenir.
  */
 export default function LiveBusinessCompanion() {
+  const t = useT();
   const { user } = useAuth();
   const { businesses, businessId, setBusinessId, access } = useBusiness();
   const uid = user?.uid ?? null;
@@ -38,7 +40,7 @@ export default function LiveBusinessCompanion() {
     return !(uid && getSyncedUid() === uid && !isPushOptedOut());
   }, [uid]);
 
-  const arrivals = useArrivalQueue({ businessName: active?.name ?? "İşletmen", shouldNotifyNatively });
+  const arrivals = useArrivalQueue({ businessName: active?.name ?? t("İşletmen"), shouldNotifyNatively });
 
   // Aynı "yeni randevu" push'u ön planda ikinci kez zil/toast olmasın.
   useEffect(() => registerForegroundClaim((data) =>

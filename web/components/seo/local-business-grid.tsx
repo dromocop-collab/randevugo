@@ -1,8 +1,9 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { ArrowRight, MapPin, Star, Store } from "lucide-react";
 import { categoryDisplayName } from "@/lib/seo/categories";
 import { businessPath } from "@/lib/seo/site";
+import { getT } from "@/i18n/server";
 import styles from "./seo-blocks.module.css";
 
 export type GridBusiness = {
@@ -20,10 +21,11 @@ export type GridBusiness = {
 };
 
 /** Sunucuda çizilen, taranabilir işletme kartları. Kart başlıkları sayfa hiyerarşisine göre h3'tür. */
-export function LocalBusinessGrid({ businesses, headingLevel = "h3" }: { businesses: GridBusiness[]; headingLevel?: "h2" | "h3" }) {
+export async function LocalBusinessGrid({ businesses, headingLevel = "h3" }: { businesses: GridBusiness[]; headingLevel?: "h2" | "h3" }) {
+  const t = await getT();
   const Heading = headingLevel;
   if (businesses.length === 0) {
-    return <div className={styles.empty}><Store aria-hidden="true" /><b>Yeni işletmeler hazırlanıyor</b><p>Bu alanda yayınlanan işletme olduğunda liste otomatik güncellenir.</p></div>;
+    return <div className={styles.empty}><Store aria-hidden="true" /><b>{t("Yeni işletmeler hazırlanıyor")}</b><p>{t("Bu alanda yayınlanan işletme olduğunda liste otomatik güncellenir.")}</p></div>;
   }
   return (
     <ul className={styles.grid}>
@@ -40,12 +42,12 @@ export function LocalBusinessGrid({ businesses, headingLevel = "h3" }: { busines
                   : <Store size={40} aria-hidden="true" />}
               </div>
               <div className={styles.cardBody}>
-                <span className={styles.cardCategory}>{categoryDisplayName(business.category)}</span>
+                <span className={styles.cardCategory}>{t(categoryDisplayName(business.category))}</span>
                 <Heading className={styles.cardTitle}>{business.name}<ArrowRight size={18} aria-hidden="true" /></Heading>
-                <p className={styles.cardText}>{business.description || `${business.name} hizmetlerini, fiyatlarını ve uygun randevu saatlerini inceleyin.`}</p>
+                <p className={styles.cardText}>{business.description || t("{name} hizmetlerini, fiyatlarını ve uygun randevu saatlerini inceleyin.", { name: business.name })}</p>
                 <div className={styles.cardMeta}>
                   <span><MapPin size={14} aria-hidden="true" />{place}</span>
-                  {rated && <span className={styles.cardRating} aria-label={`5 üzerinden ${business.rating!.toFixed(1)} puan`}><Star size={14} fill="currentColor" aria-hidden="true" />{business.rating!.toFixed(1)} <small>({business.reviewCount})</small></span>}
+                  {rated && <span className={styles.cardRating} aria-label={t("5 üzerinden {rating} puan", { rating: business.rating!.toFixed(1) })}><Star size={14} fill="currentColor" aria-hidden="true" />{business.rating!.toFixed(1)} <small>({business.reviewCount})</small></span>}
                 </div>
               </div>
             </Link>

@@ -1,15 +1,16 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { CSSProperties, ReactNode } from "react";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { Crumbs, PageCta, cx } from "./ui";
 import mp from "./mp.module.css";
 import s from "./editorial.module.css";
+import { getT } from "@/i18n/server";
 
 export type EditorialSection = { id: string; icon: ReactNode; title: string; body: ReactNode; points?: string[] };
 
 /** Hakkımızda / Güvenlik gibi metin ağırlıklı sayfalar için sade editoryal düzen. */
-export function EditorialPage({
+export async function EditorialPage({
   eyebrow, eyebrowIcon, title, intro, crumb, highlights, sections, tocLabel, related, cta,
 }: {
   eyebrow: string;
@@ -23,13 +24,14 @@ export function EditorialPage({
   related: Array<{ href: string; label: string; text: string }>;
   cta?: { title: ReactNode; text: string; primary: { href: string; label: string }; secondary?: { href: string; label: string } };
 }) {
+  const t = await getT();
   return (
     <main className={mp.page}>
       <section className={mp.hero}>
         <div className={mp.heroGrid} aria-hidden="true" />
         <div className={cx(mp.shell, s.heroInner)}>
           <div className={s.heroCopy}>
-            <Crumbs items={[{ href: "/", label: "Ana Sayfa" }, { label: crumb }]} />
+            <Crumbs ariaLabel={t("İçerik haritası")} items={[{ href: "/", label: t("Ana Sayfa") }, { label: crumb }]} />
             <span className={cx(mp.eyebrow, mp.rise)}>{eyebrowIcon} {eyebrow}</span>
             <h1 className={cx(mp.title, s.title, mp.rise)} style={{ "--i": 1 } as CSSProperties}>{title}</h1>
             <p className={cx(mp.lead, mp.rise)} style={{ "--i": 2 } as CSSProperties}>{intro}</p>
@@ -39,7 +41,7 @@ export function EditorialPage({
       </section>
 
       <div className={mp.shell}>
-        <ul className={s.highlights} aria-label="Öne çıkanlar">
+        <ul className={s.highlights} aria-label={t("Öne çıkanlar")}>
           {highlights.map((item, i) => (
             <li key={item.title} className={mp.rise} style={{ "--i": i } as CSSProperties}>
               <span>{item.icon}</span>
@@ -69,7 +71,7 @@ export function EditorialPage({
         </div>
 
         <section className={s.related} aria-labelledby="ilgili-baslik">
-          <h2 id="ilgili-baslik" className={s.relatedTitle}>İlgili sayfalar</h2>
+          <h2 id="ilgili-baslik" className={s.relatedTitle}>{t("İlgili sayfalar")}</h2>
           <ul>
             {related.map((item) => (
               <li key={item.href}>

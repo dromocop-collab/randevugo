@@ -3,6 +3,7 @@
 import { AlertCircle, Check, ChevronDown, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { CustomBookingField, CustomFieldInputValues } from "./booking-fields-domain";
+import { useT } from "@/i18n/client";
 import styles from "./custom-fields.module.css";
 
 type Value = CustomFieldInputValues[string] | undefined;
@@ -42,9 +43,10 @@ export function CustomFieldInputs({
 }
 
 function FieldLabel({ field, htmlFor, counter }: { field: CustomBookingField; htmlFor?: string; counter?: string }) {
+  const t = useT();
   const content = <>
     <span className={styles.labelText}>{field.label}</span>
-    {field.required ? <em aria-hidden="true">*</em> : <small>İsteğe bağlı</small>}
+    {field.required ? <em aria-hidden="true">*</em> : <small>{t("İsteğe bağlı")}</small>}
     {counter && <small className={styles.counter}>{counter}</small>}
   </>;
   return htmlFor
@@ -59,11 +61,12 @@ function CustomFieldInput({ field, value, error, inputId, onChange }: {
   inputId: string;
   onChange: (value: Value) => void;
 }) {
+  const t = useT();
   const helpId = field.helpText ? `${inputId}-help` : undefined;
   const errorId = error ? `${inputId}-error` : undefined;
   const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
   const help = field.helpText ? <p id={helpId} className={styles.help}>{field.helpText}</p> : null;
-  const errorLine = error ? <p id={errorId} className={styles.error} role="alert"><AlertCircle size={14} aria-hidden /> {error}</p> : null;
+  const errorLine = error ? <p id={errorId} className={styles.error} role="alert"><AlertCircle size={14} aria-hidden /> {t(error)}</p> : null;
 
   if (field.type === "checkbox") {
     const checked = value === true;
@@ -102,7 +105,7 @@ function CustomFieldInput({ field, value, error, inputId, onChange }: {
       <div className={styles.field}>
         <FieldLabel field={field} htmlFor={inputId} counter={`${min}–${max}`} />
         <div className={cn(styles.stepper, error && styles.invalid)}>
-          <button type="button" className={styles.stepBtn} onClick={() => step(-1)} disabled={numeric !== null && numeric <= min} aria-label={`${field.label} azalt`}><Minus size={18} strokeWidth={2.4} /></button>
+          <button type="button" className={styles.stepBtn} onClick={() => step(-1)} disabled={numeric !== null && numeric <= min} aria-label={t("{label} azalt", { label: field.label })}><Minus size={18} strokeWidth={2.4} /></button>
           <input
             id={inputId}
             type="number"
@@ -117,7 +120,7 @@ function CustomFieldInput({ field, value, error, inputId, onChange }: {
             aria-invalid={Boolean(error)}
             className={styles.stepValue}
           />
-          <button type="button" className={styles.stepBtn} onClick={() => step(1)} disabled={numeric !== null && numeric >= max} aria-label={`${field.label} artır`}><Plus size={18} strokeWidth={2.4} /></button>
+          <button type="button" className={styles.stepBtn} onClick={() => step(1)} disabled={numeric !== null && numeric >= max} aria-label={t("{label} artır", { label: field.label })}><Plus size={18} strokeWidth={2.4} /></button>
         </div>
         {help}
         {errorLine}
@@ -166,7 +169,7 @@ function CustomFieldInput({ field, value, error, inputId, onChange }: {
             aria-invalid={Boolean(error)}
             className={cn(styles.input, styles.select, error && styles.invalid)}
           >
-            <option value="">Seçin…</option>
+            <option value="">{t("Seçin…")}</option>
             {options.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
           <ChevronDown size={18} aria-hidden />

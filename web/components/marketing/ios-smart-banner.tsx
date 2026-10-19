@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Apple, ArrowUpRight, X } from "lucide-react";
 import { APP_STORE_URL } from "@/lib/app-store";
+import { useT } from "@/i18n/client";
 
 const HIDDEN_KEY = "sr_ios_banner_hidden_until";
 // Sabit alt çubuğu olan (randevu al, sihirbaz) ve odak gerektiren sayfalarda banner gösterilmez.
@@ -23,6 +24,7 @@ function isMobileSafari() {
 }
 
 export function IosSmartBanner() {
+  const t = useT();
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const bannerRef = useRef<HTMLElement>(null);
@@ -58,11 +60,11 @@ export function IosSmartBanner() {
 
   if (hiddenOnRoute || !visible) return null;
 
-  return <aside ref={bannerRef} className="ios-smart-banner" aria-label="SeninRandevun iOS uygulamasını indir">
+  return <aside ref={bannerRef} className="ios-smart-banner" aria-label={t("SeninRandevun iOS uygulamasını indir")}>
     <span className="ios-smart-banner-shine"/>
-    <button type="button" onClick={dismiss} aria-label="Uygulama önerisini kapat"><X size={15}/></button>
-    <Image src="/icon-192.png" width={52} height={52} alt="SeninRandevun uygulama ikonu"/>
-    <div><small><Apple size={10} fill="currentColor"/> APP STORE&apos;DA</small><b>SeninRandevun</b><span>Randevun artık cebinde</span></div>
-    <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer">İndir <ArrowUpRight size={13}/></a>
+    <button type="button" onClick={dismiss} aria-label={t("Uygulama önerisini kapat")}><X size={15}/></button>
+    <Image src="/icon-192.png" width={52} height={52} alt={t("SeninRandevun uygulama ikonu")}/>
+    <div><small><Apple size={10} fill="currentColor"/> {t("APP STORE'DA")}</small><b>SeninRandevun</b><span>{t("Randevun artık cebinde")}</span></div>
+    <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer">{t("İndir")} <ArrowUpRight size={13}/></a>
   </aside>;
 }
