@@ -140,6 +140,47 @@ export function priceRangeText(prices: number[]): string | undefined {
   return min === max ? `${format(min)} TRY` : `${format(min)}-${format(max)} TRY`;
 }
 
+/** Vitrin JSON-LD hizmet satırı; priceType yoksa sabit fiyat (eski hizmetler). */
+export type StorefrontServiceInput = {
+  name: string;
+  description?: string;
+  price?: number;
+  currency?: string;
+  durationMinutes?: number;
+  priceType?: "fixed" | "from" | "range" | "quote";
+  priceMax?: number;
+  variants?: { price: number }[];
+};
+
+/** Hizmet teklifinin fiyat alanları: quote → yok; range → min/max; from (veya farklı fiyatlı seçenekler) → minPrice; fixed → price. */
+function serviceOfferPrice(service: StorefrontServiceInput): JsonLdObject {
+  const type = service.priceType ?? "fixed";
+  if (type === "quote") return {};
+  const currency = service.currency || "TRY";
+  const base = Number(service.price ?? 0);
+  if (type === "range") {
+    const max = Math.max(base, Number(service.priceMax ?? base));
+    if (!(max > 0)) return {};
+    return { priceSpecification: { "@type": "PriceSpecification", minPrice: Math.max(0, base), maxPrice: max, priceCurrency: currency } };
+  }
+  const variantPrices = (service.variants ?? []).map((item) => Number(item?.price)).filter((value) => Number.isFinite(value) && value >= 0);
+  const min = variantPrices.length ? Math.min(...variantPrices) : base;
+  const varied = variantPrices.some((value) => value !== min);
+  if (!(min > 0)) return {};
+  if (type === "from" || varied) return { priceSpecification: { "@type": "PriceSpecification", minPrice: min, priceCurrency: currency } };
+  return { price: min, priceCurrency: currency };
+}
+
+/** priceRange için kullanılacak tutarlar (görüşmede belirlenen fiyat hariç). */
+function servicePricePoints(service: StorefrontServiceInput): number[] {
+  const type = service.priceType ?? "fixed";
+  if (type === "quote") return [];
+  const base = Number(service.price ?? 0);
+  if (type === "range") return [base, Number(service.priceMax ?? base)];
+  const variantPrices = (service.variants ?? []).map((item) => Number(item?.price)).filter((value) => Number.isFinite(value));
+  return variantPrices.length ? variantPrices : [base];
+}
+
 export type StorefrontSchemaInput = {
   slug: string;
   path: string;
@@ -159,7 +200,7 @@ export type StorefrontSchemaInput = {
   reviewCount?: number;
   instagram?: string;
   hours: ScheduleLike[];
-  services: { name: string; description?: string; price?: number; currency?: string; durationMinutes?: number }[];
+  services: StorefrontServiceInput[];
   reviews: { customerName?: string; rating: number; comment?: string; createdAt?: string; isVisible?: boolean; status?: string }[];
   allowOnlineBooking?: boolean;
   /** Yalnız güvenilir konum (haritada işaretli veya tam adres) yazılır; ilçe/il merkezi yazılmaz. */
@@ -193,7 +234,7 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
   const images = [input.coverUrl, input.logoUrl, ...(input.galleryUrls ?? [])].filter((value): value is string => Boolean(value)).map((value) => absoluteUrl(value));
   const uniqueImages = [...new Set(images)].slice(0, 6);
   const offers = input.services.filter((service) => service.name?.trim()).slice(0, 30);
-  const prices = offers.map((service) => service.price ?? 0);
+  const prices = offers.flatMap(servicePricePoints);
   const priceRange = priceRangeText(prices);
   const openingHours = openingHoursJsonLd(input.hours);
   const reviewCount = Math.max(0, Math.floor(input.reviewCount ?? 0));
@@ -240,7 +281,7 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
             ...(service.description?.trim() ? { description: service.description.trim().slice(0, 300) } : {}),
             ...(isoDuration(service.durationMinutes) ? { duration: isoDuration(service.durationMinutes) } : {}),
           },
-          ...(service.price && service.price > 0 ? { price: service.price, priceCurrency: service.currency || "TRY" } : {}),
+          ...serviceOfferPrice(service),
           url: absoluteUrl(`${input.path}/randevu`),
         })),
       },

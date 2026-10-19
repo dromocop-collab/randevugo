@@ -1,4 +1,5 @@
-import type { Service } from "@/types/service";
+import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/i18n/config";
+import type { Service, ServiceTranslations } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Staff } from "@/types/staff";
 
@@ -60,4 +61,33 @@ export function cleanOverrides(overrides: Staff["serviceOverrides"] = {}) {
 
 export function categoryName(categories: ServiceCategory[], id: string) {
   return categories.find((item) => item.id === id)?.name ?? "Kategorisiz";
+}
+
+/** Varsayılan dil (Türkçe) dışındaki diller — işletme metinlerinin karşılık girilebilen dilleri. */
+export const TRANSLATION_LOCALES = LOCALES.filter((locale) => locale !== DEFAULT_LOCALE) as Locale[];
+
+/** Bir dilin hizmet metinleri (düzenleyici taslağı). */
+export type ServiceTextDraft = { name: string; description: string; variants: Record<string, string> };
+
+/**
+ * Hizmetin dil karşılıklarına bir dilin elle düzeltilmiş metinlerini yazar (manual: true → sunucu otomatik
+ * çeviriyle ezmez). Boş alanlar kaydedilmez; dil tamamen boşsa o dil silinir (sunucu yeniden otomatik çevirir).
+ * Firestore tanımsız değer kabul etmediği için yalnız dolu alanlar yazılır.
+ */
+export function withManualServiceTranslation(existing: ServiceTranslations | undefined, locale: string, draft: Partial<ServiceTextDraft>, variantIds: string[]): ServiceTranslations {
+  const next: ServiceTranslations = {};
+  Object.entries(existing ?? {}).forEach(([key, value]) => { if (value && key !== locale) next[key] = value; });
+  const entry: { name?: string; description?: string; variants?: Record<string, string>; manual?: boolean } = {};
+  const name = draft.name?.trim();
+  const description = draft.description?.trim();
+  if (name) entry.name = name;
+  if (description) entry.description = description;
+  const variants: Record<string, string> = {};
+  Object.entries(draft.variants ?? {}).forEach(([id, value]) => {
+    const text = value?.trim();
+    if (text && variantIds.includes(id)) variants[id] = text;
+  });
+  if (Object.keys(variants).length) entry.variants = variants;
+  if (Object.keys(entry).length) next[locale] = { ...entry, manual: true };
+  return next;
 }

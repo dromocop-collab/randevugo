@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 import { CheckCircle2, ChevronLeft, ChevronRight, MoonStar, ShieldCheck, Sun, Sunrise, X } from "lucide-react";
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
@@ -12,6 +13,25 @@ import { localizeHref, tk } from "@/i18n/config";
 import s from "./booking.module.css";
 
 const useDateLocale = useDateFnsLocale;
+
+/** next.config images.remotePatterns ile eşleşen (optimize edilebilen) Firebase Storage adresi mi? */
+function isOptimizableImage(url: string) {
+  try {
+    const { protocol, hostname, pathname } = new URL(url);
+    if (protocol !== "https:") return false;
+    return (hostname === "firebasestorage.googleapis.com" && pathname.startsWith("/v0/b/randevugo-d1d2e.firebasestorage.app/o/"))
+      || (hostname === "storage.googleapis.com" && pathname.startsWith("/randevugo-d1d2e.firebasestorage.app/"));
+  } catch {
+    return false;
+  }
+}
+
+/** Hizmetin kare küçük görseli; kapsayıcı (position: relative; overflow: hidden) boyutu belirler. */
+export function ServiceThumb({ url, size }: { url: string; size: number }) {
+  if (isOptimizableImage(url)) return <Image src={url} alt="" fill sizes={`${size}px`} style={{ objectFit: "cover" }} />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
+}
 
 /* ━━━ Alt sayfa (iOS benzeri) ━━━ */
 export function BottomSheet({

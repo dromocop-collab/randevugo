@@ -31,17 +31,19 @@ import {
 import { cx, matchesSearch, useConfirm, ws } from "../_workspace/kit";
 import { ServiceRow } from "./service-row";
 import { ServiceEditorSheet } from "./service-editor-sheet";
-import { CategoryEditorSheet, CategoryManagerSheet, DeleteCategorySheet } from "./category-sheets";
+import { CategoryEditorSheet, CategoryManagerSheet, DeleteCategorySheet, type CategoryInput } from "./category-sheets";
+import { localizedCategoryName, localizedServiceDescription, localizedServiceName } from "@/features/services/service-pricing";
 import { TemplateLibrarySheet } from "./template-library-sheet";
 import { bySortOrder, reorderPatch, serviceStatus, type ServiceStatusFilter } from "./service-shared";
 import styles from "./services.module.css";
-import { useT } from "@/i18n/client";
+import { useLocale, useT } from "@/i18n/client";
 
 const UNCATEGORIZED = "__none__";
 
 export default function ServicesPage() {
   const { businessId } = useBusiness();
   const t = useT();
+  const locale = useLocale();
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -176,7 +178,7 @@ export default function ServicesPage() {
   }
 
   /* ── Kategori işlemleri ── */
-  async function handleSubmitCategory(category: ServiceCategory | null, input: { name: string; icon: string; color: string }) {
+  async function handleSubmitCategory(category: ServiceCategory | null, input: CategoryInput) {
     if (!businessId) return false;
     try {
       if (category) {
@@ -259,8 +261,8 @@ export default function ServicesPage() {
     });
     await reload();
     toast.success(item.templateDraft
-      ? t("{name} fiyatlandırıldı ve yayına alındı.", { name: item.name })
-      : t("{name} fiyatı güncellendi.", { name: item.name }));
+      ? t("{name} fiyatlandırıldı ve yayına alındı.", { name: localizedServiceName(item, locale) })
+      : t("{name} fiyatı güncellendi.", { name: localizedServiceName(item, locale) }));
   }
 
   async function handleToggleService(item: Service) {
@@ -277,7 +279,7 @@ export default function ServicesPage() {
         ...(!item.isActive ? { templateDraft: false } : {}),
       });
       await reload();
-      toast.success(item.isActive ? t("{name} duraklatıldı.", { name: item.name }) : t("{name} yayında.", { name: item.name }));
+      toast.success(item.isActive ? t("{name} duraklatıldı.", { name: localizedServiceName(item, locale) }) : t("{name} yayında.", { name: localizedServiceName(item, locale) }));
     } catch {
       toast.error(t("Hizmet durumu değiştirilemedi."));
     }
@@ -287,7 +289,7 @@ export default function ServicesPage() {
     if (!businessId) return;
     const ok = await confirm({
       title: t("Hizmet silinsin mi?"),
-      description: t("“{name}” kalıcı olarak silinecek. Geçmiş randevular etkilenmez; geçici olarak kaldırmak isterseniz silmek yerine duraklatabilirsiniz.", { name: item.name }),
+      description: t("“{name}” kalıcı olarak silinecek. Geçmiş randevular etkilenmez; geçici olarak kaldırmak isterseniz silmek yerine duraklatabilirsiniz.", { name: localizedServiceName(item, locale) }),
       confirmLabel: t("Sil"),
     });
     if (!ok) return;
@@ -334,7 +336,7 @@ export default function ServicesPage() {
   const groups = useMemo(() => {
     const matches = (service: Service) =>
       (statusFilter === "all" || serviceStatus(service) === statusFilter) &&
-      matchesSearch(search, service.name, service.description);
+      matchesSearch(search, service.name, service.description, localizedServiceName(service, locale), localizedServiceDescription(service, locale));
     const list = [
       ...categories.map((category) => ({ id: category.id, category, items: services.filter((s) => s.category === category.id) })),
       { id: UNCATEGORIZED, category: undefined as ServiceCategory | undefined, items: uncategorized },
@@ -343,7 +345,7 @@ export default function ServicesPage() {
       .filter((group) => activeCategory === "all" || group.id === activeCategory)
       .map((group) => ({ ...group, all: [...group.items].sort(bySortOrder), items: group.items.filter(matches).sort(bySortOrder) }))
       .filter((group) => group.items.length > 0);
-  }, [activeCategory, categories, search, services, statusFilter, uncategorized]);
+  }, [activeCategory, categories, locale, search, services, statusFilter, uncategorized]);
   const visibleCount = groups.reduce((total, group) => total + group.items.length, 0);
 
   const openCreate = (categoryId?: string) => setEditor({
@@ -418,7 +420,7 @@ export default function ServicesPage() {
                   const active = activeCategory === cat.id;
                   return (
                     <button key={cat.id} type="button" className={cx(ws.chip, active && ws.chipActive)} aria-pressed={active} onClick={() => setActiveCategory(active ? "all" : cat.id)}>
-                      <ServiceCategoryIcon icon={cat.icon} name={cat.name} size={16} />{cat.name}<span className={ws.chipCount}>{count}</span>
+                      <ServiceCategoryIcon icon={cat.icon} name={cat.name} size={16} />{localizedCategoryName(cat, locale)}<span className={ws.chipCount}>{count}</span>
                     </button>
                   );
                 })}
@@ -448,10 +450,10 @@ export default function ServicesPage() {
                   <header className={styles.groupHead}>
                     <span className={styles.catIcon} aria-hidden="true">{group.category ? <ServiceCategoryIcon icon={group.category.icon} name={group.category.name} size={19} /> : <FolderOpen size={18} />}</span>
                     <div className={styles.groupTitle}>
-                      <h2 id={`group-${group.id}`}>{group.category?.name ?? t("Kategorisiz hizmetler")}</h2>
+                      <h2 id={`group-${group.id}`}>{group.category ? localizedCategoryName(group.category, locale) : t("Kategorisiz hizmetler")}</h2>
                       <p>{filtering ? t("{count} hizmet · {total} içinden", { count: group.items.length, total: group.all.length }) : t("{count} hizmet", { count: group.items.length })}</p>
                     </div>
-                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => openCreate(group.id)} aria-label={t("{name} grubuna hizmet ekle", { name: group.category?.name ?? t("Kategorisiz") })}>{t("Ekle")}</Button>
+                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => openCreate(group.id)} aria-label={t("{name} grubuna hizmet ekle", { name: group.category ? localizedCategoryName(group.category, locale) : t("Kategorisiz") })}>{t("Ekle")}</Button>
                   </header>
                   <div className={styles.groupList}>
                     {group.items.map((item, index) => (

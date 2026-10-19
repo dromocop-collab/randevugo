@@ -1,0 +1,17 @@
+{
+  "Ödemeyi kaydetmeden önce kesin hizmet tutarını girin.": "Enter the final service amount before recording the payment.",
+  "Hizmet tutarı ek hizmetlerin toplamından ({amount}) az olamaz.": "The service amount can't be less than the add-on services total ({amount}).",
+  "Kesin tutarı girin (₺)": "Enter the final amount (₺)",
+  "Hizmet tutarı (₺)": "Service amount (₺)",
+  "Örn. 750": "e.g. 750",
+  "Tahmini: {price}": "Estimated: {price}",
+  "Ek hizmetler dahil toplam tutar.": "Total amount including add-on services.",
+  "Kesin tutarı girin": "Enter the final amount",
+  "Bu hizmetin fiyatı iş bitince belirlenir. Tamamlamak için müşterinin ödeyeceği tutarı yazın.": "This service is priced once the work is done. Enter the amount the customer will pay to complete it.",
+  "Kaydet ve tamamla": "Save and complete",
+  "Kesin tutar (₺)": "Final amount (₺)",
+  "Müşterinin ödeyeceği hizmet tutarı.": "The service amount the customer will pay.",
+  "{minutes} dk · {price}": "{minutes} min · {price}",
+  "hizmet::Seçenek": "Option",
+  "Seçenek düzenlemede değiştirilemez; farklı seçenek için yeni randevu oluşturun.": "The option can't be changed when editing; create a new appointment for a different option."
+}

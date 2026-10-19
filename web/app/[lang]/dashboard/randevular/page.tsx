@@ -15,6 +15,8 @@ import {
   updateAppointmentStatus,
 } from "@/features/appointments/appointment-repository";
 import { listServices } from "@/features/services/service-repository";
+import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
+import { FinalPriceDialog } from "@/components/dashboard/final-price-dialog";
 import { AppointmentCustomFields } from "@/features/booking-fields/appointment-custom-fields";
 import { millisToZonedDateTime, zonedDateTimeToMillis } from "@/lib/time/zoned";
 import { userFacingError } from "@/lib/errors/user-facing-error";
@@ -24,8 +26,8 @@ import {
   SearchField, SegmentedControl, Sheet, StatCard, StatGrid, StatusPill, Toolbar, appointmentStatusMeta, type DataColumn,
 } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
-import { tk, type TFunction } from "@/i18n/config";
-import { useIntlLocale, useT } from "@/i18n/client";
+import { tk, type Locale, type TFunction } from "@/i18n/config";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 import { DATE_FNS_LOCALES, useDateFnsLocale } from "@/i18n/date";
 import type { Appointment, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
 import type { Service } from "@/types/service";
@@ -40,7 +42,9 @@ const PAYMENT_LABEL: Record<string, string> = { paid: tk("Ödendi"), deposit_pai
 
 function formatDate(value: string, locale: DateLocale = DATE_FNS_LOCALES.tr) { try { return format(new Date(value), "d MMM yyyy", { locale }); } catch { return value; } }
 function formatTime(value: string) { try { return format(new Date(value), "HH:mm"); } catch { return ""; } }
-function servicesOf(item: Appointment) { return [item.serviceName, ...(item.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + "); }
+function servicesOf(item: Appointment, locale: Locale) { return [localizedAppointmentServiceName(item, locale), ...(item.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + "); }
+/** Tutar gösterilecek mi: girilmiş tutar ya da sabit olmayan fiyat tipi (ör. "görüşmede"). */
+function hasPrice(item: Appointment) { return Boolean(item.servicePrice) || (item.servicePriceType ?? "fixed") !== "fixed"; }
 function csvCell(value: string) { return `"${value.replaceAll('"', '""')}"`; }
 function dayLabel(value: string, t: TFunction, locale: DateLocale) {
   const date = new Date(value);
@@ -56,6 +60,7 @@ export default function AppointmentsPage() {
   const { businessId, access } = useBusiness();
   const t = useT();
   const intlLocale = useIntlLocale();
+  const locale = useLocale();
   const dateLocale = useDateFnsLocale();
   const fmtDate = (value: string) => formatDate(value, dateLocale);
   const money = (value: number) => `${value.toLocaleString(intlLocale)} ₺`;
@@ -73,6 +78,8 @@ export default function AppointmentsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Appointment | null>(null);
+  // Fiyatı iş bitince kesinleşen randevuyu tamamlarken kesin tutar sorulur.
+  const [finalPriceFor, setFinalPriceFor] = useState<Appointment | null>(null);
   // Ek hizmet düzenleyici
   const [serviceEditor, setServiceEditor] = useState<Appointment | null>(null);
   const [selectedExtraServiceIds, setSelectedExtraServiceIds] = useState<string[]>([]);
@@ -146,9 +153,9 @@ export default function AppointmentsPage() {
       if (dateScope === "upcoming" && date < now) return false;
       if (dateScope === "past" && date >= now) return false;
       if (dateScope === "custom" && ((from && date < from) || (to && date > to))) return false;
-      return !needle || `${a.customerName} ${a.customerPhone ?? ""} ${servicesOf(a)} ${a.staffName ?? ""}`.toLocaleLowerCase("tr-TR").includes(needle);
+      return !needle || `${a.customerName} ${a.customerPhone ?? ""} ${servicesOf(a, locale)} ${a.staffName ?? ""}`.toLocaleLowerCase("tr-TR").includes(needle);
     });
-  }, [appointments, dateScope, fromDate, toDate, search]);
+  }, [appointments, dateScope, fromDate, toDate, search, locale]);
 
   const counts = useMemo(() => {
     const result: Record<FilterTab, number> = { all: scoped.length, pending: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0 };
@@ -176,14 +183,16 @@ export default function AppointmentsPage() {
     };
   }, [appointments, now]);
 
-  async function handleStatusChange(item: Appointment, nextStatus: AppointmentStatus) {
+  async function handleStatusChange(item: Appointment, nextStatus: AppointmentStatus, finalPrice?: { total: number; extrasTotal: number }) {
     if (!businessId) return;
+    if (nextStatus === "completed" && !finalPrice && needsFinalPrice(item)) { setFinalPriceFor(item); return; }
     setUpdatingId(item.id);
     try {
-      await updateAppointmentStatus(businessId, item.id, nextStatus);
+      await updateAppointmentStatus(businessId, item.id, nextStatus, finalPrice);
       toast.success(t("Randevu {status} olarak güncellendi", { status: t(appointmentStatusMeta[nextStatus].label).toLocaleLowerCase(intlLocale) }));
       await reload();
       setConfirmCancel(null);
+      setFinalPriceFor(null);
     } catch {
       toast.error(t("Güncelleme başarısız oldu"));
     } finally {
@@ -277,7 +286,7 @@ export default function AppointmentsPage() {
   function exportAppointments() {
     const rows = [
       [t("Tarih"), t("Saat"), t("Müşteri"), t("Telefon"), t("E-posta"), t("Hizmet"), t("Çalışan"), t("Durum"), t("Ödeme"), t("Tutar")],
-      ...filtered.map((item) => [fmtDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", servicesOf(item), item.staffName ?? "", t(appointmentStatusMeta[item.status].label), item.paymentStatus, String(item.servicePrice ?? 0)]),
+      ...filtered.map((item) => [fmtDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", servicesOf(item, locale), item.staffName ?? "", t(appointmentStatusMeta[item.status].label), item.paymentStatus, String(item.servicePrice ?? 0)]),
     ];
     const csv = "﻿" + rows.map((row) => row.map(csvCell).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -291,10 +300,10 @@ export default function AppointmentsPage() {
   const columns: DataColumn<Appointment>[] = [
     { key: "when", header: t("Tarih"), width: 150, cell: (item) => <span className={styles.when}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt, t, dateLocale)}</small></span> },
     { key: "customer", header: t("Müşteri"), primary: true, cell: (item) => <span className={styles.customer}><span className={styles.avatar} aria-hidden>{item.customerName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="min-w-0"><b>{item.customerName}</b>{canViewCustomerContact && item.customerPhone && <small>{item.customerPhone}</small>}</span></span> },
-    { key: "service", header: t("Hizmet"), cell: (item) => <span className={styles.service}>{item.serviceName ?? "—"}{(item.additionalServices?.length ?? 0) > 0 && <Badge size="sm" tone="green">{t("+{count} ek", { count: item.additionalServices?.length ?? 0 })}</Badge>}</span> },
+    { key: "service", header: t("Hizmet"), cell: (item) => <span className={styles.service}>{localizedAppointmentServiceName(item, locale) || "—"}{(item.additionalServices?.length ?? 0) > 0 && <Badge size="sm" tone="green">{t("+{count} ek", { count: item.additionalServices?.length ?? 0 })}</Badge>}</span> },
     { key: "staff", header: t("Çalışan"), cell: (item) => item.staffName || <span className={styles.muted}>{t("Atanmamış")}</span> },
     { key: "status", header: t("Durum"), cell: (item) => <StatusPill status={item.status} size="sm" /> },
-    { key: "price", header: t("Tutar"), align: "right", cell: (item) => item.servicePrice ? <b className={styles.price}>{money(item.servicePrice)}</b> : <span className={styles.muted}>—</span> },
+    { key: "price", header: t("Tutar"), align: "right", cell: (item) => hasPrice(item) ? <span className={styles.service}><b className={styles.price}>{appointmentPriceLabel(item, t, money)}</b>{needsFinalPrice(item) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}</span> : <span className={styles.muted}>—</span> },
   ];
 
   const tabs = (["all", "pending", "confirmed", "completed", "cancelled", "no_show"] as FilterTab[]).map((key) => ({
@@ -358,8 +367,8 @@ export default function AppointmentsPage() {
               <span className={styles.cardTime}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt, t, dateLocale)}</small></span>
               <span className={styles.cardMain}>
                 <b>{item.customerName}</b>
-                <small>{servicesOf(item) || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</small>
-                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" />{item.servicePrice ? <em>{money(item.servicePrice)}</em> : null}</span>
+                <small>{servicesOf(item, locale) || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</small>
+                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" />{hasPrice(item) ? <span className={styles.service}>{needsFinalPrice(item) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}<em>{appointmentPriceLabel(item, t, money)}</em></span> : null}</span>
               </span>
             </span>
           )}
@@ -391,9 +400,9 @@ export default function AppointmentsPage() {
               <div><b>{format(new Date(sel.startAt), "d MMMM yyyy, EEEE", { locale: dateLocale })}</b><small>{formatTime(sel.startAt)}{sel.endAt ? ` – ${formatTime(sel.endAt)}` : ""}{sel.serviceDurationMinutes ? ` · ${t("{minutes} dk", { minutes: sel.serviceDurationMinutes })}` : ""}</small></div>
             </div>
             <KeyValueList items={[
-              { label: t("Hizmet"), value: servicesOf(sel) || "—", wide: true },
+              { label: t("Hizmet"), value: servicesOf(sel, locale) || "—", wide: true },
               { label: t("Çalışan"), value: sel.staffName || t("Atanmamış") },
-              { label: t("Tutar"), value: sel.servicePrice ? money(sel.servicePrice) : "—" },
+              { label: t("Tutar"), value: hasPrice(sel) ? <span className={styles.service}>{appointmentPriceLabel(sel, t, money)}{needsFinalPrice(sel) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}</span> : "—" },
               { label: t("Ödeme"), value: PAYMENT_LABEL[sel.paymentStatus] ? t(PAYMENT_LABEL[sel.paymentStatus]) : sel.paymentStatus },
               ...(sel.source ? [{ label: t("Kaynak"), value: SOURCE_LABEL[sel.source] ? t(SOURCE_LABEL[sel.source]) : sel.source }] : []),
               ...(canViewCustomerContact && sel.customerPhone ? [{ label: t("Telefon"), value: <a href={`tel:${sel.customerPhone}`} className={styles.link}>{sel.customerPhone}</a> }] : []),
@@ -434,6 +443,13 @@ export default function AppointmentsPage() {
         icon={CircleX}
       />
 
+      <FinalPriceDialog
+        appointment={finalPriceFor}
+        busy={Boolean(finalPriceFor && updatingId === finalPriceFor.id)}
+        onClose={() => setFinalPriceFor(null)}
+        onConfirm={(finalPrice) => { if (finalPriceFor) void handleStatusChange(finalPriceFor, "completed", finalPrice); }}
+      />
+
       {/* ── Saat değiştir ── */}
       <Sheet
         open={Boolean(rescheduling)}
@@ -461,7 +477,7 @@ export default function AppointmentsPage() {
         dismissible={!savingServices}
         size="lg"
         title={t("Ek hizmet ekle")}
-        description={serviceEditor ? <>{serviceEditor.customerName} · {t("Ana hizmet:")} <b>{serviceEditor.serviceName ?? t("Hizmet")}</b></> : undefined}
+        description={serviceEditor ? <>{serviceEditor.customerName} · {t("Ana hizmet:")} <b>{localizedAppointmentServiceName(serviceEditor, locale) || t("Hizmet")}</b></> : undefined}
         headerExtra={<div className={styles.serviceSearch}><SearchField value={serviceSearch} onChange={setServiceSearch} placeholder={t("Ek hizmet ara…")} /><Badge tone="accent">{t("{count} seçili", { count: selectedExtraServices.length })}</Badge></div>}
         footer={<div className={styles.serviceFoot}>
           {editorScheduleConflict && <Callout tone="amber" title={t("Çakışma uyarısı")}>{t("Yeni bitiş saati {name} müşterisinin {time} randevusuyla çakışıyor. Yine de kaydedebilirsiniz.", { name: editorScheduleConflict.customerName, time: formatTime(editorScheduleConflict.startAt) })}</Callout>}

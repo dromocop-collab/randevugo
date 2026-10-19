@@ -111,6 +111,8 @@ export async function finalizeCheckout(input: {
   paidAmount: number;
   paymentMethod: PaymentMethod;
   loyaltyPointsToUse: number;
+  /** Kesinleşen hizmet tutarı (ek hizmetler dahil); verilmezse randevudaki tutar kullanılır. */
+  servicePrice?: number;
 }): Promise<{ receiptId: string; total: number; loyaltyPointsEarned: number }> {
   const fn = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "finalizeAppointmentCheckout");
   const result = await fn({
@@ -121,6 +123,7 @@ export async function finalizeCheckout(input: {
     paidAmount: input.paidAmount,
     paymentMethod: input.paymentMethod,
     loyaltyPointsToUse: input.loyaltyPointsToUse,
+    ...(input.servicePrice !== undefined && Number.isFinite(input.servicePrice) ? { servicePrice: Math.max(0, Math.round(input.servicePrice * 100) / 100) } : {}),
   });
   return result.data as { receiptId: string; total: number; loyaltyPointsEarned: number };
 }

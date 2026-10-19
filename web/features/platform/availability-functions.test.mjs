@@ -195,6 +195,61 @@ test("alerts, matching, last-minute projection, privacy and booking race", async
   assert.equal((await db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get()).data().status, "cancelled");
 });
 
+test("service options set price and duration; old clients get the first option; quote books at zero", async () => {
+  const booker = await client("options-customer");
+  const owner = await client("options-owner");
+  const businessId = "options-business";
+  const staffId = "staff-o";
+  const dateKey = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  const at = (hour) => Date.parse(`${dateKey}T${String(hour - 3).padStart(2, "0")}:00:00.000Z`);
+  await db.doc(`businesses/${businessId}`).set({ name: "Seçenek İşletmesi", slug: businessId, ownerUid: owner.uid,
+    status: "active", isPublished: true, isSuspended: false, timeZone: "Europe/Istanbul",
+    minimumBookingNoticeMinutes: 30, slotIntervalMinutes: 15, maximumBookingDaysAhead: 30 });
+  await db.doc(`subscriptions/${businessId}`).set({ businessId, userId: owner.uid, status: "active", accessMode: "lifetime", isLifetime: true });
+  await db.doc(`businesses/${businessId}/staff/${staffId}`).set({ fullName: "Can", isActive: true, serviceIds: [], specialtyCategoryIds: [], workingHours: [] });
+  await Promise.all(Array.from({ length: 7 }, (_, day) =>
+    db.doc(`businesses/${businessId}/workingHours/${day}`).set({ day, isOpen: true, start: "09:00", end: "20:00" })));
+  await db.doc(`businesses/${businessId}/services/boya`).set({ name: "Saç Boyama", isActive: true, isBookableOnline: true,
+    price: 500, durationMinutes: 45, priceType: "from", category: "hair",
+    variants: [{ id: "kisa", name: "Kısa saç", price: 500, durationMinutes: 45 }, { id: "uzun", name: "Uzun saç", price: 900, durationMinutes: 120 }],
+    translations: { en: { name: "Hair coloring", variants: { uzun: "Long hair" } } } });
+  await db.doc(`businesses/${businessId}/services/teklif`).set({ name: "Gelin Saçı", isActive: true, isBookableOnline: true,
+    price: 0, durationMinutes: 60, priceType: "quote", category: "hair" });
+  for (const phone of ["+905551110011", "+905551110012", "+905551110013"]) {
+    await db.doc(`verificationCodes/${phone}`).set({ verified: true, verifiedAt: Timestamp.now() });
+  }
+  const book = (data, phone) => booker.call("createAppointment", { businessId, staffId, customerName: "Test", customerPhone: phone, ...data });
+
+  // 120 dk'lık seçenek 18:30'da sığmaz (20:00 kapanış), 45 dk'lık sığar.
+  const longSlots = (await booker.call("getAvailableSlots", { businessId, serviceId: "boya", variantId: "uzun", staffId, date: dateKey })).data.slots;
+  const shortSlots = (await booker.call("getAvailableSlots", { businessId, serviceId: "boya", staffId, date: dateKey })).data.slots;
+  const lateStart = Date.parse(`${dateKey}T15:30:00.000Z`);
+  assert.equal(longSlots.some((slot) => slot.startAtMillis === lateStart), false);
+  assert.equal(shortSlots.some((slot) => slot.startAtMillis === lateStart), true);
+  await assert.rejects(booker.call("getAvailableSlots", { businessId, serviceId: "boya", variantId: "yok", staffId, date: dateKey }));
+
+  const longId = (await book({ serviceId: "boya", variantId: "uzun", startAtMillis: at(10) }, "+905551110011")).data.appointmentId;
+  const long = (await db.doc(`businesses/${businessId}/appointments/${longId}`).get()).data();
+  assert.equal(long.servicePrice, 900);
+  assert.equal(long.serviceDurationMinutes, 120);
+  assert.equal(long.endAt.toMillis() - long.startAt.toMillis(), 120 * 60_000);
+  assert.equal(long.serviceName, "Saç Boyama · Uzun saç");
+  assert.equal(long.servicePriceType, "from");
+  assert.equal(long.serviceVariantId, "uzun");
+  assert.deepEqual(long.serviceNameTranslations, { en: "Hair coloring · Long hair" });
+
+  // Seçeneği bilmeyen eski istemci → ilk seçenek.
+  const legacyId = (await book({ serviceId: "boya", startAtMillis: at(14) }, "+905551110012")).data.appointmentId;
+  const legacy = (await db.doc(`businesses/${businessId}/appointments/${legacyId}`).get()).data();
+  assert.equal(legacy.serviceVariantId, "kisa");
+  assert.equal(legacy.serviceDurationMinutes, 45);
+
+  const quoteId = (await book({ serviceId: "teklif", startAtMillis: at(16) }, "+905551110013")).data.appointmentId;
+  const quote = (await db.doc(`businesses/${businessId}/appointments/${quoteId}`).get()).data();
+  assert.equal(quote.servicePrice, 0);
+  assert.equal(quote.servicePriceType, "quote");
+});
+
 test.after(async () => {
   await Promise.all(apps.map((app) => deleteApp(app)));
   await deleteAdminApp(adminApp);

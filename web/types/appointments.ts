@@ -33,6 +33,15 @@ export interface Appointment extends EntityBase {
   notes?: string;
   publicToken?: string;
   serviceName?: string;
+  /** Hizmet adının randevu anındaki dil karşılıkları (ör. { en: "Haircut · Long hair" }). */
+  serviceNameTranslations?: Partial<Record<string, string>>;
+  serviceVariantId?: string;
+  serviceVariantName?: string;
+  /** Randevu anındaki fiyat tipi; "fixed" dışındakilerde kesin tutar iş bitince girilir. */
+  servicePriceType?: "fixed" | "from" | "range" | "quote";
+  servicePriceMax?: number;
+  /** Kesin tutar girildi (tahsilat veya tamamlama sırasında). */
+  servicePriceFinal?: boolean;
   staffName?: string;
   /** Original booked service snapshots, retained while extra services change totals. */
   primaryServicePrice?: number;
@@ -70,6 +79,8 @@ export interface AppointmentCreateInput {
   customerEmail?: string;
   notes?: string;
   startAtMillis: number;
+  /** Seçenekli hizmette seçilen seçenek. */
+  variantId?: string;
   /** Ek alan değerleri (alan id → değer). Gönderildiğinde sunucu zorunlu alanları denetler. */
   customFields?: Record<string, string | number | boolean>;
 }
@@ -79,6 +90,8 @@ export interface DashboardAppointmentCreateInput {
   startAtMillis: number;
   customerName?: string;
   serviceId?: string;
+  /** Seçenekli hizmette seçilen seçenek. */
+  variantId?: string;
   staffId?: string;
 }
 

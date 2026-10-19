@@ -275,7 +275,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
   const status: OpenStatus | null = nowMillis === null ? null : computeOpenStatus(workingHours, nowMillis);
   const today = nowMillis === null ? null : istanbulNow(nowMillis).day;
   const todayHours = today === null ? null : workingHours.find((item) => item.day === today);
-  const prices = services.filter((service) => service.isActive !== false && service.isBookableOnline !== false && service.price > 0).map((service) => service.price);
+  const prices = services.filter((service) => service.isActive !== false && service.isBookableOnline !== false && service.priceType !== "quote" && service.price > 0).map((service) => service.price);
   const minPrice = prices.length ? Math.min(...prices) : null;
   const currency = services[0]?.currency ?? "TRY";
   const rating = business.rating ?? 0;

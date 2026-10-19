@@ -7,14 +7,14 @@ import { toast } from "sonner";
 import { collection, doc, getDoc, getDocs, type DocumentSnapshot, type QueryDocumentSnapshot } from "firebase/firestore";
 import {
   ArrowRightLeft, Ban, Building2, CalendarDays, Check, ChevronRight, Copy, Crown, Download, ExternalLink, Eye, EyeOff,
-  MapPin, PackageCheck, RefreshCw, RotateCcw, Store, UserRound, WalletCards, X,
+  Languages, MapPin, PackageCheck, RefreshCw, RotateCcw, Store, UserRound, WalletCards, X,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import {
   DEFAULT_PLATFORM_PLAN_ID, isLegacyPlanId, listPlatformPlansWithSource, planDisplayLabel, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import {
-  assignBusinessPlan, backfillBusinessGeo, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
+  assignBusinessPlan, backfillBusinessGeo, backfillServiceTranslations, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
 } from "@/features/platform/admin-business-actions";
 import {
   AdminButton, AdminPage, Badge, Callout, ConfirmSheet, DataTable, EmptyState, KeyValueList, PageHeader, Panel,
@@ -270,6 +270,20 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
     } finally { setGeoBusy(false); }
   }
 
+  const [translateBusy, setTranslateBusy] = useState(false);
+  // İngilizce sayfalar için: hizmet/kategori adları otomatik çevrilir (yeni kayıtlarda zaten otomatik).
+  async function runTranslationBackfill() {
+    setTranslateBusy(true);
+    try {
+      const result = await backfillServiceTranslations();
+      toast.success(`${result.updated} hizmet/kategori çevrildi.`, {
+        description: [result.failed ? `${result.failed} kayıt çevrilemedi, tekrar deneyin.` : "", result.remaining ? `${result.remaining} kayıt kaldı, tekrar basın.` : "Tüm çeviriler güncel."].filter(Boolean).join(" "),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Çeviriler güncellenemedi.");
+    } finally { setTranslateBusy(false); }
+  }
+
   function exportBusinesses() {
     const rows = [
       ["İşletme", "Firma", "Şehir", "İlçe", "Kategori", "Paket", "Durum", "Keşifte", "Oluşturulma", "İşletme ID", "Sahip UID"],
@@ -318,6 +332,7 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
         icon={Building2}
         actions={<>
           <AdminButton variant="glass" icon={MapPin} loading={geoBusy} onClick={() => void runGeoBackfill()}>Konumları güncelle</AdminButton>
+          <AdminButton variant="glass" icon={Languages} loading={translateBusy} onClick={() => void runTranslationBackfill()}>Çevirileri güncelle</AdminButton>
           <AdminButton variant="glass" icon={Download} onClick={exportBusinesses} disabled={filtered.length === 0}>CSV</AdminButton>
           <AdminButton variant="lime" icon={RefreshCw} loading={loading} onClick={() => void loadBusinesses()}>Yenile</AdminButton>
         </>}

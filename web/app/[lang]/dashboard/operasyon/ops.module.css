@@ -268,3 +268,10 @@
 @media (prefers-reduced-motion: reduce) {
   .module, .pick, .card, .productRow, .stepper > button { transition: none; }
 }
+
+/* ── Tahsilat: hizmet tutarı (fiyatı kesinleşmemiş randevuda vurgulu) ── */
+.priceBox { min-width: 0; }
+.priceBoxAlert { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--k-warn) 45%, transparent); border-radius: var(--k-r-md); background: var(--k-warn-bg); }
+.priceEstimate { display: block; color: var(--k-warn); font-weight: 700; }
+.priceError { display: block; color: var(--k-bad); font-weight: 650; }
+.pickBadge { align-self: flex-start; margin-top: 3px; }

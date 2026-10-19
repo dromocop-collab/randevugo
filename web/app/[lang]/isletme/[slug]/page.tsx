@@ -16,6 +16,7 @@ import { categoryCounts, getSeoIndex, sortForListing } from "@/lib/seo/seo-data"
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { displayPlace, locative, seoSlug } from "@/lib/seo/text";
 import { getLocale, getT } from "@/i18n/server";
+import { localizedServiceDescription, localizedServiceName } from "@/features/services/service-pricing";
 import styles from "@/components/seo/seo-blocks.module.css";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,8 @@ function serializable<T>(value: T): T {
 export default async function BusinessProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const t = await getT();
-  const turkish = (await getLocale()) === "tr";
+  const locale = await getLocale();
+  const turkish = locale === "tr";
   const inPlace = (place: string) => (turkish ? locative(place) : place);
   const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || business.status !== "active" || !business.isPublished) notFound();
@@ -86,7 +88,7 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
       reviewCount: business.reviewCount,
       instagram: business.socialMedia?.instagram,
       hours: workingHours,
-      services: services.filter((service) => service.isActive !== false),
+      services: services.filter((service) => service.isActive !== false).map((service) => ({ ...service, name: localizedServiceName(service, locale), description: localizedServiceDescription(service, locale) })),
       reviews,
       allowOnlineBooking: business.allowOnlineBooking,
     }),

@@ -44,7 +44,16 @@ import {
   Send, ShieldCheck, Smartphone, Sparkles, UserRound, UsersRound, WandSparkles, type LucideIcon,
 } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
-import { CalendarSheet, DateStrip, PrivacySheet, SlotGroups } from "./booking-parts";
+import { CalendarSheet, DateStrip, PrivacySheet, ServiceThumb, SlotGroups } from "./booking-parts";
+import {
+  localizedServiceDescription,
+  localizedServiceName,
+  localizedVariantName,
+  priceTypeOf,
+  servicePriceLabel,
+  variantPriceLabel,
+  variantsOf,
+} from "@/features/services/service-pricing";
 import {
   addDaysToIso,
   dateFromIso,
@@ -78,6 +87,8 @@ interface Props {
   maximumBookingDaysAhead: number;
   slotIntervalMinutes: number;
   preselectedServiceId?: string | null;
+  /** İsteğe bağlı ?variant= (seçenekli hizmette seçili seçenek). */
+  preselectedVariantId?: string | null;
   preselectedStaffId?: string | null;
   preselectedDate?: string | null;
   preselectedStartAtMillis?: number | null;
@@ -164,6 +175,7 @@ export function BookingWizard(props: Props) {
   const [autoJump, setAutoJump] = useState<{ from: string; to: string } | null>(null);
 
   const [serviceId, setServiceId] = useState(props.preselectedServiceId ?? "");
+  const [variantId, setVariantId] = useState("");
   const [staffId, setStaffId] = useState(props.preselectedStaffId ?? "");
   const [anyStaff, setAnyStaff] = useState(false);
   const [appointmentsDate, setAppointmentsDate] = useState(() => {
@@ -209,7 +221,7 @@ export function BookingWizard(props: Props) {
   const stepRef = useRef<WizardStep>(step);
   const focusHeadingRef = useRef(false);
 
-  const selectionKey = `${serviceId}:${staffId}`;
+  const selectionKey = `${serviceId}:${variantId}:${staffId}`;
   useEffect(() => {
     availabilitySelectionRef.current = selectionKey;
   }, [selectionKey]);
@@ -268,7 +280,7 @@ export function BookingWizard(props: Props) {
     time: string;
     startAtMillis: number;
     durationMinutes: number;
-    price: number;
+    priceLabel: string;
   } | null>(null);
 
   useEffect(() => {
@@ -281,12 +293,17 @@ export function BookingWizard(props: Props) {
       // Pre-select service: URL param takes priority, fallback to first
       const initialService = (props.preselectedServiceId && serviceRows.find((s) => s.id === props.preselectedServiceId)) || serviceRows[0];
       setServiceId(initialService?.id ?? "");
+      const initialVariants = variantsOf(initialService);
+      const preselectedVariant = props.preselectedVariantId && initialService?.id === props.preselectedServiceId
+        ? initialVariants.find((item) => item.id === props.preselectedVariantId)
+        : undefined;
+      setVariantId(preselectedVariant?.id ?? (initialVariants.length === 1 ? initialVariants[0].id : ""));
       // Yalnızca seçili hizmeti verebilen personel seçilir; aksi halde saatler yüklenemiyordu.
       const preselected = props.preselectedStaffId ? staffRows.find((staff) => staff.id === props.preselectedStaffId && canServe(staff, initialService)) : undefined;
       setStaffId((preselected ?? staffRows.find((staff) => canServe(staff, initialService)))?.id ?? "");
     }).catch(() => { const t = tRef.current; toast.error(t("Randevu seçenekleri yüklenemedi.")); })
       .finally(() => setCatalogLoading(false));
-  }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId]);
+  }, [props.businessId, props.preselectedServiceId, props.preselectedStaffId, props.preselectedVariantId]);
 
   useEffect(() => {
     let active = true;
@@ -304,14 +321,25 @@ export function BookingWizard(props: Props) {
     return () => { active = false; };
   }, [props.businessId]);
 
+  const selectedService = useMemo(
+    () => services.find((item) => item.id === serviceId),
+    [serviceId, services]
+  );
+  const selectedVariants = useMemo(() => variantsOf(selectedService), [selectedService]);
+  const selectedVariant = useMemo(() => selectedVariants.find((item) => item.id === variantId), [selectedVariants, variantId]);
+  // Seçenekli hizmette seçenek seçilmeden müsaitlik sorulmaz (süre seçeneğe göre değişir).
+  const variantPending = selectedVariants.length > 0 && !selectedVariant;
+  const serviceReady = Boolean(selectedService) && !variantPending;
+  const bookedVariantId = selectedVariant?.id;
+
   useEffect(() => {
-    if (!serviceId) return;
+    if (!serviceId || !serviceReady) return;
     let cancelled = false;
     Promise.resolve().then(() => {
       if (cancelled) return [] as AvailableAppointmentSlot[];
       setSlotsLoading(true);
       setAvailableSlots([]);
-      return listAvailableSlots({ businessId: props.businessId, serviceId, staffId, date: appointmentsDate });
+      return listAvailableSlots({ businessId: props.businessId, serviceId, ...(bookedVariantId ? { variantId: bookedVariantId } : {}), staffId, date: appointmentsDate });
     })
       .then((rows) => { if (!cancelled) {
         setAvailableSlots(rows);
@@ -329,12 +357,12 @@ export function BookingWizard(props: Props) {
       })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
-  }, [appointmentsDate, props.businessId, props.preselectedDate, props.preselectedStartAtMillis, serviceId, staffId]);
+  }, [appointmentsDate, bookedVariantId, props.businessId, props.preselectedDate, props.preselectedStartAtMillis, serviceId, serviceReady, staffId]);
 
   // Tarih müsaitliği: aralıklar birleştirilerek saklanır (şerit + aylık takvim aynı veriyi kullanır).
   const loadDateAvailability = useCallback(async (startDate: string, endDate: string) => {
-    if (!serviceId || endDate < startDate) return;
-    const key = `${serviceId}:${staffId}`;
+    if (!serviceId || !serviceReady || endDate < startDate) return;
+    const key = `${serviceId}:${bookedVariantId ?? ""}:${staffId}`;
     const requestKey = `${key}|${startDate}|${endDate}`;
     if (requestedRangesRef.current.has(requestKey)) return;
     requestedRangesRef.current.add(requestKey);
@@ -343,6 +371,7 @@ export function BookingWizard(props: Props) {
       const rows = await listAvailableDates({
         businessId: props.businessId,
         serviceId,
+        ...(bookedVariantId ? { variantId: bookedVariantId } : {}),
         staffId: staffId || undefined,
         startDate,
         endDate,
@@ -369,12 +398,19 @@ export function BookingWizard(props: Props) {
     } finally {
       setDatesLoadingCount((count) => Math.max(0, count - 1));
     }
-  }, [props.businessId, props.preselectedDate, serviceId, staffId]);
+  }, [bookedVariantId, props.businessId, props.preselectedDate, serviceId, serviceReady, staffId]);
 
-  const selectedService = useMemo(
-    () => services.find((item) => item.id === serviceId),
-    [serviceId, services]
-  );
+  const money = useCallback((value: number) => formatPrice(value, intlLocale), [intlLocale]);
+  const serviceTitle = (service: Service) => displayName(localizedServiceName(service, locale));
+  /** Seçili hizmet (+ seçenek) adı, süresi ve fiyat etiketi. */
+  const selectedTitle = selectedService
+    ? `${serviceTitle(selectedService)}${selectedVariant ? ` · ${localizedVariantName(selectedService, selectedVariant, locale)}` : ""}`
+    : "";
+  const selectedDuration = selectedVariant?.durationMinutes ?? selectedService?.durationMinutes ?? 0;
+  const selectedPriceLabel = selectedService
+    ? selectedVariant ? variantPriceLabel(selectedService, selectedVariant, t, money) : servicePriceLabel(selectedService, t, money)
+    : "";
+  const selectedPriceType = priceTypeOf(selectedService);
   const selectedStaff = useMemo(
     () => staffList.find((item) => item.id === staffId),
     [staffList, staffId]
@@ -427,8 +463,8 @@ export function BookingWizard(props: Props) {
   const visibleServices = useMemo(() => {
     const query = serviceQuery.trim().toLocaleLowerCase("tr-TR");
     if (!query) return services;
-    return services.filter((service) => `${service.name} ${service.description ?? ""}`.toLocaleLowerCase("tr-TR").includes(query));
-  }, [serviceQuery, services]);
+    return services.filter((service) => `${service.name} ${service.description ?? ""} ${localizedServiceName(service, locale)} ${localizedServiceDescription(service, locale) ?? ""}`.toLocaleLowerCase("tr-TR").includes(query));
+  }, [locale, serviceQuery, services]);
 
   async function joinWaitlist() {
     if (!selectedService || customerName.trim().length < 2 || (!customerPhone.trim() && !customerEmail.trim())) {
@@ -483,6 +519,10 @@ export function BookingWizard(props: Props) {
   }
 
   function selectService(service: Service) {
+    if (service.id !== serviceId) {
+      const options = variantsOf(service);
+      setVariantId(options.length === 1 ? options[0].id : "");
+    }
     setServiceId(service.id);
     if (!anyStaff) {
       const eligible = staffList.find((member) => canServe(member, service));
@@ -630,6 +670,7 @@ export function BookingWizard(props: Props) {
         businessId: props.businessId,
         staffId: selectedSlot.staffId ?? selectedStaff?.id ?? "",
         serviceId: selectedService.id,
+        ...(bookedVariantId ? { variantId: bookedVariantId } : {}),
         customerName: bookingFields.collectName ? customerName.trim() : undefined,
         customerPhone: normalizedCustomerPhone,
         customerEmail: bookingFields.collectEmail ? customerEmail.trim() : undefined,
@@ -652,13 +693,13 @@ export function BookingWizard(props: Props) {
         appointmentId: createdAppointment.appointmentId,
         publicToken: createdAppointment.publicToken,
         isGuest,
-        serviceName: selectedService.name,
+        serviceName: selectedTitle,
         staffName: staffForSlot ? displayName(staffForSlot.fullName) : t("İşletme"),
         date: format(dateBase, "dd.MM.yyyy"),
         time: slot,
         startAtMillis: selectedSlot.startAtMillis,
-        durationMinutes: selectedService.durationMinutes,
-        price: selectedService.price,
+        durationMinutes: selectedDuration,
+        priceLabel: selectedPriceLabel,
       });
       setDirection("forward");
       setStep("success");
@@ -711,10 +752,10 @@ export function BookingWizard(props: Props) {
     const start = new Date(successData.startAtMillis);
     const calendarEvent: CalendarEventInput = {
       uid: successData.appointmentId || successData.publicToken || String(successData.startAtMillis),
-      title: `${props.businessName} — ${displayName(successData.serviceName)}`,
+      title: `${props.businessName} — ${successData.serviceName}`,
       start,
       end: new Date(successData.startAtMillis + Math.max(successData.durationMinutes, 15) * 60000),
-      description: [t("Hizmet: {service}", { service: displayName(successData.serviceName) }), t("Uzman: {name}", { name: successData.staffName }), props.businessPhone ? t("İşletme telefonu: {phone}", { phone: props.businessPhone }) : ""].filter(Boolean).join("\n"),
+      description: [t("Hizmet: {service}", { service: successData.serviceName }), t("Uzman: {name}", { name: successData.staffName }), props.businessPhone ? t("İşletme telefonu: {phone}", { phone: props.businessPhone }) : ""].filter(Boolean).join("\n"),
       reminder: t("Randevu hatırlatması"),
       location: props.businessAddress || props.businessName,
       url: successData.publicToken && typeof window !== "undefined" ? `${window.location.origin}${localizeHref(`/randevu/${encodeURIComponent(successData.publicToken)}`, locale)}` : undefined,
@@ -744,11 +785,11 @@ export function BookingWizard(props: Props) {
             <div className={s.perforation} aria-hidden="true" />
             <div className={s.rows}>
               <SummaryRow icon={Building2} label={t("İşletme")} value={props.businessName} index={0} />
-              <SummaryRow icon={WandSparkles} label={t("Hizmet")} value={displayName(successData.serviceName)} index={1} />
+              <SummaryRow icon={WandSparkles} label={t("Hizmet")} value={successData.serviceName} index={1} />
               <SummaryRow icon={UserRound} label={t("Uzman")} value={successData.staffName} index={2} />
               <SummaryRow icon={Navigation} label={t("Adres")} value={props.businessAddress} index={3} />
             </div>
-            <div className={s.total}><span>{t("Toplam tutar")}</span><b>{formatPrice(successData.price, intlLocale)}</b></div>
+            <div className={s.total}><span>{t("Toplam tutar")}</span><b>{successData.priceLabel}</b></div>
           </section>
 
           {successData.publicToken && (
@@ -790,6 +831,7 @@ export function BookingWizard(props: Props) {
   const dateShort = format(dateFromIso(appointmentsDate), datePatterns.dayShort, { locale: dateLocale });
   let blockReason = "";
   if (step === "service" && !serviceId) blockReason = t("Devam etmek için bir hizmet seçin");
+  else if (step === "service" && variantPending) blockReason = t("Devam etmek için bir seçenek seçin");
   else if (step === "staff" && !staffId && !anyStaff) blockReason = t("Bir uzman seçin");
   else if (step === "datetime" && !slot) blockReason = slotsLoading ? t("Saatler yükleniyor…") : t("Uygun bir saat seçin");
   else if (step === "info" && !infoValid) {
@@ -843,22 +885,43 @@ export function BookingWizard(props: Props) {
               {!catalogLoading && visibleServices.length === 0 && <div className={s.empty}><b>{t("Sonuç bulunamadı")}</b>{t("Farklı bir kelimeyle aramayı deneyin.")}</div>}
               {visibleServices.map((service, idx) => {
                 const on = serviceId === service.id;
-                return <label key={service.id} className={`${s.choice} ${on ? s.choiceOn : ""}`} style={{ "--i": idx } as React.CSSProperties}>
+                const name = serviceTitle(service);
+                const description = localizedServiceDescription(service, locale)?.trim();
+                const options = variantsOf(service);
+                const label = <label key={service.id} className={`${s.choice} ${on ? s.choiceOn : ""}`} style={{ "--i": idx } as React.CSSProperties}>
                   <input type="radio" name="service" value={service.id} checked={on} onChange={() => selectService(service)} className={s.srOnly} />
-                  <span className={s.choiceTile} aria-hidden="true">{initials(service.name)}</span>
+                  <span className={`${s.choiceTile} ${service.imageUrl ? s.choiceTileImg : ""}`} aria-hidden="true">{service.imageUrl ? <ServiceThumb url={service.imageUrl} size={48} /> : initials(service.name)}</span>
                   <span className={s.choiceBody}>
-                    <span className={s.choiceName}>{displayName(service.name)}</span>
-                    {service.description?.trim() && <span className={s.choiceDesc}>{service.description.trim()}</span>}
+                    <span className={s.choiceName}>{name}</span>
+                    {description && <span className={s.choiceDesc}>{description}</span>}
                     <span className={s.choiceMeta}>
                       <span className={s.metaChip}><Clock3 size={12} /> {formatServiceDuration(service.durationMinutes, t)}</span>
+                      {options.length > 1 && <span className={s.metaChip}>{t("{count} seçenek", { count: options.length })}</span>}
                       {service.requiresDeposit && service.depositAmount > 0 && <span className={`${s.metaChip} ${s.metaChipLime}`}>{t("Kapora {amount}", { amount: formatPrice(service.depositAmount, intlLocale) })}</span>}
                     </span>
                   </span>
                   <span className={s.choiceSide}>
-                    <span className={s.price}>{formatPrice(service.price, intlLocale)}</span>
+                    <span className={s.price}>{servicePriceLabel(service, t, money)}</span>
                     <span className={s.check} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
                   </span>
                 </label>;
+                if (!on || options.length === 0) return label;
+                return <div key={service.id} className={s.choiceGroup}>
+                  {label}
+                  <div className={s.variants} role="radiogroup" aria-label={t("{name} seçenekleri", { name })}>
+                    <span className={`${s.variantsHint} ${variantPending ? s.variantsHintOn : ""}`}>{variantPending ? t("Bir seçenek seçin") : t("Seçenek", { ctx: "hizmet" })}</span>
+                    <div className={s.variantList}>
+                      {options.map((option) => {
+                        const picked = option.id === variantId;
+                        return <label key={option.id} className={`${s.variantChip} ${picked ? s.variantChipOn : ""}`}>
+                          <input type="radio" name={`variant-${service.id}`} value={option.id} checked={picked} onChange={() => { setVariantId(option.id); setSlot(""); }} className={s.srOnly} />
+                          <span className={s.variantName}>{localizedVariantName(service, option, locale)}</span>
+                          <span className={s.variantMeta}>{formatServiceDuration(option.durationMinutes, t)} · <b>{variantPriceLabel(service, option, t, money)}</b></span>
+                        </label>;
+                      })}
+                    </div>
+                  </div>
+                </div>;
               })}
             </div>
           </div>
@@ -868,7 +931,7 @@ export function BookingWizard(props: Props) {
         {step === "staff" && (
           <div>
             <StepHead headingRef={headingRef} icon={UsersRound} title={t("Kiminle randevu almak istersiniz?")} text={t("Dilerseniz uzman seçimini bize bırakın; en erken müsait uzmanı atarız.")} badge={t("{count} uzman", { count: filteredStaff.length })} />
-            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes, t)}</span></div>}
+            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{selectedTitle}</b> · {formatServiceDuration(selectedDuration, t)}</span></div>}
             <div className={s.staffGrid} role="radiogroup" aria-label={t("Uzmanlar")}>
               {filteredStaff.length > 1 && (
                 <label className={`${s.choice} ${anyStaff ? s.choiceOn : ""}`} style={{ "--i": 0 } as React.CSSProperties}>
@@ -911,7 +974,7 @@ export function BookingWizard(props: Props) {
         {step === "datetime" && (
           <div>
             <StepHead headingRef={headingRef} icon={CalendarDays} title={t("Ne zaman uygunsunuz?")} text={t("Günü seçin, ardından size uyan saate dokunun.")} />
-            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{displayName(selectedService.name)}</b> · {formatServiceDuration(selectedService.durationMinutes, t)}{staffLabel ? ` · ${staffLabel}` : ""}</span></div>}
+            {selectedService && <div className={s.context}><WandSparkles size={16} /><span><b>{selectedTitle}</b> · {formatServiceDuration(selectedDuration, t)}{staffLabel ? ` · ${staffLabel}` : ""}</span></div>}
 
             <div className={s.section}>
               <div className={s.sectionHead}>
@@ -1170,12 +1233,12 @@ export function BookingWizard(props: Props) {
               <div className={s.summaryHero}>
                 <small>{props.businessName.toLocaleUpperCase("tr-TR")}</small>
                 <strong>{format(dateFromIso(appointmentsDate), dayPattern, { locale: dateLocale })}</strong>
-                <span>{selectedService ? `${displayName(selectedService.name)} · ${formatServiceDuration(selectedService.durationMinutes, t)}` : ""}</span>
+                <span>{selectedService ? `${selectedTitle} · ${formatServiceDuration(selectedDuration, t)}` : ""}</span>
                 <span className={s.summaryTime}>{slot}</span>
               </div>
               <div className={s.rows}>
                 <SummaryRow icon={WandSparkles} label={t("Hizmet")} index={0}
-                  value={selectedService ? `${displayName(selectedService.name)} (${formatServiceDuration(selectedService.durationMinutes, t)})` : ""}
+                  value={selectedService ? `${selectedTitle} (${formatServiceDuration(selectedDuration, t)})` : ""}
                   onEdit={() => jumpTo("service")} />
                 {activeSteps.includes("staff") && <SummaryRow icon={UserRound} label={t("Uzman")} value={staffLabel || t("İşletme")} index={1} onEdit={() => jumpTo("staff")} />}
                 <SummaryRow icon={CalendarDays} label={t("Tarih ve saat")} value={`${appointmentsDate.split("-").reverse().join(".")} · ${slot}`} index={2} onEdit={() => jumpTo("datetime")} />
@@ -1186,7 +1249,8 @@ export function BookingWizard(props: Props) {
                 {bookingFields.collectNotes && notes && <SummaryRow icon={MessageSquareText} label={t("Not")} value={notes} index={6} />}
                 <SummaryRow icon={Building2} label={t("Adres")} value={props.businessAddress} index={7} />
               </div>
-              <div className={s.total}><span><CircleDollarSign size={15} style={{ verticalAlign: -2, marginRight: 4 }} />{t("Toplam tutar")}</span><b>{selectedService ? formatPrice(selectedService.price, intlLocale) : ""}</b></div>
+              <div className={s.total}><span><CircleDollarSign size={15} style={{ verticalAlign: -2, marginRight: 4 }} />{selectedPriceType === "fixed" ? t("Toplam tutar") : t("Fiyat")}</span><b>{selectedPriceLabel}</b></div>
+              {selectedService && selectedPriceType !== "fixed" && <p className={s.totalNote}>{t("Kesin tutar işletmede belirlenir.")}</p>}
             </section>
             <p className={s.secure}><ShieldCheck size={16} /> {t("Ödeme işletmede yapılır. Onaydan sonra randevunuzu güvenli bağlantı ile yönetebilirsiniz.")}</p>
           </div>
@@ -1200,13 +1264,13 @@ export function BookingWizard(props: Props) {
             <button type="button" className={s.iconBtn} onClick={goBack} disabled={submitting} aria-label={t("Önceki adım")}><ArrowLeft size={19} /></button>
           )}
           <div className={s.actionSummary} aria-live="polite">
-            <span className={s.actionTitle}>{selectedService ? displayName(selectedService.name) : catalogLoading ? t("Yükleniyor…") : t("Hizmet seçin")}</span>
-            {nextDisabled && step !== "service" ? (
+            <span className={s.actionTitle}>{selectedService ? selectedTitle : catalogLoading ? t("Yükleniyor…") : t("Hizmet seçin")}</span>
+            {nextDisabled && (step !== "service" || variantPending) ? (
               <span className={s.actionHint}>{blockReason}</span>
             ) : (
               <span className={s.actionSub}>
-                {step === "service" || !slot ? (selectedService ? formatServiceDuration(selectedService.durationMinutes, t) : "") : `${dateShort} · ${slot}`}
-                {selectedService && <> · <b>{formatPrice(selectedService.price, intlLocale)}</b></>}
+                {step === "service" || !slot ? (selectedService ? formatServiceDuration(selectedDuration, t) : "") : `${dateShort} · ${slot}`}
+                {selectedService && <> · <b>{selectedPriceLabel}</b></>}
               </span>
             )}
           </div>

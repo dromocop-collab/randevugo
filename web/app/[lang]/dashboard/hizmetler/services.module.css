@@ -154,6 +154,86 @@
 .staffHead > input { flex: none; width: 20px; height: 20px; accent-color: var(--dui-core); }
 .staffHead > span:nth-child(3) { flex: 1; }
 
+/* Hizmet görseli */
+.imagePicker { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 12px; border: 1px solid var(--dui-line); border-radius: 18px; background: var(--dui-card-2); }
+.imageThumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 1px dashed var(--dui-line-strong);
+  border-radius: 16px;
+  background: var(--dui-card) center / cover no-repeat;
+  color: var(--dui-faint);
+}
+.imageThumbOn { border-style: solid; border-color: var(--dui-line); }
+.imageText { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.imageText b { color: var(--dui-ink); font-size: 13.5px; font-weight: 740; }
+.imageText small { color: var(--dui-muted); font-size: 12px; line-height: 1.4; }
+.imageText > div { margin-top: 4px; }
+
+/* Seçenekler */
+.variantBox { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--dui-line); border-radius: 18px; background: var(--dui-card-2); }
+.variantIntro { display: grid; gap: 2px; }
+.variantIntro b { color: var(--dui-ink); font-size: 13.5px; font-weight: 740; }
+.variantIntro small { color: var(--dui-muted); font-size: 12px; line-height: 1.45; }
+.variantList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.variantItem { display: grid; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--dui-line-strong); border-radius: 16px; background: var(--dui-card); }
+.variantItemInvalid { border-color: var(--dui-red-fg); }
+.variantTop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.variantTop > input { flex: 1; min-width: 0; }
+
+/* Dil karşılıkları */
+.langBox { min-width: 0; border: 1px solid var(--dui-line); border-radius: 18px; background: var(--dui-card-2); overflow: hidden; }
+.langToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: var(--dui-accent-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.langToggle:focus-visible { outline: none; box-shadow: inset var(--dui-focus); }
+.langTitle { display: grid; flex: 1; min-width: 0; }
+.langTitle b { color: var(--dui-ink); font-size: 14px; font-weight: 740; }
+.langTitle small { color: var(--dui-muted); font-size: 12px; }
+.langChevron { flex: none; color: var(--dui-muted); transition: transform 0.18s ease; }
+.langChevronOpen { transform: rotate(180deg); }
+.langBody { display: grid; gap: 12px; padding: 4px 14px 14px; border-top: 1px solid var(--dui-line); padding-top: 12px; }
+.langNote { flex: 1 1 220px; margin: 0; color: var(--dui-muted); font-size: 12.5px; line-height: 1.45; }
+
+/* Satırdaki görsel ve fiyat etiketi */
+.rowImage { background: var(--dui-card) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--dui-line); }
+.priceLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--dui-line-strong);
+  border-radius: 13px;
+  background: var(--dui-card);
+  color: var(--dui-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+.priceLabel:hover { border-color: var(--dui-core); background: var(--dui-hover); }
+.priceLabel:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.priceLabel svg { flex: none; color: var(--dui-muted); }
+
 /* ── Kategori yönetimi ── */
 .catList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .catItem { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 6px 8px 8px; border: 1px solid var(--dui-line); border-radius: 16px; background: var(--dui-card); }
@@ -218,7 +298,7 @@
 .libraryTags .libraryMore { background: color-mix(in srgb, var(--cat-color) 14%, transparent); color: var(--cat-color); font-weight: 800; }
 
 @media (prefers-reduced-motion: reduce) {
-  .row, .price, .staffItem, .iconOption, .swatch, .libraryCard { transition: none; }
+  .row, .price, .staffItem, .iconOption, .swatch, .libraryCard, .priceLabel, .langChevron { transition: none; }
   .libraryCard:hover, .swatch:hover { transform: none; }
   .miniSpin { animation-duration: 2s; }
 }
