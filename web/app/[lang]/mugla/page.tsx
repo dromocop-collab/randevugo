@@ -37,7 +37,8 @@ export default async function MuglaPage() {
           <h1 className="mt-5 text-5xl font-bold tracking-[-.055em] text-[#10241c] sm:text-7xl">{t("Muğla'da online randevu")}</h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-[#60756a]">{t("Muğla'nın ilçelerindeki gerçek işletmeleri, hizmetleri ve müsait saatleri tek yerde keşfedin.")}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/sehir/mugla" className="inline-flex items-center gap-3 rounded-full bg-[#0b6b45] px-6 py-4 text-sm font-bold text-white">{t("Muğla'daki tüm işletmeler")} <ArrowRight size={17} aria-hidden="true" /></Link>
+            {/* Şehir sayfası yalnız yayında işletme varken açılır (yoksa 404); o durumda keşfete gider. */}
+            <Link href={city ? "/sehir/mugla" : "/kesfet"} className="inline-flex items-center gap-3 rounded-full bg-[#0b6b45] px-6 py-4 text-sm font-bold text-white">{t("Muğla'daki tüm işletmeler")} <ArrowRight size={17} aria-hidden="true" /></Link>
             <Link href="/mugla/fethiye" className="inline-flex items-center gap-3 rounded-full border border-[#0b6b45]/25 bg-white px-6 py-4 text-sm font-bold text-[#0b6b45]">{t("Fethiye işletmeleri")} <ArrowRight size={17} aria-hidden="true" /></Link>
           </div>
         </section>

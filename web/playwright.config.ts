@@ -24,9 +24,11 @@ export default defineConfig({
   ],
   webServer: externalBaseURL ? undefined : {
     // CI'da derlenmiş sürüm test edilir: geliştirme sunucusunun ilk derlemesi 130+ testte zaman aşımına düşüyordu.
+    // --hostname 127.0.0.1 KULLANMA: Next dil yeniden yazımını (proxy.ts, /kesfet → /tr/kesfet) "localhost"a kurar,
+    // farklı köken sanıp dışarıdan tekrar ister ve /tr/... → /... yönlendirmesiyle sonsuz döngü oluşur.
     command: process.env.CI
-      ? "npm run build && npm run start -- --hostname 127.0.0.1 --port 3000"
-      : "npm run dev -- --hostname 127.0.0.1",
+      ? "npm run build && npm run start -- --port 3000"
+      : "npm run dev",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 600_000 : 120_000,

@@ -34,7 +34,8 @@ export function isLocaleBypassPath(pathname: string): boolean {
   if (BYPASS_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
   // public/ altındaki dosyalar (görseller, service worker, pwa simgeleri): son parçada uzantı var.
   const last = pathname.slice(pathname.lastIndexOf("/") + 1);
-  return /\.[a-z0-9]{2,5}$/i.test(last);
+  // Uzun uzantılar da dosyadır (ör. .webmanifest — PWA manifestleri 404 oluyordu).
+  return /\.[a-z0-9]{2,12}$/i.test(last);
 }
 
 /** Görünen yoldan dili ayırır: "/en/kesfet" → { locale: "en", path: "/kesfet" }; "/kesfet" → tr. */

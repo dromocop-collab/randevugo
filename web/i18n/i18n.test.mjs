@@ -28,7 +28,7 @@ test("localizeHref writes internal paths per language and leaves the rest", () =
 });
 
 test("bypass paths", () => {
-  for (const p of ["/api/x", "/sitemap.xml", "/robots.txt", "/manifest.webmanifest", "/app-sw.js", "/pwa/icon-192.png", "/.well-known/assetlinks.json", "/_next/static/a.js"]) assert.equal(isLocaleBypassPath(p), true, p);
+  for (const p of ["/api/x", "/sitemap.xml", "/robots.txt", "/manifest.webmanifest", "/app-sw.js", "/pwa/icon-192.png", "/pwa/isletme.webmanifest", "/vendor/maplibre/6.11.2/maplibre-gl-worker.mjs", "/.well-known/assetlinks.json", "/_next/static/a.js"]) assert.equal(isLocaleBypassPath(p), true, p);
   for (const p of ["/", "/kesfet", "/isletme/erdem-kuafor", "/dashboard/ayarlar"]) assert.equal(isLocaleBypassPath(p), false, p);
 });
 
