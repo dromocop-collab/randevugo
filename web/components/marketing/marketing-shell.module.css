@@ -181,6 +181,9 @@
   -webkit-tap-highlight-color: transparent;
 }
 .iconButton:hover { border-color: color-mix(in srgb, var(--ms-green-2) 40%, transparent); }
+/* İşletme paneline geçiş: marka yeşili, mobilde de görünür. */
+.panelButton { border-color: transparent; background: linear-gradient(150deg, var(--ms-green-2), var(--ms-green, #14532d)); color: #fff; box-shadow: 0 8px 18px color-mix(in srgb, var(--ms-green-2) 30%, transparent); }
+.panelButton:hover { border-color: transparent; filter: brightness(1.06); }
 .iconButton:active { transform: scale(0.94); }
 .ghostButton,
 .primaryButton,

@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BriefcaseBusiness,
+  LayoutDashboard,
   CalendarCheck2,
   ChevronRight,
   Compass,
@@ -35,6 +36,7 @@ import {
   Play,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useBusinessContext } from "@/features/businesses/business-context";
 import { useTheme } from "@/components/layout/theme-provider";
 import { LaunchCampaign } from "@/components/marketing/launch-campaign";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
@@ -109,6 +111,9 @@ export function MarketingHeader() {
   const { theme, toggleTheme } = useTheme();
   const { user, status } = useAuth();
   const signedIn = status === "authenticated" && Boolean(user);
+  // Kendi işletmesi (sahip/yönetici/çalışan) olanlara panele tek dokunuşla geçiş.
+  const { businesses } = useBusinessContext();
+  const hasBusiness = signedIn && businesses.length > 0;
   const pathname = usePathname();
   const isClient = useIsClient();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -238,6 +243,11 @@ export function MarketingHeader() {
 
           <div className={styles.actions}>
             <LanguageSwitcher className={styles.hideSm} />
+            {hasBusiness && (
+              <Link href="/dashboard" className={`${styles.iconButton} ${styles.panelButton}`} aria-label={t("İşletme paneli")} title={t("İşletme paneli")}>
+                <LayoutDashboard size={17} aria-hidden="true" />
+              </Link>
+            )}
             <button type="button" onClick={toggleTheme} className={`${styles.iconButton} ${styles.hideSm}`} aria-label={themeLabel} title={themeLabel}>
               <ThemeIcon size={17} />
             </button>
@@ -366,11 +376,19 @@ export function MarketingHeader() {
                   <span><small>{t("App Store'dan")}</small><b>{t("İndir")}</b></span>
                 </a>
                 <PlayBadge />
-                <Link href="/isletmeler" className={styles.businessCard} onClick={closeMenu}>
-                  <span className={styles.businessIcon} aria-hidden="true"><BriefcaseBusiness size={18} /></span>
-                  <span><b>{t("İşletmeler için")}</b><small>{t("İlk ay ücretsiz")}</small></span>
-                  <ArrowUpRight size={16} aria-hidden="true" />
-                </Link>
+                {hasBusiness ? (
+                  <Link href="/dashboard" className={styles.businessCard} onClick={closeMenu}>
+                    <span className={styles.businessIcon} aria-hidden="true"><LayoutDashboard size={18} /></span>
+                    <span><b>{t("İşletme paneli")}</b><small>{businesses.length === 1 ? businesses[0]!.name : t("{count} işletme", { count: businesses.length })}</small></span>
+                    <ArrowUpRight size={16} aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <Link href="/isletmeler" className={styles.businessCard} onClick={closeMenu}>
+                    <span className={styles.businessIcon} aria-hidden="true"><BriefcaseBusiness size={18} /></span>
+                    <span><b>{t("İşletmeler için")}</b><small>{t("İlk ay ücretsiz")}</small></span>
+                    <ArrowUpRight size={16} aria-hidden="true" />
+                  </Link>
+                )}
               </section>
 
               <div className={`${styles.sheetFoot} ${styles.stagger}`} style={{ "--i": 11 } as CSSProperties}>
