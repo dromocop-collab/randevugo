@@ -2,8 +2,9 @@
 //
 // YENİ DİL EKLEMEK (ör. Almanca "de"):
 //   1) LOCALES'e "de" ekle, LOCALE_LABELS'e satırını yaz (ad, Intl etiketi, yazım yönü).
-//   2) i18n/messages/de/ klasörünü en/ ile aynı dosya adlarıyla oluştur ve messages.ts'te kaydet.
-//   3) npm run test:unit → eksik çeviriler listelenir. Başka hiçbir dosyaya dokunmak gerekmez.
+//   2) i18n/messages/de/ + i18n/bundles/de.ts oluştur; messages.ts ve client.tsx (LOADERS) içinde kaydet.
+//   3) i18n/date.ts ve app/global-error.tsx tablolarına satır ekle (eksikse TypeScript uyarır).
+//   4) node i18n/check.mjs → eksik çeviriler listelenir. Ayrıntı: i18n/README.md
 //
 // Adresler:  Türkçe (varsayılan) önekiz: /kesfet      İngilizce: /en/kesfet
 // İçeride her sayfa app/[lang]/... altında; proxy.ts önekiz istekleri /tr/... olarak yeniden yazar.

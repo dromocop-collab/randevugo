@@ -8,11 +8,11 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ lang?: string }> }) {
   const { t } = await getTForParams(params);
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: t("Kuaför · Berber · Güzellik · Sağlık"),
     title: t("Yakınındaki işletmeyi keşfet, online randevu al"),
     subtitle: t("Hizmetleri, fiyatları ve müsait saatleri karşılaştır."),
-    chips: [t("Müşteriler için ücretsiz"), "7/24"],
+    chips: [t("Müşteriler için ücretsiz"), t("7/24")],
     image: await localImageDataUrl("/images/home-hero-studio-v2.jpg"),
   });
 }

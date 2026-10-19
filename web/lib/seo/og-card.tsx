@@ -70,6 +70,8 @@ export type OgCardInput = {
   image?: string | null;
   /** Görsel yoksa büyük harf monogram. */
   monogram?: string;
+  /** Sağ alt düğme metni (etkin dilde, ör. t("Online randevu al")). */
+  cta: string;
 };
 
 function clampText(value: string, max: number) {
@@ -116,7 +118,7 @@ export async function renderOgCard(input: OgCardInput): Promise<ImageResponse> {
             {(input.chips ?? []).filter(Boolean).slice(0, 3).map((chip) => (
               <div key={chip} style={{ display: "flex", alignItems: "center", padding: "10px 22px", borderRadius: 999, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", fontSize: 24, fontWeight: 600 }}>{clampText(chip, 34)}</div>
             ))}
-            <div style={{ display: "flex", alignItems: "center", padding: "10px 22px", borderRadius: 999, background: "#c9f45b", color: "#0b2a1b", fontSize: 24, fontWeight: 700 }}>Online randevu al</div>
+            <div style={{ display: "flex", alignItems: "center", padding: "10px 22px", borderRadius: 999, background: "#c9f45b", color: "#0b2a1b", fontSize: 24, fontWeight: 700 }}>{input.cta}</div>
           </div>
         </div>
 

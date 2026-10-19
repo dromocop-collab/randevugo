@@ -74,4 +74,8 @@ personel adları, açıklamalar), adres yolları (URL), veritabanı değerleri v
 1. `i18n/config.ts` → `LOCALES` ve `LOCALE_LABELS` (Intl etiketi, yazım yönü `ltr`/`rtl`).
 2. `i18n/messages/<dil>/` klasörünü `en/` ile aynı dosya adlarıyla oluştur; `i18n/bundles/<dil>.ts` paketini yaz
    (`bundles/en.ts` örnek) ve `i18n/messages.ts` ile `i18n/client.tsx` (LOADERS) içinde kaydet.
-3. `node i18n/check.mjs` → eksik çeviri kalmayınca bitti. Başka koda dokunmak gerekmez.
+3. `i18n/date.ts` (date-fns dili ve tarih kalıpları) ve `app/global-error.tsx` (COPY) tablolarına satır ekle —
+   `Record<Locale, …>` oldukları için unutulursa TypeScript hata verir.
+4. `node i18n/check.mjs` → eksik çeviri kalmayınca bitti.
+5. Dilbilgisi gerektiren SEO metinleri (`lib/seo/text.ts`) Türkçe dışındaki dillerde İngilizce üreticiyi kullanır;
+   yeni dil için gerekirse oraya o dilin üreticisini ekle.

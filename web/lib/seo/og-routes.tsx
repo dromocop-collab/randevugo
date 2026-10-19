@@ -18,16 +18,18 @@ export async function localImageDataUrl(publicPath: string | undefined): Promise
   }
 }
 
+const upperFirst = (value: string, intl: string) => value.charAt(0).toLocaleUpperCase(intl) + value.slice(1);
+
 /** Kategori tanıtım sayfaları (/kuafor-randevu vb.) için paylaşım kartı; metinler t ile etkin dilde yazılır. */
 export async function categoryLandingOg({ t, locale }: { t: TFunction; locale: Locale }, slug: string, title?: string) {
   const category = seoCategory(slug);
   const label = t(category?.label ?? categoryDisplayName(slug));
   const examples = category ? t(category.examples) : "";
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: t("{label} · Online randevu", { label }),
     title: title ?? t("{label} randevunu online al", { label }),
-    subtitle: examples ? t("{examples} için uygun saati seç.", { examples: `${examples.charAt(0).toLocaleUpperCase(LOCALE_LABELS[locale].intl)}${examples.slice(1)}` }) : undefined,
-    chips: [t("Ücretsiz"), "7/24"],
+    subtitle: examples ? upperFirst(t("{examples} için uygun saati seç.", { examples }), LOCALE_LABELS[locale].intl) : undefined,
+    chips: [t("Ücretsiz"), t("7/24")],
     image: await localImageDataUrl(category?.image),
   });
 }

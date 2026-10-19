@@ -7,7 +7,7 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ lang?: string }> }) {
   const { t } = await getTForParams(params);
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: t("Tüm kategoriler"),
     title: t("Ne için randevu almak istersin?"),
     subtitle: t("Kuaför, berber, güzellik, spa, sağlık, spor, veteriner ve daha fazlası."),

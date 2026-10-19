@@ -8,11 +8,11 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ lang?: string }> }) {
   const { t } = await getTForParams(params);
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: t("Online randevu"),
     title: t("Uygun saati seç, randevunu saniyeler içinde al"),
     subtitle: t("Kuaförden veterinere yakınındaki işletmeler tek yerde."),
-    chips: [t("Ücretsiz"), "7/24"],
+    chips: [t("Ücretsiz"), t("7/24")],
     image: await localImageDataUrl("/images/booking-flow-hero.png"),
   });
 }

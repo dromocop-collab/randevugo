@@ -20,13 +20,13 @@ export default async function Image({ params }: { params: Promise<{ lang: string
   const t = (source: string, vars?: TranslateVars) => translate(locale, messages, source, vars);
   const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || business.status !== "active" || !business.isPublished) {
-    return renderOgCard({ eyebrow: "SeninRandevun", title: t("Yakınındaki işletmeyi keşfet, online randevu al") });
+    return renderOgCard({ cta: t("Online randevu al"), eyebrow: "SeninRandevun", title: t("Yakınındaki işletmeyi keşfet, online randevu al") });
   }
   const category = t(categoryDisplayName(canonicalBusinessCategory(business.category ?? "")));
   const place = [displayPlace(business.district), displayPlace(business.city)].filter(Boolean).join(", ");
   const rated = (business.reviewCount ?? 0) > 0 && (business.rating ?? 0) > 0;
   const image = (await fetchImageDataUrl(business.coverUrl)) ?? (await fetchImageDataUrl(business.logoUrl));
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: [category, displayPlace(business.city)].filter(Boolean).join(" · "),
     title: business.name,
     subtitle: place ? `${place}` : undefined,

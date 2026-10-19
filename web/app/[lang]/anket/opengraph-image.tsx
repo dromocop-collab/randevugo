@@ -12,7 +12,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
   const locale = isLocale(lang) ? lang : DEFAULT_LOCALE;
   const messages = getMessages(locale);
   const t = (source: string) => translate(locale, messages, source);
-  return renderOgCard({
+  return renderOgCard({ cta: t("Online randevu al"),
     eyebrow: t("1 dakikalık test"),
     title: t("Senin randevu karakterin ne?"),
     subtitle: t("8 eğlenceli soru: Telefon Ninjası mı, Defter Ustası mı, Gece Kuşu mu?"),
