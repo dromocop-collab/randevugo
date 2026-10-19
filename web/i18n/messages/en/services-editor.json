@@ -26,7 +26,10 @@
   "Seçenek adı": "Option name",
   "{name} seçeneğini sil": "Delete option {name}",
   "{name} süresi": "{name} duration",
-  "{count} alan dolu": { "one": "{count} field filled", "other": "{count} fields filled" },
+  "{count} alan dolu": {
+    "one": "{count} field filled",
+    "other": "{count} fields filled"
+  },
   "Seçenek: {name}": "Option: {name}",
   "{name} fiyatını düzenle": "Edit {name} price",
   "Sabit fiyat": "Fixed price",
@@ -35,5 +38,15 @@
   "Fiyat aralığı": "Price range",
   "“500–900 ₺” olarak görünür; kesin tutarı iş bitince girersiniz.": "Shown as “500–900 ₺”; you enter the final amount when the job is done.",
   "Görüşmede belirlenir": "Price on consultation",
-  "Fiyat gösterilmez; kesin tutarı iş bitince girersiniz.": "No price is shown; you enter the final amount when the job is done."
+  "Fiyat gösterilmez; kesin tutarı iş bitince girersiniz.": "No price is shown; you enter the final amount when the job is done.",
+  "En yüksek fiyat en düşük fiyattan büyük olmalı.": "The maximum price must be higher than the minimum price.",
+  "{name}: {type}": "{name}: {type}",
+  "{name} fiyat tipi": "{name} price type",
+  "{name} en düşük fiyat": "{name} minimum price",
+  "{name} en yüksek fiyat": "{name} maximum price",
+  "₺'den": "₺+",
+  "{name}: fiyatı görüşmede belirlenir olarak kaydet": "{name}: save as price on request",
+  "Fiyat yok: Görüşmede belirlenir": "No price: set on request",
+  "kisa::En az": "Min",
+  "kisa::En çok": "Max"
 }

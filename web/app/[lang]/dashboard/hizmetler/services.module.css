@@ -135,6 +135,34 @@
   cursor: pointer;
 }
 .price button:disabled { background: var(--dui-soft); color: var(--dui-faint); cursor: not-allowed; }
+/* Satırda fiyat tipi + tutar (düzenleyiciye girmeden) */
+.quickPricing { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.typeSelect { position: relative; display: inline-flex; flex: none; }
+.typeSelect select {
+  height: 44px;
+  max-width: 150px;
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--dui-line-strong);
+  border-radius: 13px;
+  background: var(--dui-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center;
+  color: var(--dui-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.typeSelect select:hover { border-color: var(--dui-core); }
+.typeSelect select:focus-visible { outline: none; border-color: var(--dui-core); box-shadow: var(--dui-focus); }
+.typeSelect select:disabled { opacity: 0.6; cursor: wait; }
+.quoteChip { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 1px dashed var(--dui-line-strong); border-radius: 13px; background: var(--dui-soft); color: var(--dui-muted); font-size: 13.5px; font-weight: 740; white-space: nowrap; }
+.priceRange input { width: 70px; }
+.price > .rangeDash { padding: 0 2px; color: var(--dui-faint); font-weight: 700; }
+@media (max-width: 420px) {
+  .typeSelect select { max-width: 118px; padding-right: 26px; font-size: 12.5px; }
+  .priceRange input { width: 58px; }
+}
 .miniSpin { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: svcSpin 0.8s linear infinite; }
 @keyframes svcSpin { to { transform: rotate(360deg); } }
 

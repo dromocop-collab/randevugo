@@ -5,8 +5,8 @@ import { Check, Clock, Globe2, Layers3, Pencil, Trash2, Wallet, Users } from "lu
 import { toast } from "sonner";
 import { Badge, Button, Switch } from "@/components/dashboard/ui";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
-import { localizedServiceDescription, localizedServiceName, moneyFormatter, priceTypeOf, servicePriceLabel, variantsOf } from "@/features/services/service-pricing";
-import type { Service } from "@/types/service";
+import { PRICE_TYPE_OPTIONS, localizedServiceDescription, localizedServiceName, moneyFormatter, priceTypeOf, servicePriceLabel, variantsOf } from "@/features/services/service-pricing";
+import type { Service, ServicePriceType } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import { OrderButtons, cx } from "../_workspace/kit";
 import { formatPrice } from "./service-shared";
@@ -14,7 +14,7 @@ import styles from "./services.module.css";
 import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 
 export function ServiceRow({
-  service, category, staffCount, order, onEdit, onToggle, onDelete, onQuickPrice,
+  service, category, staffCount, order, onEdit, onToggle, onDelete, onQuickPrice, onQuickPricing,
 }: {
   service: Service;
   category?: ServiceCategory;
@@ -24,6 +24,8 @@ export function ServiceRow({
   onToggle: () => Promise<void>;
   onDelete: () => void;
   onQuickPrice: (price: number) => Promise<void>;
+  /** Satırdan fiyat tipi değişimi (ve gerekirse tutarlar). */
+  onQuickPricing: (next: { priceType: ServicePriceType; price?: number; priceMax?: number }) => Promise<void>;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -31,30 +33,57 @@ export function ServiceRow({
   const displayName = localizedServiceName(service, locale);
   const displayDescription = localizedServiceDescription(service, locale);
   const variantCount = variantsOf(service).length;
-  /** Hızlı fiyat kutusu yalnız sabit fiyatlı, seçeneksiz hizmette; diğerlerinde etiket (dokununca düzenleyici). */
-  const quickPriceEditable = priceTypeOf(service) === "fixed" && variantCount === 0;
+  const savedType = priceTypeOf(service);
+  /** Seçenekli hizmette fiyat seçeneklerden gelir; satırda yalnız etiket (dokununca düzenleyici). */
+  const quickEditable = variantCount === 0;
+  // Satırda seçilen tip; "Aralık" seçilince üst tutar girilene kadar kaydedilmez.
+  const [type, setType] = useState<ServicePriceType>(savedType);
   const [quickPrice, setQuickPrice] = useState(String(service.price || ""));
+  const [quickMax, setQuickMax] = useState(service.priceMax ? String(service.priceMax) : "");
   const [quickSaving, setQuickSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const priceChanged = quickPrice.trim() !== "" && Number(quickPrice) !== service.price;
-  const priceInvalid = quickPrice.trim() !== "" && (!Number.isFinite(Number(quickPrice)) || Number(quickPrice) <= 0);
   const isDraft = Boolean(service.templateDraft) && !service.isActive;
+  const priceInvalid = quickPrice.trim() !== "" && (!Number.isFinite(Number(quickPrice)) || Number(quickPrice) <= 0);
+  const maxInvalid = type === "range" && quickMax.trim() !== "" && !(Number(quickMax) > Number(quickPrice));
+  const priceChanged = type === "range"
+    ? quickPrice.trim() !== "" && quickMax.trim() !== "" && (savedType !== "range" || Number(quickPrice) !== service.price || Number(quickMax) !== (service.priceMax ?? 0))
+    : quickPrice.trim() !== "" && Number(quickPrice) !== service.price;
+  // Fiyatı boş bırakıp onaylamak = "Görüşmede belirlenir" (fiyatı olmayan hizmetler tek dokunuşla).
+  const emptyPrice = quickPrice.trim() === "" && type !== "quote";
 
-  async function saveQuickPrice() {
-    const value = Number(quickPrice);
-    if (!Number.isFinite(value) || value <= 0) {
-      toast.error(t("Fiyat sıfırdan büyük olmalı."));
-      return;
-    }
+  async function run(action: () => Promise<void>) {
     setQuickSaving(true);
     try {
-      await onQuickPrice(value);
+      await action();
     } catch (error) {
       if (error instanceof Error && error.message === "invalid-price") return;
       toast.error(t("Fiyat güncellenemedi."));
     } finally {
       setQuickSaving(false);
     }
+  }
+
+  function saveQuickPrice() {
+    if (emptyPrice) {
+      setType("quote");
+      return run(() => onQuickPricing({ priceType: "quote" }));
+    }
+    const value = Number(quickPrice);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error(t("Fiyat sıfırdan büyük olmalı."));
+      return;
+    }
+    if (type === "range") return run(() => onQuickPricing({ priceType: "range", price: value, priceMax: Number(quickMax) }));
+    if (type !== savedType) return run(() => onQuickPricing({ priceType: type, price: value }));
+    return run(() => onQuickPrice(value));
+  }
+
+  function changeType(next: ServicePriceType) {
+    setType(next);
+    if (next === "range") return; // üst tutar girilince ✓ ile kaydedilir
+    if (next === "quote") return void run(() => onQuickPricing({ priceType: "quote" }));
+    // Sabit/başlangıç: tutar varsa hemen kaydet, yoksa kullanıcı tutarı yazıp onaylar.
+    if (Number(quickPrice) > 0) void run(() => onQuickPricing({ priceType: next, price: Number(quickPrice) }));
   }
 
   async function toggle() {
@@ -83,26 +112,61 @@ export function ServiceRow({
       </div>
 
       <div className={styles.rowSide}>
-        {quickPriceEditable ? <div className={cx(styles.price, priceInvalid && styles.priceInvalid, isDraft && styles.priceDraft)}>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            inputMode="decimal"
-            value={quickPrice}
-            onChange={(event) => setQuickPrice(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
-            placeholder={isDraft ? t("Fiyat") : "0"}
-            aria-label={t("{name} fiyatı", { name: displayName })}
-            aria-invalid={priceInvalid}
-          />
-          <span aria-hidden="true">₺</span>
-          {priceChanged || isDraft ? (
-            <button type="button" onClick={() => void saveQuickPrice()} disabled={quickSaving || !priceChanged || priceInvalid} aria-label={isDraft ? t("{name} fiyatını kaydet ve yayınla", { name: displayName }) : t("{name} fiyatını kaydet", { name: displayName })} title={isDraft ? t("Kaydet ve yayınla") : t("Fiyatı kaydet")}>
-              {quickSaving ? <span className={styles.miniSpin} /> : <Check size={16} strokeWidth={3} />}
-            </button>
-          ) : null}
-        </div> : (
+        {quickEditable ? (
+          <div className={styles.quickPricing}>
+            <label className={styles.typeSelect}>
+              <span className="sr-only">{t("{name} fiyat tipi", { name: displayName })}</span>
+              <select value={type} onChange={(event) => changeType(event.target.value as ServicePriceType)} disabled={quickSaving}>
+                {PRICE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
+              </select>
+            </label>
+            {type === "quote" ? (
+              <span className={styles.quoteChip}>{quickSaving ? <span className={styles.miniSpin} /> : null}{t("Fiyat görüşmede")}</span>
+            ) : (
+              <div className={cx(styles.price, (priceInvalid || maxInvalid) && styles.priceInvalid, isDraft && styles.priceDraft, type === "range" && styles.priceRange)}>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="decimal"
+                  value={quickPrice}
+                  onChange={(event) => setQuickPrice(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
+                  placeholder={type === "range" ? t("En az", { ctx: "kisa" }) : isDraft ? t("Fiyat") : "0"}
+                  aria-label={type === "range" ? t("{name} en düşük fiyat", { name: displayName }) : t("{name} fiyatı", { name: displayName })}
+                  aria-invalid={priceInvalid}
+                />
+                {type === "range" ? <>
+                  <span className={styles.rangeDash} aria-hidden="true">–</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="decimal"
+                    value={quickMax}
+                    onChange={(event) => setQuickMax(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
+                    placeholder={t("En çok", { ctx: "kisa" })}
+                    aria-label={t("{name} en yüksek fiyat", { name: displayName })}
+                    aria-invalid={maxInvalid}
+                  />
+                </> : null}
+                <span aria-hidden="true">{type === "from" ? t("₺'den") : "₺"}</span>
+                {priceChanged || isDraft || emptyPrice || type !== savedType ? (
+                  <button
+                    type="button"
+                    onClick={() => void saveQuickPrice()}
+                    disabled={quickSaving || priceInvalid || maxInvalid || (type === "range" && !priceChanged) || (!emptyPrice && !priceChanged && type === savedType)}
+                    aria-label={emptyPrice ? t("{name}: fiyatı görüşmede belirlenir olarak kaydet", { name: displayName }) : isDraft ? t("{name} fiyatını kaydet ve yayınla", { name: displayName }) : t("{name} fiyatını kaydet", { name: displayName })}
+                    title={emptyPrice ? t("Fiyat yok: Görüşmede belirlenir") : isDraft ? t("Kaydet ve yayınla") : t("Fiyatı kaydet")}
+                  >
+                    {quickSaving ? <span className={styles.miniSpin} /> : <Check size={16} strokeWidth={3} />}
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : (
           <button type="button" className={styles.priceLabel} onClick={onEdit} aria-label={t("{name} fiyatını düzenle", { name: displayName })}>
             {servicePriceLabel(service, t, money)}
             <Pencil size={13} aria-hidden="true" />

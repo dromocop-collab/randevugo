@@ -19,7 +19,7 @@ import {
 } from "@/features/services/service-category-repository";
 import { getBusinessById } from "@/features/businesses/business-repository";
 import { listStaff, updateStaff } from "@/features/staff/staff-repository";
-import type { Service } from "@/types/service";
+import type { Service, ServicePriceType } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Staff } from "@/types/staff";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
@@ -32,7 +32,7 @@ import { cx, matchesSearch, useConfirm, ws } from "../_workspace/kit";
 import { ServiceRow } from "./service-row";
 import { ServiceEditorSheet } from "./service-editor-sheet";
 import { CategoryEditorSheet, CategoryManagerSheet, DeleteCategorySheet, type CategoryInput } from "./category-sheets";
-import { localizedCategoryName, localizedServiceDescription, localizedServiceName } from "@/features/services/service-pricing";
+import { PRICE_TYPE_OPTIONS, localizedCategoryName, localizedServiceDescription, localizedServiceName } from "@/features/services/service-pricing";
 import { TemplateLibrarySheet } from "./template-library-sheet";
 import { bySortOrder, reorderPatch, serviceStatus, type ServiceStatusFilter } from "./service-shared";
 import styles from "./services.module.css";
@@ -265,6 +265,30 @@ export default function ServicesPage() {
       : t("{name} fiyatı güncellendi.", { name: localizedServiceName(item, locale) }));
   }
 
+  /** Satırdan fiyat tipi/tutar: Görüşmede seçilince veya fiyat boş kaydedilince tutar sorulmaz. Taslak hizmet yayına alınır. */
+  async function handleQuickPricing(item: Service, next: { priceType: ServicePriceType; price?: number; priceMax?: number }) {
+    if (!businessId) return;
+    if (next.priceType !== "quote" && !(Number(next.price ?? item.price) > 0)) {
+      toast.error(t("Fiyat sıfırdan büyük olmalı."));
+      throw new Error("invalid-price");
+    }
+    if (next.priceType === "range" && !(Number(next.priceMax) > Number(next.price ?? item.price))) {
+      toast.error(t("En yüksek fiyat en düşük fiyattan büyük olmalı."));
+      throw new Error("invalid-price");
+    }
+    await updateService(businessId, item.id, {
+      priceType: next.priceType,
+      ...(next.price !== undefined ? { price: next.price } : {}),
+      ...(next.priceType === "range" ? { priceMax: next.priceMax } : {}),
+      ...(item.templateDraft ? { isActive: true, isBookableOnline: true, templateDraft: false } : {}),
+    });
+    await reload();
+    const label = t(PRICE_TYPE_OPTIONS.find((option) => option.value === next.priceType)?.label ?? "");
+    toast.success(item.templateDraft
+      ? t("{name} fiyatlandırıldı ve yayına alındı.", { name: localizedServiceName(item, locale) })
+      : t("{name}: {type}", { name: localizedServiceName(item, locale), type: label }));
+  }
+
   async function handleToggleService(item: Service) {
     if (!businessId) return;
     if (!item.isActive && item.templateDraft && item.price <= 0) {
@@ -467,6 +491,7 @@ export default function ServicesPage() {
                         onToggle={() => handleToggleService(item)}
                         onDelete={() => void handleDeleteService(item)}
                         onQuickPrice={(nextPrice) => handleQuickPrice(item, nextPrice)}
+                        onQuickPricing={(next) => handleQuickPricing(item, next)}
                       />
                     ))}
                   </div>
