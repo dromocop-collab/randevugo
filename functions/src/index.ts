@@ -9207,7 +9207,8 @@ async function loadWhatsAppOverview() {
     if (templateResult.error) metaErrors.push(`Şablonlar: ${templateResult.error}`);
   }
   const requiredTemplates = [...new Set(Object.values(templateNames))];
-  const readiness = whatsappReadiness({ settings: raw, phone, templates, requiredTemplates, language });
+  // Kanal için onay şablonu yeterli; hatırlatma/iptal/değişiklik onay bekliyorsa o bildirimler SMS'e düşer.
+  const readiness = whatsappReadiness({ settings: raw, phone, templates, requiredTemplates, essentialTemplates: [templateNames.confirmation], language });
   return {
     raw, parsed, phone, templates, readiness, metaErrors, language, templateNames,
     settings: {

@@ -80,6 +80,14 @@ test("readiness: blocking checks gate the channel, display name does not", () =>
   assert.equal(r.ready, false);
   r = whatsappReadiness({ settings, phone: null, templates, requiredTemplates: required, language: "tr" });
   assert.equal(r.ready, false);
+  // Yalnız onay şablonu şartsa: diğerleri onay bekliyorken kanal açılır, uyarı engellemez.
+  templates[1].status = "PENDING";
+  r = whatsappReadiness({ settings, phone: { status: "CONNECTED" }, templates, requiredTemplates: required, essentialTemplates: ["randevu_onay"], language: "tr" });
+  assert.equal(r.ready, true);
+  assert.match(r.checks.find((c) => c.key === "templatesOptional").detail, /randevu_iptal.*SMS/);
+  r = whatsappReadiness({ settings, phone: { status: "CONNECTED" }, templates: templates.map((t) => ({ ...t, status: "PENDING" })), requiredTemplates: required, essentialTemplates: ["randevu_onay"], language: "tr" });
+  assert.equal(r.ready, false, "onay şablonu onaysızsa kanal açılmaz");
+  templates[1].status = "APPROVED";
   // Başka dilde onaylı şablon sayılmaz.
   r = whatsappReadiness({ settings, phone: { status: "CONNECTED" }, templates: templates.map((t) => ({ ...t, language: "en" })), requiredTemplates: required, language: "tr" });
   assert.equal(r.ready, false);

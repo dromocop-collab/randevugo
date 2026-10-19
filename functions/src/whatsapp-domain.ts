@@ -130,12 +130,19 @@ export function whatsappReadiness(input: {
   phone: { status?: string; name_status?: string; code_verification_status?: string } | null;
   templates: Array<{ name: string; status: string; language: string }> | null;
   requiredTemplates: string[];
+  /**
+   * Kanalın açılması için şart olan şablonlar (varsayılan: hepsi). Diğerleri onaysızken kanal yine açılır;
+   * Meta onaysız şablonu anında reddeder ve o bildirim otomatik SMS'e düşer.
+   */
+  essentialTemplates?: string[];
   language: string;
 }): { ready: boolean; checks: ReadinessCheck[] } {
   const s = input.settings ?? {};
   const has = (key: string, min = 1) => String(s[key] ?? "").trim().length >= min;
   const approved = new Set((input.templates ?? []).filter((t) => t.status === "APPROVED" && t.language === input.language).map((t) => t.name));
-  const missingTemplates = input.requiredTemplates.filter((name) => !approved.has(name));
+  const essential = new Set(input.essentialTemplates ?? input.requiredTemplates);
+  const missingEssential = input.requiredTemplates.filter((name) => essential.has(name) && !approved.has(name));
+  const missingOptional = input.requiredTemplates.filter((name) => !essential.has(name) && !approved.has(name));
   const checks: ReadinessCheck[] = [
     { key: "phoneNumberId", label: "Telefon numarası kimliği", ok: /^\d{6,}$/.test(String(s.phoneNumberId ?? "")), blocking: true, detail: "Firestore: phoneNumberId" },
     { key: "accessToken", label: "Kalıcı erişim anahtarı", ok: has("accessToken", 20), blocking: true, detail: "Sistem kullanıcısı token'ı (accessToken)" },
@@ -146,9 +153,13 @@ export function whatsappReadiness(input: {
       detail: input.phone ? `Durum: ${input.phone.status ?? "?"}` : "Meta'dan numara bilgisi alınamadı (token veya kimlik hatalı olabilir)",
     },
     {
-      key: "templates", label: "Şablonlar onaylı", ok: missingTemplates.length === 0, blocking: true,
-      detail: missingTemplates.length ? `Onay bekleyen/eksik: ${missingTemplates.join(", ")}` : `${input.requiredTemplates.length} şablon onaylı`,
+      key: "templates", label: "Şablonlar onaylı", ok: missingEssential.length === 0, blocking: true,
+      detail: missingEssential.length ? `Onay bekleyen/eksik: ${missingEssential.join(", ")}` : `${input.requiredTemplates.length - missingOptional.length} şablon onaylı`,
     },
+    ...(missingOptional.length ? [{
+      key: "templatesOptional", label: "Diğer şablonlar", ok: false, blocking: false,
+      detail: `Onay bekleyen: ${missingOptional.join(", ")} — onaylanana kadar bu bildirimler SMS ile gider`,
+    }] : []),
     {
       key: "displayName", label: "Görünen ad onayı", ok: input.phone?.name_status === "APPROVED", blocking: false,
       detail: input.phone?.name_status === "APPROVED" ? "Müşteriler işletme adını görür" : "Onay bekleniyor; bu sürede sohbet başlığında numara görünür",
