@@ -59,7 +59,10 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
     let map: MapLibreMap | null = null;
     void (async () => {
       try {
-        const maplibre = (await import("maplibre-gl")).default;
+        const maplibre = await import("maplibre-gl");
+        // 6.x worker'ı ayrı dosyadan yükler; dosyalar public/vendor/maplibre/<sürüm>/ altına kopyalanır
+        // (scripts/copy-maplibre-worker.mjs, predev/prebuild).
+        maplibre.setWorkerUrl(`/vendor/maplibre/${maplibre.getVersion()}/maplibre-gl-worker.mjs`);
         if (cancelled || !containerRef.current) return;
         const start = business.geo ? { lat: business.geo.lat, lng: business.geo.lng } : null;
         map = new maplibre.Map({

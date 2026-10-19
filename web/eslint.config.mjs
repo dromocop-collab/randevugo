@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Kopyalanmış paket dosyaları (scripts/copy-maplibre-worker.mjs)
+    "public/vendor/**",
   ]),
 ]);
 

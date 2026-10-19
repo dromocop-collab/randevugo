@@ -95,7 +95,7 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
   );
 
   const seoFooter = (
-    <div className={styles.storefrontLinks}>
+    <div key="seo-footer" className={styles.storefrontLinks}>
       <Breadcrumbs items={crumbs} />
       {related.length > 0 && (
         <LinkCloud
