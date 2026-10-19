@@ -94,3 +94,12 @@ export function translate(locale: Locale, messages: Messages, source: string, va
 }
 
 export type TFunction = (source: string, vars?: TranslateVars) => string;
+
+/**
+ * Çevrilecek sabit metni işaretler (kimlik fonksiyonu). Sabit listelerde kullanılır, gösterirken t() ile çevrilir:
+ *   const NAV = [{ label: tk("Takvim") }];   …   {t(item.label)}
+ * Böylece çeviri denetimi (i18n/check.mjs) bu metinleri de bulur.
+ */
+export function tk<T extends string>(source: T): T {
+  return source;
+}

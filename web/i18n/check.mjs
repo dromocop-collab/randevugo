@@ -36,7 +36,7 @@ function loadDictionaries() {
   return out;
 }
 
-const T_CALL = /\bt\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1\s*[,)]/g;
+const T_CALL = /\bt[k]?\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1\s*[,)]/g;
 const TURKISH = /[çğıöşüÇĞİÖŞÜ]/;
 
 function unescape(text, quote) {
@@ -56,7 +56,9 @@ const untranslated = [];
 let keyCount = 0;
 
 for (const file of files) {
-  const source = stripComments(readFileSync(file, "utf8"));
+  const original = readFileSync(file, "utf8");
+  const source = stripComments(original);
+  const originalLines = original.split("\n");
   for (const match of source.matchAll(T_CALL)) {
     if (match[1] === "`" && match[2].includes("${")) continue; // dinamik anahtar (ör. t(errorMessage)) denetlenemez
     const key = unescape(match[2], match[1]);
@@ -76,7 +78,7 @@ for (const file of files) {
     const withoutT = line.replace(T_CALL, "");
     if (!TURKISH.test(withoutT)) return;
     if (/^\s*(import|export \* from)/.test(line)) return;
-    if (/i18n-ignore/.test(line)) return;
+    if (/i18n-ignore/.test(originalLines[index] ?? "") || /i18n-ignore/.test(originalLines[index - 1] ?? "")) return;
     untranslated.push(`${relative(root, file)}:${index + 1}: ${line.trim().slice(0, 140)}`);
   });
 }

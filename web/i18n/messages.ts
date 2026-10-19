@@ -1,18 +1,12 @@
+import "server-only";
 import type { Locale, Messages } from "./config";
-import enCommon from "./messages/en/common.json";
+import en from "./bundles/en";
 
-// Sözlükler: dil başına klasör (messages/<dil>/*.json), konu başına dosya; burada birleştirilir.
-// Anahtar = Türkçe kaynak metin, değer = o dildeki karşılık (ya da çoğul nesnesi).
-// Türkçe varsayılan dil olduğu için sözlüğü yoktur. Yeni dil: aşağıya bir satır ekle.
-const DICTIONARIES: Partial<Record<Locale, Messages>> = {
-  en: { ...enCommon },
-};
+// Sunucu tarafı sözlükler (getT). İstemci aynı paketleri client.tsx içinde ayrı dosya olarak yükler;
+// böylece sözlük her sayfanın HTML'ine gömülmez ve Türkçe ziyaretçi hiç indirmez.
+// Yeni dil: bundles/<dil>.ts oluştur, burada ve client.tsx'teki LOADERS'ta kaydet.
+const DICTIONARIES: Partial<Record<Locale, Messages>> = { en };
 
 export function getMessages(locale: Locale): Messages {
   return DICTIONARIES[locale] ?? {};
-}
-
-/** Testler ve eksik çeviri raporu için. */
-export function dictionaryLocales(): Locale[] {
-  return Object.keys(DICTIONARIES) as Locale[];
 }
