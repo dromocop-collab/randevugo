@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { usePathname } from "@/i18n/navigation";
 import { ArrowUpRight, Clock3, Headphones, Mail, MessageCircleMore, Phone, X } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 const HINT_KEY = "sr_rovi_hint_seen";
 
@@ -11,30 +13,31 @@ const SUPPORT_CHANNELS = [
   {
     id: "whatsapp",
     label: "WhatsApp",
-    desc: "Hızlı mesaj gönderin",
+    desc: tk("Hızlı mesaj gönderin"),
     icon: <MessageCircleMore size={22} />,
     href: "https://wa.me/905304788298",
-    eyebrow: "En hızlı kanal",
+    eyebrow: tk("En hızlı kanal"),
   },
   {
     id: "email",
-    label: "E-posta",
-    desc: "Detaylı destek talebi",
+    label: tk("E-posta"),
+    desc: tk("Detaylı destek talebi"),
     icon: <Mail size={22} />,
     href: "mailto:info@seninrandevun.com",
-    eyebrow: "Detaylı talepler",
+    eyebrow: tk("Detaylı talepler"),
   },
   {
     id: "phone",
-    label: "Telefon",
-    desc: "Hemen arayın",
+    label: tk("Telefon"),
+    desc: tk("Hemen arayın"),
     icon: <Phone size={22} />,
     href: "tel:+905304788298",
-    eyebrow: "Doğrudan görüşme",
+    eyebrow: tk("Doğrudan görüşme"),
   },
 ];
 
 export function SupportBubble() {
+  const t = useT();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -112,12 +115,12 @@ export function SupportBubble() {
           ref={popupRef}
           className={`support-popup ${isClosing ? "closing" : ""}`}
           role="dialog"
-          aria-label="SeninRandevun destek kanalları"
+          aria-label={t("SeninRandevun destek kanalları")}
         >
           <div className="support-popup-head">
             <span><Headphones size={23} /></span>
-            <div><small>CANLI DESTEK</small><strong>Yanındayız.</strong><p>İhtiyacına uygun kanalı seç, ekibimize hemen ulaş.</p></div>
-            <button type="button" onClick={handleClose} aria-label="Destek penceresini kapat"><X size={17} /></button>
+            <div><small>{t("CANLI DESTEK")}</small><strong>{t("Yanındayız.")}</strong><p>{t("İhtiyacına uygun kanalı seç, ekibimize hemen ulaş.")}</p></div>
+            <button type="button" onClick={handleClose} aria-label={t("Destek penceresini kapat")}><X size={17} /></button>
           </div>
 
           <div className="support-popup-channels">
@@ -130,21 +133,21 @@ export function SupportBubble() {
                 className={`support-popup-item support-channel-${channel.id}`}
               >
                 <span>{channel.icon}</span>
-                <div><small>{channel.eyebrow}</small><strong>{channel.label}</strong><p>{channel.desc}</p></div>
+                <div><small>{t(channel.eyebrow)}</small><strong>{t(channel.label)}</strong><p>{t(channel.desc)}</p></div>
                 <ArrowUpRight size={18} />
               </a>
             ))}
           </div>
 
-          <div className="support-popup-foot"><span><i /> Şu anda çevrimiçiyiz</span><span><Clock3 size={13} /> Ortalama 5 dk.</span></div>
+          <div className="support-popup-foot"><span><i /> {t("Şu anda çevrimiçiyiz")}</span><span><Clock3 size={13} /> {t("Ortalama 5 dk.")}</span></div>
         </div>
       )}
 
       {/* Rovi tanıtım balonu */}
       {showHint && !isOpen && (
         <button type="button" className="rovi-support-hint" onClick={() => { setShowHint(false); setIsOpen(true); }}>
-          <strong>Merhaba, ben Rovi! 👋</strong>
-          <span>Yardım lazım mı? Bana dokun.</span>
+          <strong>{t("Merhaba, ben Rovi! 👋")}</strong>
+          <span>{t("Yardım lazım mı? Bana dokun.")}</span>
         </button>
       )}
 
@@ -153,9 +156,9 @@ export function SupportBubble() {
         ref={btnRef}
         onClick={() => { setShowHint(false); handleToggle(); }}
         className={`support-bubble-btn support-bubble-btn--rovi ${isOpen && !isClosing ? "open" : ""}`}
-        aria-label="Destek"
+        aria-label={t("Destek")}
         aria-expanded={isOpen && !isClosing}
-        title="Rovi'ye sor"
+        title={t("Rovi'ye sor")}
       >
         <span className="rovi-support-disc" aria-hidden="true" />
         <RoviMascot size={78} mood={isOpen && !isClosing ? "happy" : "idle"} interactive={false} alt="" className="rovi-support-figure" />

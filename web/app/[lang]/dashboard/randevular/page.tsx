@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
-import { tr } from "date-fns/locale";
+import { format, type Locale as DateLocale } from "date-fns";
+import { enGB, tr } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   BadgeCheck, Banknote, CalendarClock, CalendarDays, Check, CheckCircle2, CircleX, Clock3, Download, ListChecks, PackagePlus,
@@ -25,6 +25,8 @@ import {
   SearchField, SegmentedControl, Sheet, StatCard, StatGrid, StatusPill, Toolbar, appointmentStatusMeta, type DataColumn,
 } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
+import { tk, type TFunction } from "@/i18n/config";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 import type { Appointment, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
 import type { Service } from "@/types/service";
 import styles from "./appointments.module.css";
@@ -33,25 +35,30 @@ type FilterTab = "all" | AppointmentStatus;
 type DateScope = "all" | "today" | "upcoming" | "past" | "custom";
 const PAGE = 40;
 
-const SOURCE_LABEL: Record<string, string> = { online: "Online", dashboard: "Panel", phone: "Telefon", walk_in: "Yürüyerek" };
-const PAYMENT_LABEL: Record<string, string> = { paid: "Ödendi", deposit_paid: "Kapora ödendi", refunded: "İade edildi", unpaid: "Ödeme bekliyor" };
+const SOURCE_LABEL: Record<string, string> = { online: tk("Online"), dashboard: tk("Panel"), phone: tk("Telefon"), walk_in: tk("Yürüyerek") };
+const PAYMENT_LABEL: Record<string, string> = { paid: tk("Ödendi"), deposit_paid: tk("Kapora ödendi"), refunded: tk("İade edildi"), unpaid: tk("Ödeme bekliyor") };
 
-function formatDate(value: string) { try { return format(new Date(value), "d MMM yyyy", { locale: tr }); } catch { return value; } }
+function formatDate(value: string, locale: DateLocale = tr) { try { return format(new Date(value), "d MMM yyyy", { locale }); } catch { return value; } }
 function formatTime(value: string) { try { return format(new Date(value), "HH:mm"); } catch { return ""; } }
 function servicesOf(item: Appointment) { return [item.serviceName, ...(item.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + "); }
 function csvCell(value: string) { return `"${value.replaceAll('"', '""')}"`; }
-function dayLabel(value: string) {
+function dayLabel(value: string, t: TFunction, locale: DateLocale) {
   const date = new Date(value);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff = Math.round((new Date(date).setHours(0, 0, 0, 0) - today.getTime()) / 86_400_000);
-  if (diff === 0) return "Bugün";
-  if (diff === 1) return "Yarın";
-  if (diff === -1) return "Dün";
-  return format(date, "d MMM, EEE", { locale: tr });
+  if (diff === 0) return t("Bugün");
+  if (diff === 1) return t("Yarın");
+  if (diff === -1) return t("Dün");
+  return format(date, "d MMM, EEE", { locale });
 }
 
 export default function AppointmentsPage() {
   const { businessId, access } = useBusiness();
+  const t = useT();
+  const intlLocale = useIntlLocale();
+  const dateLocale = useLocale() === "en" ? enGB : tr;
+  const fmtDate = (value: string) => formatDate(value, dateLocale);
+  const money = (value: number) => `${value.toLocaleString(intlLocale)} ₺`;
   const canManageStatus = access?.role !== "staff" || Boolean(access?.permissions.manageAppointments);
   const canViewCustomerContact = access?.role !== "staff" || Boolean(access?.permissions.viewCustomers);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -101,11 +108,11 @@ export default function AppointmentsPage() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setAppointments([]);
-        toast.error(error instanceof Error ? error.message : "Randevular yüklenemedi.");
+        toast.error(error instanceof Error ? t(error.message) : t("Randevular yüklenemedi."));
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [businessId]);
+  }, [businessId, t]);
 
   useEffect(() => {
     const onChanged = () => { void reload().catch(() => undefined); };
@@ -160,7 +167,7 @@ export default function AppointmentsPage() {
   const stats = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const end = today.getTime() + 86_400_000;
-    const todayItems = appointments.filter((a) => { const t = new Date(a.startAt).getTime(); return t >= today.getTime() && t < end; });
+    const todayItems = appointments.filter((a) => { const time = new Date(a.startAt).getTime(); return time >= today.getTime() && time < end; });
     return {
       todayCount: todayItems.filter((a) => a.status !== "cancelled").length,
       pendingCount: appointments.filter((a) => a.status === "pending").length,
@@ -174,11 +181,11 @@ export default function AppointmentsPage() {
     setUpdatingId(item.id);
     try {
       await updateAppointmentStatus(businessId, item.id, nextStatus);
-      toast.success(`Randevu ${appointmentStatusMeta[nextStatus].label.toLocaleLowerCase("tr-TR")} olarak güncellendi`);
+      toast.success(t("Randevu {status} olarak güncellendi", { status: t(appointmentStatusMeta[nextStatus].label).toLocaleLowerCase(intlLocale) }));
       await reload();
       setConfirmCancel(null);
     } catch {
-      toast.error("Güncelleme başarısız oldu");
+      toast.error(t("Güncelleme başarısız oldu"));
     } finally {
       setUpdatingId(null);
     }
@@ -232,10 +239,10 @@ export default function AppointmentsPage() {
       await updateAppointmentAdditionalServices(businessId, serviceEditor, selectedExtraServices);
       await reload();
       setServiceEditor(null);
-      if (editorScheduleConflict) toast.warning(`Hizmetler kaydedildi; yeni bitiş saati ${editorScheduleConflict.customerName} randevusuyla çakışıyor.`);
-      else toast.success(selectedExtraServices.length > 0 ? `${selectedExtraServices.length} ek hizmet randevuya işlendi.` : "Ek hizmetler randevudan kaldırıldı.");
+      if (editorScheduleConflict) toast.warning(t("Hizmetler kaydedildi; yeni bitiş saati {name} randevusuyla çakışıyor.", { name: editorScheduleConflict.customerName }));
+      else toast.success(selectedExtraServices.length > 0 ? t("{count} ek hizmet randevuya işlendi.", { count: selectedExtraServices.length }) : t("Ek hizmetler randevudan kaldırıldı."));
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Ek hizmetler güncellenemedi.");
+      toast.error(error instanceof Error ? t(error.message) : t("Ek hizmetler güncellenemedi."));
     } finally {
       setSavingServices(false);
     }
@@ -251,17 +258,17 @@ export default function AppointmentsPage() {
   async function saveReschedule() {
     if (!businessId || !rescheduling || !newDate || !newTime) return;
     const startAt = new Date(zonedDateTimeToMillis(newDate, newTime));
-    if (Number.isNaN(startAt.getTime())) { toast.error("Tarih veya saat geçersiz."); return; }
-    if (startAt.getTime() < Date.now()) { toast.error("Geçmiş bir saate taşınamaz."); return; }
+    if (Number.isNaN(startAt.getTime())) { toast.error(t("Tarih veya saat geçersiz.")); return; }
+    if (startAt.getTime() < Date.now()) { toast.error(t("Geçmiş bir saate taşınamaz.")); return; }
     const duration = Math.max(5, (new Date(rescheduling.endAt).getTime() - new Date(rescheduling.startAt).getTime()) / 60_000 || Number(rescheduling.serviceDurationMinutes) || 30);
     setSavingReschedule(true);
     try {
       await rescheduleAppointment(businessId, rescheduling.id, { startAt, endAt: new Date(startAt.getTime() + duration * 60_000), staffId: rescheduling.staffId });
-      toast.success("Randevu yeni saate taşındı; müşteriye bildirim gönderilir.");
+      toast.success(t("Randevu yeni saate taşındı; müşteriye bildirim gönderilir."));
       setRescheduling(null);
       await reload();
     } catch (error) {
-      toast.error(userFacingError(error, "Randevu taşınamadı. Saat dolu veya çalışma saatleri dışında olabilir."));
+      toast.error(t(userFacingError(error, tk("Randevu taşınamadı. Saat dolu veya çalışma saatleri dışında olabilir."))));
     } finally {
       setSavingReschedule(false);
     }
@@ -269,30 +276,30 @@ export default function AppointmentsPage() {
 
   function exportAppointments() {
     const rows = [
-      ["Tarih", "Saat", "Müşteri", "Telefon", "E-posta", "Hizmet", "Çalışan", "Durum", "Ödeme", "Tutar"],
-      ...filtered.map((item) => [formatDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", servicesOf(item), item.staffName ?? "", appointmentStatusMeta[item.status].label, item.paymentStatus, String(item.servicePrice ?? 0)]),
+      [t("Tarih"), t("Saat"), t("Müşteri"), t("Telefon"), t("E-posta"), t("Hizmet"), t("Çalışan"), t("Durum"), t("Ödeme"), t("Tutar")],
+      ...filtered.map((item) => [fmtDate(item.startAt), formatTime(item.startAt), item.customerName, item.customerPhone ?? "", item.customerEmail ?? "", servicesOf(item), item.staffName ?? "", t(appointmentStatusMeta[item.status].label), item.paymentStatus, String(item.servicePrice ?? 0)]),
     ];
     const csv = "﻿" + rows.map((row) => row.map(csvCell).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `randevular-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `${t("randevular")}-${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
   const columns: DataColumn<Appointment>[] = [
-    { key: "when", header: "Tarih", width: 150, cell: (item) => <span className={styles.when}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt)}</small></span> },
-    { key: "customer", header: "Müşteri", primary: true, cell: (item) => <span className={styles.customer}><span className={styles.avatar} aria-hidden>{item.customerName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="min-w-0"><b>{item.customerName}</b>{canViewCustomerContact && item.customerPhone && <small>{item.customerPhone}</small>}</span></span> },
-    { key: "service", header: "Hizmet", cell: (item) => <span className={styles.service}>{item.serviceName ?? "—"}{(item.additionalServices?.length ?? 0) > 0 && <Badge size="sm" tone="green">+{item.additionalServices?.length} ek</Badge>}</span> },
-    { key: "staff", header: "Çalışan", cell: (item) => item.staffName || <span className={styles.muted}>Atanmamış</span> },
-    { key: "status", header: "Durum", cell: (item) => <StatusPill status={item.status} size="sm" /> },
-    { key: "price", header: "Tutar", align: "right", cell: (item) => item.servicePrice ? <b className={styles.price}>{item.servicePrice.toLocaleString("tr-TR")} ₺</b> : <span className={styles.muted}>—</span> },
+    { key: "when", header: t("Tarih"), width: 150, cell: (item) => <span className={styles.when}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt, t, dateLocale)}</small></span> },
+    { key: "customer", header: t("Müşteri"), primary: true, cell: (item) => <span className={styles.customer}><span className={styles.avatar} aria-hidden>{item.customerName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="min-w-0"><b>{item.customerName}</b>{canViewCustomerContact && item.customerPhone && <small>{item.customerPhone}</small>}</span></span> },
+    { key: "service", header: t("Hizmet"), cell: (item) => <span className={styles.service}>{item.serviceName ?? "—"}{(item.additionalServices?.length ?? 0) > 0 && <Badge size="sm" tone="green">{t("+{count} ek", { count: item.additionalServices?.length ?? 0 })}</Badge>}</span> },
+    { key: "staff", header: t("Çalışan"), cell: (item) => item.staffName || <span className={styles.muted}>{t("Atanmamış")}</span> },
+    { key: "status", header: t("Durum"), cell: (item) => <StatusPill status={item.status} size="sm" /> },
+    { key: "price", header: t("Tutar"), align: "right", cell: (item) => item.servicePrice ? <b className={styles.price}>{money(item.servicePrice)}</b> : <span className={styles.muted}>—</span> },
   ];
 
   const tabs = (["all", "pending", "confirmed", "completed", "cancelled", "no_show"] as FilterTab[]).map((key) => ({
     value: key,
-    label: key === "all" ? "Tümü" : key === "pending" ? "Bekleyen" : key === "confirmed" ? "Onaylı" : key === "completed" ? "Tamamlanan" : key === "cancelled" ? "İptal" : "Gelmedi",
+    label: key === "all" ? t("Tümü") : key === "pending" ? t("Bekleyen") : key === "confirmed" ? t("Onaylı") : key === "completed" ? t("Tamamlanan") : key === "cancelled" ? t("İptal") : t("Gelmedi"),
     count: counts[key],
   }));
 
@@ -306,62 +313,62 @@ export default function AppointmentsPage() {
       <PageHeader
         variant="plain"
         icon={ListChecks}
-        eyebrow="Operasyon"
-        title="Randevular"
-        description="Durumları tek dokunuşla güncelleyin, müşteriye ulaşın, saat ve hizmetleri düzenleyin."
+        eyebrow={t("Operasyon")}
+        title={t("Randevular")}
+        description={t("Durumları tek dokunuşla güncelleyin, müşteriye ulaşın, saat ve hizmetleri düzenleyin.")}
         actions={<>
           <Button variant="secondary" icon={Download} onClick={exportAppointments} disabled={filtered.length === 0}>CSV</Button>
-          <Button variant="primary" icon={Plus} onClick={() => openQuickAppointment()}>Yeni randevu</Button>
+          <Button variant="primary" icon={Plus} onClick={() => openQuickAppointment()}>{t("Yeni randevu")}</Button>
         </>}
       />
 
       <StatGrid columns={4}>
-        <StatCard label="Bugün" value={stats.todayCount} icon={CalendarDays} loading={loading} onClick={() => { setDateScope("today"); setActiveTab("all"); }} />
-        <StatCard label="Onay bekleyen" value={stats.pendingCount} icon={Clock3} tone="amber" loading={loading} onClick={() => { setActiveTab("pending"); setDateScope("all"); }} hint={stats.pendingCount ? "Dokun ve onayla" : "Bekleyen yok"} />
-        <StatCard label="Yaklaşan onaylı" value={stats.upcomingConfirmed} icon={BadgeCheck} tone="blue" loading={loading} onClick={() => { setActiveTab("confirmed"); setDateScope("upcoming"); }} />
-        <StatCard label="Tamamlanan gelir" value={`${stats.totalRevenue.toLocaleString("tr-TR")} ₺`} icon={Banknote} tone="green" loading={loading} />
+        <StatCard label={t("Bugün")} value={stats.todayCount} icon={CalendarDays} loading={loading} onClick={() => { setDateScope("today"); setActiveTab("all"); }} />
+        <StatCard label={t("Onay bekleyen")} value={stats.pendingCount} icon={Clock3} tone="amber" loading={loading} onClick={() => { setActiveTab("pending"); setDateScope("all"); }} hint={stats.pendingCount ? t("Dokun ve onayla") : t("Bekleyen yok")} />
+        <StatCard label={t("Yaklaşan onaylı")} value={stats.upcomingConfirmed} icon={BadgeCheck} tone="blue" loading={loading} onClick={() => { setActiveTab("confirmed"); setDateScope("upcoming"); }} />
+        <StatCard label={t("Tamamlanan gelir")} value={money(stats.totalRevenue)} icon={Banknote} tone="green" loading={loading} />
       </StatGrid>
 
       <Panel flush>
         <div className={styles.filters}>
-          <SegmentedControl ariaLabel="Durum filtresi" value={activeTab} onChange={(value) => { setActiveTab(value); setLimit(PAGE); }} options={tabs} className={styles.tabs} />
+          <SegmentedControl ariaLabel={t("Durum filtresi")} value={activeTab} onChange={(value) => { setActiveTab(value); setLimit(PAGE); }} options={tabs} className={styles.tabs} />
           <Toolbar>
-            <SearchField value={search} onChange={(value) => { setSearch(value); setLimit(PAGE); }} placeholder="Müşteri, telefon, hizmet veya çalışan ara…" />
-            <SegmentedControl ariaLabel="Tarih aralığı" value={dateScope} onChange={(value) => { setDateScope(value); setLimit(PAGE); }}
-              options={[{ value: "all", label: "Tümü" }, { value: "today", label: "Bugün" }, { value: "upcoming", label: "Yaklaşan" }, { value: "past", label: "Geçmiş" }, { value: "custom", label: "Tarih seç", icon: CalendarDays }]} />
+            <SearchField value={search} onChange={(value) => { setSearch(value); setLimit(PAGE); }} placeholder={t("Müşteri, telefon, hizmet veya çalışan ara…")} />
+            <SegmentedControl ariaLabel={t("Tarih aralığı")} value={dateScope} onChange={(value) => { setDateScope(value); setLimit(PAGE); }}
+              options={[{ value: "all", label: t("Tümü") }, { value: "today", label: t("Bugün") }, { value: "upcoming", label: t("Yaklaşan") }, { value: "past", label: t("Geçmiş") }, { value: "custom", label: t("Tarih seç"), icon: CalendarDays }]} />
           </Toolbar>
           {dateScope === "custom" && (
             <FormGrid className={styles.range}>
-              <Field label="Başlangıç"><Input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => { setFromDate(event.target.value); setLimit(PAGE); }} /></Field>
-              <Field label="Bitiş"><Input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => { setToDate(event.target.value); setLimit(PAGE); }} /></Field>
+              <Field label={t("Başlangıç")}><Input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => { setFromDate(event.target.value); setLimit(PAGE); }} /></Field>
+              <Field label={t("Bitiş")}><Input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => { setToDate(event.target.value); setLimit(PAGE); }} /></Field>
             </FormGrid>
           )}
-          <p className={styles.resultCount} aria-live="polite">{loading ? "Yükleniyor…" : `${filtered.length} randevu`}</p>
+          <p className={styles.resultCount} aria-live="polite">{loading ? t("Yükleniyor…") : t("{count} randevu", { count: filtered.length })}</p>
         </div>
         <DataTable
-          ariaLabel="Randevu listesi"
+          ariaLabel={t("Randevu listesi")}
           rows={filtered.slice(0, limit)}
           columns={columns}
           loading={loading}
           rowKey={(item) => item.id}
           onRowClick={(item) => setSelectedId(item.id)}
-          rowLabel={(item) => `${item.customerName}, ${formatDate(item.startAt)} ${formatTime(item.startAt)}, ${appointmentStatusMeta[item.status].label}`}
+          rowLabel={(item) => `${item.customerName}, ${fmtDate(item.startAt)} ${formatTime(item.startAt)}, ${t(appointmentStatusMeta[item.status].label)}`}
           renderMobileCard={(item) => (
             <span className={cn(styles.card, styles[`st-${item.status}`])}>
-              <span className={styles.cardTime}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt)}</small></span>
+              <span className={styles.cardTime}><b>{formatTime(item.startAt)}</b><small>{dayLabel(item.startAt, t, dateLocale)}</small></span>
               <span className={styles.cardMain}>
                 <b>{item.customerName}</b>
-                <small>{servicesOf(item) || "Hizmet"}{item.staffName ? ` · ${item.staffName}` : ""}</small>
-                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" />{item.servicePrice ? <em>{item.servicePrice.toLocaleString("tr-TR")} ₺</em> : null}</span>
+                <small>{servicesOf(item) || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</small>
+                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" />{item.servicePrice ? <em>{money(item.servicePrice)}</em> : null}</span>
               </span>
             </span>
           )}
-          empty={<EmptyState mascot compact title="Randevu bulunamadı" description={search || activeTab !== "all" || dateScope !== "all" ? "Filtreleri değiştirerek tekrar deneyin." : "Henüz randevu oluşturulmamış."} action={search || activeTab !== "all" || dateScope !== "all"
-            ? <Button size="sm" variant="secondary" icon={Search} onClick={() => { setSearch(""); setActiveTab("all"); setDateScope("all"); }}>Filtreleri temizle</Button>
-            : <Button size="sm" variant="primary" icon={Plus} onClick={() => openQuickAppointment()}>Randevu ekle</Button>} />}
+          empty={<EmptyState mascot compact title={t("Randevu bulunamadı")} description={search || activeTab !== "all" || dateScope !== "all" ? t("Filtreleri değiştirerek tekrar deneyin.") : t("Henüz randevu oluşturulmamış.")} action={search || activeTab !== "all" || dateScope !== "all"
+            ? <Button size="sm" variant="secondary" icon={Search} onClick={() => { setSearch(""); setActiveTab("all"); setDateScope("all"); }}>{t("Filtreleri temizle")}</Button>
+            : <Button size="sm" variant="primary" icon={Plus} onClick={() => openQuickAppointment()}>{t("Randevu ekle")}</Button>} />}
         />
         {filtered.length > limit && (
-          <div className={styles.more}><Button variant="secondary" onClick={() => setLimit((value) => value + PAGE)}>Daha fazla göster ({filtered.length - limit})</Button></div>
+          <div className={styles.more}><Button variant="secondary" onClick={() => setLimit((value) => value + PAGE)}>{t("Daha fazla göster ({count})", { count: filtered.length - limit })}</Button></div>
         )}
       </Panel>
 
@@ -371,46 +378,46 @@ export default function AppointmentsPage() {
         onClose={() => setSelectedId(null)}
         placement="side"
         title={sel?.customerName ?? ""}
-        description={sel ? <span className={styles.sheetMeta}><StatusPill status={sel.status} />{new Date(sel.startAt).toDateString() === new Date().toDateString() && <Badge tone="blue" size="sm">Bugün</Badge>}</span> : undefined}
+        description={sel ? <span className={styles.sheetMeta}><StatusPill status={sel.status} />{new Date(sel.startAt).toDateString() === new Date().toDateString() && <Badge tone="blue" size="sm">{t("Bugün")}</Badge>}</span> : undefined}
         footer={sel && canManageStatus && selOpen ? <>
-          {sel.status === "pending" && <Button variant="primary" icon={BadgeCheck} loading={selBusy} onClick={() => void handleStatusChange(sel, "confirmed")}>Onayla</Button>}
-          <Button variant={sel.status === "pending" ? "secondary" : "primary"} icon={Check} loading={selBusy} onClick={() => void handleStatusChange(sel, "completed")}>Tamamlandı</Button>
+          {sel.status === "pending" && <Button variant="primary" icon={BadgeCheck} loading={selBusy} onClick={() => void handleStatusChange(sel, "confirmed")}>{t("Onayla")}</Button>}
+          <Button variant={sel.status === "pending" ? "secondary" : "primary"} icon={Check} loading={selBusy} onClick={() => void handleStatusChange(sel, "completed")}>{t("Tamamlandı")}</Button>
         </> : undefined}
       >
         {sel && (
           <div className={styles.detail}>
             <div className={styles.hero}>
               <span><CalendarClock size={18} aria-hidden /></span>
-              <div><b>{format(new Date(sel.startAt), "d MMMM yyyy, EEEE", { locale: tr })}</b><small>{formatTime(sel.startAt)}{sel.endAt ? ` – ${formatTime(sel.endAt)}` : ""}{sel.serviceDurationMinutes ? ` · ${sel.serviceDurationMinutes} dk` : ""}</small></div>
+              <div><b>{format(new Date(sel.startAt), "d MMMM yyyy, EEEE", { locale: dateLocale })}</b><small>{formatTime(sel.startAt)}{sel.endAt ? ` – ${formatTime(sel.endAt)}` : ""}{sel.serviceDurationMinutes ? ` · ${t("{minutes} dk", { minutes: sel.serviceDurationMinutes })}` : ""}</small></div>
             </div>
             <KeyValueList items={[
-              { label: "Hizmet", value: servicesOf(sel) || "—", wide: true },
-              { label: "Çalışan", value: sel.staffName || "Atanmamış" },
-              { label: "Tutar", value: sel.servicePrice ? `${sel.servicePrice.toLocaleString("tr-TR")} ₺` : "—" },
-              { label: "Ödeme", value: PAYMENT_LABEL[sel.paymentStatus] ?? sel.paymentStatus },
-              ...(sel.source ? [{ label: "Kaynak", value: SOURCE_LABEL[sel.source] ?? sel.source }] : []),
-              ...(canViewCustomerContact && sel.customerPhone ? [{ label: "Telefon", value: <a href={`tel:${sel.customerPhone}`} className={styles.link}>{sel.customerPhone}</a> }] : []),
-              ...(canViewCustomerContact && sel.customerEmail ? [{ label: "E-posta", value: <a href={`mailto:${sel.customerEmail}`} className={styles.link}>{sel.customerEmail}</a>, wide: true }] : []),
+              { label: t("Hizmet"), value: servicesOf(sel) || "—", wide: true },
+              { label: t("Çalışan"), value: sel.staffName || t("Atanmamış") },
+              { label: t("Tutar"), value: sel.servicePrice ? money(sel.servicePrice) : "—" },
+              { label: t("Ödeme"), value: PAYMENT_LABEL[sel.paymentStatus] ? t(PAYMENT_LABEL[sel.paymentStatus]) : sel.paymentStatus },
+              ...(sel.source ? [{ label: t("Kaynak"), value: SOURCE_LABEL[sel.source] ? t(SOURCE_LABEL[sel.source]) : sel.source }] : []),
+              ...(canViewCustomerContact && sel.customerPhone ? [{ label: t("Telefon"), value: <a href={`tel:${sel.customerPhone}`} className={styles.link}>{sel.customerPhone}</a> }] : []),
+              ...(canViewCustomerContact && sel.customerEmail ? [{ label: t("E-posta"), value: <a href={`mailto:${sel.customerEmail}`} className={styles.link}>{sel.customerEmail}</a>, wide: true }] : []),
             ]} />
 
             {(sel.additionalServices?.length ?? 0) > 0 && (
               <div className={styles.extras}>
-                <p><PackagePlus size={13} aria-hidden /> Eklenen hizmetler</p>
-                <div>{sel.additionalServices?.map((service) => <Badge key={service.serviceId} tone="green">{service.name} · {service.durationMinutes} dk · {service.price.toLocaleString("tr-TR")} ₺</Badge>)}</div>
+                <p><PackagePlus size={13} aria-hidden /> {t("Eklenen hizmetler")}</p>
+                <div>{sel.additionalServices?.map((service) => <Badge key={service.serviceId} tone="green">{service.name} · {t("{minutes} dk", { minutes: service.durationMinutes })} · {money(service.price)}</Badge>)}</div>
               </div>
             )}
-            {sel.notes && <div className={styles.note}><small>Randevu notu</small><p>{sel.notes}</p></div>}
+            {sel.notes && <div className={styles.note}><small>{t("Randevu notu")}</small><p>{sel.notes}</p></div>}
             <AppointmentCustomFields values={sel.customFields} />
 
             <div className={styles.actionGrid}>
-              {canViewCustomerContact && sel.customerPhone && <Button variant="soft" icon={Phone} href={`tel:${sel.customerPhone}`}>Ara</Button>}
-              {canManageStatus && selOpen && <Button variant="soft" icon={CalendarClock} onClick={() => openReschedule(sel)}>Saati değiştir</Button>}
-              {canManageStatus && !["cancelled", "no_show"].includes(sel.status) && <Button variant="soft" icon={Plus} onClick={() => openServiceEditor(sel)}>Hizmet ekle / düzenle</Button>}
-              {canManageStatus && !["cancelled", "no_show"].includes(sel.status) && sel.paymentStatus !== "paid" && <Button variant="soft" icon={ReceiptText} href={`/dashboard/operasyon?appointment=${encodeURIComponent(sel.id)}`}>Adisyon aç</Button>}
-              {canManageStatus && sel.status !== "no_show" && selPast && <Button variant="secondary" icon={UserX} loading={selBusy} onClick={() => void handleStatusChange(sel, "no_show")}>Gelmedi</Button>}
-              {canManageStatus && selOpen && <Button variant="dangerSoft" icon={CircleX} disabled={selBusy} onClick={() => setConfirmCancel(sel)}>İptal et</Button>}
+              {canViewCustomerContact && sel.customerPhone && <Button variant="soft" icon={Phone} href={`tel:${sel.customerPhone}`}>{t("Ara")}</Button>}
+              {canManageStatus && selOpen && <Button variant="soft" icon={CalendarClock} onClick={() => openReschedule(sel)}>{t("Saati değiştir")}</Button>}
+              {canManageStatus && !["cancelled", "no_show"].includes(sel.status) && <Button variant="soft" icon={Plus} onClick={() => openServiceEditor(sel)}>{t("Hizmet ekle / düzenle")}</Button>}
+              {canManageStatus && !["cancelled", "no_show"].includes(sel.status) && sel.paymentStatus !== "paid" && <Button variant="soft" icon={ReceiptText} href={`/dashboard/operasyon?appointment=${encodeURIComponent(sel.id)}`}>{t("Adisyon aç")}</Button>}
+              {canManageStatus && sel.status !== "no_show" && selPast && <Button variant="secondary" icon={UserX} loading={selBusy} onClick={() => void handleStatusChange(sel, "no_show")}>{t("Gelmedi")}</Button>}
+              {canManageStatus && selOpen && <Button variant="dangerSoft" icon={CircleX} disabled={selBusy} onClick={() => setConfirmCancel(sel)}>{t("İptal et")}</Button>}
             </div>
-            {!canManageStatus && <Callout tone="neutral" icon={CheckCircle2} title="Salt okunur">Randevu durumunu değiştirme yetkiniz yok.</Callout>}
+            {!canManageStatus && <Callout tone="neutral" icon={CheckCircle2} title={t("Salt okunur")}>{t("Randevu durumunu değiştirme yetkiniz yok.")}</Callout>}
           </div>
         )}
       </Sheet>
@@ -420,10 +427,10 @@ export default function AppointmentsPage() {
         onClose={() => setConfirmCancel(null)}
         onConfirm={() => { if (confirmCancel) void handleStatusChange(confirmCancel, "cancelled"); }}
         busy={Boolean(confirmCancel && updatingId === confirmCancel.id)}
-        title="Randevu iptal edilsin mi?"
-        description={confirmCancel ? `${confirmCancel.customerName} · ${formatDate(confirmCancel.startAt)} ${formatTime(confirmCancel.startAt)}. Saat yeniden müsait görünür.` : undefined}
-        confirmLabel="İptal et"
-        cancelLabel="Vazgeç"
+        title={t("Randevu iptal edilsin mi?")}
+        description={confirmCancel ? t("{name} · {date} {time}. Saat yeniden müsait görünür.", { name: confirmCancel.customerName, date: fmtDate(confirmCancel.startAt), time: formatTime(confirmCancel.startAt) }) : undefined}
+        confirmLabel={t("İptal et")}
+        cancelLabel={t("Vazgeç")}
         icon={CircleX}
       />
 
@@ -433,18 +440,18 @@ export default function AppointmentsPage() {
         onClose={() => setRescheduling(null)}
         dismissible={!savingReschedule}
         size="sm"
-        title="Saati değiştir"
-        description={rescheduling ? `${rescheduling.customerName} · şu an ${formatDate(rescheduling.startAt)} ${formatTime(rescheduling.startAt)}` : undefined}
+        title={t("Saati değiştir")}
+        description={rescheduling ? t("{name} · şu an {date} {time}", { name: rescheduling.customerName, date: fmtDate(rescheduling.startAt), time: formatTime(rescheduling.startAt) }) : undefined}
         footer={<>
-          <Button variant="secondary" onClick={() => setRescheduling(null)} disabled={savingReschedule}>Vazgeç</Button>
-          <Button variant="primary" icon={CalendarClock} loading={savingReschedule} disabled={!newDate || !newTime} onClick={() => void saveReschedule()}>Taşı</Button>
+          <Button variant="secondary" onClick={() => setRescheduling(null)} disabled={savingReschedule}>{t("Vazgeç")}</Button>
+          <Button variant="primary" icon={CalendarClock} loading={savingReschedule} disabled={!newDate || !newTime} onClick={() => void saveReschedule()}>{t("Taşı")}</Button>
         </>}
       >
         <FormGrid>
-          <Field label="Yeni tarih"><Input type="date" value={newDate} onChange={(event) => setNewDate(event.target.value)} /></Field>
-          <Field label="Yeni saat"><Input type="time" step={900} value={newTime} onChange={(event) => setNewTime(event.target.value)} /></Field>
+          <Field label={t("Yeni tarih")}><Input type="date" value={newDate} onChange={(event) => setNewDate(event.target.value)} /></Field>
+          <Field label={t("Yeni saat")}><Input type="time" step={900} value={newTime} onChange={(event) => setNewTime(event.target.value)} /></Field>
         </FormGrid>
-        <p className={styles.hint}>Çalışan ve süre aynı kalır. Saat doluysa veya çalışma saatleri dışındaysa sistem uyarır.</p>
+        <p className={styles.hint}>{t("Çalışan ve süre aynı kalır. Saat doluysa veya çalışma saatleri dışındaysa sistem uyarır.")}</p>
       </Sheet>
 
       {/* ── Ek hizmetler ── */}
@@ -453,24 +460,24 @@ export default function AppointmentsPage() {
         onClose={() => setServiceEditor(null)}
         dismissible={!savingServices}
         size="lg"
-        title="Ek hizmet ekle"
-        description={serviceEditor ? <>{serviceEditor.customerName} · Ana hizmet: <b>{serviceEditor.serviceName ?? "Hizmet"}</b></> : undefined}
-        headerExtra={<div className={styles.serviceSearch}><SearchField value={serviceSearch} onChange={setServiceSearch} placeholder="Ek hizmet ara…" /><Badge tone="accent">{selectedExtraServices.length} seçili</Badge></div>}
+        title={t("Ek hizmet ekle")}
+        description={serviceEditor ? <>{serviceEditor.customerName} · {t("Ana hizmet:")} <b>{serviceEditor.serviceName ?? t("Hizmet")}</b></> : undefined}
+        headerExtra={<div className={styles.serviceSearch}><SearchField value={serviceSearch} onChange={setServiceSearch} placeholder={t("Ek hizmet ara…")} /><Badge tone="accent">{t("{count} seçili", { count: selectedExtraServices.length })}</Badge></div>}
         footer={<div className={styles.serviceFoot}>
-          {editorScheduleConflict && <Callout tone="amber" title="Çakışma uyarısı">Yeni bitiş saati {editorScheduleConflict.customerName} müşterisinin {formatTime(editorScheduleConflict.startAt)} randevusuyla çakışıyor. Yine de kaydedebilirsiniz.</Callout>}
+          {editorScheduleConflict && <Callout tone="amber" title={t("Çakışma uyarısı")}>{t("Yeni bitiş saati {name} müşterisinin {time} randevusuyla çakışıyor. Yine de kaydedebilirsiniz.", { name: editorScheduleConflict.customerName, time: formatTime(editorScheduleConflict.startAt) })}</Callout>}
           <div className={styles.totals}>
-            <span><small>Ek hizmet</small><b>{selectedExtraServices.length}</b></span>
-            <span><small>Toplam süre</small><b>{editorTotalDuration} dk</b></span>
-            <span><small>Toplam tutar</small><b>{editorTotalPrice.toLocaleString("tr-TR")} ₺</b></span>
+            <span><small>{t("Ek hizmet")}</small><b>{selectedExtraServices.length}</b></span>
+            <span><small>{t("Toplam süre")}</small><b>{t("{minutes} dk", { minutes: editorTotalDuration })}</b></span>
+            <span><small>{t("Toplam tutar")}</small><b>{money(editorTotalPrice)}</b></span>
           </div>
           <div className={styles.serviceButtons}>
-            <Button variant="secondary" onClick={() => setServiceEditor(null)} disabled={savingServices}>Vazgeç</Button>
-            <Button variant="primary" icon={Check} loading={savingServices} onClick={() => void handleSaveAdditionalServices()}>{savingServices ? "Kaydediliyor…" : "Hizmetleri kaydet"}</Button>
+            <Button variant="secondary" onClick={() => setServiceEditor(null)} disabled={savingServices}>{t("Vazgeç")}</Button>
+            <Button variant="primary" icon={Check} loading={savingServices} onClick={() => void handleSaveAdditionalServices()}>{savingServices ? t("Kaydediliyor…") : t("Hizmetleri kaydet")}</Button>
           </div>
         </div>}
       >
         {visibleExtraServiceOptions.length === 0 ? (
-          <EmptyState icon={PackagePlus} compact title="Uygun ek hizmet bulunamadı" description="Aktif ve fiyatı tanımlanmış hizmetler burada görünür." />
+          <EmptyState icon={PackagePlus} compact title={t("Uygun ek hizmet bulunamadı")} description={t("Aktif ve fiyatı tanımlanmış hizmetler burada görünür.")} />
         ) : (
           <div className={styles.serviceGrid}>
             {visibleExtraServiceOptions.map((service) => {
@@ -478,7 +485,7 @@ export default function AppointmentsPage() {
               return (
                 <button key={service.serviceId} type="button" aria-pressed={on} onClick={() => toggleExtraService(service.serviceId)} className={cn(styles.serviceOption, on && styles.serviceOn)}>
                   <span className={styles.serviceCheck}>{on ? <Check size={16} strokeWidth={3} aria-hidden /> : <Plus size={16} aria-hidden />}</span>
-                  <span className="min-w-0"><b>{service.name}</b><small>{service.durationMinutes} dk · {service.price.toLocaleString("tr-TR")} ₺</small></span>
+                  <span className="min-w-0"><b>{service.name}</b><small>{t("{minutes} dk", { minutes: service.durationMinutes })} · {money(service.price)}</small></span>
                 </button>
               );
             })}

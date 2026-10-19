@@ -1,13 +1,17 @@
+"use client";
+
 import { ReactNode } from "react";
 import { LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { useT } from "@/i18n/client";
 
 export function LoadingState({ title, description }: { title: string; description?: string }) {
+  const t = useT();
   return (
     <div className="premium-loading-state" role="status" aria-live="polite">
       <div className="premium-loading-orbit"><span/><span/><LoaderCircle/></div>
-      <div className="premium-loading-copy"><small><Sparkles size={13}/> SENİNRANDEVUN</small><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
+      <div className="premium-loading-copy"><small><Sparkles size={13}/> {"SENINRANDEVUN"}</small><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
       <div className="premium-loading-progress"><i/><i/><i/></div>
-      <span className="premium-loading-trust"><ShieldCheck size={13}/> Güvenli bağlantı kuruluyor</span>
+      <span className="premium-loading-trust"><ShieldCheck size={13}/> {t("Güvenli bağlantı kuruluyor")}</span>
     </div>
   );
 }

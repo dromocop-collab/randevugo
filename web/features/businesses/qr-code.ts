@@ -82,7 +82,7 @@ export function encodeQr(text: string): QrMatrix {
     const needed = 4 + countBits + bytes.length * 8;
     if (needed <= numDataCodewords(version) * 8) break;
   }
-  if (version > 40) throw new RangeError("QR için metin çok uzun.");
+  if (version > 40) throw new RangeError("QR için metin çok uzun."); // i18n-ignore — geliştirici hatası (mağaza linki her zaman sığar)
 
   // Veri bitleri
   const bits: number[] = [];

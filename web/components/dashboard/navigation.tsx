@@ -17,34 +17,36 @@ import {
 } from "lucide-react";
 import { Sheet } from "@/components/dashboard/ui";
 import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./shell.module.css";
 
 const ADMIN_EMAIL = "cihatwin@gmail.com";
 
 type NavGroup = "merkez" | "operasyon" | "buyume" | "yonetim" | "sistem";
 export interface NavItem { href: string; label: string; short?: string; icon: LucideIcon; group: NavGroup; entitlement?: SubscriptionEntitlement }
-const GROUP_LABELS: Record<NavGroup, string> = { merkez: "Çalışma alanı", operasyon: "Günlük operasyon", buyume: "Analiz ve otomasyon", yonetim: "İşletme yönetimi", sistem: "Hesap ve sistem" };
+const GROUP_LABELS: Record<NavGroup, string> = { merkez: tk("Çalışma alanı"), operasyon: tk("Günlük operasyon"), buyume: tk("Analiz ve otomasyon"), yonetim: tk("İşletme yönetimi"), sistem: tk("Hesap ve sistem") };
 
 const navItems: NavItem[] = ([
-  { href: "/dashboard", label: "Bugün", short: "Bugün", icon: House, group: "merkez" },
-  { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays, group: "merkez" },
-  { href: "/dashboard/randevular", label: "Randevular", icon: ListChecks, group: "merkez" },
-  { href: "/dashboard/musteriler", label: "Müşteriler", icon: UsersRound, group: "merkez" },
-  { href: "/dashboard/operasyon", label: "Kasa & Operasyon", short: "Kasa", icon: ReceiptText, group: "merkez" },
-  { href: "/dashboard/canli-operasyon", label: "Canlı Sıra", icon: Activity, group: "operasyon" },
-  { href: "/dashboard/bekleme-listesi", label: "Bekleme Listesi", icon: BellRing, group: "operasyon" },
-  { href: "/dashboard/asistan", label: "İşletme Asistanı", icon: Bot, group: "operasyon" },
-  { href: "/dashboard/analitik", label: "Analiz & Büyüme", icon: ChartNoAxesCombined, group: "buyume" },
-  { href: "/dashboard/otomasyonlar", label: "Otomasyonlar", icon: WandSparkles, group: "buyume" },
-  { href: "/dashboard/hizmetler", label: "Hizmetler", icon: Scissors, group: "yonetim" },
-  { href: "/dashboard/calisanlar", label: "Çalışanlar", icon: UsersRound, group: "yonetim" },
-  { href: "/dashboard/calisma-saatleri", label: "Çalışma Saatleri", icon: Clock3, group: "yonetim" },
-  { href: "/dashboard/subeler", label: "Şubeler", icon: GitBranch, group: "yonetim" },
-  { href: "/dashboard/yorumlar", label: "Yorumlar", icon: Star, group: "yonetim" },
-  { href: "/dashboard/destek", label: "Destek", icon: Headphones, group: "sistem" },
-  { href: "/dashboard/abonelik", label: "Abonelik", icon: CreditCard, group: "sistem" },
-  { href: "/dashboard/ayarlar", label: "Ayarlar", icon: Settings2, group: "sistem" },
-  { href: "/hesabim", label: "Müşteri Modu", icon: CircleUserRound, group: "sistem" },
+  { href: "/dashboard", label: tk("Bugün"), short: tk("Bugün"), icon: House, group: "merkez" },
+  { href: "/dashboard/takvim", label: tk("Takvim"), icon: CalendarDays, group: "merkez" },
+  { href: "/dashboard/randevular", label: tk("Randevular"), icon: ListChecks, group: "merkez" },
+  { href: "/dashboard/musteriler", label: tk("Müşteriler"), icon: UsersRound, group: "merkez" },
+  { href: "/dashboard/operasyon", label: tk("Kasa & Operasyon"), short: tk("Kasa"), icon: ReceiptText, group: "merkez" },
+  { href: "/dashboard/canli-operasyon", label: tk("Canlı Sıra"), icon: Activity, group: "operasyon" },
+  { href: "/dashboard/bekleme-listesi", label: tk("Bekleme Listesi"), icon: BellRing, group: "operasyon" },
+  { href: "/dashboard/asistan", label: tk("İşletme Asistanı"), icon: Bot, group: "operasyon" },
+  { href: "/dashboard/analitik", label: tk("Analiz & Büyüme"), icon: ChartNoAxesCombined, group: "buyume" },
+  { href: "/dashboard/otomasyonlar", label: tk("Otomasyonlar"), icon: WandSparkles, group: "buyume" },
+  { href: "/dashboard/hizmetler", label: tk("Hizmetler"), icon: Scissors, group: "yonetim" },
+  { href: "/dashboard/calisanlar", label: tk("Çalışanlar"), icon: UsersRound, group: "yonetim" },
+  { href: "/dashboard/calisma-saatleri", label: tk("Çalışma Saatleri"), icon: Clock3, group: "yonetim" },
+  { href: "/dashboard/subeler", label: tk("Şubeler"), icon: GitBranch, group: "yonetim" },
+  { href: "/dashboard/yorumlar", label: tk("Yorumlar"), icon: Star, group: "yonetim" },
+  { href: "/dashboard/destek", label: tk("Destek"), icon: Headphones, group: "sistem" },
+  { href: "/dashboard/abonelik", label: tk("Abonelik"), icon: CreditCard, group: "sistem" },
+  { href: "/dashboard/ayarlar", label: tk("Ayarlar"), icon: Settings2, group: "sistem" },
+  { href: "/hesabim", label: tk("Müşteri Modu"), icon: CircleUserRound, group: "sistem" },
 ] satisfies Omit<NavItem, "entitlement">[]).map((item) => ({ ...item, entitlement: DASHBOARD_ROUTE_ENTITLEMENTS[item.href] }));
 
 type Access = ReturnType<typeof useBusinessContext>["access"];
@@ -77,6 +79,7 @@ function useDashboardNav() {
 const tourId = (href: string) => href === "/dashboard" ? "overview" : href.replace("/dashboard/", "");
 
 export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const t = useT();
   const { businesses, businessId } = useBusinessContext();
   const { items, isAdmin, isActive } = useDashboardNav();
   const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
@@ -85,18 +88,18 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
     .filter((entry) => entry.items.length > 0);
 
   return (
-    <aside className={styles.sidebar} aria-label="İşletme menüsü">
+    <aside className={styles.sidebar} aria-label={t("İşletme menüsü")}>
       <Link href="/dashboard" className={styles.brand} title={activeBusiness?.name ?? "SeninRandevun"}>
         <Image src="/logo.png" alt="" width={36} height={36} className={styles.brandLogo} />
         <span className={styles.brandText}>
-          <small>İşletme paneli</small>
+          <small>{t("İşletme paneli")}</small>
           <b>{activeBusiness?.name ?? "SeninRandevun"}</b>
         </span>
       </Link>
       <nav className={styles.sideNav}>
         {groups.map(({ group, items: groupItems }) => (
           <section key={group} className={styles.sideGroup}>
-            <p className={styles.sideGroupLabel}>{GROUP_LABELS[group]}</p>
+            <p className={styles.sideGroupLabel}>{t(GROUP_LABELS[group])}</p>
             {groupItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -106,11 +109,11 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
                   href={item.href}
                   data-dashboard-tour={tourId(item.href)}
                   aria-current={active ? "page" : undefined}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? t(item.label) : undefined}
                   className={cn(styles.sideLink, active && styles.sideLinkActive)}
                 >
                   <span className={styles.sideIcon}><Icon size={18} strokeWidth={active ? 2.2 : 1.9} aria-hidden /></span>
-                  <span className={styles.sideLabel}>{item.label}</span>
+                  <span className={styles.sideLabel}>{t(item.label)}</span>
                 </Link>
               );
             })}
@@ -118,23 +121,24 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
         ))}
         {isAdmin && (
           <section className={styles.sideGroup}>
-            <p className={styles.sideGroupLabel}>Platform</p>
-            <Link href="/super-admin" className={cn(styles.sideLink, styles.sideLinkAdmin)} title={collapsed ? "Süper Admin" : undefined}>
+            <p className={styles.sideGroupLabel}>{t("Platform")}</p>
+            <Link href="/super-admin" className={cn(styles.sideLink, styles.sideLinkAdmin)} title={collapsed ? t("Süper Admin") : undefined}>
               <span className={styles.sideIcon}><ShieldCheck size={18} aria-hidden /></span>
-              <span className={styles.sideLabel}>Süper Admin</span>
+              <span className={styles.sideLabel}>{t("Süper Admin")}</span>
             </Link>
           </section>
         )}
       </nav>
-      <button type="button" className={styles.collapseBtn} onClick={onToggle} aria-label={collapsed ? "Menüyü genişlet" : "Menüyü daralt"} aria-pressed={collapsed}>
+      <button type="button" className={styles.collapseBtn} onClick={onToggle} aria-label={collapsed ? t("Menüyü genişlet") : t("Menüyü daralt")} aria-pressed={collapsed}>
         {collapsed ? <PanelLeftOpen size={18} aria-hidden /> : <PanelLeftClose size={18} aria-hidden />}
-        <span className={styles.sideLabel}>Menüyü daralt</span>
+        <span className={styles.sideLabel}>{t("Menüyü daralt")}</span>
       </button>
     </aside>
   );
 }
 
 export function DashboardBottomNav() {
+  const t = useT();
   const { items, isAdmin, isActive, access } = useDashboardNav();
   const [moreOpen, setMoreOpen] = useState(false);
   const isStaff = access?.role === "staff";
@@ -165,13 +169,13 @@ export function DashboardBottomNav() {
 
   return (
     <>
-      <nav className={styles.bottomNav} aria-label="İşletme paneli menüsü">
+      <nav className={styles.bottomNav} aria-label={t("İşletme paneli menüsü")}>
         <ul>
           {slots.map((slot) => {
             if (slot === "new") {
               return (
                 <li key="new">
-                  <button type="button" className={styles.fab} onClick={() => openQuickAppointment()} aria-label="Yeni randevu">
+                  <button type="button" className={styles.fab} onClick={() => openQuickAppointment()} aria-label={t("Yeni randevu")}>
                     <span><Plus size={24} strokeWidth={2.4} aria-hidden /></span>
                   </button>
                 </li>
@@ -188,7 +192,7 @@ export function DashboardBottomNav() {
                   className={cn(styles.bottomLink, active && styles.bottomLinkActive)}
                 >
                   <span className={styles.bottomIcon}><Icon size={21} strokeWidth={active ? 2.3 : 1.9} aria-hidden /></span>
-                  <span className={styles.bottomLabel}>{slot.short ?? slot.label}</span>
+                  <span className={styles.bottomLabel}>{t(slot.short ?? slot.label)}</span>
                 </Link>
               </li>
             );
@@ -202,16 +206,16 @@ export function DashboardBottomNav() {
               aria-expanded={moreOpen}
             >
               <span className={styles.bottomIcon}><LayoutGrid size={21} strokeWidth={moreActive ? 2.3 : 1.9} aria-hidden /></span>
-              <span className={styles.bottomLabel}>Daha fazla</span>
+              <span className={styles.bottomLabel}>{t("Daha fazla")}</span>
             </button>
           </li>
         </ul>
       </nav>
-      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Tüm araçlar" description="İşletmenizi yönetmek için ihtiyacınız olan her şey.">
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t("Tüm araçlar")} description={t("İşletmenizi yönetmek için ihtiyacınız olan her şey.")}>
         <div className={styles.moreGroups}>
           {groups.map(({ group, items: groupItems }) => (
             <section key={group}>
-              <p className={styles.moreLabel}>{GROUP_LABELS[group]}</p>
+              <p className={styles.moreLabel}>{t(GROUP_LABELS[group])}</p>
               <div className={styles.moreGrid}>
                 {groupItems.map((item) => {
                   const Icon = item.icon;
@@ -226,7 +230,7 @@ export function DashboardBottomNav() {
                       className={cn(styles.moreTile, active && styles.moreTileActive)}
                     >
                       <span className={styles.moreTileIcon}><Icon size={20} aria-hidden /></span>
-                      <span>{item.label}</span>
+                      <span>{t(item.label)}</span>
                     </Link>
                   );
                 })}
@@ -235,11 +239,11 @@ export function DashboardBottomNav() {
           ))}
           {isAdmin && (
             <section>
-              <p className={styles.moreLabel}>Platform</p>
+              <p className={styles.moreLabel}>{t("Platform")}</p>
               <div className={styles.moreGrid}>
                 <Link href="/super-admin" onClick={() => setMoreOpen(false)} className={styles.moreTile}>
                   <span className={styles.moreTileIcon}><ShieldCheck size={20} aria-hidden /></span>
-                  <span>Süper Admin</span>
+                  <span>{t("Süper Admin")}</span>
                 </Link>
               </div>
             </section>

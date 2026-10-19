@@ -1,7 +1,7 @@
 import "server-only";
 import { lang } from "next/root-params";
-import { DEFAULT_LOCALE, LOCALE_LABELS, isLocale, translate, type Locale, type TFunction } from "./config";
-import { getMessages } from "./messages";
+import { DEFAULT_LOCALE, LOCALE_LABELS, isLocale, translateWithPatterns, type Locale, type TFunction } from "./config";
+import { getMessages, getPatterns } from "./messages";
 
 /** Sunucu bileşenlerinde geçerli dil (kök [lang] parametresinden). */
 export async function getLocale(): Promise<Locale> {
@@ -17,7 +17,8 @@ export async function getLocale(): Promise<Locale> {
 export async function getT(): Promise<TFunction> {
   const locale = await getLocale();
   const messages = getMessages(locale);
-  return (source, vars) => translate(locale, messages, source, vars);
+  const patterns = getPatterns(locale);
+  return (source, vars) => translateWithPatterns(locale, messages, patterns, source, vars);
 }
 
 export async function getIntlLocale(): Promise<string> {

@@ -1,43 +1,46 @@
-import { SeoLandingPage } from "@/components/seo/seo-landing-page";
-import { createProfessionMetadata } from "@/lib/profession-seo";
+import type { Metadata } from "next";
+import { SeoLandingPage, seoLandingMetadata } from "@/components/seo/seo-landing-page";
+import { tk } from "@/i18n/config";
 
 // Kategori işletme listesi saatte bir yenilenir.
 export const revalidate = 3600;
 
-export const metadata = createProfessionMetadata({
-  title: "Berber Randevusu Al – Online ve Ücretsiz",
-  description: "Yakınındaki berberleri keşfet; saç, sakal ve tıraş hizmetlerinin fiyatlarını, yorumlarını ve müsait saatlerini karşılaştırıp online berber randevusu al.",
-  pathname: "/berber-randevu",
-  category: "berber",
-});
+export async function generateMetadata(): Promise<Metadata> {
+  return seoLandingMetadata({
+    title: tk("Berber Randevusu Al – Online ve Ücretsiz"),
+    description: tk("Yakınındaki berberleri keşfet; saç, sakal ve tıraş hizmetlerinin fiyatlarını, yorumlarını ve müsait saatlerini karşılaştırıp online berber randevusu al."),
+    pathname: "/berber-randevu",
+    category: "berber",
+  });
+}
 
 export default function BerberRandevuPage() {
   return (
     <SeoLandingPage
       pathname="/berber-randevu"
-      eyebrow="Erkek bakım"
-      title="Berber randevunuzu online alın"
-      description="Saç kesimi, sakal tıraşı ve bakım hizmetleri sunan berberleri keşfedin. Uygun hizmeti ve saati seçerek hızlıca randevu oluşturun."
+      eyebrow={tk("Erkek bakım")}
+      title={tk("Berber randevunuzu online alın")}
+      description={tk("Saç kesimi, sakal tıraşı ve bakım hizmetleri sunan berberleri keşfedin. Uygun hizmeti ve saati seçerek hızlıca randevu oluşturun.")}
       category="berber"
       benefits={[
-        "Berberlerin hizmetlerini, çalışma saatlerini ve müşteri yorumlarını karşılaştırın.",
-        "Size uygun çalışanı ve randevu saatini kendiniz seçin.",
-        "Randevunuzu telefon beklemeden birkaç adımda tamamlayın.",
+        tk("Berberlerin hizmetlerini, çalışma saatlerini ve müşteri yorumlarını karşılaştırın."),
+        tk("Size uygun çalışanı ve randevu saatini kendiniz seçin."),
+        tk("Randevunuzu telefon beklemeden birkaç adımda tamamlayın."),
       ]}
       steps={[
-        "Konumunuza göre berberleri arayın ve işletme profilini inceleyin.",
-        "Saç, sakal veya bakım hizmetlerinden ihtiyacınıza uygun olanı seçin.",
-        "Müsait gün ve saati seçerek randevunuzu onaylayın.",
+        tk("Konumunuza göre berberleri arayın ve işletme profilini inceleyin."),
+        tk("Saç, sakal veya bakım hizmetlerinden ihtiyacınıza uygun olanı seçin."),
+        tk("Müsait gün ve saati seçerek randevunuzu onaylayın."),
       ]}
       faq={[
-        { question: "Online berber randevusu nasıl alınır?", answer: "Berber kategorisindeki işletmeleri keşfedin, hizmet ve çalışan seçimini yapın. Müsait saatlerden birini seçerek randevunuzu tamamlayın." },
-        { question: "Berber randevusunda hangi hizmetleri bulabilirim?", answer: "İşletmeye göre saç kesimi, sakal tıraşı, saç ve sakal bakımı, çocuk saç kesimi ve benzeri hizmetleri bulabilirsiniz." },
-        { question: "Berberimi ve saatimi seçebilir miyim?", answer: "İşletmenin tanımladığı çalışan ve müsaitlik seçenekleri arasından size uygun olanı seçebilirsiniz." },
+        { question: tk("Online berber randevusu nasıl alınır?"), answer: tk("Berber kategorisindeki işletmeleri keşfedin, hizmet ve çalışan seçimini yapın. Müsait saatlerden birini seçerek randevunuzu tamamlayın.") },
+        { question: tk("Berber randevusunda hangi hizmetleri bulabilirim?"), answer: tk("İşletmeye göre saç kesimi, sakal tıraşı, saç ve sakal bakımı, çocuk saç kesimi ve benzeri hizmetleri bulabilirsiniz.") },
+        { question: tk("Berberimi ve saatimi seçebilir miyim?"), answer: tk("İşletmenin tanımladığı çalışan ve müsaitlik seçenekleri arasından size uygun olanı seçebilirsiniz.") },
       ]}
       relatedLinks={[
-        { href: "/kesfet?category=berber", label: "Berberleri keşfet" },
-        { href: "/online-randevu", label: "Online randevu nasıl alınır?" },
-        { href: "/kuafor-randevu", label: "Kuaför randevusu" },
+        { href: "/kesfet?category=berber", label: tk("Berberleri keşfet") },
+        { href: "/online-randevu", label: tk("Online randevu nasıl alınır?") },
+        { href: "/kuafor-randevu", label: tk("Kuaför randevusu") },
       ]}
     />
   );

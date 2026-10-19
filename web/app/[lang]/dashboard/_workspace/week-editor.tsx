@@ -3,11 +3,14 @@
 import { CalendarOff, Coffee, Copy, CopyCheck, Plus, TriangleAlert, X } from "lucide-react";
 import { Button, Field, Input, Switch } from "@/components/dashboard/ui";
 import type { DaySchedule } from "@/types/business";
+import { useT } from "@/i18n/client";
+import { interpolate, tk, type TFunction } from "@/i18n/config";
 import { cx, ws } from "./kit";
 import styles from "./week-editor.module.css";
 
-export const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-export const DAY_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+/** Gün adları tk() ile işaretli; gösterirken t(DAY_NAMES[i]). */
+export const DAY_NAMES: string[] = [tk("Pazar"), tk("Pazartesi"), tk("Salı"), tk("Çarşamba"), tk("Perşembe"), tk("Cuma"), tk("Cumartesi")];
+export const DAY_SHORT: string[] = [tk("Paz"), tk("Pzt"), tk("Sal"), tk("Çar"), tk("Per"), tk("Cum"), tk("Cmt")];
 export const ORDERED_DAYS = [1, 2, 3, 4, 5, 6, 0]; // Pzt–Paz
 
 export function toMinutes(value?: string) {
@@ -20,19 +23,24 @@ export function fromMinutes(value: number) {
   return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
 }
 
-export function formatDuration(totalMinutes: number) {
+const identityT: TFunction = (source, vars) => interpolate(source, vars);
+
+/** Süre metni; çeviri için bileşenin t fonksiyonunu geçin (varsayılan Türkçe). */
+export function formatDuration(totalMinutes: number, t: TFunction = identityT) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return minutes ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+  return minutes ? t("{hours} sa {minutes} dk", { hours, minutes }) : t("{hours} sa", { hours });
 }
+
+/** dayError() Türkçe anahtar döndürür; gösterirken t(dayError(day)). */
 
 export function dayError(day: DaySchedule): string | null {
   if (!day.isOpen) return null;
-  if (!day.start || !day.end) return "Başlangıç ve bitiş saatini seçin.";
-  if (day.start >= day.end) return "Bitiş saati başlangıçtan sonra olmalı. Gece yarısını geçen vardiyaları ayrı günlere bölün.";
+  if (!day.start || !day.end) return tk("Başlangıç ve bitiş saatini seçin.");
+  if (day.start >= day.end) return tk("Bitiş saati başlangıçtan sonra olmalı. Gece yarısını geçen vardiyaları ayrı günlere bölün.");
   if (day.breakStart) {
-    if (!day.breakEnd || day.breakStart >= day.breakEnd) return "Mola bitişi, mola başlangıcından sonra olmalı.";
-    if (day.breakStart < day.start || day.breakEnd > day.end) return "Mola, çalışma saatleri içinde olmalı.";
+    if (!day.breakEnd || day.breakStart >= day.breakEnd) return tk("Mola bitişi, mola başlangıcından sonra olmalı.");
+    if (day.breakStart < day.start || day.breakEnd > day.end) return tk("Mola, çalışma saatleri içinde olmalı.");
   }
   return null;
 }
@@ -67,56 +75,57 @@ export function copySchedule(days: DaySchedule[], source: DaySchedule, target: "
 }
 
 /** Tek günlük düzenleyici: aç/kapat, saatler, mola çipi, kopyalama. */
-export function DayCard({ day, onChange, onCopy, closedLabel = "Randevuya kapalı", compact = false }: {
+export function DayCard({ day, onChange, onCopy, closedLabel, compact = false }: {
   day: DaySchedule;
   onChange: (patch: Partial<DaySchedule>) => void;
   onCopy: (target: "weekdays" | "all") => void;
   closedLabel?: string;
   compact?: boolean;
 }) {
+  const t = useT();
   const error = dayError(day);
   const rangeInvalid = Boolean(error) && day.start >= day.end;
-  const name = DAY_NAMES[day.day];
+  const name = t(DAY_NAMES[day.day]);
   return (
     <article id={compact ? undefined : `day-${day.day}`} className={cx(styles.day, compact && styles.dayCompact, !day.isOpen && styles.dayClosed, error && styles.dayInvalid)}>
       <header className={styles.dayHead}>
-        <span className={cx(styles.dayBadge, day.isOpen && styles.dayBadgeOpen)} aria-hidden="true">{DAY_SHORT[day.day]}</span>
+        <span className={cx(styles.dayBadge, day.isOpen && styles.dayBadgeOpen)} aria-hidden="true">{t(DAY_SHORT[day.day])}</span>
         <div className={styles.dayTitle}>
           <h3>{name}</h3>
-          <p>{day.isOpen ? (error ? "Saatleri kontrol edin" : `${day.start}–${day.end} · ${formatDuration(workMinutes(day))}`) : closedLabel}</p>
+          <p>{day.isOpen ? (error ? t("Saatleri kontrol edin") : `${day.start}–${day.end} · ${formatDuration(workMinutes(day), t)}`) : closedLabel ?? t("Randevuya kapalı")}</p>
         </div>
-        <Switch checked={day.isOpen} onChange={(next) => onChange({ isOpen: next })} ariaLabel={`${name} açık`} />
+        <Switch checked={day.isOpen} onChange={(next) => onChange({ isOpen: next })} ariaLabel={t("{day} açık", { day: name })} />
       </header>
 
       {day.isOpen ? (
         <div className={styles.dayBody}>
           <div className={ws.grid2}>
-            <Field label="Başlangıç"><Input type="time" step={900} className={cx(rangeInvalid && styles.invalid)} value={day.start} onChange={(event) => onChange({ start: event.target.value })} aria-invalid={rangeInvalid} /></Field>
-            <Field label="Bitiş"><Input type="time" step={900} className={cx(rangeInvalid && styles.invalid)} value={day.end} onChange={(event) => onChange({ end: event.target.value })} aria-invalid={rangeInvalid} /></Field>
+            <Field label={t("Başlangıç")}><Input type="time" step={900} className={cx(rangeInvalid && styles.invalid)} value={day.start} onChange={(event) => onChange({ start: event.target.value })} aria-invalid={rangeInvalid} /></Field>
+            <Field label={t("Bitiş")}><Input type="time" step={900} className={cx(rangeInvalid && styles.invalid)} value={day.end} onChange={(event) => onChange({ end: event.target.value })} aria-invalid={rangeInvalid} /></Field>
           </div>
 
           {day.breakStart ? (
             <div className={styles.breakChip}>
               <span className={styles.breakIcon} aria-hidden="true"><Coffee size={16} /></span>
-              <Input type="time" step={900} className={styles.breakInput} value={day.breakStart} onChange={(event) => onChange({ breakStart: event.target.value || undefined })} aria-label={`${name} mola başlangıcı`} />
+              <Input type="time" step={900} className={styles.breakInput} value={day.breakStart} onChange={(event) => onChange({ breakStart: event.target.value || undefined })} aria-label={t("{day} mola başlangıcı", { day: name })} />
               <span className={styles.breakDash} aria-hidden="true">–</span>
-              <Input type="time" step={900} className={styles.breakInput} value={day.breakEnd ?? ""} onChange={(event) => onChange({ breakEnd: event.target.value || undefined })} aria-label={`${name} mola bitişi`} />
-              <Button variant="dangerSoft" iconOnly icon={X} onClick={() => onChange({ breakStart: undefined, breakEnd: undefined })} aria-label={`${name} molasını kaldır`} />
+              <Input type="time" step={900} className={styles.breakInput} value={day.breakEnd ?? ""} onChange={(event) => onChange({ breakEnd: event.target.value || undefined })} aria-label={t("{day} mola bitişi", { day: name })} />
+              <Button variant="dangerSoft" iconOnly icon={X} onClick={() => onChange({ breakStart: undefined, breakEnd: undefined })} aria-label={t("{day} molasını kaldır", { day: name })} />
             </div>
           ) : (
-            <button type="button" className={styles.addBreak} onClick={() => onChange(breakPatch(day))}><Plus size={15} /> Mola ekle</button>
+            <button type="button" className={styles.addBreak} onClick={() => onChange(breakPatch(day))}><Plus size={15} /> {t("Mola ekle")}</button>
           )}
 
-          {error ? <p className={styles.error} role="alert"><TriangleAlert size={14} /> {error}</p> : null}
+          {error ? <p className={styles.error} role="alert"><TriangleAlert size={14} /> {t(error)}</p> : null}
 
           <div className={styles.dayActions}>
-            <Button size="sm" variant="ghost" icon={Copy} onClick={() => onCopy("weekdays")}>Hafta içine</Button>
-            <Button size="sm" variant="ghost" icon={CopyCheck} onClick={() => onCopy("all")}>Tüm günlere</Button>
+            <Button size="sm" variant="ghost" icon={Copy} onClick={() => onCopy("weekdays")}>{t("Hafta içine")}</Button>
+            <Button size="sm" variant="ghost" icon={CopyCheck} onClick={() => onCopy("all")}>{t("Tüm günlere")}</Button>
           </div>
         </div>
       ) : (
         <button type="button" className={styles.closedHint} onClick={() => onChange({ isOpen: true })}>
-          <CalendarOff size={16} aria-hidden="true" /> Kapalı · açmak için dokunun
+          <CalendarOff size={16} aria-hidden="true" /> {t("Kapalı · açmak için dokunun")}
         </button>
       )}
     </article>

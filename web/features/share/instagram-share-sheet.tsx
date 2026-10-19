@@ -7,6 +7,8 @@ import { Check, Copy, Download, ExternalLink, LoaderCircle, RotateCcw, Share2, X
 import { InstagramGlyph } from "./instagram-glyph";
 import { shareFileName, shareImagePath, type ShareFormat } from "./instagram-share-domain";
 import styles from "./instagram-share-sheet.module.css";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 type Props = {
   open: boolean;
@@ -20,8 +22,8 @@ type Props = {
 type FileState = { status: "loading" } | { status: "ready"; file: File; url: string } | { status: "error" };
 
 const FORMATS: { format: ShareFormat; label: string; action: string; ratio: string }[] = [
-  { format: "story", label: "Hikâye · 9:16", action: "Hikâyede paylaş", ratio: "9 / 16" },
-  { format: "post", label: "Gönderi · 4:5", action: "Gönderi olarak paylaş", ratio: "4 / 5" },
+  { format: "story", label: tk("Hikâye · 9:16"), action: tk("Hikâyede paylaş"), ratio: "9 / 16" },
+  { format: "post", label: tk("Gönderi · 4:5"), action: tk("Gönderi olarak paylaş"), ratio: "4 / 5" },
 ];
 
 async function copyText(text: string): Promise<boolean> {
@@ -71,6 +73,7 @@ export function InstagramShareSheet(props: Props) {
 }
 
 function SheetBody({ onClose, slug, businessName, version }: Props) {
+  const t = useT();
   const [files, setFiles] = useState<Record<ShareFormat, FileState>>({ story: { status: "loading" }, post: { status: "loading" } });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState<ShareFormat | null>(null);
@@ -138,9 +141,9 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2400);
-      if (!silent) toast.success("Bağlantı kopyalandı.", { description: "Instagram'da bağlantı çıkartmasına yapıştır." });
+      if (!silent) toast.success(t("Bağlantı kopyalandı."), { description: t("Instagram'da bağlantı çıkartmasına yapıştır.") });
     } else if (!silent) {
-      toast.error("Kopyalanamadı. Bağlantıyı elle seçip kopyalayabilirsin.");
+      toast.error(t("Kopyalanamadı. Bağlantıyı elle seçip kopyalayabilirsin."));
     }
     return ok;
   }
@@ -157,7 +160,7 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
     anchor.remove();
     if (file && !objectUrls.current.includes(href)) objectUrls.current.push(href);
     setDone(format);
-    toast.success("Görsel indirildi.", { description: "Instagram'ı açıp görseli seç; linki bağlantı çıkartmasıyla ekle." });
+    toast.success(t("Görsel indirildi."), { description: t("Instagram'ı açıp görseli seç; linki bağlantı çıkartmasıyla ekle.") });
   }
 
   async function share(format: ShareFormat) {
@@ -171,11 +174,11 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
         // Yalnızca dosya gönderilir: metin/URL eklenince bazı uygulamalar (Instagram dahil) görseli almıyor.
         await navigator.share({ files: [file], title: businessName });
         setDone(format);
-        if (await copiedPromise) toast.success("Bağlantı panoda.", { description: "Instagram'da bağlantı çıkartmasına yapıştır." });
+        if (await copiedPromise) toast.success(t("Bağlantı panoda."), { description: t("Instagram'da bağlantı çıkartmasına yapıştır.") });
       } catch (reason) {
         const name = (reason as DOMException)?.name;
         if (name === "AbortError") return;
-        if (name === "NotAllowedError") { toast.message("Paylaşmak için butona tekrar dokun."); return; }
+        if (name === "NotAllowedError") { toast.message(t("Paylaşmak için butona tekrar dokun.")); return; }
         download(format, file);
       }
       return;
@@ -183,9 +186,9 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
     setBusy(format);
     try {
       const loaded = file ?? (await loadFile(format));
-      if (!loaded) { toast.error("Görsel hazırlanamadı. Lütfen tekrar dene."); return; }
+      if (!loaded) { toast.error(t("Görsel hazırlanamadı. Lütfen tekrar dene.")); return; }
       // Görsel bu dokunuşta indirildiyse ve paylaşım destekleniyorsa ikinci dokunuşta paylaşılır.
-      if (!file && canShareFile(loaded)) { toast.message("Görsel hazır — paylaşmak için tekrar dokun."); return; }
+      if (!file && canShareFile(loaded)) { toast.message(t("Görsel hazır — paylaşmak için tekrar dokun.")); return; }
       download(format, loaded);
     } finally {
       setBusy(null);
@@ -201,14 +204,14 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
         <header className={styles.head}>
           <span className={styles.badge} aria-hidden="true"><InstagramGlyph size={22} /></span>
           <div className={styles.headText}>
-            <small>INSTAGRAM&apos;DA PAYLAŞ</small>
-            <h3 id="ig-share-title">Instagram için görsel</h3>
+            <small>{t("INSTAGRAM'DA PAYLAŞ")}</small>
+            <h3 id="ig-share-title">{t("Instagram için görsel")}</h3>
           </div>
-          <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label="Kapat"><X size={19} aria-hidden="true" /></button>
+          <button ref={closeRef} type="button" className={styles.close} onClick={onClose} aria-label={t("Kapat")}><X size={19} aria-hidden="true" /></button>
         </header>
 
         <div className={styles.body}>
-          <p className={styles.lead}>{businessName} için hazır tasarım: hizmetler, fiyatlar, QR kod ve randevu linki tek görselde.</p>
+          <p className={styles.lead}>{t("{name} için hazır tasarım: hizmetler, fiyatlar, QR kod ve randevu linki tek görselde.", { name: businessName })}</p>
 
           <div className={styles.previews}>
             {FORMATS.map(({ format, label, action, ratio }) => {
@@ -218,20 +221,20 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
                   <div className={styles.frame} style={{ aspectRatio: ratio }}>
                     {state.status === "error" ? (
                       <button type="button" className={styles.retry} onClick={() => setAttempt((value) => value + 1)}>
-                        <RotateCcw size={18} aria-hidden="true" /> Tekrar dene
+                        <RotateCcw size={18} aria-hidden="true" /> {t("Tekrar dene")}
                       </button>
                     ) : state.status === "loading" ? (
-                      <span className={styles.skeleton} role="status" aria-label="Görsel hazırlanıyor"><LoaderCircle className="animate-spin" size={20} aria-hidden="true" /></span>
+                      <span className={styles.skeleton} role="status" aria-label={t("Görsel hazırlanıyor")}><LoaderCircle className="animate-spin" size={20} aria-hidden="true" /></span>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element -- Sunucuda üretilen PNG'nin yerel kopyası (blob) gösterilir.
-                      <img src={state.url} alt={`${businessName} Instagram ${format === "story" ? "hikâye" : "gönderi"} görseli önizlemesi`} className={styles.preview} />
+                      <img src={state.url} alt={format === "story" ? t("{name} Instagram hikâye görseli önizlemesi", { name: businessName }) : t("{name} Instagram gönderi görseli önizlemesi", { name: businessName })} className={styles.preview} />
                     )}
-                    {done === format && <span className={styles.doneTag}><Check size={13} aria-hidden="true" /> Hazır</span>}
+                    {done === format && <span className={styles.doneTag}><Check size={13} aria-hidden="true" /> {t("Hazır")}</span>}
                   </div>
-                  <span className={styles.optionLabel}>{label}</span>
+                  <span className={styles.optionLabel}>{t(label)}</span>
                   <button type="button" className={`${styles.action} ${format === "story" ? styles.actionPrimary : ""}`} onClick={() => void share(format)} disabled={busy !== null || state.status === "error"}>
                     {busy === format ? <LoaderCircle className="animate-spin" size={17} aria-hidden="true" /> : mobile ? <Share2 size={17} aria-hidden="true" /> : <Download size={17} aria-hidden="true" />}
-                    {action}
+                    {t(action)}
                   </button>
                 </div>
               );
@@ -239,29 +242,32 @@ function SheetBody({ onClose, slug, businessName, version }: Props) {
           </div>
 
           <ol className={styles.steps}>
-            <li><b>1</b><span>{mobile ? "Paylaş menüsünden Instagram'ı seç ya da görseli indir." : "Görseli indir ve telefonuna gönder."}</span></li>
-            <li><b>2</b><span>Instagram&apos;ı aç → Hikâye → görseli seç.</span></li>
-            <li><b>3</b><span>Bağlantı çıkartmasıyla linki ekle. Gönderide linki biyografine koyabilirsin.</span></li>
+            <li><b>1</b><span>{mobile ? t("Paylaş menüsünden Instagram'ı seç ya da görseli indir.") : t("Görseli indir ve telefonuna gönder.")}</span></li>
+            <li><b>2</b><span>{t("Instagram'ı aç → Hikâye → görseli seç.")}</span></li>
+            <li><b>3</b><span>{t("Bağlantı çıkartmasıyla linki ekle. Gönderide linki biyografine koyabilirsin.")}</span></li>
           </ol>
 
           <div className={styles.linkRow}>
             <code className={styles.link} title={pageUrl}>{pageUrl.replace(/^https?:\/\//, "")}</code>
             <button type="button" className={styles.copy} onClick={() => void copyLink()}>
-              {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />} {copied ? "Kopyalandı" : "Bağlantıyı kopyala"}
+              {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />} {copied ? t("Kopyalandı") : t("Bağlantıyı kopyala")}
             </button>
           </div>
 
           <div className={styles.footRow}>
             {mobile ? (
-              <a className={styles.ghost} href="instagram://story-camera"><InstagramGlyph size={16} /> Instagram&apos;ı aç</a>
+              <a className={styles.ghost} href="instagram://story-camera"><InstagramGlyph size={16} /> {t("Instagram'ı aç")}</a>
             ) : null}
             {mobile ? (
-              <button type="button" className={styles.ghost} onClick={() => download("story", files.story.status === "ready" ? files.story.file : null)}><Download size={16} aria-hidden="true" /> Görseli indir</button>
+              <button type="button" className={styles.ghost} onClick={() => download("story", files.story.status === "ready" ? files.story.file : null)}><Download size={16} aria-hidden="true" /> {t("Görseli indir")}</button>
             ) : (
-              <a className={styles.ghost} href={srcFor("story")} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} aria-hidden="true" /> Görseli yeni sekmede aç</a>
+              <a className={styles.ghost} href={srcFor("story")} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} aria-hidden="true" /> {t("Görseli yeni sekmede aç")}</a>
             )}
           </div>
-          <p className={styles.brand}>Görselin altında küçük bir <b>SeninRandevun ile online randevu</b> imzası yer alır.</p>
+          <p className={styles.brand}>{(() => {
+            const [before, after] = t("Görselin altında küçük bir {signature} imzası yer alır.").split("{signature}");
+            return <>{before}<b>SeninRandevun ile online randevu</b>{after}</>; // i18n-ignore (görseldeki Türkçe imza)
+          })()}</p>
         </div>
       </section>
     </div>

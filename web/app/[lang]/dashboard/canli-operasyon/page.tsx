@@ -7,6 +7,8 @@ import {
   Settings2, Ticket, Timer, UserRound, UsersRound, type LucideIcon,
 } from "lucide-react";
 import { useBusinessContext } from "@/features/businesses/business-context";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 import { updateBusiness } from "@/features/businesses/business-repository";
 import { listAppointmentsByDateRange } from "@/features/appointments/appointment-repository";
 import { listStaff } from "@/features/staff/staff-repository";
@@ -29,14 +31,14 @@ import {
 import l from "./live.module.css";
 
 const ACTION_LABELS: Record<string, string> = {
-  called: "Müşteriyi Çağır", in_service: "İşleme Başla", completed: "İşlemi Tamamla",
-  no_show: "Gelmedi", cancelled: "İptal Et",
+  called: tk("Müşteriyi Çağır"), in_service: tk("İşleme Başla"), completed: tk("İşlemi Tamamla"),
+  no_show: tk("Gelmedi"), cancelled: tk("İptal Et"),
 };
 const ACTION_ICONS: Record<string, LucideIcon> = {
   called: Megaphone, in_service: Play, completed: CheckCircle2,
 };
 const STATUS_LABELS: Record<string, string> = {
-  waiting: "Sırada", on_the_way: "Yola Çıktı", called: "Çağrıldı", in_service: "İşlemde",
+  waiting: tk("Sırada"), on_the_way: tk("Yola Çıktı"), called: tk("Çağrıldı"), in_service: tk("İşlemde"),
 };
 const STATUS_TONES: Record<string, PillTone> = {
   waiting: "neutral", on_the_way: "info", called: "warn", in_service: "ok",
@@ -45,19 +47,19 @@ const DESTRUCTIVE = ["cancelled", "no_show"];
 const WAITING = ["waiting", "on_the_way"];
 const SERVING = ["called", "in_service"];
 
-function operationError(error: unknown): string {
+function operationError(error: unknown, t: TFunction): string {
   const value = error as { code?: string; message?: string };
-  if (value.message?.includes("FEATURE_DISABLED")) return "Canlı operasyon şu anda devre dışı.";
-  if (value.code?.includes("permission-denied")) return "Bu işlem için yetkiniz bulunmuyor.";
-  if (value.code?.includes("already-exists")) return "Personelin devam eden işlemi var. Liste yenileniyor.";
-  if (value.code?.includes("failed-precondition")) return "Sıra veya personel durumu değişti. Liste yenileniyor.";
-  if (value.code?.includes("not-found")) return "Uygun müşteri bulunamadı.";
-  return "İşlem tamamlanamadı. Lütfen yeniden deneyin.";
+  if (value.message?.includes("FEATURE_DISABLED")) return t("Canlı operasyon şu anda devre dışı.");
+  if (value.code?.includes("permission-denied")) return t("Bu işlem için yetkiniz bulunmuyor.");
+  if (value.code?.includes("already-exists")) return t("Personelin devam eden işlemi var. Liste yenileniyor.");
+  if (value.code?.includes("failed-precondition")) return t("Sıra veya personel durumu değişti. Liste yenileniyor.");
+  if (value.code?.includes("not-found")) return t("Uygun müşteri bulunamadı.");
+  return t("İşlem tamamlanamadı. Lütfen yeniden deneyin.");
 }
 
-function timeLabel(value?: string): string {
+function timeLabel(value: string | undefined, locale: string): string {
   const date = value ? new Date(value) : null;
-  return date && Number.isFinite(date.getTime()) ? date.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—";
+  return date && Number.isFinite(date.getTime()) ? date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : "—";
 }
 
 function minutesSince(value: string | undefined, now: number): number | null {
@@ -65,15 +67,24 @@ function minutesSince(value: string | undefined, now: number): number | null {
   return Number.isFinite(time) ? Math.max(0, Math.floor((now - time) / 60_000)) : null;
 }
 
-function durationLabel(minutes: number | null): string {
+function durationLabel(minutes: number | null, t: TFunction): string {
   if (minutes === null) return "—";
-  if (minutes < 1) return "az önce";
-  if (minutes < 60) return `${minutes} dk`;
-  return `${Math.floor(minutes / 60)} sa ${minutes % 60} dk`;
+  if (minutes < 1) return t("az önce");
+  if (minutes < 60) return t("{minutes} dk", { minutes });
+  return t("{hours} sa {minutes} dk", { hours: Math.floor(minutes / 60), minutes: minutes % 60 });
 }
+
+/** Personel durum etiketleri (tk ile işaretli; karşılaştırma bu sabitlerle yapılır, gösterirken t()). */
+const STAFF_STATUS = {
+  off: tk("Çalışmıyor"), live: tk("Canlı işlemde"), called: tk("Müşteri çağrıldı"),
+  appointment: tk("Randevuda"), upcoming: tk("Yaklaşan randevu"), check: tk("Takvimi kontrol edin"),
+} as const;
 
 export default function LiveOperationsPage() {
   const { businessId, access, refreshBusinesses } = useBusinessContext();
+  const t = useT();
+  const locale = useIntlLocale();
+  const timeAt = (value?: string) => timeLabel(value, locale);
   const [global, setGlobal] = useState<{ queue: boolean; operations: boolean } | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [capabilities, setCapabilities] = useState<LiveOperationsCapabilities | null>(null);
@@ -166,10 +177,10 @@ export default function LiveOperationsPage() {
     try {
       await transitionQueueEntry(businessId, entry.id, status,
         (entry.assignedStaffId ?? entry.requestedStaffId ?? effectiveSelectedStaffId) || undefined);
-      toast.success("Sıra durumu güncellendi.");
+      toast.success(t("Sıra durumu güncellendi."));
       if (!businessEnabled) setRevision((value) => value + 1);
     } catch (cause) {
-      toast.error(operationError(cause));
+      toast.error(operationError(cause, t));
       if (!businessEnabled) setRevision((value) => value + 1);
     } finally { setBusy(null); }
   }
@@ -192,9 +203,9 @@ export default function LiveOperationsPage() {
     setBusy("next");
     try {
       await callNextCustomer(businessId, effectiveSelectedStaffId);
-      toast.success("Sonraki müşteri çağrıldı.");
+      toast.success(t("Sonraki müşteri çağrıldı."));
       if (!businessEnabled) setRevision((value) => value + 1);
-    } catch (cause) { toast.error(operationError(cause)); }
+    } catch (cause) { toast.error(operationError(cause, t)); }
     finally { setBusy(null); }
   }
 
@@ -204,17 +215,17 @@ export default function LiveOperationsPage() {
     try {
       await updateBusiness(businessId, { liveQueueIntakePaused: business.liveQueueIntakePaused !== true });
       refreshBusinesses();
-      toast.success(business.liveQueueIntakePaused ? "Yeni müşteri alımı devam ediyor." : "Yeni müşteri alımı durduruldu; mevcut sıra korunur.");
-    } catch { toast.error("Alım durumu kaydedilemedi."); }
+      toast.success(business.liveQueueIntakePaused ? t("Yeni müşteri alımı devam ediyor.") : t("Yeni müşteri alımı durduruldu; mevcut sıra korunur."));
+    } catch { toast.error(t("Alım durumu kaydedilemedi.")); }
     finally { setBusy(null); }
   }
 
-  if (access?.role === "staff") return <StudioPage label="Canlı operasyon"><EmptyState mood="idle" title="Bu alan yöneticilere özel" description="Canlı sıra operasyonları işletme yöneticileri tarafından yürütülür." /></StudioPage>;
-  if (global === null) return <StudioPage label="Canlı operasyon"><StudioSkeleton stats={4} rows={4} label="Canlı operasyon yükleniyor" /></StudioPage>;
-  if (!globalEnabled) return <StudioPage label="Canlı operasyon"><EmptyState mood="idle" title="Canlı operasyon özelliği şu anda kullanılamıyor" description="Normal randevu yönetiminiz kesintisiz devam eder." /></StudioPage>;
-  if (error) return <StudioPage label="Canlı operasyon"><EmptyState mood="thinking" title="Canlı sıra yüklenemedi" description="Veriler güvenle alınamadı. Yeniden deneyin."
-    action={<button type="button" className={cx(studio.btn, studio.btnPrimary)} onClick={() => { setError(false); setRevision((value) => value + 1); }}><RefreshCw size={16} aria-hidden /> Yeniden dene</button>} /></StudioPage>;
-  if (!business || loading) return <StudioPage label="Canlı operasyon"><StudioSkeleton stats={4} rows={4} label="Canlı operasyon yükleniyor" /></StudioPage>;
+  if (access?.role === "staff") return <StudioPage label={t("Canlı operasyon")}><EmptyState mood="idle" title={t("Bu alan yöneticilere özel")} description={t("Canlı sıra operasyonları işletme yöneticileri tarafından yürütülür.")} /></StudioPage>;
+  if (global === null) return <StudioPage label={t("Canlı operasyon")}><StudioSkeleton stats={4} rows={4} label={t("Canlı operasyon yükleniyor")} /></StudioPage>;
+  if (!globalEnabled) return <StudioPage label={t("Canlı operasyon")}><EmptyState mood="idle" title={t("Canlı operasyon özelliği şu anda kullanılamıyor")} description={t("Normal randevu yönetiminiz kesintisiz devam eder.")} /></StudioPage>;
+  if (error) return <StudioPage label={t("Canlı operasyon")}><EmptyState mood="thinking" title={t("Canlı sıra yüklenemedi")} description={t("Veriler güvenle alınamadı. Yeniden deneyin.")}
+    action={<button type="button" className={cx(studio.btn, studio.btnPrimary)} onClick={() => { setError(false); setRevision((value) => value + 1); }}><RefreshCw size={16} aria-hidden /> {t("Yeniden dene")}</button>} /></StudioPage>;
+  if (!business || loading) return <StudioPage label={t("Canlı operasyon")}><StudioSkeleton stats={4} rows={4} label={t("Canlı operasyon yükleniyor")} /></StudioPage>;
 
   const waitingEntries = entries.filter((item) => !SERVING.includes(item.status));
   const servingEntries = entries.filter((item) => SERVING.includes(item.status));
@@ -222,16 +233,16 @@ export default function LiveOperationsPage() {
   const activeStaff = staff.filter((item) => item.isActive && !item.archivedAt);
   const callDisabled = !eligible || !effectiveSelectedStaffId || !!busy || entries.every((item) => !WAITING.includes(item.status));
   const nextUp = entries.find((item) => WAITING.includes(item.status));
-  const liveState = !businessEnabled ? "Canlı sıra kapalı" : business.liveQueueIntakePaused ? "Yeni müşteri alımı duraklatıldı" : "Yeni müşteri kabul ediliyor";
+  const liveState = !businessEnabled ? t("Canlı sıra kapalı") : business.liveQueueIntakePaused ? t("Yeni müşteri alımı duraklatıldı") : t("Yeni müşteri kabul ediliyor");
   const liveTone = !businessEnabled ? l.stateOff : business.liveQueueIntakePaused ? l.statePaused : l.stateOn;
 
   function entryInfo(entry: QueueEntry) {
-    const requested = entry.requestedStaffId ? staffById.get(entry.requestedStaffId)?.fullName ?? "Seçili personel" : "İlk müsait personel";
+    const requested = entry.requestedStaffId ? staffById.get(entry.requestedStaffId)?.fullName ?? t("Seçili personel") : t("İlk müsait personel");
     const assigned = entry.assignedStaffId ? staffById.get(entry.assignedStaffId)?.fullName : null;
     const actions = (capabilities?.transitions[entry.status] ?? []).filter((status) => ACTION_LABELS[status]);
     const calledOverdue = entry.status === "called" && !!entry.calledAt && !!capabilities?.calledGraceMinutes &&
       Date.parse(entry.calledAt) + capabilities.calledGraceMinutes * 60_000 <= clock;
-    return { requested, assigned, actions, calledOverdue, service: serviceById.get(entry.serviceId)?.name ?? "Hizmet" };
+    return { requested, assigned, actions, calledOverdue, service: serviceById.get(entry.serviceId)?.name ?? t("Hizmet") };
   }
 
   function renderActions(entry: QueueEntry, actions: string[], calledOverdue: boolean, large?: boolean) {
@@ -249,79 +260,79 @@ export default function LiveOperationsPage() {
               : (destructive ? studio.btnDangerSoft : index === 0 ? studio.btnPrimary : studio.btnSoft),
             large && !destructive && index === 0 && studio.btnLg, !destructive && l.actionMain)}
           onClick={() => requestAction(entry, status)}
-          aria-label={`${ACTION_LABELS[status]}: ${entry.id.slice(0, 6)}`}>
+          aria-label={t("{action}: {id}", { action: t(ACTION_LABELS[status]), id: entry.id.slice(0, 6) })}>
           {loadingThis && index === 0 ? <LoaderCircle size={17} className={studio.spin} aria-hidden /> : Icon ? <Icon size={17} aria-hidden /> : null}
-          {ACTION_LABELS[status]}
+          {t(ACTION_LABELS[status])}
         </button>;
       })}
     </div>;
   }
 
-  return <StudioPage label="Canlı operasyon" className={l.page}>
-    <StudioHero eyebrow="Canlı operasyon merkezi" icon={Activity} title="Canlı Sıra"
-      description={`${business.name} için müşterileri, personeli ve yaklaşan randevuları tek ekrandan yönet.`}
+  return <StudioPage label={t("Canlı operasyon")} className={l.page}>
+    <StudioHero eyebrow={t("Canlı operasyon merkezi")} icon={Activity} title={t("Canlı Sıra")}
+      description={t("{business} için müşterileri, personeli ve yaklaşan randevuları tek ekrandan yönet.", { business: business.name })}
       actions={<>
-        {!businessEnabled ? <a className={cx(studio.btn, studio.btnBright)} href="#canli-sira-ayari"><Settings2 size={16} aria-hidden /> Canlı Sırayı aç</a> :
+        {!businessEnabled ? <a className={cx(studio.btn, studio.btnBright)} href="#canli-sira-ayari"><Settings2 size={16} aria-hidden /> {t("Canlı Sırayı aç")}</a> :
           <button type="button" className={cx(studio.btn, business.liveQueueIntakePaused ? studio.btnBright : studio.btnGlass)} disabled={!!busy} onClick={() => void togglePause()}>
             {busy === "pause" ? <LoaderCircle size={16} className={studio.spin} aria-hidden /> : business.liveQueueIntakePaused ? <Play size={16} aria-hidden /> : <Pause size={16} aria-hidden />}
-            {business.liveQueueIntakePaused ? "Alımı Devam Ettir" : "Yeni Alımı Duraklat"}</button>}
-        <button type="button" className={cx(studio.btn, studio.btnGlass, studio.iconBtn)} onClick={() => setRevision((value) => value + 1)} aria-label="Canlı sıra verilerini yenile"><RefreshCw size={17} aria-hidden /></button>
+            {business.liveQueueIntakePaused ? t("Alımı Devam Ettir") : t("Yeni Alımı Duraklat")}</button>}
+        <button type="button" className={cx(studio.btn, studio.btnGlass, studio.iconBtn)} onClick={() => setRevision((value) => value + 1)} aria-label={t("Canlı sıra verilerini yenile")}><RefreshCw size={17} aria-hidden /></button>
       </>}>
       <span className={cx(l.liveState, liveTone)}><i aria-hidden />{liveState}</span>
-      <HeroChip icon={UsersRound} value={waitingCount} label="sırada" />
+      <HeroChip icon={UsersRound} value={waitingCount} label={t("sırada")} />
     </StudioHero>
 
     {(!businessEnabled || business.liveQueueIntakePaused) && <Notice tone="warn" icon={Pause}>
-      {businessEnabled ? "Yeni müşteri alımı durduruldu. Mevcut müşterileri işlemeye devam edebilirsiniz." :
-        "Canlı Sıra işletmeniz için kapalı. Yeni katılım alınmıyor; mevcut kayıtlar korunur ve tamamlanabilir."}
+      {businessEnabled ? t("Yeni müşteri alımı durduruldu. Mevcut müşterileri işlemeye devam edebilirsiniz.") :
+        t("Canlı Sıra işletmeniz için kapalı. Yeni katılım alınmıyor; mevcut kayıtlar korunur ve tamamlanabilir.")}
     </Notice>}
 
-    <section className={l.callCard} aria-label="Sıradakini çağır">
+    <section className={l.callCard} aria-label={t("Sıradakini çağır")}>
       <div className={l.callCopy}>
-        <span className={l.callKicker}>Sıradaki</span>
-        <strong className={l.callNext}>{nextUp ? `${serviceById.get(nextUp.serviceId)?.name ?? "Hizmet"} · ${nextUp.id.slice(0, 6)}` : "Bekleyen müşteri yok"}</strong>
-        <span className={l.callNote}>{waitingCount ? `${waitingCount} kişi sırada · katılım sırası sunucu zamanına göre belirlenir` : "Yeni katılımlar olduğunda burada görünür."}</span>
+        <span className={l.callKicker}>{t("Sıradaki")}</span>
+        <strong className={l.callNext}>{nextUp ? `${serviceById.get(nextUp.serviceId)?.name ?? t("Hizmet")} · ${nextUp.id.slice(0, 6)}` : t("Bekleyen müşteri yok")}</strong>
+        <span className={l.callNote}>{waitingCount ? t("{count} kişi sırada · katılım sırası sunucu zamanına göre belirlenir", { count: waitingCount }) : t("Yeni katılımlar olduğunda burada görünür.")}</span>
       </div>
       <div className={l.callControls}>
         <label className={studio.field} htmlFor="queue-staff">
-          <span className={l.callLabel}>Çağıracak personel</span>
+          <span className={l.callLabel}>{t("Çağıracak personel")}</span>
           <select id="queue-staff" className={cx(studio.select, l.callSelect)} value={effectiveSelectedStaffId} onChange={(event) => setSelectedStaffId(event.target.value)} disabled={!activeStaff.length}>
-            {activeStaff.length ? activeStaff.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>) : <option value="">Aktif personel yok</option>}
+            {activeStaff.length ? activeStaff.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>) : <option value="">{t("Aktif personel yok")}</option>}
           </select>
         </label>
         <button type="button" className={cx(studio.btn, studio.btnPrimary, studio.btnLg, studio.btnBlock, l.callBtn)} disabled={callDisabled} onClick={() => void callNext()}>
           {busy === "next" ? <LoaderCircle size={22} className={studio.spin} aria-hidden /> : <Megaphone size={22} aria-hidden />}
-          Sıradakini çağır <ArrowRight size={20} aria-hidden />
+          {t("Sıradakini çağır")} <ArrowRight size={20} aria-hidden />
         </button>
       </div>
     </section>
 
-    <div className={studio.stats} aria-label="Operasyon özeti">
-      <StatTile label="Sırada" value={waitingCount} hint="Yeni hizmet bekliyor" icon={UsersRound} accent />
-      <StatTile label="Çağrılan" value={entries.filter((item) => item.status === "called").length} hint="Müşteri çağrıldı" icon={Ticket} />
-      <StatTile label="İşlemde" value={entries.filter((item) => item.status === "in_service").length} hint="Hizmet sürüyor" icon={Activity} />
-      <StatTile label="Yaklaşan Randevu" value={upcoming[0] ? timeLabel(upcoming[0].startAt) : "—"} hint="Planlı randevu" icon={CalendarClock} />
+    <div className={studio.stats} aria-label={t("Operasyon özeti")}>
+      <StatTile label={t("Sırada")} value={waitingCount} hint={t("Yeni hizmet bekliyor")} icon={UsersRound} accent />
+      <StatTile label={t("Çağrılan")} value={entries.filter((item) => item.status === "called").length} hint={t("Müşteri çağrıldı")} icon={Ticket} />
+      <StatTile label={t("İşlemde")} value={entries.filter((item) => item.status === "in_service").length} hint={t("Hizmet sürüyor")} icon={Activity} />
+      <StatTile label={t("Yaklaşan Randevu")} value={upcoming[0] ? timeAt(upcoming[0].startAt) : "—"} hint={t("Planlı randevu")} icon={CalendarClock} />
     </div>
 
     <section className={l.section} aria-labelledby="now-serving-title">
       <div className={l.sectionHead}>
-        <h2 id="now-serving-title" className={studio.sectionLabel}>Şu an hizmette</h2>
-        <Pill tone={servingEntries.length ? "ok" : "neutral"} dot>{servingEntries.length} aktif</Pill>
+        <h2 id="now-serving-title" className={studio.sectionLabel}>{t("Şu an hizmette")}</h2>
+        <Pill tone={servingEntries.length ? "ok" : "neutral"} dot>{t("{count} aktif", { count: servingEntries.length })}</Pill>
       </div>
-      {servingEntries.length === 0 ? <div className={l.servingEmpty}><span className={l.servingEmptyIcon}><Ticket size={22} aria-hidden /></span><div><b>Şu anda hizmet verilen müşteri yok</b><small>“Sıradakini çağır” ile sıradaki müşteriyi çağırın.</small></div></div> :
+      {servingEntries.length === 0 ? <div className={l.servingEmpty}><span className={l.servingEmptyIcon}><Ticket size={22} aria-hidden /></span><div><b>{t("Şu anda hizmet verilen müşteri yok")}</b><small>{t("“Sıradakini çağır” ile sıradaki müşteriyi çağırın.")}</small></div></div> :
         <div className={l.servingGrid}>{servingEntries.map((entry) => {
           const info = entryInfo(entry);
           const staffName = info.assigned ?? info.requested;
           const since = entry.status === "called" ? minutesSince(entry.calledAt, clock) : null;
           return <article key={entry.id} className={cx(l.serving, entry.status === "called" && l.servingCalled, info.calledOverdue && l.servingOverdue)}>
             <div className={l.servingTop}>
-              <span className={l.servingBadge}><i aria-hidden />{STATUS_LABELS[entry.status] ?? entry.status}</span>
-              <span className={l.servingTime}>{entry.status === "called" ? <><Timer size={14} aria-hidden /> {since === null ? "Çağrıldı" : since < 1 ? "Az önce çağrıldı" : `${durationLabel(since)} önce çağrıldı`}</> : <><Clock3 size={14} aria-hidden /> Katılım {timeLabel(entry.joinedAt)}</>}</span>
+              <span className={l.servingBadge}><i aria-hidden />{STATUS_LABELS[entry.status] ? t(STATUS_LABELS[entry.status]) : entry.status}</span>
+              <span className={l.servingTime}>{entry.status === "called" ? <><Timer size={14} aria-hidden /> {since === null ? t("Çağrıldı") : since < 1 ? t("Az önce çağrıldı") : t("{duration} önce çağrıldı", { duration: durationLabel(since, t) })}</> : <><Clock3 size={14} aria-hidden /> {t("Katılım {time}", { time: timeAt(entry.joinedAt) })}</>}</span>
             </div>
-            <strong className={l.servingName}>Müşteri · {entry.id.slice(0, 6)}</strong>
+            <strong className={l.servingName}>{t("Müşteri · {id}", { id: entry.id.slice(0, 6) })}</strong>
             <p className={l.servingService}>{info.service}</p>
-            <p className={l.servingStaff}><UserRound size={14} aria-hidden /> {staffName}{info.assigned && info.assigned !== info.requested ? ` · İstenen: ${info.requested}` : ""}</p>
-            {entry.status === "called" && <p className={l.servingNote}>{info.calledOverdue ? "Çağrıldı — bekleme süresi aşıldı. Gelmedi kararı operatöre ait." : `Çağrıldı · ${capabilities?.calledGraceMinutes ?? 10} dk bekleme süresi`}</p>}
+            <p className={l.servingStaff}><UserRound size={14} aria-hidden /> {info.assigned && info.assigned !== info.requested ? t("{staff} · İstenen: {requested}", { staff: staffName, requested: info.requested }) : staffName}</p>
+            {entry.status === "called" && <p className={l.servingNote}>{info.calledOverdue ? t("Çağrıldı — bekleme süresi aşıldı. Gelmedi kararı operatöre ait.") : t("Çağrıldı · {minutes} dk bekleme süresi", { minutes: capabilities?.calledGraceMinutes ?? 10 })}</p>}
             {renderActions(entry, info.actions, info.calledOverdue, true)}
           </article>;
         })}</div>}
@@ -329,31 +340,31 @@ export default function LiveOperationsPage() {
 
     <section className={l.section} aria-labelledby="queue-title">
       <div className={l.sectionHead}>
-        <h2 id="queue-title" className={studio.sectionLabel}>Sıradaki müşteriler</h2>
-        <Pill tone="accent">{entries.length} aktif kayıt</Pill>
+        <h2 id="queue-title" className={studio.sectionLabel}>{t("Sıradaki müşteriler")}</h2>
+        <Pill tone="accent">{t("{count} aktif kayıt", { count: entries.length })}</Pill>
       </div>
-      {waitingEntries.length === 0 ? <EmptyState mood="happy" title="Şu anda sırada bekleyen müşteri yok" description="Yeni katılımlar olduğunda burada görünür." /> :
+      {waitingEntries.length === 0 ? <EmptyState mood="happy" title={t("Şu anda sırada bekleyen müşteri yok")} description={t("Yeni katılımlar olduğunda burada görünür.")} /> :
         <ol className={l.queue}>{waitingEntries.map((entry, index) => {
           const info = entryInfo(entry);
           const waited = minutesSince(entry.joinedAt, clock);
           const estimate = WAITING.includes(entry.status) ? waitEstimates[entry.id] : undefined;
           return <li key={entry.id} className={cx(l.entry, index === 0 && l.entryFirst)}>
             <div className={l.entryMain}>
-              <span className={l.pos} aria-label={`Sıra ${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
+              <span className={l.pos} aria-label={t("Sıra {position}", { position: index + 1 })}>{String(index + 1).padStart(2, "0")}</span>
               <div className={l.entryBody}>
                 <div className={l.entryTitleRow}>
-                  <strong className={l.entryName}>Müşteri · {entry.id.slice(0, 6)}</strong>
-                  <Pill tone={STATUS_TONES[entry.status] ?? "neutral"} dot>{STATUS_LABELS[entry.status] ?? entry.status}</Pill>
+                  <strong className={l.entryName}>{t("Müşteri · {id}", { id: entry.id.slice(0, 6) })}</strong>
+                  <Pill tone={STATUS_TONES[entry.status] ?? "neutral"} dot>{STATUS_LABELS[entry.status] ? t(STATUS_LABELS[entry.status]) : entry.status}</Pill>
                 </div>
                 <p className={l.entryService}>{info.service}</p>
-                <p className={l.entryStaff}><UserRound size={14} aria-hidden /> {info.requested}{info.assigned && info.assigned !== info.requested ? ` · Atanan: ${info.assigned}` : ""}</p>
+                <p className={l.entryStaff}><UserRound size={14} aria-hidden /> {info.assigned && info.assigned !== info.requested ? t("{requested} · Atanan: {assigned}", { requested: info.requested, assigned: info.assigned }) : info.requested}</p>
                 <div className={l.meta}>
-                  <span><Clock3 size={13} aria-hidden /> Katılım {timeLabel(entry.joinedAt)}</span>
-                  <span><Timer size={13} aria-hidden /> {durationLabel(waited)} bekliyor</span>
+                  <span><Clock3 size={13} aria-hidden /> {t("Katılım {time}", { time: timeAt(entry.joinedAt) })}</span>
+                  <span><Timer size={13} aria-hidden /> {t("{duration} bekliyor", { duration: durationLabel(waited, t) })}</span>
                   {estimate && <span className={l.metaAccent}>{waitEstimateLabel(estimate)}</span>}
                 </div>
-                {entry.status === "on_the_way" && <span className={cx(l.flag, l.flagInfo)}><ArrowRight size={14} aria-hidden /> Yola çıktı{entry.declaredEtaMinutes ? ` · Yaklaşık geliş: ${entry.declaredEtaMinutes}${entry.declaredEtaMinutes === 20 ? "+" : ""} dk` : ""}</span>}
-                {entry.presenceConfirmedAt && WAITING.includes(entry.status) && <span className={cx(l.flag, l.flagOk)}><CheckCircle2 size={14} aria-hidden /> Geliyorum onayı verildi</span>}
+                {entry.status === "on_the_way" && <span className={cx(l.flag, l.flagInfo)}><ArrowRight size={14} aria-hidden /> {entry.declaredEtaMinutes ? t("Yola çıktı · Yaklaşık geliş: {minutes} dk", { minutes: `${entry.declaredEtaMinutes}${entry.declaredEtaMinutes === 20 ? "+" : ""}` }) : t("Yola çıktı")}</span>}
+                {entry.presenceConfirmedAt && WAITING.includes(entry.status) && <span className={cx(l.flag, l.flagOk)}><CheckCircle2 size={14} aria-hidden /> {t("Geliyorum onayı verildi")}</span>}
               </div>
             </div>
             {renderActions(entry, info.actions, info.calledOverdue)}
@@ -361,21 +372,21 @@ export default function LiveOperationsPage() {
         })}</ol>}
     </section>
 
-    <Panel title="Personel ve Randevular" description="Durumlar canlı sıra ve mevcut randevu kayıtlarından türetilir." icon={UsersRound}>
-      {staff.length === 0 ? <EmptyState mood="idle" size={72} title="Aktif personel bulunamadı" /> :
+    <Panel title={t("Personel ve Randevular")} description={t("Durumlar canlı sıra ve mevcut randevu kayıtlarından türetilir.")} icon={UsersRound}>
+      {staff.length === 0 ? <EmptyState mood="idle" size={72} title={t("Aktif personel bulunamadı")} /> :
         <div className={l.team}>{staff.map((person) => {
           const activeQueue = entries.find((entry) => entry.assignedStaffId === person.id && ["called", "in_service"].includes(entry.status));
           const currentAppointment = activeAppointments.find((item) => item.staffId === person.id && Date.parse(item.startAt) <= now && Date.parse(item.endAt) > now);
           const next = upcoming.find((item) => item.staffId === person.id);
-          const status = !person.isActive || person.archivedAt ? "Çalışmıyor" : activeQueue?.status === "in_service" ? "Canlı işlemde" : activeQueue ? "Müşteri çağrıldı" : currentAppointment ? "Randevuda" : next && Date.parse(next.startAt) - now <= 60 * 60_000 ? "Yaklaşan randevu" : "Takvimi kontrol edin";
-          const tone: PillTone = status === "Çalışmıyor" ? "neutral" : status === "Canlı işlemde" || status === "Randevuda" ? "ok" : status === "Müşteri çağrıldı" || status === "Yaklaşan randevu" ? "warn" : "info";
+          const status = !person.isActive || person.archivedAt ? STAFF_STATUS.off : activeQueue?.status === "in_service" ? STAFF_STATUS.live : activeQueue ? STAFF_STATUS.called : currentAppointment ? STAFF_STATUS.appointment : next && Date.parse(next.startAt) - now <= 60 * 60_000 ? STAFF_STATUS.upcoming : STAFF_STATUS.check;
+          const tone: PillTone = status === STAFF_STATUS.off ? "neutral" : status === STAFF_STATUS.live || status === STAFF_STATUS.appointment ? "ok" : status === STAFF_STATUS.called || status === STAFF_STATUS.upcoming ? "warn" : "info";
           return <div key={person.id} className={l.member}>
             <div className={l.memberHead}>
               <span className={l.memberAvatar}><UserRound size={19} aria-hidden /></span>
-              <div className={l.memberText}><strong>{person.fullName}</strong><Pill tone={tone} dot>{status}</Pill></div>
+              <div className={l.memberText}><strong>{person.fullName}</strong><Pill tone={tone} dot>{t(status)}</Pill></div>
             </div>
-            {activeQueue && <p className={l.memberNote}><Activity size={13} aria-hidden /> {serviceById.get(activeQueue.serviceId)?.name ?? "Canlı hizmet"}</p>}
-            {next && <p className={l.memberNote}><CalendarClock size={13} aria-hidden /> Sonraki randevu: {timeLabel(next.startAt)} · {next.serviceName ?? serviceById.get(next.serviceId)?.name ?? "Hizmet"}</p>}
+            {activeQueue && <p className={l.memberNote}><Activity size={13} aria-hidden /> {serviceById.get(activeQueue.serviceId)?.name ?? t("Canlı hizmet")}</p>}
+            {next && <p className={l.memberNote}><CalendarClock size={13} aria-hidden /> {t("Sonraki randevu: {time} · {service}", { time: timeAt(next.startAt), service: next.serviceName ?? serviceById.get(next.serviceId)?.name ?? t("Hizmet") })}</p>}
           </div>;
         })}</div>}
     </Panel>
@@ -384,13 +395,13 @@ export default function LiveOperationsPage() {
       setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} /></div>
 
     <ConfirmSheet open={!!pending} busy={!!pending && busy === pending.entry.id}
-      title={pending?.status === "no_show" ? "Müşteri ‘Gelmedi’ olarak işaretlensin mi?" : "Sıra kaydı iptal edilsin mi?"}
+      title={pending?.status === "no_show" ? t("Müşteri ‘Gelmedi’ olarak işaretlensin mi?") : t("Sıra kaydı iptal edilsin mi?")}
       description={pending?.status === "no_show"
-        ? "Bu müşteriyi ‘Gelmedi’ olarak işaretlemek istediğinizden emin misiniz? Bu işlem geri alınamaz."
-        : "Bu sıra kaydını iptal etmek istediğinizden emin misiniz? Müşteri sıradan çıkarılır."}
-      confirmLabel={pending?.status === "no_show" ? "Gelmedi olarak işaretle" : "İptal et"} cancelLabel="Vazgeç"
+        ? t("Bu müşteriyi ‘Gelmedi’ olarak işaretlemek istediğinizden emin misiniz? Bu işlem geri alınamaz.")
+        : t("Bu sıra kaydını iptal etmek istediğinizden emin misiniz? Müşteri sıradan çıkarılır.")}
+      confirmLabel={pending?.status === "no_show" ? t("Gelmedi olarak işaretle") : t("İptal et")} cancelLabel={t("Vazgeç")}
       onConfirm={() => void confirmPending()} onClose={() => setPending(null)}>
-      {pending ? <div className={l.confirmEntry}><b>Müşteri · {pending.entry.id.slice(0, 6)}</b><small>{serviceById.get(pending.entry.serviceId)?.name ?? "Hizmet"}</small></div> : null}
+      {pending ? <div className={l.confirmEntry}><b>{t("Müşteri · {id}", { id: pending.entry.id.slice(0, 6) })}</b><small>{serviceById.get(pending.entry.serviceId)?.name ?? t("Hizmet")}</small></div> : null}
     </ConfirmSheet>
   </StudioPage>;
 }

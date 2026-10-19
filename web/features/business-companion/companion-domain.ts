@@ -3,6 +3,11 @@
  * Firebase/React bağımlılığı yok; node --test ile birim testleri var (companion-domain.test.mjs).
  */
 
+import { interpolate, tk, type TFunction } from "../../i18n/config.ts";
+
+/** Varsayılan (Türkçe) çeviri: bileşenler kendi t fonksiyonlarını geçer. */
+const identityT: TFunction = (source, vars) => interpolate(source, vars);
+
 export type CompanionRole = "owner" | "admin" | "manager" | "staff";
 
 export type CompanionStatus = "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
@@ -109,7 +114,7 @@ export function toCompanionAppointment(id: string, data: Record<string, unknown>
   const status = STATUSES.includes(data.status as CompanionStatus) ? (data.status as CompanionStatus) : "confirmed";
   return {
     id,
-    customerName: text(data.customerName) ?? "Müşteri",
+    customerName: text(data.customerName) ?? "Müşteri", // i18n-ignore (veri yedeği; gösterirken t())
     serviceName: text(data.serviceName),
     staffName: text(data.staffName),
     startAtMs,
@@ -215,15 +220,15 @@ export function pendingUpcoming(list: CompanionAppointment[], nowMs: number): Co
     .sort((a, b) => a.startAtMs - b.startAtMs);
 }
 
-/** "şimdi", "12 dk", "1 sa 5 dk", "2 gün". */
-export function formatCountdown(ms: number): string {
-  if (ms < MINUTE) return "şimdi";
+/** "şimdi", "12 dk", "1 sa 5 dk", "2 gün". Çeviri için t verin. */
+export function formatCountdown(ms: number, t: TFunction = identityT): string {
+  if (ms < MINUTE) return t("şimdi");
   const minutes = Math.floor(ms / MINUTE);
-  if (minutes < 60) return `${minutes} dk`;
-  if (ms >= DAY) return `${Math.floor(ms / DAY)} gün`;
+  if (minutes < 60) return t("{minutes} dk", { minutes });
+  if (ms >= DAY) return t("{count} gün", { count: Math.floor(ms / DAY) });
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest ? `${hours} sa ${rest} dk` : `${hours} sa`;
+  return rest ? t("{hours} sa {minutes} dk", { hours, minutes: rest }) : t("{hours} sa", { hours });
 }
 
 export function formatClock(ms: number): string {
@@ -231,34 +236,35 @@ export function formatClock(ms: number): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-const DAY_NAMES = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
-const MONTH_NAMES = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const DAY_NAMES = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"]; // i18n-ignore (Türkçe biçim; diğer dillerde Intl)
+const MONTH_NAMES = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]; // i18n-ignore
 
-/** "Bugün 14:30", "Yarın 09:00", "12 Eki Pzt 10:15". */
-export function formatWhen(ms: number, nowMs: number): string {
+/** "Bugün 14:30", "Yarın 09:00", "12 Eki Pzt 10:15". Diğer dillerde t ve Intl dil etiketi verin. */
+export function formatWhen(ms: number, nowMs: number, t: TFunction = identityT, locale = "tr-TR"): string {
   const diffDays = Math.round((startOfLocalDay(ms) - startOfLocalDay(nowMs)) / DAY);
   const clock = formatClock(ms);
-  if (diffDays === 0) return `Bugün ${clock}`;
-  if (diffDays === 1) return `Yarın ${clock}`;
-  if (diffDays === -1) return `Dün ${clock}`;
+  if (diffDays === 0) return t("Bugün {time}", { time: clock });
+  if (diffDays === 1) return t("Yarın {time}", { time: clock });
+  if (diffDays === -1) return t("Dün {time}", { time: clock });
   const date = new Date(ms);
+  if (locale !== "tr-TR") return `${new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", weekday: "short" }).format(date)} ${clock}`;
   return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${DAY_NAMES[date.getDay()]} ${clock}`;
 }
 
-export function statusLabel(status: CompanionStatus): string {
+export function statusLabel(status: CompanionStatus, t: TFunction = identityT): string {
   switch (status) {
-    case "pending": return "Onay bekliyor";
-    case "confirmed": return "Onaylandı";
-    case "completed": return "Tamamlandı";
-    case "cancelled": return "İptal edildi";
-    case "no_show": return "Gelmedi";
+    case "pending": return t(tk("Onay bekliyor"));
+    case "confirmed": return t(tk("Onaylandı"));
+    case "completed": return t(tk("Tamamlandı"));
+    case "cancelled": return t(tk("İptal edildi"));
+    case "no_show": return t(tk("Gelmedi"));
   }
 }
 
 /** Ekran okuyucu duyurusu ve bildirim gövdesi. */
-export function arrivalSentence(item: CompanionAppointment, nowMs: number): string {
-  const parts = [`${item.customerName}`, item.serviceName, formatWhen(item.startAtMs, nowMs), item.staffName].filter(Boolean);
-  return `Yeni randevu: ${parts.join(", ")}. ${statusLabel(item.status)}.`;
+export function arrivalSentence(item: CompanionAppointment, nowMs: number, t: TFunction = identityT, locale = "tr-TR"): string {
+  const parts = [`${item.customerName}`, item.serviceName, formatWhen(item.startAtMs, nowMs, t, locale), item.staffName].filter(Boolean);
+  return t("Yeni randevu: {details}. {status}.", { details: parts.join(", "), status: statusLabel(item.status, t) });
 }
 
 /** Başlatıcı rozeti: önce onay bekleyen, yoksa bugün kalan randevu sayısı. */

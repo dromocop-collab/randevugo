@@ -7,6 +7,14 @@
  * `gain` sesler arası algılanan yüksekliği eşitler (tepe kırpılmasına karşı zincirde ayrıca kompresör var).
  */
 
+/**
+ * Çevrilecek metin işareti (i18n/config tk ile aynı kimlik fonksiyonu). Bu modül node testinde
+ * yol takma adı olmadan yüklendiği için yerel tanımlı; ad ve açıklama gösterilirken t(preset.name) kullanılır.
+ */
+function tk<T extends string>(source: T): T {
+  return source;
+}
+
 export type Wave = "sine" | "triangle" | "square" | "sawtooth";
 
 export interface ToneNote {
@@ -65,7 +73,7 @@ function seq(freqs: number[], gap: number, decay: number, peak = 0.75, extra: { 
 export const SOUND_PRESETS: readonly SoundPreset[] = [
   {
     // Mevcut panel zili (E6 → G#6 → B6) — birebir aynı.
-    id: DEFAULT_SOUND_ID, name: "Varsayılan", description: "Yumuşak, yükselen üç nota",
+    id: DEFAULT_SOUND_ID, name: tk("Varsayılan"), description: tk("Yumuşak, yükselen üç nota"),
     notes: [
       { freq: N.E6, start: 0, decay: 0.6, peak: 0.7 },
       { freq: N.Gs6, start: 0.085, decay: 0.6, peak: 0.7 },
@@ -74,38 +82,38 @@ export const SOUND_PRESETS: readonly SoundPreset[] = [
     partials: SOFT, lowpass: 5200, gain: 1,
   },
   {
-    id: "klasik-zil", name: "Klasik Zil", description: "İki vuruşlu masa zili",
+    id: "klasik-zil", name: tk("Klasik Zil"), description: tk("İki vuruşlu masa zili"),
     notes: [{ freq: N.A5, start: 0, decay: 0.55, peak: 0.85, attack: 0.003 }, { freq: N.A5, start: 0.24, decay: 0.7, peak: 0.85, attack: 0.003 }],
     partials: BELL, lowpass: 7000, gain: 0.85,
   },
   {
-    id: "kristal", name: "Kristal", description: "Parlak, hızlı kristal tını",
+    id: "kristal", name: tk("Kristal"), description: tk("Parlak, hızlı kristal tını"),
     notes: seq([N.C7, N.E7, N.G7, N.C8], 0.06, 0.45, 0.6),
     partials: PURE, lowpass: 9000, gain: 0.8,
   },
   {
-    id: "marimba", name: "Marimba", description: "Sıcak ahşap tonlar",
+    id: "marimba", name: tk("Marimba"), description: tk("Sıcak ahşap tonlar"),
     notes: seq([N.C5, N.E5, N.G5], 0.11, 0.32, 0.9, { attack: 0.003 }),
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "sine", ratio: 4, level: 0.22 }], lowpass: 4500, gain: 1.25,
   },
   {
-    id: "can", name: "Çan", description: "Uzun yankılı tek çan",
+    id: "can", name: tk("Çan"), description: tk("Uzun yankılı tek çan"),
     notes: [{ freq: N.D5, start: 0, decay: 1.3, peak: 0.9, attack: 0.004 }],
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "sine", ratio: 2, level: 0.45 }, { wave: "sine", ratio: 3, level: 0.25 }, { wave: "sine", ratio: 4.2, level: 0.15 }],
     lowpass: 6000, gain: 0.9,
   },
   {
-    id: "damla", name: "Damla", description: "İki yumuşak damla",
+    id: "damla", name: tk("Damla"), description: tk("İki yumuşak damla"),
     notes: [{ freq: 1200, glide: 1800, start: 0, decay: 0.16, peak: 0.85, attack: 0.004 }, { freq: 1500, glide: 2300, start: 0.18, decay: 0.18, peak: 0.85, attack: 0.004 }],
     partials: PURE, lowpass: 6000, gain: 1.15,
   },
   {
-    id: "tik-tik", name: "Tık Tık", description: "Kısa ve net iki tık",
+    id: "tik-tik", name: tk("Tık Tık"), description: tk("Kısa ve net iki tık"),
     notes: [{ freq: 1900, start: 0, decay: 0.05, peak: 0.8, attack: 0.001 }, { freq: 2300, start: 0.12, decay: 0.06, peak: 0.8, attack: 0.001 }],
     partials: [{ wave: "triangle", ratio: 1, level: 1 }, { wave: "sine", ratio: 0.5, level: 0.4 }], lowpass: 4000, gain: 1.3,
   },
   {
-    id: "kus-civiltisi", name: "Kuş Cıvıltısı", description: "Üç neşeli cıvıltı",
+    id: "kus-civiltisi", name: tk("Kuş Cıvıltısı"), description: tk("Üç neşeli cıvıltı"),
     notes: [
       { freq: 2500, glide: 3700, start: 0, decay: 0.09, peak: 0.6, attack: 0.005 },
       { freq: 2700, glide: 3900, start: 0.12, decay: 0.09, peak: 0.6, attack: 0.005 },
@@ -114,70 +122,70 @@ export const SOUND_PRESETS: readonly SoundPreset[] = [
     partials: PURE, lowpass: 8000, gain: 0.9,
   },
   {
-    id: "yumusak-gong", name: "Yumuşak Gong", description: "Derin ve sakin gong",
+    id: "yumusak-gong", name: tk("Yumuşak Gong"), description: tk("Derin ve sakin gong"),
     notes: [{ freq: N.A3, start: 0, decay: 1.4, peak: 0.95, attack: 0.02 }],
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "sine", ratio: 2, level: 0.3 }, { wave: "sine", ratio: 2.98, level: 0.2 }],
     lowpass: 3000, gain: 1.5,
   },
   {
-    id: "arp", name: "Arp", description: "Yükselen arp akoru",
+    id: "arp", name: tk("Arp"), description: tk("Yükselen arp akoru"),
     notes: seq([N.C5, N.E5, N.G5, N.C6, N.E6], 0.07, 0.5, 0.65, { attack: 0.004 }),
     partials: [{ wave: "triangle", ratio: 1, level: 1 }, { wave: "sine", ratio: 2, level: 0.15 }], lowpass: 5000, gain: 1,
   },
   {
-    id: "piyano-akoru", name: "Piyano Akoru", description: "Dolgun majör akor",
+    id: "piyano-akoru", name: tk("Piyano Akoru"), description: tk("Dolgun majör akor"),
     notes: seq([N.C5, N.E5, N.G5], 0.015, 1.0, 0.6, { attack: 0.004 }),
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "triangle", ratio: 2, level: 0.2 }, { wave: "sine", ratio: 3, level: 0.08 }],
     lowpass: 4200, gain: 1.05,
   },
   {
-    id: "ksilofon", name: "Ksilofon", description: "Tıkırtılı üç nota",
+    id: "ksilofon", name: tk("Ksilofon"), description: tk("Tıkırtılı üç nota"),
     notes: seq([N.G5, N.C6, N.E6], 0.1, 0.25, 0.85, { attack: 0.002 }),
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "sine", ratio: 3, level: 0.3 }], lowpass: 7000, gain: 1.1,
   },
   {
-    id: "retro-bip", name: "Retro Bip", description: "8-bit oyun bipleri",
+    id: "retro-bip", name: tk("Retro Bip"), description: tk("8-bit oyun bipleri"),
     notes: [{ freq: N.A5, start: 0, decay: 0.1, peak: 0.55, attack: 0.002 }, { freq: N.E6, start: 0.12, decay: 0.14, peak: 0.55, attack: 0.002 }],
     partials: [{ wave: "square", ratio: 1, level: 1 }], lowpass: 3500, gain: 0.7,
   },
   {
-    id: "kapi-zili", name: "Kapı Zili", description: "Klasik iki tonlu kapı zili",
+    id: "kapi-zili", name: tk("Kapı Zili"), description: tk("Klasik iki tonlu kapı zili"),
     notes: [{ freq: N.E5, start: 0, decay: 0.7, peak: 0.85, attack: 0.004 }, { freq: N.C5, start: 0.42, decay: 0.95, peak: 0.85, attack: 0.004 }],
     partials: BELL, lowpass: 5000, gain: 1,
   },
   {
-    id: "neseli", name: "Neşeli", description: "Hızlı ve enerjik melodi",
+    id: "neseli", name: tk("Neşeli"), description: tk("Hızlı ve enerjik melodi"),
     notes: seq([N.C6, N.E6, N.G6, N.E6, N.C7], 0.065, 0.3, 0.6, { attack: 0.003 }),
     partials: [{ wave: "triangle", ratio: 1, level: 1 }], lowpass: 6000, gain: 0.95,
   },
   {
-    id: "sakin", name: "Sakin", description: "Yavaş ve yumuşak geçiş",
+    id: "sakin", name: tk("Sakin"), description: tk("Yavaş ve yumuşak geçiş"),
     notes: seq([N.A4, N.Cs5, N.E5], 0.18, 0.9, 0.7, { attack: 0.04 }),
     partials: SOFT, lowpass: 2500, gain: 1.3,
   },
   {
-    id: "parilti", name: "Parıltı", description: "Işıltılı yüksek tınılar",
+    id: "parilti", name: tk("Parıltı"), description: tk("Işıltılı yüksek tınılar"),
     notes: seq([N.C7, N.E7, N.G7, N.B7, N.C8], 0.05, 0.4, 0.45),
     partials: PURE, lowpass: 10000, gain: 0.75,
   },
   {
-    id: "su-damlasi", name: "Su Damlası", description: "Berrak su damlaları",
+    id: "su-damlasi", name: tk("Su Damlası"), description: tk("Berrak su damlaları"),
     notes: [{ freq: 900, glide: 1600, start: 0, decay: 0.2, peak: 0.85, attack: 0.003 }, { freq: 1100, glide: 2000, start: 0.25, decay: 0.22, peak: 0.85, attack: 0.003 }],
     partials: PURE, lowpass: 5000, gain: 1.2,
   },
   {
-    id: "ding-dong", name: "Ding Dong", description: "Parlak iki nota",
+    id: "ding-dong", name: tk("Ding Dong"), description: tk("Parlak iki nota"),
     notes: [{ freq: N.C6, start: 0, decay: 0.6, peak: 0.8 }, { freq: N.A5, start: 0.32, decay: 0.85, peak: 0.8 }],
     partials: SOFT, lowpass: 6000, gain: 0.95,
   },
   {
-    id: "zen-kase", name: "Zen Kase", description: "Tınlayan Tibet kasesi",
+    id: "zen-kase", name: tk("Zen Kase"), description: tk("Tınlayan Tibet kasesi"),
     notes: [{ freq: 528, start: 0, decay: 1.45, peak: 0.9, attack: 0.03 }],
     partials: [{ wave: "sine", ratio: 1, level: 1 }, { wave: "sine", ratio: 2.71, level: 0.35 }, { wave: "sine", ratio: 5.1, level: 0.12 }],
     lowpass: 5000, gain: 1.2,
   },
   {
-    id: "fanfar", name: "Fanfar", description: "Kısa kutlama fanfarı",
+    id: "fanfar", name: tk("Fanfar"), description: tk("Kısa kutlama fanfarı"),
     notes: [
       { freq: N.G4, start: 0, decay: 0.16, peak: 0.6, attack: 0.006 },
       { freq: N.C5, start: 0.1, decay: 0.16, peak: 0.6, attack: 0.006 },

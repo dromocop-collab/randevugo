@@ -5,6 +5,7 @@ import { getAuth } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
 import { PLAN_LABEL } from "@/constants/plans";
+import { tk } from "@/i18n/config";
 import {
   DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, normalizePlatformPlan, sortPlatformPlans, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-domain";
@@ -25,8 +26,9 @@ export function planDisplayLabel(planId: string | undefined, plans: PlatformPlan
   const plan = plans.find((item) => item.id === id);
   if (plan) return plan.label;
   if (id === DEFAULT_PLATFORM_PLAN_ID) return PLAN_LABEL;
+  // i18n-ignore (yalnız süper admin)
   if (isLegacyPlanId(id)) return `Eski paket: ${id}`;
-  return `Tanımsız paket: ${id}`;
+  return `Tanımsız paket: ${id}`; // i18n-ignore
 }
 
 /** Firestore'daki paketler + koleksiyon boşsa yerleşik varsayılan paket. */
@@ -83,9 +85,9 @@ export async function savePlatformPlan(input: PlatformPlan): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { isFallback, sortOrder, ...plan } = input;
   const planId = plan.id.trim().toUpperCase();
-  if (!/^[A-Z0-9_-]{1,40}$/.test(planId)) throw new Error("Paket kodu geçersiz.");
+  if (!/^[A-Z0-9_-]{1,40}$/.test(planId)) throw new Error(tk("Paket kodu geçersiz."));
   const entitlements = [...new Set(plan.entitlements)].filter((key) => ALL_SUBSCRIPTION_ENTITLEMENTS.includes(key));
-  if (entitlements.length === 0) throw new Error("Pakete en az bir özellik seçin.");
+  if (entitlements.length === 0) throw new Error(tk("Pakete en az bir özellik seçin."));
   const label = plan.label.trim();
   const monthlyPrice = Math.max(0, Number(plan.monthlyPrice) || 0);
   const db = getDb();

@@ -14,6 +14,8 @@ import type { Appointment } from "@/types/appointments";
 import { millisToZonedDateTime, zonedDateTimeToMillis } from "@/lib/time/zoned";
 import { Button, Field, FormGrid, Input, NativeSelect, Sheet } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./quick-appointment-modal.module.css";
 
 interface Props {
@@ -34,6 +36,8 @@ function defaultStart() {
 
 /** Hızlı randevu ekleme/düzenleme. Tarih+saat zorunlu; müşteri, işlem ve kişi isteğe bağlı. */
 export function QuickAppointmentModal({ businessId, open, initialStartAt, appointment, onClose, onCreated }: Props) {
+  const t = useT();
+  const locale = useIntlLocale();
   const formId = useId();
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -52,7 +56,7 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       const zoned = millisToZonedDateTime(start.getTime());
       setDate(zoned.date);
       setTime(zoned.time);
-      setCustomerName(appointment?.customerName === "Rezerve saat" ? "" : appointment?.customerName ?? "");
+      setCustomerName(appointment?.customerName === "Rezerve saat" ? "" : appointment?.customerName ?? ""); // i18n-ignore (veri değeri)
       setServiceId(appointment?.serviceId ?? "");
       setStaffId(appointment?.staffId ?? "");
     });
@@ -61,16 +65,16 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
         setServices(nextServices);
         setStaff(nextStaff);
       })
-      .catch(() => toast.error("Hizmet ve çalışan listesi alınamadı."));
-  }, [appointment, businessId, initialStartAt, open]);
+      .catch(() => toast.error(t("Hizmet ve çalışan listesi alınamadı.")));
+  }, [appointment, businessId, initialStartAt, open, t]);
 
   const quickDays = useMemo(() => {
     const today = new Date();
     return [0, 1, 2].map((offset) => {
       const day = addDays(today, offset);
-      return { value: millisToZonedDateTime(day.getTime()).date, label: offset === 0 ? "Bugün" : offset === 1 ? "Yarın" : new Intl.DateTimeFormat("tr-TR", { weekday: "short", day: "numeric" }).format(day) };
+      return { value: millisToZonedDateTime(day.getTime()).date, label: offset === 0 ? t("Bugün") : offset === 1 ? t("Yarın") : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(day) };
     });
-  }, []);
+  }, [locale, t]);
   const selectedService = services.find((service) => service.id === serviceId);
 
   function requestClose() {
@@ -80,13 +84,13 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!date || !time) {
-      toast.error("Lütfen randevu tarihini ve saatini seçin.");
+      toast.error(t("Lütfen randevu tarihini ve saatini seçin."));
       return;
     }
     // Tarih/saat işletme saatiyle (Europe/Istanbul) yorumlanır; tarayıcının saat dilimi farklı olsa da doğru kaydedilir.
     const startAt = new Date(zonedDateTimeToMillis(date, time));
     if (Number.isNaN(startAt.getTime())) {
-      toast.error("Tarih veya saat geçersiz.");
+      toast.error(t("Tarih veya saat geçersiz."));
       return;
     }
     setSaving(true);
@@ -100,11 +104,11 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       };
       if (appointment) await updateDashboardAppointment({ ...input, appointmentId: appointment.id });
       else await createDashboardAppointment(input);
-      toast.success(appointment ? "Randevu güncellendi." : "Randevu takvime eklendi; seçilen saat artık dolu görünecek.");
+      toast.success(appointment ? t("Randevu güncellendi.") : t("Randevu takvime eklendi; seçilen saat artık dolu görünecek."));
       await onCreated?.();
       onClose();
     } catch (error) {
-      toast.error(userFacingError(error, "Randevu kaydedilemedi. Lütfen yeniden deneyin."));
+      toast.error(t(userFacingError(error, tk("Randevu kaydedilemedi. Lütfen yeniden deneyin."))));
     } finally {
       setSaving(false);
     }
@@ -115,42 +119,42 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       open={open}
       onClose={requestClose}
       dismissible={!saving}
-      title={appointment ? "Randevuyu düzenle" : "Yeni randevu"}
-      description="Tarih ve saat yeterli. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz."
+      title={appointment ? t("Randevuyu düzenle") : t("Yeni randevu")}
+      description={t("Tarih ve saat yeterli. Diğer bilgileri şimdi veya daha sonra ekleyebilirsiniz.")}
       footer={<>
-        <Button variant="secondary" onClick={requestClose} disabled={saving}>Vazgeç</Button>
+        <Button variant="secondary" onClick={requestClose} disabled={saving}>{t("Vazgeç")}</Button>
         <Button type="submit" form={formId} variant="primary" icon={appointment ? Save : Plus} loading={saving} disabled={!date || !time}>
-          {saving ? "Kaydediliyor…" : appointment ? "Değişiklikleri kaydet" : "Randevuyu kaydet"}
+          {saving ? t("Kaydediliyor…") : appointment ? t("Değişiklikleri kaydet") : t("Randevuyu kaydet")}
         </Button>
       </>}
     >
       <form id={formId} onSubmit={submit} className={styles.form} aria-busy={saving}>
-        <div className={styles.quickDays} role="group" aria-label="Hızlı tarih seçimi">
+        <div className={styles.quickDays} role="group" aria-label={t("Hızlı tarih seçimi")}>
           {quickDays.map((day) => (
             <button key={day.value} type="button" className={cn(styles.dayChip, date === day.value && styles.dayChipActive)} aria-pressed={date === day.value} onClick={() => setDate(day.value)}>{day.label}</button>
           ))}
         </div>
         <FormGrid>
-          <Field label={<span className={styles.label}><CalendarDays size={14} aria-hidden /> Tarih <b>*</b></span>}>
+          <Field label={<span className={styles.label}><CalendarDays size={14} aria-hidden /> {t("Tarih")} <b>*</b></span>}>
             <Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} />
           </Field>
-          <Field label={<span className={styles.label}><Clock3 size={14} aria-hidden /> Saat <b>*</b></span>}>
+          <Field label={<span className={styles.label}><Clock3 size={14} aria-hidden /> {t("Saat")} <b>*</b></span>}>
             <Input type="time" required step={900} value={time} onChange={(event) => setTime(event.target.value)} />
           </Field>
         </FormGrid>
-        <Field label={<span className={styles.label}><UserRound size={14} aria-hidden /> Müşteri adı <small>İsteğe bağlı</small></span>}>
-          <Input value={customerName} maxLength={80} placeholder="Örn. Ayşe Yılmaz" autoComplete="off" onChange={(event) => setCustomerName(event.target.value)} />
+        <Field label={<span className={styles.label}><UserRound size={14} aria-hidden /> {t("Müşteri adı")} <small>{t("İsteğe bağlı")}</small></span>}>
+          <Input value={customerName} maxLength={80} placeholder={t("Örn. Ayşe Yılmaz")} autoComplete="off" onChange={(event) => setCustomerName(event.target.value)} />
         </Field>
         <FormGrid>
-          <Field label={<span className={styles.label}><Scissors size={14} aria-hidden /> İşlem <small>İsteğe bağlı</small></span>} hint={selectedService ? `${selectedService.durationMinutes} dk · ${selectedService.price.toLocaleString("tr-TR")} ₺` : undefined}>
+          <Field label={<span className={styles.label}><Scissors size={14} aria-hidden /> {t("İşlem")} <small>{t("İsteğe bağlı")}</small></span>} hint={selectedService ? t("{minutes} dk · {price} ₺", { minutes: selectedService.durationMinutes, price: selectedService.price.toLocaleString(locale) }) : undefined}>
             <NativeSelect value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
-              <option value="">İşlem seçmeden devam et</option>
-              {services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} dk</option>)}
+              <option value="">{t("İşlem seçmeden devam et")}</option>
+              {services.map((service) => <option key={service.id} value={service.id}>{service.name} · {t("{minutes} dk", { minutes: service.durationMinutes })}</option>)}
             </NativeSelect>
           </Field>
-          <Field label={<span className={styles.label}><UsersRound size={14} aria-hidden /> Kişi <small>İsteğe bağlı</small></span>}>
+          <Field label={<span className={styles.label}><UsersRound size={14} aria-hidden /> {t("Kişi")} <small>{t("İsteğe bağlı")}</small></span>}>
             <NativeSelect value={staffId} onChange={(event) => setStaffId(event.target.value)}>
-              <option value="">Kişi atamadan devam et</option>
+              <option value="">{t("Kişi atamadan devam et")}</option>
               {staff.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.position ? ` · ${item.position}` : ""}</option>)}
             </NativeSelect>
           </Field>

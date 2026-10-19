@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { CalendarCheck2, Clock3, Globe2, MapPin, Phone, Star } from "lucide-react";
 import { formatDuration, formatTry, storeDisplayUrl } from "@/features/businesses/setup-helpers";
+import { useIntlLocale, useT } from "@/i18n/client";
 import p from "./store-preview.module.css";
 
 export interface StorePreviewProps {
@@ -28,10 +29,12 @@ function initials(name: string) {
 
 /** Kayıt sırasında canlı güncellenen mağaza vitrini önizlemesi (etkileşimsiz). */
 export function StorePreview({ name, categoryLabel, image, emoji, accent = "#1f7a4a", city, district, slug, allowOnlineBooking = true, services, compact }: StorePreviewProps) {
-  const title = name?.trim() || "İşletmenin adı";
+  const t = useT();
+  const intlLocale = useIntlLocale();
+  const title = name?.trim() || t("İşletmenin adı");
   const place = [district?.trim(), city?.trim()].filter(Boolean).join(", ");
   return (
-    <div className={`${p.card} ${compact ? p.compact : ""}`} aria-label="Mağaza önizlemesi" role="group">
+    <div className={`${p.card} ${compact ? p.compact : ""}`} aria-label={t("Mağaza önizlemesi")} role="group">
       <div className={p.browser} aria-hidden="true"><i /><i /><i /><span><Globe2 size={11} />{storeDisplayUrl(slug ?? "")}</span></div>
       <div className={p.cover} style={{ ["--accent" as string]: accent }}>
         {image ? <Image src={image} alt="" fill sizes="(max-width: 1180px) 92vw, 340px" className={p.coverImg} /> : <span className={p.coverEmoji} aria-hidden="true">{emoji ?? "📅"}</span>}
@@ -43,19 +46,19 @@ export function StorePreview({ name, categoryLabel, image, emoji, accent = "#1f7
           <span className={p.logo} style={{ ["--accent" as string]: accent }} aria-hidden="true">{initials(name ?? "")}</span>
           <div className={p.titles}>
             <b className={name?.trim() ? "" : p.placeholder}>{title}</b>
-            <span><MapPin size={12} aria-hidden="true" />{place || "Şehir, ilçe"}</span>
+            <span><MapPin size={12} aria-hidden="true" />{place || t("Şehir, ilçe")}</span>
           </div>
-          <span className={p.rating}><Star size={11} aria-hidden="true" /> Yeni</span>
+          <span className={p.rating}><Star size={11} aria-hidden="true" /> {t("Yeni")}</span>
         </div>
         <ul className={p.services}>
           {services.map((service) => (
             <li key={service.id}>
-              <span><b>{service.name}</b><small><Clock3 size={11} aria-hidden="true" />{formatDuration(service.durationMinutes)}</small></span>
-              <em>{formatTry(service.price)}</em>
+              <span><b>{service.name}</b><small><Clock3 size={11} aria-hidden="true" />{formatDuration(service.durationMinutes, t)}</small></span>
+              <em>{formatTry(service.price, t, intlLocale)}</em>
             </li>
           ))}
         </ul>
-        <span className={p.cta} aria-hidden="true">{allowOnlineBooking ? <><CalendarCheck2 size={16} /> Randevu Al</> : <><Phone size={16} /> Randevu için ara</>}</span>
+        <span className={p.cta} aria-hidden="true">{allowOnlineBooking ? <><CalendarCheck2 size={16} /> {t("Randevu Al")}</> : <><Phone size={16} /> {t("Randevu için ara")}</>}</span>
       </div>
     </div>
   );

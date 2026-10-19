@@ -17,12 +17,12 @@ export function canonicalBusinessCategory(value: string): string {
   const normalized = value
     .trim()
     .toLocaleLowerCase("tr-TR")
-    .replaceAll("ı", "i")
-    .replaceAll("ğ", "g")
-    .replaceAll("ü", "u")
-    .replaceAll("ş", "s")
-    .replaceAll("ö", "o")
-    .replaceAll("ç", "c")
+    .replaceAll("ı", "i") // i18n-ignore
+    .replaceAll("ğ", "g") // i18n-ignore
+    .replaceAll("ü", "u") // i18n-ignore
+    .replaceAll("ş", "s") // i18n-ignore
+    .replaceAll("ö", "o") // i18n-ignore
+    .replaceAll("ç", "c") // i18n-ignore
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   for (const [canonical, aliases] of Object.entries(CATEGORY_ALIASES)) {

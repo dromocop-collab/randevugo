@@ -15,7 +15,7 @@ import { DashboardCommandCenter } from "@/components/dashboard/command-center";
 import { AppearanceStudio } from "@/components/dashboard/appearance-studio";
 import { LanguageSwitcher, switchLocale } from "@/i18n/language-switcher";
 import { LOCALES, LOCALE_LABELS } from "@/i18n/config";
-import { useLocale } from "@/i18n/client";
+import { useLocale, useT } from "@/i18n/client";
 import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
 import { Badge, Button, Sheet, dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
@@ -29,6 +29,7 @@ function initials(value?: string | null) {
 }
 
 export function DashboardTopBar() {
+  const t = useT();
   const { user } = useAuth();
   const { businesses, businessId, setBusinessId, access } = useBusinessContext();
   const { can, plan } = useSubscriptionPlan();
@@ -78,8 +79,8 @@ export function DashboardTopBar() {
   }
 
   const statusBadge = activeBusiness?.status === "pending_review"
-    ? <Badge tone="amber" size="sm" icon={Clock3}>Onay bekliyor</Badge>
-    : activeBusiness?.status === "rejected" ? <Badge tone="red" size="sm">Reddedildi</Badge> : null;
+    ? <Badge tone="amber" size="sm" icon={Clock3}>{t("Onay bekliyor")}</Badge>
+    : activeBusiness?.status === "rejected" ? <Badge tone="red" size="sm">{t("Reddedildi")}</Badge> : null;
 
   const businessButton = (
     <>
@@ -89,7 +90,7 @@ export function DashboardTopBar() {
           : initials(activeBusiness?.name)}
       </span>
       <span className={styles.bizText}>
-        <small>{isStaff ? "Çalışan paneli" : "İşletme"}</small>
+        <small>{isStaff ? t("Çalışan paneli") : t("İşletme")}</small>
         <b>{activeBusiness?.name ?? "SeninRandevun"}</b>
       </span>
       {canSwitch && <ChevronDown size={16} className={styles.bizChevron} aria-hidden />}
@@ -101,7 +102,7 @@ export function DashboardTopBar() {
       <div className={styles.inner}>
         <div className={styles.left}>
           {canSwitch
-            ? <button type="button" className={styles.biz} onClick={() => setSwitcherOpen(true)} aria-haspopup="dialog" aria-label={`İşletme: ${activeBusiness?.name ?? ""}. Değiştir`}>{businessButton}</button>
+            ? <button type="button" className={styles.biz} onClick={() => setSwitcherOpen(true)} aria-haspopup="dialog" aria-label={t("İşletme: {name}. Değiştir", { name: activeBusiness?.name ?? "" })}>{businessButton}</button>
             : <Link href={isStaff ? "/dashboard/takvim" : "/dashboard"} className={styles.biz}>{businessButton}</Link>}
           {statusBadge && <span className={styles.statusSlot}>{statusBadge}</span>}
         </div>
@@ -111,30 +112,30 @@ export function DashboardTopBar() {
         </div>
 
         <div className={styles.right}>
-          <Button variant="primary" size="sm" icon={Plus} className={styles.newBtn} onClick={() => openQuickAppointment()}>Yeni randevu</Button>
+          <Button variant="primary" size="sm" icon={Plus} className={styles.newBtn} onClick={() => openQuickAppointment()}>{t("Yeni randevu")}</Button>
           {!isStaff && <NotificationCenter key={businessId} businessId={businessId} triggerClassName={styles.iconBtn} />}
           <LanguageSwitcher className={styles.hideMobile} />
           <AppearanceStudio triggerClassName={cn(styles.iconBtn, styles.hideMobile)} />
           <div className={styles.account} ref={accountRef}>
-            <button type="button" className={styles.avatarBtn} onClick={toggleAccount} aria-expanded={accountOpen} aria-haspopup="menu" aria-label="Hesap menüsü">
+            <button type="button" className={styles.avatarBtn} onClick={toggleAccount} aria-expanded={accountOpen} aria-haspopup="menu" aria-label={t("Hesap menüsü")}>
               {initials(user?.email)}
             </button>
             {accountOpen && typeof document !== "undefined" && createPortal(
               <div className={dashTokensClassName}>
-                <button type="button" className={styles.menuBackdrop} aria-label="Menüyü kapat" onClick={() => setAccountOpen(false)} />
-                <div className={styles.menu} role="menu" aria-label="Hesap" ref={menuRef} style={menuStyle}>
+                <button type="button" className={styles.menuBackdrop} aria-label={t("Menüyü kapat")} onClick={() => setAccountOpen(false)} />
+                <div className={styles.menu} role="menu" aria-label={t("Hesap")} ref={menuRef} style={menuStyle}>
                   <div className={styles.menuHead}>
                     <span className={styles.menuAvatar} aria-hidden>{initials(user?.email)}</span>
-                    <span className="min-w-0"><small>{isStaff ? "Çalışan hesabı" : "İşletme hesabı"}</small><b>{user?.email ?? ""}</b></span>
+                    <span className="min-w-0"><small>{isStaff ? t("Çalışan hesabı") : t("İşletme hesabı")}</small><b>{user?.email ?? ""}</b></span>
                   </div>
-                  {activeBusiness?.slug && <Link role="menuitem" href={`/isletme/${activeBusiness.slug}`} className={styles.menuItem} onClick={() => setAccountOpen(false)}><Store size={16} aria-hidden /> Mağazamı gör <ExternalLink size={13} className={styles.menuTrail} aria-hidden /></Link>}
-                  <Link role="menuitem" href="/kesfet" className={styles.menuItem} onClick={() => setAccountOpen(false)}><Compass size={16} aria-hidden /> Keşfet</Link>
-                  <Link role="menuitem" href="/hesabim" className={styles.menuItem} onClick={() => setAccountOpen(false)}><UserRound size={16} aria-hidden /> Müşteri moduna geç</Link>
-                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} onClick={() => { setAccountOpen(false); window.dispatchEvent(new Event("sr-dashboard-open-appearance")); }}><span className={styles.menuIcon} aria-hidden>◐</span> Görünüm stüdyosu</button>
+                  {activeBusiness?.slug && <Link role="menuitem" href={`/isletme/${activeBusiness.slug}`} className={styles.menuItem} onClick={() => setAccountOpen(false)}><Store size={16} aria-hidden /> {t("Mağazamı gör")} <ExternalLink size={13} className={styles.menuTrail} aria-hidden /></Link>}
+                  <Link role="menuitem" href="/kesfet" className={styles.menuItem} onClick={() => setAccountOpen(false)}><Compass size={16} aria-hidden /> {t("Keşfet")}</Link>
+                  <Link role="menuitem" href="/hesabim" className={styles.menuItem} onClick={() => setAccountOpen(false)}><UserRound size={16} aria-hidden /> {t("Müşteri moduna geç")}</Link>
+                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} onClick={() => { setAccountOpen(false); window.dispatchEvent(new Event("sr-dashboard-open-appearance")); }}><span className={styles.menuIcon} aria-hidden>◐</span> {t("Görünüm stüdyosu")}</button>
                   {LOCALES.filter((item) => item !== locale).map((item) => (
                     <button key={item} role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} lang={item} onClick={() => { setAccountOpen(false); switchLocale(item); }}><Globe size={16} aria-hidden /> {LOCALE_LABELS[item].name}</button>
                   ))}
-                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.menuDanger)} onClick={() => void signOut()}><LogOut size={16} aria-hidden /> Çıkış yap</button>
+                  <button role="menuitem" type="button" className={cn(styles.menuItem, styles.menuDanger)} onClick={() => void signOut()}><LogOut size={16} aria-hidden /> {t("Çıkış yap")}</button>
                 </div>
               </div>,
               document.body,
@@ -143,7 +144,7 @@ export function DashboardTopBar() {
         </div>
       </div>
 
-      <Sheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} size="sm" title="İşletme değiştir" description="Panelde gördüğünüz veriler seçtiğiniz işletmeye göre güncellenir.">
+      <Sheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} size="sm" title={t("İşletme değiştir")} description={t("Panelde gördüğünüz veriler seçtiğiniz işletmeye göre güncellenir.")}>
         <div className={styles.bizList} role="list">
           {businesses.map((business) => {
             const active = business.id === activeBusiness?.id;
@@ -159,14 +160,14 @@ export function DashboardTopBar() {
                 <span className={styles.bizAvatar} aria-hidden>{initials(business.name)}</span>
                 <span className={styles.bizRowText}>
                   <b>{business.name}</b>
-                  <small>{business.status === "pending_review" ? "Süper admin onayı bekleniyor" : business.status === "rejected" ? "Reddedildi" : [business.district, business.city].filter(Boolean).join(", ") || "Aktif"}</small>
+                  <small>{business.status === "pending_review" ? t("Süper admin onayı bekleniyor") : business.status === "rejected" ? t("Reddedildi") : [business.district, business.city].filter(Boolean).join(", ") || t("Aktif")}</small>
                 </span>
                 {active && <Check size={18} className={styles.bizCheck} aria-hidden />}
               </button>
             );
           })}
         </div>
-        {canAddBranch && <Button href="/dashboard/subeler" variant="soft" icon={CirclePlus} block className="mt-3" onClick={() => setSwitcherOpen(false)}>Yeni şube ekle</Button>}
+        {canAddBranch && <Button href="/dashboard/subeler" variant="soft" icon={CirclePlus} block className="mt-3" onClick={() => setSwitcherOpen(false)}>{t("Yeni şube ekle")}</Button>}
       </Sheet>
     </header>
   );

@@ -8,6 +8,8 @@ import { uploadReviewImage } from "@/lib/firebase/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, PenLine } from "lucide-react";
+import { useLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 interface ReviewFormProps {
   businessId: string;
@@ -33,6 +35,8 @@ export function ReviewForm({
   const [previews, setPreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const t = useT();
+  const locale = useLocale();
 
   if (submitted) {
     return (
@@ -41,10 +45,10 @@ export function ReviewForm({
           <CheckCircle2 size={30}/>
         </div>
         <h3 className="mt-4 text-lg font-bold text-[var(--text-1)]">
-          Yorumunuz gönderildi!
+          {t("Yorumunuz gönderildi!")}
         </h3>
         <p className="mt-1 text-sm text-[var(--text-3)]">
-          Değerli geri bildiriminiz için teşekkürler. İşletme onayladıktan sonra yayınlanacak.
+          {t("Değerli geri bildiriminiz için teşekkürler. İşletme onayladıktan sonra yayınlanacak.")}
         </p>
       </div>
     );
@@ -54,13 +58,13 @@ export function ReviewForm({
     if (!newFiles) return;
     const remaining = 3 - files.length;
     if (remaining <= 0) {
-      toast.error("En fazla 3 fotoğraf ekleyebilirsiniz.");
+      toast.error(t("En fazla 3 fotoğraf ekleyebilirsiniz."));
       return;
     }
     const toAdd = Array.from(newFiles).slice(0, remaining);
     const oversized = toAdd.filter((f) => f.size > 5 * 1024 * 1024);
     if (oversized.length > 0) {
-      toast.error("Fotoğraf boyutu en fazla 5MB olabilir.");
+      toast.error(t("Fotoğraf boyutu en fazla 5MB olabilir."));
       return;
     }
     setFiles((prev) => [...prev, ...toAdd]);
@@ -76,22 +80,22 @@ export function ReviewForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!customerName.trim()) {
-      toast.error("Lütfen adınızı yazın.");
+      toast.error(t("Lütfen adınızı yazın."));
       return;
     }
     if (rating === 0) {
-      toast.error("Lütfen bir puan verin.");
+      toast.error(t("Lütfen bir puan verin."));
       return;
     }
     if (!comment.trim() && files.length === 0) {
-      toast.error("Lütfen bir yorum yazın veya fotoğraf ekleyin.");
+      toast.error(t("Lütfen bir yorum yazın veya fotoğraf ekleyin."));
       return;
     }
 
     setSubmitting(true);
 
     try {
-      if (!appointmentId) throw new Error("Yorum için tamamlanmış randevu gereklidir.");
+      if (!appointmentId) throw new Error(tk("Yorum için tamamlanmış randevu gereklidir."));
 
       // Upload images
       const imageUrls: string[] = [];
@@ -115,20 +119,20 @@ export function ReviewForm({
       });
 
       setSubmitted(true);
-      toast.success("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak!");
+      toast.success(t("Yorumunuz gönderildi, onaylandıktan sonra yayınlanacak!"));
       onSuccess?.();
     } catch (error) {
       const code = (error as { code?: string } | null)?.code ?? "";
       // Aynı randevu zaten değerlendirilmişse kullanıcıya hata değil, durum gösterilir.
       if (code === "functions/already-exists") {
         setSubmitted(true);
-        toast.info("Bu randevuyu daha önce değerlendirmişsiniz. Teşekkürler!");
+        toast.info(t("Bu randevuyu daha önce değerlendirmişsiniz. Teşekkürler!"));
         onSuccess?.();
         return;
       }
       const serverMessage = code.startsWith("functions/") && error instanceof Error && error.message && code !== "functions/internal"
         ? error.message : "";
-      toast.error(serverMessage || "Yorum gönderilemedi. Lütfen tekrar deneyin.");
+      toast.error(serverMessage ? t(serverMessage) : t("Yorum gönderilemedi. Lütfen tekrar deneyin."));
     } finally {
       setSubmitting(false);
     }
@@ -141,25 +145,25 @@ export function ReviewForm({
       onSubmit={handleSubmit}
       className="rounded-2xl border border-[var(--border)] bg-[var(--surface-1)] p-6 shadow-lg"
     >
-      <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><PenLine size={18}/> Yorum Yaz</h3>
+      <h3 className="flex items-center gap-2 text-lg font-bold text-[var(--text-1)]"><PenLine size={18}/> {t("Yorum Yaz")}</h3>
       <p className="mt-1 text-xs text-[var(--text-3)]">
-        Yalnızca tamamlanmış ve hesabınıza bağlı randevular değerlendirilebilir.
+        {t("Yalnızca tamamlanmış ve hesabınıza bağlı randevular değerlendirilebilir.")}
       </p>
 
       {/* Name */}
       <div className="mt-4">
         <Input
-          label="Adınız *"
+          label={t("Adınız *")}
           value={customerName}
           onChange={(e) => setCustomerName(e.target.value)}
-          placeholder="Adınız Soyadınız"
+          placeholder={t("Adınız Soyadınız")}
           required
         />
       </div>
 
       {/* Star Rating */}
       <div className="mt-5">
-        <p className="mb-2 text-sm font-medium text-[var(--text-2)]">Puanınız *</p>
+        <p className="mb-2 text-sm font-medium text-[var(--text-2)]">{t("Puanınız *")}</p>
         <div className="flex items-center gap-1">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
@@ -190,14 +194,15 @@ export function ReviewForm({
           {displayRating > 0 && (
             <span className="ml-2 text-sm font-semibold text-amber-600">
               {displayRating === 5
-                ? "Mükemmel!"
+                ? t("Mükemmel!")
                 : displayRating === 4
-                  ? "Çok İyi"
+                  ? t("Çok İyi")
                   : displayRating === 3
-                    ? "İyi"
+                    ? t("İyi")
                     : displayRating === 2
-                      ? "Orta"
-                      : "Kötü"}
+                      // "Orta" şablonlardaki "Orta" (uzunluk) ile çakışmasın diye puan için ayrı anahtar
+                      ? locale === "tr" ? "Orta" /* i18n-ignore */ : t("Orta (puan)")
+                      : t("Kötü")}
             </span>
           )}
         </div>
@@ -206,29 +211,29 @@ export function ReviewForm({
       {/* Comment */}
       <div className="mt-4">
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-2)]">
-          Yorumunuz
+          {t("Yorumunuz")}
         </label>
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           rows={3}
           className="w-full rounded-xl border border-[var(--border)] bg-[var(--field-bg)] px-4 py-3 text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none transition hover:bg-[var(--field-bg-hover)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-          placeholder="Deneyiminizi paylaşın... Aldığınız hizmet nasıldı?"
+          placeholder={t("Deneyiminizi paylaşın... Aldığınız hizmet nasıldı?")}
         />
       </div>
 
       {/* Photo Upload */}
       <div className="mt-4">
         <p className="mb-2 text-sm font-medium text-[var(--text-2)]">
-          Fotoğraf Ekle{" "}
-          <span className="font-normal text-[var(--text-3)]">(maks. 3 adet)</span>
+          {t("Fotoğraf Ekle")}{" "}
+          <span className="font-normal text-[var(--text-3)]">{t("(maks. 3 adet)")}</span>
         </p>
         <div className="flex flex-wrap gap-3">
           {previews.map((url, i) => (
             <div key={i} className="group relative">
               <Image
                 src={url}
-                alt={`Fotoğraf ${i + 1}`}
+                alt={t("Fotoğraf {index}", { index: i + 1 })}
                 width={80}
                 height={80}
                 unoptimized
@@ -249,7 +254,7 @@ export function ReviewForm({
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                <span className="text-[9px] font-medium">Fotoğraf</span>
+                <span className="text-[9px] font-medium">{t("Fotoğraf")}</span>
               </div>
               <input
                 type="file"
@@ -265,7 +270,7 @@ export function ReviewForm({
           )}
         </div>
         <p className="mt-1 text-[10px] text-[var(--text-3)]">
-          PNG, JPEG, WebP · Maks. 5MB/adet
+          {t("PNG, JPEG, WebP · Maks. 5MB/adet")}
         </p>
       </div>
 
@@ -275,10 +280,10 @@ export function ReviewForm({
           {submitting ? (
             <span className="flex items-center gap-2">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Gönderiliyor...
+              {t("Gönderiliyor...")}
             </span>
           ) : (
-            "Yorum Gönder"
+            t("Yorum Gönder")
           )}
         </Button>
       </div>

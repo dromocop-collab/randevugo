@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import Link from "@/i18n/link";
+import { useT } from "@/i18n/client";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import type { PlatformAnalyticsSettings } from "@/types/platform";
 
@@ -36,6 +37,7 @@ function readPreferences(): CookiePreferences | null {
 }
 
 export function AnalyticsScripts() {
+  const t = useT();
   const [analytics, setAnalytics] = useState<PlatformAnalyticsSettings | null>(null);
   const [preferences, setPreferences] = useState<CookiePreferences | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,13 +94,13 @@ export function AnalyticsScripts() {
         </Script>
       )}
       {dialogOpen && <aside className={`cookie-consent ${editing ? "is-editing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="cookie-title">
-        <div className="cookie-consent__copy"><strong id="cookie-title">Çerez tercihleri senin kontrolünde.</strong><p>Zorunlu çerezler hizmeti çalıştırır. Analitik ve pazarlama çerezleri yalnızca seçiminle etkinleşir.</p><Link href="/cerez-politikasi">Çerez politikasını incele</Link></div>
+        <div className="cookie-consent__copy"><strong id="cookie-title">{t("Çerez tercihleri senin kontrolünde.")}</strong><p>{t("Zorunlu çerezler hizmeti çalıştırır. Analitik ve pazarlama çerezleri yalnızca seçiminle etkinleşir.")}</p><Link href="/cerez-politikasi">{t("Çerez politikasını incele")}</Link></div>
         {editing && <div className="cookie-preferences">
-          <label><span><b>Zorunlu</b><small>Güvenli giriş, tercih ve temel işlevler</small></span><input type="checkbox" checked disabled aria-label="Zorunlu çerezler her zaman etkin" /></label>
-          <label><span><b>Analitik</b><small>Anonim kullanım ve performans ölçümü</small></span><input type="checkbox" checked={draft.analytics} onChange={(event) => setDraft((current) => ({ ...current, analytics: event.target.checked }))} /></label>
-          <label><span><b>Pazarlama</b><small>Kampanya performansı ve ilgili içerikler</small></span><input type="checkbox" checked={draft.marketing} onChange={(event) => setDraft((current) => ({ ...current, marketing: event.target.checked }))} /></label>
+          <label><span><b>{t("Zorunlu")}</b><small>{t("Güvenli giriş, tercih ve temel işlevler")}</small></span><input type="checkbox" checked disabled aria-label={t("Zorunlu çerezler her zaman etkin")} /></label>
+          <label><span><b>{t("Analitik")}</b><small>{t("Anonim kullanım ve performans ölçümü")}</small></span><input type="checkbox" checked={draft.analytics} onChange={(event) => setDraft((current) => ({ ...current, analytics: event.target.checked }))} /></label>
+          <label><span><b>{t("Pazarlama")}</b><small>{t("Kampanya performansı ve ilgili içerikler")}</small></span><input type="checkbox" checked={draft.marketing} onChange={(event) => setDraft((current) => ({ ...current, marketing: event.target.checked }))} /></label>
         </div>}
-        <div className="cookie-consent__actions"><button type="button" onClick={() => save({ analytics: false, marketing: false })}>Tümünü reddet</button>{editing ? <button type="button" onClick={() => save(draft)}>Tercihleri kaydet</button> : <button type="button" onClick={() => setEditing(true)}>Tercihleri yönet</button>}<button type="button" onClick={() => save({ analytics: true, marketing: true })}>Tümünü kabul et</button></div>
+        <div className="cookie-consent__actions"><button type="button" onClick={() => save({ analytics: false, marketing: false })}>{t("Tümünü reddet")}</button>{editing ? <button type="button" onClick={() => save(draft)}>{t("Tercihleri kaydet")}</button> : <button type="button" onClick={() => setEditing(true)}>{t("Tercihleri yönet")}</button>}<button type="button" onClick={() => save({ analytics: true, marketing: true })}>{t("Tümünü kabul et")}</button></div>
       </aside>}
     </>
   );

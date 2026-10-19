@@ -7,6 +7,7 @@ import { BadgeCheck, Camera, MessageCircleReply, PenLine, Scissors, Star, UserRo
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import type { Review } from "@/types/review";
 import { relativeDate } from "./utils";
+import { useIntlLocale, useT } from "@/i18n/client";
 import styles from "../storefront.module.css";
 
 type Filter = "all" | "photos" | 1 | 2 | 3 | 4 | 5;
@@ -14,9 +15,10 @@ type Sort = "newest" | "highest" | "lowest";
 const PAGE = 5;
 
 export function Stars({ value, size = 14 }: { value: number; size?: number }) {
+  const t = useT();
   const rounded = Math.round(value);
   return (
-    <span className={styles.stars} role="img" aria-label={`5 üzerinden ${value.toFixed(1)} puan`}>
+    <span className={styles.stars} role="img" aria-label={t("5 üzerinden {rating} puan", { rating: value.toFixed(1) })}>
       {[1, 2, 3, 4, 5].map((star) => (
         <Star key={star} size={size} aria-hidden="true" className={star <= rounded ? undefined : styles.starOff} fill={star <= rounded ? "currentColor" : "none"} />
       ))}
@@ -32,6 +34,8 @@ interface Props {
 }
 
 export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis }: Props) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [limit, setLimit] = useState(PAGE);
@@ -65,10 +69,10 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
   if (reviews.length === 0) {
     return (
       <div className={styles.empty}>
-        <RoviMascot size={92} mood="happy" alt="Rovi gülümsüyor" />
-        <h3>İlk yorumu sen bırak</h3>
-        <p>Henüz yayınlanmış bir değerlendirme yok. Randevun tamamlandıktan sonra hesabından deneyimini paylaşabilirsin.</p>
-        <Link href="/hesabim" className={`${styles.pill} ${styles.pillPrimary}`} style={{ marginTop: 10 }}><PenLine size={15} /> Randevunu değerlendir</Link>
+        <RoviMascot size={92} mood="happy" alt={t("Rovi gülümsüyor")} />
+        <h3>{t("İlk yorumu sen bırak")}</h3>
+        <p>{t("Henüz yayınlanmış bir değerlendirme yok. Randevun tamamlandıktan sonra hesabından deneyimini paylaşabilirsin.")}</p>
+        <Link href="/hesabim" className={`${styles.pill} ${styles.pillPrimary}`} style={{ marginTop: 10 }}><PenLine size={15} /> {t("Randevunu değerlendir")}</Link>
       </div>
     );
   }
@@ -79,11 +83,11 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
         <div className={styles.score}>
           <strong>{score.toFixed(1)}</strong>
           <Stars value={score} size={16} />
-          <small>{count} değerlendirme</small>
+          <small>{t("{count} değerlendirme", { count })}</small>
         </div>
         <div className={styles.bars}>
           {distribution.map((row) => (
-            <button key={row.star} type="button" className={`${styles.bar} ${filter === row.star ? styles.barOn : ""}`} onClick={() => choose(row.star as Filter)} aria-pressed={filter === row.star} aria-label={`${row.star} yıldızlı yorumlar: ${row.value}`} disabled={row.value === 0}>
+            <button key={row.star} type="button" className={`${styles.bar} ${filter === row.star ? styles.barOn : ""}`} onClick={() => choose(row.star as Filter)} aria-pressed={filter === row.star} aria-label={t("{star} yıldızlı yorumlar: {count}", { star: row.star, count: row.value })} disabled={row.value === 0}>
               <span>{row.star}<Star size={11} aria-hidden="true" fill="currentColor" /></span>
               <span className={styles.barTrack}><span className={styles.barFill} style={{ width: `${row.percent}%` }} /></span>
               <span>{row.value}</span>
@@ -93,18 +97,18 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
       </div>
 
       <div className={styles.reviewTools}>
-        <div className={styles.chips} role="group" aria-label="Yorum filtreleri">
-          <button type="button" aria-pressed={filter === "all"} className={`${styles.chip} ${styles.chipPlain} ${filter === "all" ? styles.chipActive : ""}`} onClick={() => choose("all")}>Tümü <small>{reviews.length}</small></button>
-          {withPhotos > 0 && <button type="button" aria-pressed={filter === "photos"} className={`${styles.chip} ${styles.chipPlain} ${filter === "photos" ? styles.chipActive : ""}`} onClick={() => choose("photos")}><Camera size={15} aria-hidden="true" /> Fotoğraflı <small>{withPhotos}</small></button>}
+        <div className={styles.chips} role="group" aria-label={t("Yorum filtreleri")}>
+          <button type="button" aria-pressed={filter === "all"} className={`${styles.chip} ${styles.chipPlain} ${filter === "all" ? styles.chipActive : ""}`} onClick={() => choose("all")}>{t("Tümü")} <small>{reviews.length}</small></button>
+          {withPhotos > 0 && <button type="button" aria-pressed={filter === "photos"} className={`${styles.chip} ${styles.chipPlain} ${filter === "photos" ? styles.chipActive : ""}`} onClick={() => choose("photos")}><Camera size={15} aria-hidden="true" /> {t("Fotoğraflı")} <small>{withPhotos}</small></button>}
           {[5, 4, 3].map((star) => distribution.find((row) => row.star === star)!.value > 0 && (
             <button key={star} type="button" aria-pressed={filter === star} className={`${styles.chip} ${styles.chipPlain} ${filter === star ? styles.chipActive : ""}`} onClick={() => choose(star as Filter)}>{star} <Star size={13} aria-hidden="true" fill="currentColor" /></button>
           ))}
         </div>
-        <label htmlFor="review-sort" className={styles.srOnly}>Yorumları sırala</label>
+        <label htmlFor="review-sort" className={styles.srOnly}>{t("Yorumları sırala")}</label>
         <select id="review-sort" className={styles.select} value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
-          <option value="newest">En yeni</option>
-          <option value="highest">En yüksek</option>
-          <option value="lowest">En düşük</option>
+          <option value="newest">{t("En yeni")}</option>
+          <option value="highest">{t("En yüksek")}</option>
+          <option value="lowest">{t("En düşük")}</option>
         </select>
       </div>
 
@@ -114,10 +118,10 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
             <header className={styles.reviewHead}>
               <span className={styles.avatar} aria-hidden="true">{review.customerName?.trim().charAt(0).toLocaleUpperCase("tr-TR") || <UserRound size={16} />}</span>
               <div className={styles.reviewWho}>
-                <b>{review.customerName || "Müşteri"}</b>
+                <b>{review.customerName || t("Müşteri")}</b>
                 <small>
-                  {nowMillis ? relativeDate(review.createdAt, nowMillis) : new Date(review.createdAt).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}
-                  {review.appointmentId && <> · <span className={styles.verifiedTag}><BadgeCheck size={12} aria-hidden="true" /> Doğrulanmış randevu</span></>}
+                  {nowMillis ? relativeDate(review.createdAt, nowMillis, t, intlLocale) : new Date(review.createdAt).toLocaleDateString(intlLocale, { day: "numeric", month: "long", year: "numeric" })}
+                  {review.appointmentId && <> · <span className={styles.verifiedTag}><BadgeCheck size={12} aria-hidden="true" /> {t("Doğrulanmış randevu")}</span></>}
                 </small>
               </div>
               <Stars value={review.rating} size={13} />
@@ -132,7 +136,7 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
             {review.imageUrls && review.imageUrls.length > 0 && (
               <div className={styles.reviewPhotos}>
                 {review.imageUrls.map((url, photoIndex) => (
-                  <button key={url} type="button" className={styles.reviewPhoto} onClick={() => setPhoto(url)} aria-label={`Yorum fotoğrafı ${photoIndex + 1}, büyüt`}>
+                  <button key={url} type="button" className={styles.reviewPhoto} onClick={() => setPhoto(url)} aria-label={t("Yorum fotoğrafı {index}, büyüt", { index: photoIndex + 1 })}>
                     <Image src={url} alt="" fill sizes="76px" />
                   </button>
                 ))}
@@ -140,7 +144,7 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
             )}
             {review.ownerReply && (
               <div className={styles.reply}>
-                <small><MessageCircleReply size={13} aria-hidden="true" /> İŞLETME YANITI</small>
+                <small><MessageCircleReply size={13} aria-hidden="true" /> {t("İŞLETME YANITI")}</small>
                 <p>{review.ownerReply}</p>
               </div>
             )}
@@ -150,19 +154,19 @@ export function ReviewsSection({ reviews, averageRating, totalReviews, nowMillis
 
       {list.length > limit && (
         <div className={styles.moreRow}>
-          <button type="button" className={styles.pill} onClick={() => setLimit((value) => value + PAGE)}>Daha fazla yorum ({list.length - limit})</button>
+          <button type="button" className={styles.pill} onClick={() => setLimit((value) => value + PAGE)}>{t("Daha fazla yorum ({count})", { count: list.length - limit })}</button>
         </div>
       )}
 
       <div className={styles.reviewCta}>
-        <span>Bu işletmeden hizmet aldın mı?</span>
-        <Link href="/hesabim" className={styles.pill}><PenLine size={15} /> Deneyimini paylaş</Link>
+        <span>{t("Bu işletmeden hizmet aldın mı?")}</span>
+        <Link href="/hesabim" className={styles.pill}><PenLine size={15} /> {t("Deneyimini paylaş")}</Link>
       </div>
 
       {photo && (
-        <div className={styles.lightbox} role="dialog" aria-modal="true" aria-label="Yorum fotoğrafı" onMouseDown={(event) => { if (event.target === event.currentTarget) setPhoto(null); }}>
-          <button type="button" className={`${styles.lbBtn} ${styles.lbClose}`} onClick={() => setPhoto(null)} aria-label="Kapat" autoFocus><X size={20} /></button>
-          <figure><Image src={photo} alt="Yorum fotoğrafı" width={1400} height={1000} sizes="92vw" /></figure>
+        <div className={styles.lightbox} role="dialog" aria-modal="true" aria-label={t("Yorum fotoğrafı")} onMouseDown={(event) => { if (event.target === event.currentTarget) setPhoto(null); }}>
+          <button type="button" className={`${styles.lbBtn} ${styles.lbClose}`} onClick={() => setPhoto(null)} aria-label={t("Kapat")} autoFocus><X size={20} /></button>
+          <figure><Image src={photo} alt={t("Yorum fotoğrafı")} width={1400} height={1000} sizes="92vw" /></figure>
         </div>
       )}
     </>

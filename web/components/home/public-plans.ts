@@ -22,11 +22,11 @@ export async function loadPublicPlans(): Promise<PlatformPlan[]> {
       next: { revalidate: PUBLIC_PLANS_REVALIDATE_SECONDS, tags: [PLATFORM_PLANS_CACHE_TAG] },
       signal: AbortSignal.timeout(6_000),
     });
-    if (!response.ok) throw new Error(`platformPlans okunamadı (${response.status})`);
+    if (!response.ok) throw new Error(`platformPlans okunamadı (${response.status})`); // i18n-ignore (iç hata, kullanıcıya gösterilmez)
     return publicPlatformPlans(plansFromRestList(await response.json()));
   } catch (error) {
     if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NODE_ENV !== "production") {
-      console.warn("[public-plans] varsayılan pakete düşüldü:", (error as Error).message);
+      console.warn("[public-plans] varsayılan pakete düşüldü:", (error as Error).message); // i18n-ignore
       return [defaultPlatformPlan()];
     }
     throw error;
@@ -41,8 +41,8 @@ export function currencySymbol(currency: string) {
   return currency === "TRY" ? "₺" : currency;
 }
 
-export function formatPrice(value: number) {
-  return value.toLocaleString("tr-TR", { maximumFractionDigits: 0 });
+export function formatPrice(value: number, locale = "tr-TR") {
+  return value.toLocaleString(locale, { maximumFractionDigits: 0 });
 }
 
 /** Yıllık ödemede, aylığa göre yüzde kaç tasarruf (yoksa 0). */

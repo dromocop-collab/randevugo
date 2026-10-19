@@ -8,11 +8,13 @@ import { LinkCloud } from "@/components/seo/link-cloud";
 import { LocalBusinessGrid } from "@/components/seo/local-business-grid";
 import { SeoFaq } from "@/components/seo/seo-faq";
 import { LOCAL_CATEGORIES, businessesForCategory, getFethiyeBusinesses, isLocalCategory, type LocalCategorySlug } from "@/lib/seo/local-seo";
+import { localizeSeoCategory, seoCategoryVars } from "@/lib/seo/categories";
 import { createPublicMetadata } from "@/lib/seo/metadata";
-import { breadcrumbJsonLd, faqJsonLd, graph, itemListJsonLd, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
+import { breadcrumbJsonLd, faqJsonLd, graph, itemListJsonLd, localePath, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
 import { sortForListing, summarizeServices, topRated } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
-import { buildAreaFaq, buildAreaIntro, composeDescription, rankByFrequency, type AreaListingFacts } from "@/lib/seo/text";
+import { buildAreaFaq, buildAreaIntro, composeDescription, placeVars, rankByFrequency, type AreaListingFacts } from "@/lib/seo/text";
+import { getLocale, getT } from "@/i18n/server";
 
 export const revalidate = 3600;
 type Props = { params: Promise<{ category: string }> };
@@ -28,7 +30,8 @@ async function loadPage(category: string) {
   if (!isLocalCategory(category)) return null;
   const rows = sortForListing(businessesForCategory(await getFethiyeBusinesses(), category));
   if (rows.length === 0) return null;
-  const item = LOCAL_CATEGORIES[category];
+  const [t, locale] = await Promise.all([getT(), getLocale()]);
+  const item = localizeSeoCategory(LOCAL_CATEGORIES[category], t);
   const services = await summarizeServices(rows);
   const facts: AreaListingFacts = {
     place: "Fethiye",
@@ -42,27 +45,32 @@ async function loadPage(category: string) {
     maxPrice: services.maxPrice,
     popularServices: services.popularServices,
   };
-  return { rows, item, facts };
+  const vars = { ...placeVars("Fethiye", locale), ...seoCategoryVars(item, locale) };
+  return { rows, item, facts, t, locale, vars };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { category } = await params;
   const page = await loadPage(category);
-  if (!page) return { title: "Sayfa bulunamadı", robots: { index: false, follow: true } };
-  const { item, rows, facts } = page;
+  if (!page) {
+    const t = await getT();
+    return { title: t("Sayfa bulunamadı"), robots: { index: false, follow: true } };
+  }
+  const { item, rows, facts, t, locale, vars } = page;
   return createPublicMetadata({
-    title: `Fethiye ${item.label} – Fiyatlar ve Online Randevu`,
+    title: t("{place} {category} – Fiyatlar ve Online Randevu", vars),
     description: composeDescription([
-      `Fethiye'deki ${rows.length} ${item.noun} işletmesini karşılaştır.`,
-      facts.topRated ? `En yüksek puan: ${facts.topRated.name} (${facts.topRated.rating.toFixed(1)}).` : undefined,
-      "Hizmetleri, fiyatları, yorumları ve müsait saatleri incele, online randevunu ücretsiz al.",
-      `${item.examples.charAt(0).toLocaleUpperCase("tr-TR")}${item.examples.slice(1)} için uygun saati seç.`,
+      t("{placeAdj} {count} {noun} işletmesini karşılaştır.", { ...vars, count: rows.length }),
+      facts.topRated ? t("En yüksek puan: {name} ({rating}).", { name: facts.topRated.name, rating: facts.topRated.rating.toFixed(1) }) : undefined,
+      t("Hizmetleri, fiyatları, yorumları ve müsait saatleri incele, online randevunu ücretsiz al."),
+      t("{Examples} için uygun saati seç.", vars),
     ]),
     pathname: `/mugla/fethiye/${category}`,
     image: item.image,
     imageWidth: 1200,
     imageHeight: 900,
-    imageAlt: `Fethiye ${item.noun} randevusu`,
+    imageAlt: t("{place} {noun} randevusu", vars),
+    locale,
   });
 }
 
@@ -70,12 +78,12 @@ export default async function FethiyeCategoryPage({ params }: Props) {
   const { category } = await params;
   const page = await loadPage(category);
   if (!page) notFound();
-  const { rows, item, facts } = page;
-  const path = `/mugla/fethiye/${category}`;
+  const { rows, item, facts, t, locale, vars } = page;
+  const path = localePath(`/mugla/fethiye/${category}`, locale);
   const pageUrl = absoluteUrl(path);
-  const intro = buildAreaIntro(facts);
-  const faq = buildAreaFaq(facts);
-  const crumbs: Crumb[] = [{ name: "Ana Sayfa", path: "/" }, { name: "Muğla", path: "/sehir/mugla" }, { name: "Fethiye", path: "/mugla/fethiye" }, { name: `Fethiye ${item.label}`, path }];
+  const intro = buildAreaIntro(facts, locale);
+  const faq = buildAreaFaq(facts, locale);
+  const crumbs: Crumb[] = [{ name: t("Ana Sayfa"), path: localePath("/", locale) }, { name: "Muğla", path: localePath("/sehir/mugla", locale) }, { name: "Fethiye", path: localePath("/mugla/fethiye", locale) }, { name: t("{place} {category}", vars), path }]; // i18n-ignore — yer adları
   const all = await getFethiyeBusinesses();
   const others = (Object.keys(LOCAL_CATEGORIES) as LocalCategorySlug[])
     .filter((slug) => slug !== category)
@@ -83,9 +91,9 @@ export default async function FethiyeCategoryPage({ params }: Props) {
     .filter((entry) => entry.count > 0);
 
   const jsonLd = graph(
-    webPageJsonLd({ path, type: "CollectionPage", name: `Fethiye ${item.plural}`, description: intro[0] ?? "", breadcrumbId: `${pageUrl}#breadcrumb` }),
+    webPageJsonLd({ path, type: "CollectionPage", name: t("{place} {plural}", vars), description: intro[0] ?? "", breadcrumbId: `${pageUrl}#breadcrumb`, locale }),
     breadcrumbJsonLd(crumbs, `${pageUrl}#breadcrumb`),
-    itemListJsonLd(rows.map((row) => ({ name: row.name, path: businessPath(row.slug) })), { name: `Fethiye ${item.plural}` }),
+    itemListJsonLd(rows.map((row) => ({ name: row.name, path: localePath(businessPath(row.slug), locale) })), { name: t("{place} {plural}", vars) }),
     faqJsonLd(faq),
   );
 
@@ -95,14 +103,17 @@ export default async function FethiyeCategoryPage({ params }: Props) {
         <JsonLd data={jsonLd} />
         <Breadcrumbs items={crumbs} />
         <section className="mt-8 rounded-[34px] bg-[linear-gradient(135deg,#eff7ec,#dfeee1)] p-8 sm:p-14">
-          <span className="text-[10px] font-black tracking-[.18em] text-[#0b6b45]">FETHİYE · {item.label.toLocaleUpperCase("tr-TR")}</span>
-          <h1 className="mt-5 text-5xl font-bold tracking-[-.055em] text-[#10241c] sm:text-7xl">Fethiye {item.plural}</h1>
-          <p className="mt-6 max-w-3xl text-base leading-8 text-[#60756a]">Fethiye&apos;deki {item.noun} işletmelerini, {item.examples} hizmetlerini, fiyatları ve uygun randevu saatlerini tek yerde inceleyin.</p>
+          <span className="text-[10px] font-black tracking-[.18em] text-[#0b6b45]">{"FETHİYE" /* i18n-ignore — yer adı */} · {locale === "tr" ? item.label.toLocaleUpperCase("tr-TR") : item.label.toUpperCase()}</span>
+          <h1 className="mt-5 text-5xl font-bold tracking-[-.055em] text-[#10241c] sm:text-7xl">{t("{place} {plural}", vars)}</h1>
+          <p className="mt-6 max-w-3xl text-base leading-8 text-[#60756a]">{t("{placeAdj} {noun} işletmelerini, {examples} hizmetlerini, fiyatları ve uygun randevu saatlerini tek yerde inceleyin.", vars)}</p>
         </section>
-        <AreaIntro id="fethiye-category-intro" title={`Fethiye'de ${item.noun} seçerken`} paragraphs={intro} />
-        <section className="py-14" aria-label={`Fethiye ${item.plural}`}><LocalBusinessGrid businesses={rows} /></section>
-        <LinkCloud id="fethiye-other" kicker="FETHİYE" title="Fethiye'de diğer kategoriler" links={others.map((entry) => ({ href: `/mugla/fethiye/${entry.slug}`, label: `Fethiye ${LOCAL_CATEGORIES[entry.slug].noun}`, meta: `${entry.count} işletme` }))} />
-        <SeoFaq id="fethiye-category-faq" title="Sık sorulan sorular" faq={faq} />
+        <AreaIntro id="fethiye-category-intro" title={t("{inPlace} {noun} seçerken", vars)} paragraphs={intro} />
+        <section className="py-14" aria-label={t("{place} {plural}", vars)}><LocalBusinessGrid businesses={rows} /></section>
+        <LinkCloud id="fethiye-other" kicker={"FETHİYE" /* i18n-ignore — yer adı */} title={t("{inPlace} diğer kategoriler", vars)} links={others.map((entry) => {
+          const other = localizeSeoCategory(LOCAL_CATEGORIES[entry.slug], t);
+          return { href: `/mugla/fethiye/${entry.slug}`, label: t("Fethiye {noun}", { noun: other.noun, plural: other.plural }), meta: t("{count} işletme", { count: entry.count }) };
+        })} />
+        <SeoFaq id="fethiye-category-faq" title={t("Sık sorulan sorular")} faq={faq} />
       </main>
     </MarketingPage>
   );

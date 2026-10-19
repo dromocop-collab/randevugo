@@ -1,4 +1,5 @@
-import type { Messages } from "../config";
+import { compilePatterns, type Messages } from "../config";
+import enErrorPatterns from "../messages/en/error-patterns.json";
 import en_common from "../messages/en/common.json";
 import en_marketing from "../messages/en/marketing.json";
 import en_marketing_pages from "../messages/en/marketing-pages.json";
@@ -16,3 +17,6 @@ import en_errors from "../messages/en/errors.json";
 // İngilizce sözlük paketi: messages/en/*.json burada birleşir. Yeni sözlük dosyası → buraya bir satır.
 const en: Messages = { ...en_common, ...en_marketing, ...en_marketing_pages, ...en_legal, ...en_seo, ...en_storefront, ...en_account, ...en_dashboard_shell, ...en_dashboard_a, ...en_dashboard_b, ...en_dashboard_c, ...en_businesses, ...en_errors };
 export default en;
+
+/** Değişkenli sunucu mesajı kalıpları (messages/en/error-patterns.json). */
+export const patterns = compilePatterns(enErrorPatterns);

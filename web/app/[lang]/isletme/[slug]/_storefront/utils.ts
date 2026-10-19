@@ -1,20 +1,23 @@
 import type { Business, DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
+import type { LiveWaitEstimate } from "@/features/live-queue/wait-estimate";
 import { millisToZonedDateTime } from "@/lib/time/zoned";
+import { interpolate, tk, type TFunction } from "@/i18n/config";
 
-export const DAY_NAMES = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+export const DAY_NAMES = [tk("Pazar"), tk("Pazartesi"), tk("Salı"), tk("Çarşamba"), tk("Perşembe"), tk("Cuma"), tk("Cumartesi")];
 /** Pazartesi ile başlayan Türk haftası. */
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  kuafor: "Kuaför", berber: "Berber", guzellik: "Güzellik Merkezi", nail: "Nail Studio",
-  spa: "Spa & Masaj", spor: "Spor & PT", saglik: "Sağlık", danismanlik: "Danışmanlık",
-  veteriner: "Veteriner", yazilim: "Yazılım", egitim: "Eğitim", servis: "Servis & Teknik", diger: "Profesyonel hizmet",
+  kuafor: tk("Kuaför"), berber: tk("Berber"), guzellik: tk("Güzellik Merkezi"), nail: "Nail Studio",
+  spa: tk("Spa & Masaj"), spor: tk("Spor & PT"), saglik: tk("Sağlık"), danismanlik: tk("Danışmanlık"),
+  veteriner: tk("Veteriner"), yazilim: tk("Yazılım"), egitim: tk("Eğitim"), servis: tk("Servis & Teknik"), diger: tk("Profesyonel hizmet"),
 };
 
-export function categoryLabel(category?: string) {
-  if (!category) return "Profesyonel hizmet";
-  return CATEGORY_LABELS[category] ?? category.replace(/[-_]+/g, " ").replace(/^\p{L}/u, (l) => l.toLocaleUpperCase("tr-TR"));
+/** Kategori etiketi; t verilirse çevrilir (bilinmeyen kategori adı veri olarak kalır). */
+export function categoryLabel(category?: string, t: TFunction = (source) => source) {
+  if (!category) return t("Profesyonel hizmet");
+  return CATEGORY_LABELS[category] ? t(CATEGORY_LABELS[category]) : category.replace(/[-_]+/g, " ").replace(/^\p{L}/u, (l) => l.toLocaleUpperCase("tr-TR"));
 }
 
 export function initials(name: string) {
@@ -31,7 +34,7 @@ export type OpenStatus =
   | { kind: "unknown" }
   | { kind: "open"; until: string; closingSoon: boolean }
   | { kind: "break"; until: string }
-  | { kind: "closed"; nextLabel: string | null };
+  | { kind: "closed"; next: { offset: number; day: number; start: string } | null };
 
 /** İstanbul saatine göre şu anki gün (0=Pazar) ve dakika. */
 export function istanbulNow(millis: number) {
@@ -55,45 +58,62 @@ export function computeOpenStatus(hours: DaySchedule[], millis: number): OpenSta
       }
       return { kind: "open", until: today.end, closingSoon: end - minutes <= 60 };
     }
-    if (minutes < start) return { kind: "closed", nextLabel: `Bugün ${today.start}'da açılıyor` };
+    if (minutes < start) return { kind: "closed", next: { offset: 0, day, start: today.start } };
   }
   for (let offset = 1; offset <= 7; offset++) {
     const nextDay = (day + offset) % 7;
     const schedule = hours.find((item) => item.day === nextDay && item.isOpen);
     if (schedule) {
-      const label = offset === 1 ? "Yarın" : DAY_NAMES[nextDay];
-      return { kind: "closed", nextLabel: `${label} ${schedule.start}'da açılıyor` };
+      return { kind: "closed", next: { offset, day: nextDay, start: schedule.start } };
     }
   }
-  return { kind: "closed", nextLabel: null };
+  return { kind: "closed", next: null };
 }
 
-export function openStatusLabel(status: OpenStatus) {
+function nextOpeningLabel(next: { offset: number; day: number; start: string }, t: TFunction) {
+  if (next.offset === 0) return t("Bugün {time}'da açılıyor", { time: next.start });
+  if (next.offset === 1) return t("Yarın {time}'da açılıyor", { time: next.start });
+  return t("{day} {time}'da açılıyor", { day: t(DAY_NAMES[next.day]), time: next.start });
+}
+
+export function openStatusLabel(status: OpenStatus, t: TFunction = interpolate) {
   switch (status.kind) {
-    case "open": return status.closingSoon ? `Yakında kapanıyor · ${status.until}` : `Şimdi açık · ${status.until}'e kadar`;
-    case "break": return `Molada · ${status.until}'de dönüyor`;
-    case "closed": return status.nextLabel ? `Kapalı · ${status.nextLabel}` : "Şu anda kapalı";
+    case "open": return status.closingSoon ? t("Yakında kapanıyor · {time}", { time: status.until }) : t("Şimdi açık · {time}'e kadar", { time: status.until });
+    case "break": return t("Molada · {time}'de dönüyor", { time: status.until });
+    case "closed": return status.next ? t("Kapalı · {next}", { next: nextOpeningLabel(status.next, t) }) : t("Şu anda kapalı");
     default: return "";
   }
 }
 
-export function formatPrice(price: number, currency: Service["currency"] = "TRY") {
+export function formatPrice(price: number, currency: Service["currency"] = "TRY", locale = "tr-TR") {
   try {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency, maximumFractionDigits: 0 }).format(price);
+    return new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(price);
   } catch {
-    return `${price.toLocaleString("tr-TR")} ₺`;
+    return `${price.toLocaleString(locale)} ₺`;
   }
 }
 
-export function formatDuration(totalMinutes: number) {
-  if (!totalMinutes || totalMinutes < 60) return `${totalMinutes || 0} dk`;
+export function formatDuration(totalMinutes: number, t: TFunction = interpolate) {
+  if (!totalMinutes || totalMinutes < 60) return t("{count} dk", { count: totalMinutes || 0 });
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return minutes > 0 ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+  return minutes > 0 ? t("{hours} sa {minutes} dk", { hours, minutes }) : t("{hours} sa", { hours });
+}
+
+/** waitEstimateLabel'ın çevrilebilir karşılığı (aynı mantık). */
+export function liveWaitLabel(estimate: LiveWaitEstimate | null, t: TFunction = interpolate) {
+  if (!estimate) return t("Bekleme süresi şu anda hesaplanamıyor");
+  if (estimate.status === "available_now") return t("Şimdi müsait");
+  if (estimate.minWaitMinutes !== null && estimate.maxWaitMinutes !== null)
+    return t("Tahmini bekleme: {min}–{max} dk", { min: estimate.minWaitMinutes, max: estimate.maxWaitMinutes });
+  if (estimate.status === "business_closed") return t("Bugün canlı sıra kapalı");
+  if (estimate.status === "no_eligible_staff") return t("Bugün uygun personel bulunmuyor");
+  return t("Bekleme süresi şu anda hesaplanamıyor");
 }
 
 export function normalizeSearchText(value: string) {
-  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i") // i18n-ignore — arama normalleştirmesi
+    .normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
 export function mapsHref(business: Pick<Business, "name" | "address" | "district" | "city">) {
@@ -141,14 +161,14 @@ export function websiteHref(website?: string) {
   return /^https?:\/\//i.test(website.trim()) ? website.trim() : `https://${website.trim()}`;
 }
 
-export function relativeDate(iso: string, nowMillis: number) {
+export function relativeDate(iso: string, nowMillis: number, t: TFunction = interpolate, locale = "tr-TR") {
   const time = new Date(iso).getTime();
   if (Number.isNaN(time)) return "";
   const days = Math.floor((nowMillis - time) / 86_400_000);
-  if (days < 1) return "Bugün";
-  if (days < 2) return "Dün";
-  if (days < 7) return `${days} gün önce`;
-  if (days < 30) return `${Math.floor(days / 7)} hafta önce`;
-  if (days < 365) return `${Math.floor(days / 30)} ay önce`;
-  return new Date(iso).toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+  if (days < 1) return t("Bugün");
+  if (days < 2) return t("Dün");
+  if (days < 7) return t("{count} gün önce", { count: days });
+  if (days < 30) return t("{count} hafta önce", { count: Math.floor(days / 7) });
+  if (days < 365) return t("{count} ay önce", { count: Math.floor(days / 30) });
+  return new Date(iso).toLocaleDateString(locale, { month: "long", year: "numeric" });
 }

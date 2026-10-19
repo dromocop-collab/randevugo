@@ -15,7 +15,7 @@ export const SHARE_SIZES: Record<ShareFormat, { width: number; height: number }>
 /** URL'deki `boyut` değeri: varsayılan hikâye; "gonderi"/"post"/"feed" dikey gönderi. */
 export function parseShareFormat(value: string | null | undefined): ShareFormat {
   const clean = (value ?? "").trim().toLocaleLowerCase("tr-TR");
-  return clean === "gonderi" || clean === "gönderi" || clean === "post" || clean === "feed" ? "post" : "story";
+  return clean === "gonderi" || clean === "gönderi" || clean === "post" || clean === "feed" ? "post" : "story"; // i18n-ignore (URL değeri)
 }
 
 function encodeSlug(slug: string): string {
@@ -75,9 +75,9 @@ export function clampText(value: string, max: number): string {
   return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
 }
 
-/** 4.8 → "4,8" (Türkçe ondalık). */
-export function formatRating(rating: number): string {
-  return (Math.round(rating * 10) / 10).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/** 4.8 → "4,8" (varsayılan Türkçe ondalık; Instagram görseli Türkçe kalır). */
+export function formatRating(rating: number, locale = "tr-TR"): string {
+  return (Math.round(rating * 10) / 10).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 export type ShowcaseServiceInput = {
@@ -92,13 +92,13 @@ export type ShowcaseServiceInput = {
 
 export type ShowcaseService = { name: string; priceLabel: string | null; durationLabel: string | null };
 
-export function formatPriceLabel(price: number, currency = "TRY"): string | null {
+export function formatPriceLabel(price: number, currency = "TRY", locale = "tr-TR"): string | null {
   if (!Number.isFinite(price) || price <= 0) return null;
-  if (currency === "TRY") return formatTry(price);
+  if (currency === "TRY") return formatTry(price, undefined, locale);
   try {
-    return new Intl.NumberFormat("tr-TR", { style: "currency", currency, maximumFractionDigits: 0 }).format(price);
+    return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 0 }).format(price);
   } catch {
-    return formatTry(price);
+    return formatTry(price, undefined, locale);
   }
 }
 

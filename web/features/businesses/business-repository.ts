@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirebaseApp } from "@/lib/firebase/client";
+import { tk } from "@/i18n/config";
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Business, DaySchedule } from "@/types/business";
@@ -143,7 +144,7 @@ export async function createBusinessFromOnboarding(input: OnboardingInput): Prom
   const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "createBusiness");
   const result = await callable(input);
   const data = result.data as Partial<CreateBusinessResult>;
-  if (!data.businessId) throw new Error("İşletme oluşturulamadı.");
+  if (!data.businessId) throw new Error(tk("İşletme oluşturulamadı."));
   return {
     businessId: data.businessId,
     organizationId: typeof data.organizationId === "string" ? data.organizationId : undefined,

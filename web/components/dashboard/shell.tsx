@@ -10,6 +10,7 @@ import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
+import { useT } from "@/i18n/client";
 import { NEW_APPOINTMENT_EVENT, notifyAppointmentsChanged, openQuickAppointment } from "@/components/dashboard/dashboard-events";
 import { useNotificationSoundSync } from "@/features/push/notification-sound-sync";
 import styles from "./shell.module.css";
@@ -17,6 +18,7 @@ import styles from "./shell.module.css";
 const COLLAPSE_KEY = "sr-dashboard-sidebar-collapsed";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
+  const t = useT();
   const [collapsed, setCollapsed] = useState(false);
   // Randevu sesi tercihini hesaptan al (panelde push ön plan zili seçili sesi çalar).
   useNotificationSoundSync();
@@ -43,7 +45,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         data-dash-root=""
         data-sidebar={collapsed ? "collapsed" : "expanded"}
       >
-        <a href="#dashboard-main" className={styles.skipLink}>İçeriğe geç</a>
+        <a href="#dashboard-main" className={styles.skipLink}>{t("İçeriğe geç")}</a>
         <DashboardSidebar collapsed={collapsed} onToggle={toggleCollapsed} />
         <div className={styles.main}>
           <DashboardTopBar />

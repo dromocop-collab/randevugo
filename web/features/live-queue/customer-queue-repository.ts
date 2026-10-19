@@ -3,6 +3,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import type { LiveWaitEstimate } from "./wait-estimate";
+import { tk } from "@/i18n/config";
 
 export interface CustomerQueueEntry {
   id: string;
@@ -69,14 +70,16 @@ export function watchMyQueueEntry(businessId: string, entryId: string, onData: (
     (snapshot) => onData(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as CustomerQueueEntry : null), onError);
 }
 
+/** Kullanıcıya gösterilecek hata metni (Türkçe kaynak, tk ile işaretli); gösterirken t(message) kullanın. */
 export function queueCustomerError(error: unknown): string {
   const value = error as { code?: string; message?: string };
   const message = String(value?.message ?? "");
-  if (value?.code === "functions/unauthenticated") return "Sıraya katılmak için giriş yapmalısın.";
-  if (message.includes("FEATURE_DISABLED")) return "Canlı sıra şu anda kullanılamıyor.";
-  if (value?.code === "functions/already-exists") return "Bu işletmede zaten aktif bir sıran bulunuyor.";
-  if (value?.code === "functions/permission-denied") return "Bu işlem için yetkin bulunmuyor.";
-  if (message.includes("kabul etmiyor") || message.includes("uygun değil")) return "İşletme şu anda bu hizmet için yeni canlı sıra müşterisi kabul etmiyor.";
-  if (value?.code === "functions/failed-precondition") return "Sıra durumu değişti. Lütfen yenileyip tekrar dene.";
-  return "Bağlantı kurulamadı. Lütfen tekrar dene.";
+  if (value?.code === "functions/unauthenticated") return tk("Sıraya katılmak için giriş yapmalısın.");
+  if (message.includes("FEATURE_DISABLED")) return tk("Canlı sıra şu anda kullanılamıyor.");
+  if (value?.code === "functions/already-exists") return tk("Bu işletmede zaten aktif bir sıran bulunuyor.");
+  if (value?.code === "functions/permission-denied") return tk("Bu işlem için yetkin bulunmuyor.");
+  if (message.includes("kabul etmiyor") || message.includes("uygun değil")) // i18n-ignore — sunucu mesajı eşleştirmesi
+    return tk("İşletme şu anda bu hizmet için yeni canlı sıra müşterisi kabul etmiyor.");
+  if (value?.code === "functions/failed-precondition") return tk("Sıra durumu değişti. Lütfen yenileyip tekrar dene.");
+  return tk("Bağlantı kurulamadı. Lütfen tekrar dene.");
 }

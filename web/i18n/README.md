@@ -17,7 +17,8 @@ Türkçe metin **anahtardır** (gettext usulü). Sözlükte karşılığı yoksa
 | Tarih / sayı | `"tr-TR"` yazma: istemcide `useIntlLocale()`, sunucuda `await getIntlLocale()`; saf fonksiyonlara `locale` parametresi geç |
 | Bağlantı | `import Link from "@/i18n/link"`; yönlendirme `useRouter`/`usePathname` → `@/i18n/navigation`; sunucuda `redirect` → `@/i18n/server-navigation` |
 | Tam sayfa geçiş (`window.location`) | `localizeForBrowser("/giris")` — `@/i18n/browser` |
-| Sunucu hata mesajı (`error.message`) | Gösterirken `t(message)` — sunucu mesajlarının karşılıkları `messages/en/errors.json` |
+| Sunucu hata mesajı (`error.message`) | Gösterirken `t(message)` — birebir karşılıklar `messages/en/errors.json`; değişken içerenler (`Lütfen 30 saniye bekleyin.`) kalıp olarak `messages/en/error-patterns.json` (`Lütfen {n} saniye bekleyin.`) |
+| Aynı kelime, farklı anlam | `t("İptal", { ctx: "durum" })` → sözlükte `"durum::İptal": "Canceled"` (bağlam karşılığı yoksa düz anahtar kullanılır) |
 | Bilerek Türkçe kalan satır | Satır sonuna ya da üst satıra `// i18n-ignore` |
 
 Meta veriler: `export async function generateMetadata() { const t = await getT(); return createPublicMetadata({ title: t("…"), …, locale: await getLocale() }); }`

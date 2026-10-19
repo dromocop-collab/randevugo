@@ -22,6 +22,7 @@ export function createProfessionMetadata(content: ProfessionMetadataInput): Meta
     title: content.metaTitle ?? content.title,
     description: content.metaDescription ?? content.description,
     pathname: content.pathname,
+    // Türkçe arama anahtar kelimeleri (kategori adı Türkçe veri). i18n-ignore
     keywords: category ? [`${noun} randevu`, `online ${noun} randevusu`, `yakınımdaki ${noun}`, `${noun} fiyatları`] : undefined,
     image: null,
   });

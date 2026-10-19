@@ -19,6 +19,8 @@ import {
   type User,
 } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
+import { tk } from "@/i18n/config";
+import { browserLocale } from "@/i18n/browser";
 
 function getAuthInstance() {
   return getAuth(getFirebaseApp());
@@ -91,7 +93,7 @@ function socialAuthProvider(provider: SocialProvider) {
   const apple = new OAuthProvider("apple.com");
   apple.addScope("email");
   apple.addScope("name");
-  apple.setCustomParameters({ locale: "tr" });
+  apple.setCustomParameters({ locale: browserLocale() === "en" ? "en_US" : "tr" });
   return apple;
 }
 
@@ -141,14 +143,14 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ isNe
 /** Oturum açıkken hesaba Google / Apple girişini bağlar (Apple "E-postamı gizle" seçilse bile çalışır). */
 export async function linkSocialProvider(provider: SocialProvider): Promise<void> {
   const user = getAuthInstance().currentUser;
-  if (!user) throw new Error("Önce giriş yapın.");
+  if (!user) throw new Error(tk("Önce giriş yapın."));
   await linkWithPopup(user, socialAuthProvider(provider));
 }
 
 export async function unlinkProvider(providerId: string): Promise<void> {
   const user = getAuthInstance().currentUser;
-  if (!user) throw new Error("Önce giriş yapın.");
-  if (user.providerData.length <= 1) throw new Error("Son giriş yöntemi kaldırılamaz.");
+  if (!user) throw new Error(tk("Önce giriş yapın."));
+  if (user.providerData.length <= 1) throw new Error(tk("Son giriş yöntemi kaldırılamaz."));
   await unlink(user, providerId);
 }
 

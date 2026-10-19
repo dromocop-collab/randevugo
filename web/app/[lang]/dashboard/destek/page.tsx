@@ -12,10 +12,12 @@ import { useAuthContext } from "@/features/auth/auth-context";
 import { useBusiness } from "@/hooks/use-business";
 import { EmptyState, HeroChip, Pill, SearchField, Segmented, Sheet, StudioHero, StudioPage, StudioSkeleton, cx, studio } from "../_studio";
 import { TicketThread, statusLabel, statusTone, type Ticket } from "./ticket-thread";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import css from "./support.module.css";
 
 type Tab = "customers"|"platform";
-const categories=[{value:"technical",label:"Teknik sorun"},{value:"billing",label:"Faturalama"},{value:"account",label:"Hesap ve erişim"},{value:"feature_request",label:"Özellik talebi"},{value:"other",label:"Diğer"}];
+const categories=[{value:"technical",label:tk("Teknik sorun")},{value:"billing",label:tk("Faturalama")},{value:"account",label:tk("Hesap ve erişim")},{value:"feature_request",label:tk("Özellik talebi")},{value:"other",label:tk("Diğer")}];
 
 const DESKTOP_QUERY = "(min-width: 1024px)";
 function subscribeDesktop(callback: () => void) {
@@ -28,6 +30,7 @@ function useIsDesktop() {
 }
 
 export default function DashboardSupportPage(){
+  const t = useT(); const intl = useIntlLocale();
   const {user}=useAuthContext(); const {businessId}=useBusiness();
   const [tickets,setTickets]=useState<Ticket[]>([]); const [loading,setLoading]=useState(true); const [tab,setTab]=useState<Tab>("customers");
   const [search,setSearch]=useState(""); const [showForm,setShowForm]=useState(false); const [selected,setSelected]=useState<Ticket|null>(null);
@@ -39,19 +42,20 @@ export default function DashboardSupportPage(){
     queueMicrotask(()=>{
       setTab("platform");
       setCategory("billing");
-      setTitle("Abonelik ve faturalama talebi");
-      setMessage("İşletmem için abonelik süresini yenilemek ve ödeme seçenekleri hakkında bilgi almak istiyorum.");
+      setTitle(t("Abonelik ve faturalama talebi"));
+      setMessage(t("İşletmem için abonelik süresini yenilemek ve ödeme seçenekleri hakkında bilgi almak istiyorum."));
       setShowForm(true);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız ilk açılışta, o anki dille doldurulur
   },[]);
 
-  useEffect(()=>{if(!businessId)return;return onSnapshot(query(collection(getDb(),"supportTickets"),where("businessId","==",businessId),orderBy("createdAt","desc")),snapshot=>{setTickets(snapshot.docs.map(item=>{const d=item.data();const stamp=d.createdAt as Timestamp|undefined;return{id:item.id,title:String(d.title??"Mesaj"),category:String(d.category??"other"),status:String(d.status??"open"),createdAt:stamp?.toDate?stamp.toDate().toLocaleString("tr-TR"):"Şimdi",message:String(d.message??""),requesterName:String(d.requesterName??d.userEmail??"Kullanıcı"),requesterPhone:String(d.requesterPhone??""),requesterEmail:String(d.requesterEmail??d.userEmail??""),source:String(d.source??"dashboard"),target:String(d.target??"platform"),hasAccount:typeof d.userId==="string"&&d.userId.length>0}}));setLoading(false)},error=>{toast.error(error.message);setLoading(false)});},[businessId]);
+  useEffect(()=>{if(!businessId)return;return onSnapshot(query(collection(getDb(),"supportTickets"),where("businessId","==",businessId),orderBy("createdAt","desc")),snapshot=>{setTickets(snapshot.docs.map(item=>{const d=item.data();const stamp=d.createdAt as Timestamp|undefined;return{id:item.id,title:String(d.title??t("Mesaj")),category:String(d.category??"other"),status:String(d.status??"open"),createdAt:stamp?.toDate?stamp.toDate().toLocaleString(intl):t("Şimdi"),message:String(d.message??""),requesterName:String(d.requesterName??d.userEmail??t("Kullanıcı")),requesterPhone:String(d.requesterPhone??""),requesterEmail:String(d.requesterEmail??d.userEmail??""),source:String(d.source??"dashboard"),target:String(d.target??"platform"),hasAccount:typeof d.userId==="string"&&d.userId.length>0}}));setLoading(false)},error=>{toast.error(t(error.message));setLoading(false)});},[businessId, t, intl]);
   const customerTickets=useMemo(()=>tickets.filter(item=>item.target==="business"||item.source==="storefront"||item.category==="customer_message"),[tickets]);
   const platformTickets=useMemo(()=>tickets.filter(item=>!(item.target==="business"||item.source==="storefront"||item.category==="customer_message")),[tickets]);
-  const visible=(tab==="customers"?customerTickets:platformTickets).filter(item=>!search.trim()||`${item.title} ${item.requesterName} ${item.requesterPhone} ${item.message}`.toLocaleLowerCase("tr-TR").includes(search.trim().toLocaleLowerCase("tr-TR")));
+  const visible=(tab==="customers"?customerTickets:platformTickets).filter(item=>!search.trim()||`${item.title} ${item.requesterName} ${item.requesterPhone} ${item.message}`.toLocaleLowerCase(intl).includes(search.trim().toLocaleLowerCase(intl)));
 
-  async function submit(){if(!title.trim()||!message.trim()||!businessId||!user)return;setSubmitting(true);try{await httpsCallable(getFunctions(getFirebaseApp(),"europe-west1"),"createBusinessSupportTicket")({businessId,title:title.trim(),category,message:message.trim()});toast.success("Talebiniz destek ekibine ulaştı.");setTitle("");setMessage("");setShowForm(false)}catch(error){toast.error((error as Error).message)}finally{setSubmitting(false)}}
-  async function resolveCustomer(id:string){try{await updateDoc(doc(getDb(),"supportTickets",id),{status:"resolved",updatedAt:serverTimestamp()});toast.success("Müşteri mesajı çözüldü olarak işaretlendi.")}catch(error){toast.error((error as Error).message)}}
+  async function submit(){if(!title.trim()||!message.trim()||!businessId||!user)return;setSubmitting(true);try{await httpsCallable(getFunctions(getFirebaseApp(),"europe-west1"),"createBusinessSupportTicket")({businessId,title:title.trim(),category,message:message.trim()});toast.success(t("Talebiniz destek ekibine ulaştı."));setTitle("");setMessage("");setShowForm(false)}catch(error){toast.error(t((error as Error).message))}finally{setSubmitting(false)}}
+  async function resolveCustomer(id:string){try{await updateDoc(doc(getDb(),"supportTickets",id),{status:"resolved",updatedAt:serverTimestamp()});toast.success(t("Müşteri mesajı çözüldü olarak işaretlendi."))}catch(error){toast.error(t((error as Error).message))}}
 
   // Seçili talebin canlı halini (durum değişiklikleri dahil) kullan.
   const active = selected ? tickets.find(item=>item.id===selected.id) ?? selected : null;
@@ -86,48 +90,48 @@ export default function DashboardSupportPage(){
   ) : null;
 
   return (
-    <StudioPage label="İletişim merkezi">
+    <StudioPage label={t("İletişim merkezi")}>
       <StudioHero
-        eyebrow="İletişim merkezi"
+        eyebrow={t("İletişim merkezi")}
         icon={MessagesSquare}
-        title="Mesajlar & destek"
-        description="Mağaza müşterilerinizden gelen mesajları yanıtlayın veya SeninRandevun ekibiyle güvenli bir destek görüşmesi başlatın."
-        actions={<button type="button" className={cx(studio.btn, studio.btnBright)} onClick={openNewTicket}><MessageCircleMore size={17} aria-hidden /> Yeni destek talebi</button>}
+        title={t("Mesajlar & destek")}
+        description={t("Mağaza müşterilerinizden gelen mesajları yanıtlayın veya SeninRandevun ekibiyle güvenli bir destek görüşmesi başlatın.")}
+        actions={<button type="button" className={cx(studio.btn, studio.btnBright)} onClick={openNewTicket}><MessageCircleMore size={17} aria-hidden /> {t("Yeni destek talebi")}</button>}
       >
-        <HeroChip icon={UserRound} value={openCustomer} label="açık müşteri mesajı" />
-        <HeroChip icon={Headphones} value={openPlatform} label="aktif destek talebi" />
+        <HeroChip icon={UserRound} value={openCustomer} label={t("açık müşteri mesajı")} />
+        <HeroChip icon={Headphones} value={openPlatform} label={t("aktif destek talebi")} />
       </StudioHero>
 
       <div className={css.toolbar}>
         <Segmented
-          label="Mesaj türü"
+          label={t("Mesaj türü")}
           value={tab}
           onChange={switchTab}
           options={[
-            { value: "customers", label: "Müşteri mesajları", icon: UserRound, count: customerTickets.length },
-            { value: "platform", label: "Platform desteği", icon: Headphones, count: platformTickets.length },
+            { value: "customers", label: t("Müşteri mesajları"), icon: UserRound, count: customerTickets.length },
+            { value: "platform", label: t("Platform desteği"), icon: Headphones, count: platformTickets.length },
           ]}
         />
-        <SearchField value={search} onChange={setSearch} placeholder="Mesajlarda ara…" />
+        <SearchField value={search} onChange={setSearch} placeholder={t("Mesajlarda ara…")} />
       </div>
 
       {loading ? (
-        <StudioSkeleton stats={0} rows={4} label="Mesajlar yükleniyor" />
+        <StudioSkeleton stats={0} rows={4} label={t("Mesajlar yükleniyor")} />
       ) : (
         <div className={css.inbox}>
-          <section className={css.listPane} aria-label={customers ? "Müşteri mesajları" : "Destek talepleri"}>
+          <section className={css.listPane} aria-label={customers ? t("Müşteri mesajları") : t("Destek talepleri")}>
             <div className={css.listHead}>
-              <span>{customers ? "Gelen kutusu" : "Talepleriniz"}</span>
+              <span>{customers ? t("Gelen kutusu") : t("Talepleriniz")}</span>
               <span>{visible.length}</span>
             </div>
             {visible.length===0 ? (
               <div className={css.listEmpty}>
                 <EmptyState
-                  title={search.trim() ? "Sonuç bulunamadı" : customers ? "Müşteri mesajı yok" : "Destek talebi yok"}
-                  description={search.trim() ? "Farklı bir kelimeyle aramayı deneyin." : customers ? "Mağazanıza gönderilen mesajlar burada görünür." : "İhtiyaç duyduğunuzda destek ekibimiz yanınızda."}
+                  title={search.trim() ? t("Sonuç bulunamadı") : customers ? t("Müşteri mesajı yok") : t("Destek talebi yok")}
+                  description={search.trim() ? t("Farklı bir kelimeyle aramayı deneyin.") : customers ? t("Mağazanıza gönderilen mesajlar burada görünür.") : t("İhtiyaç duyduğunuzda destek ekibimiz yanınızda.")}
                   mood={customers ? "wave" : "happy"}
                   size={84}
-                  action={!customers && !search.trim() ? <button type="button" className={cx(studio.btn, studio.btnPrimary)} onClick={()=>setShowForm(true)}><MessageCircleMore size={16} aria-hidden /> Yeni talep</button> : undefined}
+                  action={!customers && !search.trim() ? <button type="button" className={cx(studio.btn, studio.btnPrimary)} onClick={()=>setShowForm(true)}><MessageCircleMore size={16} aria-hidden /> {t("Yeni talep")}</button> : undefined}
                 />
               </div>
             ) : (
@@ -144,11 +148,11 @@ export default function DashboardSupportPage(){
                         <span className={css.itemBody}>
                           <span className={css.itemTop}>
                             <span className={css.itemTitle}>{ticket.title}</span>
-                            <span className={css.itemTime}>{ticket.createdAt.split(" ")[0]}</span>
+                            <span className={css.itemTime}>{ticket.createdAt.split(/[ ,]/)[0]}</span>
                           </span>
                           <span className={css.itemSub}>{ticket.requesterName}</span>
                           <span className={css.itemFoot}>
-                            <Pill tone={statusTone(ticket.status, customers)} dot>{statusLabel(ticket.status, customers)}</Pill>
+                            <Pill tone={statusTone(ticket.status, customers)} dot>{t(statusLabel(ticket.status, customers))}</Pill>
                             <span className={css.itemPreview}>{ticket.message}</span>
                           </span>
                         </span>
@@ -160,13 +164,13 @@ export default function DashboardSupportPage(){
             )}
           </section>
 
-          <section className={css.threadPane} aria-label="Konuşma">
+          <section className={css.threadPane} aria-label={t("Konuşma")}>
             {isDesktop && thread ? thread : (
               <div className={css.placeholder}>
                 <div>
                   <EmptyState
-                    title="Bir görüşme seçin"
-                    description={customers ? "Soldaki listeden bir müşteri mesajı seçerek yanıtlayın." : "Soldaki listeden bir talep seçin veya yeni bir destek görüşmesi başlatın."}
+                    title={t("Bir görüşme seçin")}
+                    description={customers ? t("Soldaki listeden bir müşteri mesajı seçerek yanıtlayın.") : t("Soldaki listeden bir talep seçin veya yeni bir destek görüşmesi başlatın.")}
                     mood="thinking"
                     size={88}
                   />
@@ -187,29 +191,29 @@ export default function DashboardSupportPage(){
       <Sheet
         open={showForm}
         onClose={closeForm}
-        title="Yeni destek görüşmesi"
-        description="Bize anlatın, birlikte çözelim."
+        title={t("Yeni destek görüşmesi")}
+        description={t("Bize anlatın, birlikte çözelim.")}
         footer={<>
-          <button type="button" className={studio.btn} onClick={closeForm}>Vazgeç</button>
+          <button type="button" className={studio.btn} onClick={closeForm}>{t("Vazgeç")}</button>
           <button type="button" className={cx(studio.btn, studio.btnPrimary)} disabled={submitting||!title.trim()||!message.trim()} onClick={submit}>
-            {submitting?<LoaderCircle size={16} className={studio.spin} aria-hidden/>:<Send size={16} aria-hidden/>} Gönder
+            {submitting?<LoaderCircle size={16} className={studio.spin} aria-hidden/>:<Send size={16} aria-hidden/>} {t("Gönder")}
           </button>
         </>}
       >
         <div className={css.form}>
           <div className={studio.field}>
-            <label className={studio.label} htmlFor="support-title">Konu</label>
-            <input id="support-title" className={studio.input} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Kısaca konu başlığı"/>
+            <label className={studio.label} htmlFor="support-title">{t("Konu")}</label>
+            <input id="support-title" className={studio.input} value={title} onChange={e=>setTitle(e.target.value)} placeholder={t("Kısaca konu başlığı")}/>
           </div>
           <div className={studio.field}>
-            <label className={studio.label} htmlFor="support-category">Kategori</label>
-            <select id="support-category" className={studio.select} value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}</select>
+            <label className={studio.label} htmlFor="support-category">{t("Kategori")}</label>
+            <select id="support-category" className={studio.select} value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(x=><option key={x.value} value={x.value}>{t(x.label)}</option>)}</select>
           </div>
           <div className={studio.field}>
-            <label className={studio.label} htmlFor="support-message">Mesaj</label>
-            <textarea id="support-message" className={studio.textarea} rows={5} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Talebinizi detaylandırın…"/>
+            <label className={studio.label} htmlFor="support-message">{t("Mesaj")}</label>
+            <textarea id="support-message" className={studio.textarea} rows={5} value={message} onChange={e=>setMessage(e.target.value)} placeholder={t("Talebinizi detaylandırın…")}/>
           </div>
-          <p className={css.privacy}><ShieldCheck size={15} aria-hidden/> Görüşmeniz yalnızca işletmeniz ve platform ekibi tarafından görülür.</p>
+          <p className={css.privacy}><ShieldCheck size={15} aria-hidden/> {t("Görüşmeniz yalnızca işletmeniz ve platform ekibi tarafından görülür.")}</p>
         </div>
       </Sheet>
     </StudioPage>

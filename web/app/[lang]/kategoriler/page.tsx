@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "@/i18n/link";
 import { ArrowRight, ArrowUpRight, BriefcaseBusiness, Compass, LayoutGrid, MapPin, ShieldCheck, Sparkles, Store } from "lucide-react";
@@ -10,16 +11,23 @@ import { listDynamicCategories, type DynamicCategory } from "@/features/categori
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import { seoSlug } from "@/lib/seo/geo-seo";
 import { createPublicMetadata, safeJsonLd, SEO_SITE_URL } from "@/lib/seo/metadata";
+import { absoluteUrl } from "@/lib/seo/site";
+import { LOCALE_LABELS, localizeHref, tk, type TFunction } from "@/i18n/config";
+import { getLocale, getT } from "@/i18n/server";
 import { CategoriesExplorer, type CategoryCardData } from "./categories-explorer";
 import styles from "./kategoriler.module.css";
 
-export const metadata = createPublicMetadata({
-  title: "Tüm Hizmet Kategorileri ve Online Randevu",
-  description: "Kuaför, berber, güzellik merkezi, spa, nail studio, sağlık, spor ve veteriner kategorilerindeki işletmeleri keşfet; uygun saatte online randevu al.",
-  pathname: "/kategoriler",
-  keywords: ["randevu kategorileri", "kuaför randevu", "berber randevu", "güzellik merkezi randevu", "spa randevu", "veteriner randevu", "online randevu al"],
-  image: null,
-});
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return createPublicMetadata({
+    title: t("Tüm Hizmet Kategorileri ve Online Randevu"),
+    description: t("Kuaför, berber, güzellik merkezi, spa, nail studio, sağlık, spor ve veteriner kategorilerindeki işletmeleri keşfet; uygun saatte online randevu al."),
+    pathname: "/kategoriler",
+    keywords: [t("randevu kategorileri"), t("kuaför randevu"), t("berber randevu"), t("güzellik merkezi randevu"), t("spa randevu"), t("veteriner randevu"), t("online randevu al")],
+    image: null,
+    locale: await getLocale(),
+  });
+}
 
 // Kategori sayıları sunucuda hazırlanır ve 5 dakikada bir yenilenir.
 export const revalidate = 300;
@@ -70,7 +78,7 @@ function safeImage(url?: string) {
 }
 
 const EXTRA_LABELS: Record<string, { label: string; emoji: string }> = {
-  diger: { label: "Diğer", emoji: "📦" },
+  diger: { label: tk("Diğer"), emoji: "📦" },
 };
 
 function prettifySlug(slug: string) {
@@ -78,12 +86,12 @@ function prettifySlug(slug: string) {
   return text ? text.charAt(0).toLocaleUpperCase("tr-TR") + text.slice(1) : slug;
 }
 
-function buildCards(data: CategoriesData | null): CategoryCardData[] {
+function buildCards(data: CategoriesData | null, t: TFunction): CategoryCardData[] {
   const cards: CategoryCardData[] = CATEGORY_CATALOG.map((item) => ({
     slug: item.slug,
-    label: item.label,
+    label: t(item.label),
     emoji: item.emoji,
-    description: item.description,
+    description: t(item.description),
     image: item.image ?? safeImage(data?.covers[item.slug]),
     accent: item.accent,
     count: data ? data.counts[item.slug] ?? 0 : null,
@@ -98,7 +106,7 @@ function buildCards(data: CategoriesData | null): CategoryCardData[] {
       slug,
       label: dynamic.label || prettifySlug(slug),
       emoji: dynamic.emoji || "✨",
-      description: "Yeni eklenen kategori",
+      description: t("Yeni eklenen kategori"),
       image: safeImage(dynamic.imageUrl) ?? safeImage(data?.covers[slug]) ?? categoryImageFor(slug, dynamic.label),
       accent: "#1f7a4a",
       count: data ? data.counts[slug] ?? 0 : null,
@@ -110,9 +118,9 @@ function buildCards(data: CategoriesData | null): CategoryCardData[] {
     known.add(slug);
     cards.push({
       slug,
-      label: EXTRA_LABELS[slug]?.label ?? prettifySlug(slug),
+      label: EXTRA_LABELS[slug] ? t(EXTRA_LABELS[slug].label) : prettifySlug(slug),
       emoji: EXTRA_LABELS[slug]?.emoji ?? "✨",
-      description: "İşletmeleri keşfet",
+      description: t("İşletmeleri keşfet"),
       image: safeImage(data?.covers[slug]) ?? categoryImageFor(slug, EXTRA_LABELS[slug]?.label ?? slug),
       accent: "#475569",
       count,
@@ -130,15 +138,16 @@ function buildCards(data: CategoriesData | null): CategoryCardData[] {
 const GUIDES = CATEGORY_CATALOG.filter((item) => item.landing);
 
 export default async function CategoriesPage() {
-  const data = await loadCategoriesData();
-  const cards = buildCards(data);
+  const [data, t, locale] = await Promise.all([loadCategoriesData(), getT(), getLocale()]);
+  const cards = buildCards(data, t);
   const activeCount = data ? cards.filter((card) => (card.count ?? 0) > 0).length : null;
   const cities = (data?.cities ?? [])
     .map((city) => ({ city, slug: seoSlug(city) }))
     .filter((item, index, list) => item.slug && list.findIndex((other) => other.slug === item.slug) === index)
     .slice(0, 24);
 
-  const pageUrl = `${SEO_SITE_URL}/kategoriler`;
+  const pageUrl = absoluteUrl(localizeHref("/kategoriler", locale));
+  const homeUrl = absoluteUrl(localizeHref("/", locale));
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -146,29 +155,29 @@ export default async function CategoriesPage() {
         "@type": "CollectionPage",
         "@id": `${pageUrl}#page`,
         url: pageUrl,
-        name: "Tüm kategoriler",
-        description: "SeninRandevun'daki tüm hizmet kategorileri ve online randevu alınabilen işletmeler.",
-        inLanguage: "tr-TR",
+        name: t("Tüm kategoriler"),
+        description: t("SeninRandevun'daki tüm hizmet kategorileri ve online randevu alınabilen işletmeler."),
+        inLanguage: LOCALE_LABELS[locale].intl,
         isPartOf: { "@id": `${SEO_SITE_URL}/#website` },
         mainEntity: { "@id": `${pageUrl}#list` },
       },
       {
         "@type": "ItemList",
         "@id": `${pageUrl}#list`,
-        name: "Hizmet kategorileri",
+        name: t("Hizmet kategorileri"),
         numberOfItems: cards.length,
         itemListElement: cards.map((card, index) => ({
           "@type": "ListItem",
           position: index + 1,
           name: card.label,
-          url: `${SEO_SITE_URL}${CATEGORY_CATALOG.find((item) => item.slug === card.slug)?.landing ?? categoryHref(card.slug)}`,
+          url: absoluteUrl(localizeHref(CATEGORY_CATALOG.find((item) => item.slug === card.slug)?.landing ?? categoryHref(card.slug), locale)),
         })),
       },
       {
         "@type": "BreadcrumbList",
         itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: SEO_SITE_URL },
-          { "@type": "ListItem", position: 2, name: "Kategoriler", item: pageUrl },
+          { "@type": "ListItem", position: 1, name: t("Ana Sayfa"), item: homeUrl },
+          { "@type": "ListItem", position: 2, name: t("Kategoriler"), item: pageUrl },
         ],
       },
     ],
@@ -184,30 +193,30 @@ export default async function CategoriesPage() {
             <div className={styles.heroGrid} aria-hidden="true" />
             <div className={styles.heroInner}>
               <div className={styles.heroCopy}>
-                <nav className={styles.crumbs} aria-label="Sayfa konumu">
-                  <Link href="/">Ana Sayfa</Link>
+                <nav className={styles.crumbs} aria-label={t("Sayfa konumu")}>
+                  <Link href="/">{t("Ana Sayfa")}</Link>
                   <span aria-hidden="true">/</span>
-                  <span aria-current="page">Kategoriler</span>
+                  <span aria-current="page">{t("Kategoriler")}</span>
                 </nav>
-                <span className={styles.eyebrow}><LayoutGrid size={13} /> TÜM KATEGORİLER</span>
-                <h1 id="categories-title" className={styles.heroTitle}>Ne için randevu<br /><em>almak istersin?</em></h1>
-                <p className={styles.heroText}>Kuaförden veterinere, spadan danışmanlığa kadar tüm hizmet alanları tek yerde. Bir kategori seç, yakınındaki işletmeleri karşılaştır ve uygun saati hemen ayır.</p>
+                <span className={styles.eyebrow}><LayoutGrid size={13} /> {t("TÜM KATEGORİLER")}</span>
+                <h1 id="categories-title" className={styles.heroTitle}>{t("Ne için randevu")}<br /><em>{t("almak istersin?")}</em></h1>
+                <p className={styles.heroText}>{t("Kuaförden veterinere, spadan danışmanlığa kadar tüm hizmet alanları tek yerde. Bir kategori seç, yakınındaki işletmeleri karşılaştır ve uygun saati hemen ayır.")}</p>
                 <div className={styles.heroStats}>
                   {data ? (
                     <>
-                      <span className={styles.heroStat}><Store size={15} /> <b>{data.total}</b> işletme</span>
-                      <span className={styles.heroStat}><LayoutGrid size={15} /> <b>{activeCount}</b> aktif kategori</span>
-                      {data.cities.length > 0 && <span className={styles.heroStat}><MapPin size={15} /> <b>{data.cities.length}</b> şehir</span>}
+                      <span className={styles.heroStat}><Store size={15} /> {t("{count} işletme", { count: data.total })}</span>
+                      <span className={styles.heroStat}><LayoutGrid size={15} /> {t("{count} aktif kategori", { count: activeCount ?? 0 })}</span>
+                      {data.cities.length > 0 && <span className={styles.heroStat}><MapPin size={15} /> {t("{count} şehir", { count: data.cities.length })}</span>}
                     </>
                   ) : (
                     <>
-                      <span className={styles.heroStat}><ShieldCheck size={15} /> Doğrulanmış işletmeler</span>
-                      <span className={styles.heroStat}><Sparkles size={15} /> 7/24 online randevu</span>
+                      <span className={styles.heroStat}><ShieldCheck size={15} /> {t("Doğrulanmış işletmeler")}</span>
+                      <span className={styles.heroStat}><Sparkles size={15} /> {t("7/24 online randevu")}</span>
                     </>
                   )}
                 </div>
               </div>
-              <div className={styles.heroMascot}><RoviMascot size={128} mood="happy" alt="Rovi kategori rehberi" priority /></div>
+              <div className={styles.heroMascot}><RoviMascot size={128} mood="happy" alt={t("Rovi kategori rehberi")} priority /></div>
             </div>
           </section>
 
@@ -215,16 +224,16 @@ export default async function CategoriesPage() {
 
           <section className={styles.section} aria-labelledby="guides-title">
             <header className={styles.sectionHead}>
-              <span className={styles.kicker}><Compass size={13} /> RANDEVU REHBERLERİ</span>
-              <h2 id="guides-title">Kategoriye göre online randevu</h2>
-              <p>Her alan için hazırladığımız rehberlerde hizmetleri, ipuçlarını ve yayındaki işletmeleri bul.</p>
+              <span className={styles.kicker}><Compass size={13} /> {t("RANDEVU REHBERLERİ")}</span>
+              <h2 id="guides-title">{t("Kategoriye göre online randevu")}</h2>
+              <p>{t("Her alan için hazırladığımız rehberlerde hizmetleri, ipuçlarını ve yayındaki işletmeleri bul.")}</p>
             </header>
             <ul className={styles.guides}>
               {GUIDES.map((guide) => (
                 <li key={guide.slug}>
                   <Link href={guide.landing ?? categoryHref(guide.slug)} className={styles.guide}>
                     {guide.image ? <Image src={guide.image} alt="" width={56} height={56} sizes="56px" className={styles.guideImage} /> : <span className={styles.guideEmoji} aria-hidden="true">{guide.emoji}</span>}
-                    <span className={styles.guideText}><b>{guide.label} randevusu</b><small>{guide.description}</small></span>
+                    <span className={styles.guideText}><b>{t("{category} randevusu", { category: t(guide.label) })}</b><small>{t(guide.description)}</small></span>
                     <ArrowRight size={16} className={styles.guideArrow} aria-hidden="true" />
                   </Link>
                 </li>
@@ -235,9 +244,9 @@ export default async function CategoriesPage() {
           {cities.length > 0 && (
             <section className={styles.section} aria-labelledby="cities-title">
               <header className={styles.sectionHead}>
-                <span className={styles.kicker}><MapPin size={13} /> ŞEHİRLER</span>
-                <h2 id="cities-title">Şehrine göre keşfet</h2>
-                <p>Bulunduğun şehirdeki yayınlanmış işletmeleri ve kategorileri gör.</p>
+                <span className={styles.kicker}><MapPin size={13} /> {t("ŞEHİRLER")}</span>
+                <h2 id="cities-title">{t("Şehrine göre keşfet")}</h2>
+                <p>{t("Bulunduğun şehirdeki yayınlanmış işletmeleri ve kategorileri gör.")}</p>
               </header>
               <ul className={styles.cities}>
                 {cities.map(({ city, slug }) => (
@@ -252,12 +261,12 @@ export default async function CategoriesPage() {
           <section className={styles.cta} aria-labelledby="business-cta-title">
             <div className={styles.ctaIcon} aria-hidden="true"><BriefcaseBusiness size={22} /></div>
             <div className={styles.ctaCopy}>
-              <h2 id="business-cta-title">Kategorinde işletmen mi var?</h2>
-              <p>İşletmeni ücretsiz listele, online randevu almaya bugün başla. Lansmana özel ilk ay bizden.</p>
+              <h2 id="business-cta-title">{t("Kategorinde işletmen mi var?")}</h2>
+              <p>{t("İşletmeni ücretsiz listele, online randevu almaya bugün başla. Lansmana özel ilk ay bizden.")}</p>
             </div>
             <div className={styles.ctaActions}>
-              <Link href="/isletmeler/kayit" className={styles.ctaPrimary}>Ücretsiz kayıt ol <ArrowUpRight size={16} /></Link>
-              <Link href="/isletmeler" className={styles.ctaGhost}>Nasıl çalışır?</Link>
+              <Link href="/isletmeler/kayit" className={styles.ctaPrimary}>{t("Ücretsiz kayıt ol")} <ArrowUpRight size={16} /></Link>
+              <Link href="/isletmeler" className={styles.ctaGhost}>{t("Nasıl çalışır?")}</Link>
             </div>
           </section>
         </div>

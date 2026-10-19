@@ -48,7 +48,7 @@ export interface StarterServicePlanItem {
 const g = (name: string, icon: string, color: string): StarterGroup => ({ name, icon, color });
 
 function slugId(value: string): string {
-  return normalizeTemplateKey(value).replace(/ı/g, "i").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return normalizeTemplateKey(value).replace(/ı/g, "i").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); // i18n-ignore
 }
 
 function list(group: StarterGroup, rows: Array<[name: string, minutes: number, min: number, max: number, recommended?: boolean]>): StarterServiceTemplate[] {
@@ -63,109 +63,109 @@ function list(group: StarterGroup, rows: Array<[name: string, minutes: number, m
   }));
 }
 
-/* Grup tanımları (ikon/renk SECTOR_TEMPLATES ile aynı). */
-const SAC = g("Saç Hizmetleri", "✂️", "#0ea5e9");
+/* Grup tanımları (ikon/renk SECTOR_TEMPLATES ile aynı). Grup ve hizmet adları veri olarak Firestore'a yazılır (templateKey); çevrilmez. */
+const SAC = g("Saç Hizmetleri", "✂️", "#0ea5e9"); // i18n-ignore
 const MAKYAJ = g("Makyaj Hizmetleri", "💄", "#ec4899");
-const SAC_SAKAL = g("Saç & Sakal Hizmetleri", "✂️", "#0ea5e9");
-const BERBER_BAKIM = g("Bakım Hizmetleri", "💆", "#10b981");
-const DAMAT = g("Damat & Özel Gün", "✨", "#ca8a04");
-const CILT = g("Cilt Bakımı Hizmetleri", "🧴", "#10b981");
+const SAC_SAKAL = g("Saç & Sakal Hizmetleri", "✂️", "#0ea5e9"); // i18n-ignore
+const BERBER_BAKIM = g("Bakım Hizmetleri", "💆", "#10b981"); // i18n-ignore
+const DAMAT = g("Damat & Özel Gün", "✨", "#ca8a04"); // i18n-ignore
+const CILT = g("Cilt Bakımı Hizmetleri", "🧴", "#10b981"); // i18n-ignore
 const LAZER = g("Epilasyon & Lazer", "⚡", "#ef4444");
-const KAS = g("Kaş & Kirpik Hizmetleri", "👁️", "#8b5cf6");
-const EL_AYAK = g("El & Ayak Bakımı", "💅", "#ec4899");
-const PROTEZ = g("Protez & Jel Tırnak", "💎", "#8b5cf6");
+const KAS = g("Kaş & Kirpik Hizmetleri", "👁️", "#8b5cf6"); // i18n-ignore
+const EL_AYAK = g("El & Ayak Bakımı", "💅", "#ec4899"); // i18n-ignore
+const PROTEZ = g("Protez & Jel Tırnak", "💎", "#8b5cf6"); // i18n-ignore
 const OJE = g("Oje & Nail Art", "🎨", "#f59e0b");
 const MASAJ = g("Masaj Terapileri", "💆", "#14b8a6");
 const HAMAM = g("Hamam & Islak Alan", "🫧", "#06b6d4");
-const VUCUT = g("Vücut Bakımları", "✨", "#8b5cf6");
+const VUCUT = g("Vücut Bakımları", "✨", "#8b5cf6"); // i18n-ignore
 const PT = g("Bireysel Antrenman", "🏋️", "#ef4444");
 const PILATES = g("Pilates & Yoga", "🧘", "#8b5cf6");
 const MUAYENE = g("Muayene & Kontrol", "🩺", "#0ea5e9");
 const FTR = g("Fizik Tedavi & Fizyoterapi", "🦴", "#8b5cf6");
 const BESLENME = g("Beslenme & Psikoloji", "🧠", "#22c55e");
-const BIREYSEL = g("Bireysel Danışmanlık", "🧠", "#8b5cf6");
-const AILE = g("Aile & Çift Danışmanlığı", "💑", "#ec4899");
-const KURUMSAL = g("Kurumsal Danışmanlık", "🏢", "#f59e0b");
-const VET = g("Muayene & Koruyucu Sağlık", "🐾", "#f59e0b");
-const PET = g("Pet Kuaför & Bakım", "🛁", "#ec4899");
+const BIREYSEL = g("Bireysel Danışmanlık", "🧠", "#8b5cf6"); // i18n-ignore
+const AILE = g("Aile & Çift Danışmanlığı", "💑", "#ec4899"); // i18n-ignore
+const KURUMSAL = g("Kurumsal Danışmanlık", "🏢", "#f59e0b"); // i18n-ignore
+const VET = g("Muayene & Koruyucu Sağlık", "🐾", "#f59e0b"); // i18n-ignore
+const PET = g("Pet Kuaför & Bakım", "🛁", "#ec4899"); // i18n-ignore
 const WEB = g("Web & E-Ticaret", "💻", "#0ea5e9");
-const YAZILIM = g("Yazılım & Mobil", "⚙️", "#10b981");
-const TASARIM = g("Tasarım & İçerik", "🎨", "#ec4899");
+const YAZILIM = g("Yazılım & Mobil", "⚙️", "#10b981"); // i18n-ignore
+const TASARIM = g("Tasarım & İçerik", "🎨", "#ec4899"); // i18n-ignore
 const AKADEMIK = g("Akademik Dersler", "📚", "#0ea5e9");
-const DIL = g("Dil Eğitimi", "🌍", "#ec4899");
-const SANAT = g("Sanat & Müzik", "🎨", "#f97316");
-const ARIZA = g("Arıza & Onarım", "🛠️", "#f59e0b");
-const SERVIS_BAKIM = g("Bakım Hizmetleri", "🔧", "#64748b");
+const DIL = g("Dil Eğitimi", "🌍", "#ec4899"); // i18n-ignore
+const SANAT = g("Sanat & Müzik", "🎨", "#f97316"); // i18n-ignore
+const ARIZA = g("Arıza & Onarım", "🛠️", "#f59e0b"); // i18n-ignore
+const SERVIS_BAKIM = g("Bakım Hizmetleri", "🔧", "#64748b"); // i18n-ignore
 const MONTAJ = g("Montaj & Kurulum", "⚙️", "#0ea5e9");
-const KESIF = g("Keşif & Danışmanlık", "🧭", "#22c55e");
+const KESIF = g("Keşif & Danışmanlık", "🧭", "#22c55e"); // i18n-ignore
 const GENEL = g("Genel Hizmetler", "📋", "#64748b");
 
 export const STARTER_SERVICE_TEMPLATES: Record<string, StarterServiceTemplate[]> = {
   kuafor: [
     ...list(SAC, [
-      ["Saç Kesimi", 45, 400, 900, true],
-      ["Fön", 30, 250, 500, true],
-      ["Saç Boyama", 120, 1200, 3000, true],
-      ["Keratin Bakım", 90, 1500, 4000],
+      ["Saç Kesimi", 45, 400, 900, true], // i18n-ignore
+      ["Fön", 30, 250, 500, true], // i18n-ignore
+      ["Saç Boyama", 120, 1200, 3000, true], // i18n-ignore
+      ["Keratin Bakım", 90, 1500, 4000], // i18n-ignore
       ["Balayage", 180, 3000, 7000],
     ]),
-    ...list(MAKYAJ, [["Kaş Alma", 20, 150, 350]]),
+    ...list(MAKYAJ, [["Kaş Alma", 20, 150, 350]]), // i18n-ignore
   ],
   berber: [
     ...list(SAC_SAKAL, [
-      ["Saç Kesimi", 30, 300, 700, true],
-      ["Sakal Tıraşı", 20, 150, 400, true],
-      ["Saç & Sakal Tıraşı", 45, 450, 1000, true],
-      ["Çocuk Saç Kesimi", 25, 200, 450],
+      ["Saç Kesimi", 30, 300, 700, true], // i18n-ignore
+      ["Sakal Tıraşı", 20, 150, 400, true], // i18n-ignore
+      ["Saç & Sakal Tıraşı", 45, 450, 1000, true], // i18n-ignore
+      ["Çocuk Saç Kesimi", 25, 200, 450], // i18n-ignore
     ]),
-    ...list(BERBER_BAKIM, [["Cilt Bakımı", 45, 400, 1000]]),
-    ...list(DAMAT, [["Damat Tıraşı", 75, 1500, 4000]]),
+    ...list(BERBER_BAKIM, [["Cilt Bakımı", 45, 400, 1000]]), // i18n-ignore
+    ...list(DAMAT, [["Damat Tıraşı", 75, 1500, 4000]]), // i18n-ignore
   ],
   guzellik: [
     ...list(CILT, [
-      ["Klasik Cilt Bakımı", 60, 800, 1800, true],
+      ["Klasik Cilt Bakımı", 60, 800, 1800, true], // i18n-ignore
       ["Hydrafacial", 60, 1500, 3500],
     ]),
     ...list(LAZER, [
-      ["Bölgesel Lazer", 30, 500, 1500, true],
-      ["Tüm Vücut Lazer", 90, 2500, 6000],
+      ["Bölgesel Lazer", 30, 500, 1500, true], // i18n-ignore
+      ["Tüm Vücut Lazer", 90, 2500, 6000], // i18n-ignore
     ]),
     ...list(KAS, [
-      ["Kaş Tasarımı", 30, 300, 700, true],
+      ["Kaş Tasarımı", 30, 300, 700, true], // i18n-ignore
       ["Kirpik Lifting", 45, 700, 1500],
     ]),
   ],
   nail: [
     ...list(EL_AYAK, [
-      ["Manikür", 45, 400, 800, true],
-      ["Pedikür", 60, 500, 1000, true],
+      ["Manikür", 45, 400, 800, true], // i18n-ignore
+      ["Pedikür", 60, 500, 1000, true], // i18n-ignore
     ]),
     ...list(OJE, [
-      ["Kalıcı Oje", 60, 500, 1000, true],
+      ["Kalıcı Oje", 60, 500, 1000, true], // i18n-ignore
       ["Nail Art", 30, 200, 600],
     ]),
     ...list(PROTEZ, [
-      ["Protez Tırnak", 120, 1200, 2500],
-      ["Jel Güçlendirme", 75, 800, 1500],
+      ["Protez Tırnak", 120, 1200, 2500], // i18n-ignore
+      ["Jel Güçlendirme", 75, 800, 1500], // i18n-ignore
     ]),
   ],
   spa: [
     ...list(MASAJ, [
       ["Klasik Masaj", 60, 1200, 2500, true],
-      ["Aromaterapi Masajı", 60, 1400, 2800, true],
-      ["Derin Doku Masajı", 60, 1500, 3000],
+      ["Aromaterapi Masajı", 60, 1400, 2800, true], // i18n-ignore
+      ["Derin Doku Masajı", 60, 1500, 3000], // i18n-ignore
     ]),
     ...list(HAMAM, [
       ["Hamam & Kese", 60, 800, 1800, true],
-      ["Köpük Masajı", 30, 500, 1000],
+      ["Köpük Masajı", 30, 500, 1000], // i18n-ignore
     ]),
     ...list(VUCUT, [["Spa Paketi", 120, 3000, 6000]]),
   ],
   spor: [
     ...list(PT, [
       ["Personal Training", 60, 800, 2000, true],
-      ["Vücut Analizi", 30, 300, 700, true],
-      ["Program Hazırlama", 45, 500, 1200],
+      ["Vücut Analizi", 30, 300, 700, true], // i18n-ignore
+      ["Program Hazırlama", 45, 500, 1200], // i18n-ignore
     ]),
     ...list(PILATES, [
       ["Reformer Pilates", 50, 700, 1500, true],
@@ -175,78 +175,78 @@ export const STARTER_SERVICE_TEMPLATES: Record<string, StarterServiceTemplate[]>
   ],
   saglik: [
     ...list(MUAYENE, [
-      ["İlk Muayene", 30, 1000, 2500, true],
+      ["İlk Muayene", 30, 1000, 2500, true], // i18n-ignore
       ["Kontrol Muayenesi", 20, 500, 1200, true],
       ["Online Muayene", 30, 800, 1800],
     ]),
-    ...list(FTR, [["Fizik Tedavi Seansı", 60, 1000, 2500]]),
+    ...list(FTR, [["Fizik Tedavi Seansı", 60, 1000, 2500]]), // i18n-ignore
     ...list(BESLENME, [
-      ["Diyetisyen İlk Görüşme", 45, 1000, 2500, true],
-      ["Psikolojik Danışmanlık", 50, 1500, 3500],
+      ["Diyetisyen İlk Görüşme", 45, 1000, 2500, true], // i18n-ignore
+      ["Psikolojik Danışmanlık", 50, 1500, 3500], // i18n-ignore
     ]),
   ],
   danismanlik: [
     ...list(BIREYSEL, [
       ["Bireysel Seans", 50, 1200, 3000, true],
-      ["Online Danışmanlık", 50, 1000, 2500, true],
-      ["Kariyer Danışmanlığı", 60, 1500, 3500],
-      ["Yaşam Koçluğu", 60, 1500, 3500],
+      ["Online Danışmanlık", 50, 1000, 2500, true], // i18n-ignore
+      ["Kariyer Danışmanlığı", 60, 1500, 3500], // i18n-ignore
+      ["Yaşam Koçluğu", 60, 1500, 3500], // i18n-ignore
     ]),
-    ...list(AILE, [["Çift Görüşmesi", 60, 2000, 4000, true]]),
-    ...list(KURUMSAL, [["İşletme Danışmanlığı", 60, 2500, 7500]]),
+    ...list(AILE, [["Çift Görüşmesi", 60, 2000, 4000, true]]), // i18n-ignore
+    ...list(KURUMSAL, [["İşletme Danışmanlığı", 60, 2500, 7500]]), // i18n-ignore
   ],
   veteriner: [
     ...list(VET, [
       ["Genel Muayene", 30, 600, 1500, true],
-      ["Aşılama", 20, 500, 1500, true],
-      ["İç Parazit Uygulaması", 20, 300, 800],
-      ["Dış Parazit Uygulaması", 20, 400, 1000],
+      ["Aşılama", 20, 500, 1500, true], // i18n-ignore
+      ["İç Parazit Uygulaması", 20, 300, 800], // i18n-ignore
+      ["Dış Parazit Uygulaması", 20, 400, 1000], // i18n-ignore
     ]),
     ...list(PET, [
-      ["Yıkama & Kurutma", 60, 600, 1500, true],
-      ["Tırnak Kesimi", 20, 150, 400],
+      ["Yıkama & Kurutma", 60, 600, 1500, true], // i18n-ignore
+      ["Tırnak Kesimi", 20, 150, 400], // i18n-ignore
     ]),
   ],
   yazilim: [
     ...list(WEB, [
-      ["Kurumsal Web Sitesi Görüşmesi", 60, 500, 1500, true],
-      ["E-Ticaret Sitesi Görüşmesi", 60, 500, 1500],
+      ["Kurumsal Web Sitesi Görüşmesi", 60, 500, 1500, true], // i18n-ignore
+      ["E-Ticaret Sitesi Görüşmesi", 60, 500, 1500], // i18n-ignore
     ]),
     ...list(YAZILIM, [
-      ["Özel Yazılım Analizi", 90, 2500, 7500, true],
+      ["Özel Yazılım Analizi", 90, 2500, 7500, true], // i18n-ignore
       ["Teknik Destek", 45, 750, 2000, true],
     ]),
     ...list(TASARIM, [
       ["Logo & Kurumsal Kimlik", 60, 1000, 3000],
-      ["Sosyal Medya Danışmanlığı", 60, 1000, 3000],
+      ["Sosyal Medya Danışmanlığı", 60, 1000, 3000], // i18n-ignore
     ]),
   ],
   egitim: [
     ...list(AKADEMIK, [
       ["Birebir Ders", 60, 600, 1500, true],
       ["Grup Dersi", 60, 300, 800, true],
-      ["Sınav Hazırlık", 90, 900, 2200],
+      ["Sınav Hazırlık", 90, 900, 2200], // i18n-ignore
     ]),
     ...list(DIL, [
-      ["İngilizce Dersi", 60, 600, 1500, true],
-      ["Konuşma Pratiği", 45, 400, 1000],
+      ["İngilizce Dersi", 60, 600, 1500, true], // i18n-ignore
+      ["Konuşma Pratiği", 45, 400, 1000], // i18n-ignore
     ]),
     ...list(SANAT, [["Piyano Dersi", 60, 700, 1600]]),
   ],
   servis: [
     ...list(ARIZA, [
-      ["Arıza Tespiti", 60, 500, 1200, true],
-      ["Yerinde Onarım", 90, 1000, 3000, true],
+      ["Arıza Tespiti", 60, 500, 1200, true], // i18n-ignore
+      ["Yerinde Onarım", 90, 1000, 3000, true], // i18n-ignore
       ["Uzaktan Destek", 30, 300, 800],
     ]),
-    ...list(SERVIS_BAKIM, [["Periyodik Bakım", 90, 1000, 2500, true]]),
+    ...list(SERVIS_BAKIM, [["Periyodik Bakım", 90, 1000, 2500, true]]), // i18n-ignore
     ...list(MONTAJ, [["Montaj", 90, 800, 2500]]),
-    ...list(KESIF, [["Yerinde Keşif", 60, 300, 1000]]),
+    ...list(KESIF, [["Yerinde Keşif", 60, 300, 1000]]), // i18n-ignore
   ],
   diger: list(GENEL, [
-    ["Ön Görüşme", 30, 300, 800, true],
+    ["Ön Görüşme", 30, 300, 800, true], // i18n-ignore
     ["Standart Hizmet", 45, 500, 1500, true],
-    ["Kapsamlı Hizmet", 90, 1000, 3000],
+    ["Kapsamlı Hizmet", 90, 1000, 3000], // i18n-ignore
   ]),
 };
 
@@ -281,8 +281,8 @@ export function suggestedPrice(template: Pick<StarterServiceTemplate, "priceMin"
   return Math.max(50, Math.round((template.priceMin + template.priceMax) / 2 / 50) * 50);
 }
 
-export function formatPriceRange(template: Pick<StarterServiceTemplate, "priceMin" | "priceMax">): string {
-  return `₺${template.priceMin.toLocaleString("tr-TR")}–${template.priceMax.toLocaleString("tr-TR")}`;
+export function formatPriceRange(template: Pick<StarterServiceTemplate, "priceMin" | "priceMax">, locale = "tr-TR"): string {
+  return `₺${template.priceMin.toLocaleString(locale)}–${template.priceMax.toLocaleString(locale)}`;
 }
 
 export function defaultStarterSelections(category: string): StarterSelections {

@@ -1,6 +1,7 @@
 "use client";
 
-import { splitLocale } from "@/i18n/config";
+import { splitLocale, type TFunction } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 import { localizeForBrowser } from "@/i18n/browser";
 
 import { useCallback, useEffect, useState } from "react";
@@ -36,22 +37,24 @@ function notifyChange() {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown, t: TFunction): string {
   const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
   if (code === "messaging/permission-blocked" || code === "messaging/permission-default") {
-    return "Bildirim izni verilmedi. Tarayıcı ayarlarından bu site için bildirimlere izin verebilirsiniz.";
+    return t("Bildirim izni verilmedi. Tarayıcı ayarlarından bu site için bildirimlere izin verebilirsiniz.");
   }
   if (code.startsWith("messaging/") && code.includes("service-worker")) {
-    return "Bildirim servisi başlatılamadı. Sayfayı yenileyip tekrar deneyin.";
+    return t("Bildirim servisi başlatılamadı. Sayfayı yenileyip tekrar deneyin.");
   }
-  if (code === "functions/unauthenticated") return "Bildirimleri açmak için giriş yapmalısınız.";
-  return "Bildirim ayarı güncellenemedi. Lütfen tekrar deneyin.";
+  if (code === "functions/unauthenticated") return t("Bildirimleri açmak için giriş yapmalısınız.");
+  return t("Bildirim ayarı güncellenemedi. Lütfen tekrar deneyin.");
 }
 
 // Sayfada birden çok kart/yenileyici olsa bile tek bir onMessage dinleyicisi (tek toast).
 let foregroundRefs = 0;
 let foregroundUnsubscribe: (() => void) | null = null;
 let foregroundStarting: Promise<void> | null = null;
+// Modül düzeyindeki toast dinleyicisi için son kullanılan çeviri fonksiyonu (hook günceller).
+let foregroundT: TFunction = (source) => source;
 
 function retainForegroundToasts() {
   foregroundRefs += 1;
@@ -61,7 +64,8 @@ function retainForegroundToasts() {
     const data = payload.data ?? {};
     // İşletme yardımcısı aynı olayı zaten gösteriyorsa (herkese açık sayfalarda) tekrar zil/toast yok.
     if (isForegroundMessageClaimed(data)) return;
-    const title = payload.notification?.title ?? data.title ?? "Yeni bildirim";
+    const t = foregroundT;
+    const title = payload.notification?.title ?? data.title ?? t("Yeni bildirim");
     const body = payload.notification?.body ?? data.body ?? "";
     const target = data.audience === "business" ? "/dashboard/randevular" : data.audience === "customer" ? "/hesabim?tab=appointments" : null;
     playNotificationChime();
@@ -69,7 +73,7 @@ function retainForegroundToasts() {
     toast(title, {
       ...(body ? { description: body } : {}),
       ...(data.kind === "appointment_created" ? { duration: 8000 } : {}),
-      ...(target && !onTarget ? { action: { label: "Görüntüle", onClick: () => window.location.assign(localizeForBrowser(target)) } } : {}),
+      ...(target && !onTarget ? { action: { label: t("Görüntüle"), onClick: () => window.location.assign(localizeForBrowser(target)) } } : {}),
     });
   }).then((unsubscribe) => {
     foregroundStarting = null;
@@ -110,6 +114,8 @@ async function syncToken(uid: string, force: boolean): Promise<boolean> {
  * İzin zaten verilmişse ve kullanıcı kapatmadıysa jeton sessizce yenilenir.
  */
 export function usePushRegistration() {
+  const t = useT();
+  useEffect(() => { foregroundT = t; }, [t]);
   const { user, status: authStatus } = useAuth();
   const uid = user?.uid ?? null;
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -184,23 +190,23 @@ export function usePushRegistration() {
       const result = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
       setPermission(result);
       if (result !== "granted") {
-        if (result === "denied") toast.error("Bildirim izni engellendi. Tarayıcı ayarlarından izin verebilirsiniz.");
+        if (result === "denied") toast.error(t("Bildirim izni engellendi. Tarayıcı ayarlarından izin verebilirsiniz."));
         return false;
       }
       setPushOptedOut(false);
       const ok = await syncToken(uid, true);
       setRegisteredFor(ok ? uid : null);
-      if (ok) toast.success("Bildirimler bu tarayıcıda açıldı.");
-      else toast.error("Bu tarayıcı bildirim jetonu oluşturamadı.");
+      if (ok) toast.success(t("Bildirimler bu tarayıcıda açıldı."));
+      else toast.error(t("Bu tarayıcı bildirim jetonu oluşturamadı."));
       notifyChange();
       return ok;
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast.error(errorMessage(error, t));
       return false;
     } finally {
       setBusy(false);
     }
-  }, [supported, uid]);
+  }, [supported, uid, t]);
 
   const disable = useCallback(async () => {
     if (!supported) return;
@@ -211,14 +217,14 @@ export function usePushRegistration() {
       clearSynced();
       await deleteWebPushToken().catch(() => undefined);
       setRegisteredFor(null);
-      toast.success("Bu tarayıcıda bildirimler kapatıldı.");
+      toast.success(t("Bu tarayıcıda bildirimler kapatıldı."));
       notifyChange();
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast.error(errorMessage(error, t));
     } finally {
       setBusy(false);
     }
-  }, [supported, uid]);
+  }, [supported, uid, t]);
 
   let status: PushStatus;
   if (supported === null || authStatus === "loading") status = "loading";

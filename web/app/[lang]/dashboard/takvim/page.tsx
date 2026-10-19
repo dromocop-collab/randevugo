@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { addDays, addMonths, addWeeks, endOfWeek, format, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
-import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
@@ -13,15 +12,21 @@ import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-
 import { APPOINTMENTS_CHANGED_EVENT } from "@/components/dashboard/dashboard-events";
 import { Badge, Button, Callout, DashPage, NativeSelect, SegmentedControl, Skeleton, appointmentStatusMeta } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
+import { tk } from "@/i18n/config";
+import { useIntlLocale, useT } from "@/i18n/client";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
 import type { Staff } from "@/types/staff";
-import { AppointmentDrawer, MonthView, TimeGrid, UNASSIGNED, WeekAgenda, eachDay, getRange, rangeTitle, withHour, type ViewMode } from "./calendar-views";
+import { AppointmentDrawer, MonthView, TimeGrid, UNASSIGNED, WeekAgenda, eachDay, getRange, rangeTitle, useDateLocale, withHour, type ViewMode } from "./calendar-views";
 import styles from "./calendar.module.css";
 
-const VIEW_OPTIONS = [{ value: "gun", label: "Gün" }, { value: "hafta", label: "Hafta" }, { value: "ay", label: "Ay" }] as const;
+const VIEW_OPTIONS = [{ value: "gun", label: tk("Gün") }, { value: "hafta", label: tk("Hafta") }, { value: "ay", label: tk("Ay") }] as const;
 
 export default function CalendarPage() {
   const { businessId, access } = useBusiness();
+  const t = useT();
+  const intlLocale = useIntlLocale();
+  const dateLocale = useDateLocale();
+  const viewOptions = useMemo(() => VIEW_OPTIONS.map((option) => ({ value: option.value, label: t(option.label) })), [t]);
   const canManageStatus = access?.role !== "staff" || Boolean(access?.permissions.manageAppointments);
   const [view, setView] = useState<ViewMode>("gun");
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
@@ -72,7 +77,7 @@ export default function CalendarPage() {
 
   const refreshAppointments = useCallback(async () => {
     try { setAppointments(await loadAppointments()); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Takvim yüklenemedi."); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : tk("Takvim yüklenemedi.")); }
   }, [loadAppointments]);
 
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function CalendarPage() {
     queueMicrotask(() => { if (active) { setLoading(true); setError(""); } });
     loadAppointments()
       .then((items) => { if (active) setAppointments(items); })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Takvim yüklenemedi."); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : tk("Takvim yüklenemedi.")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [businessId, loadAppointments]);
@@ -96,11 +101,11 @@ export default function CalendarPage() {
   const columns = useMemo(() => {
     const map = new Map<string, string>();
     staff.forEach((item) => map.set(item.id, item.fullName));
-    appointments.forEach((item) => { if (item.staffId && !map.has(item.staffId)) map.set(item.staffId, item.staffName || "Çalışan"); });
+    appointments.forEach((item) => { if (item.staffId && !map.has(item.staffId)) map.set(item.staffId, item.staffName || t("Çalışan")); });
     const list = [...map.entries()].map(([id, name]) => ({ id, name }));
-    if (appointments.some((item) => !item.staffId)) list.push({ id: UNASSIGNED, name: "Atanmamış" });
+    if (appointments.some((item) => !item.staffId)) list.push({ id: UNASSIGNED, name: t("Atanmamış") });
     return list;
-  }, [appointments, staff]);
+  }, [appointments, staff, t]);
 
   const visible = useMemo(() => staffFilter === "all" ? appointments : appointments.filter((item) => (item.staffId || UNASSIGNED) === staffFilter), [appointments, staffFilter]);
   const days = useMemo(() => eachDay(range.start, range.end), [range]);
@@ -121,11 +126,11 @@ export default function CalendarPage() {
     setUpdating(true);
     try {
       await updateAppointmentStatus(businessId, item.id, status);
-      toast.success(`Randevu: ${appointmentStatusMeta[status].label.toLocaleLowerCase("tr-TR")}`);
+      toast.success(t("Randevu: {status}", { status: t(appointmentStatusMeta[status].label).toLocaleLowerCase(intlLocale) }));
       setSelected({ ...item, status });
       await refreshAppointments();
     } catch {
-      toast.error("Güncelleme başarısız oldu");
+      toast.error(t("Güncelleme başarısız oldu"));
     } finally {
       setUpdating(false);
     }
@@ -133,12 +138,12 @@ export default function CalendarPage() {
 
   // Mobilde gün görünümünde sağa/sola kaydırarak gün değiştirme.
   const touchRef = useRef<{ x: number; y: number } | null>(null);
-  function onTouchStart(event: ReactTouchEvent) { const t = event.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; }
+  function onTouchStart(event: ReactTouchEvent) { const touch = event.touches[0]; touchRef.current = { x: touch.clientX, y: touch.clientY }; }
   function onTouchEnd(event: ReactTouchEvent) {
     const start = touchRef.current; touchRef.current = null;
     if (!start || view !== "gun") return;
-    const t = event.changedTouches[0];
-    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) move(dx < 0 ? 1 : -1);
   }
 
@@ -148,53 +153,53 @@ export default function CalendarPage() {
     <DashPage className={styles.page}>
       <header className={styles.head}>
         <div className={styles.headTitle}>
-          <span className={styles.eyebrow}><CalendarDays size={13} aria-hidden /> Takvim</span>
-          <h1>{rangeTitle(cursor, view)}</h1>
+          <span className={styles.eyebrow}><CalendarDays size={13} aria-hidden /> {t("Takvim")}</span>
+          <h1>{rangeTitle(cursor, view, dateLocale)}</h1>
           <div className={styles.metaRow}>
-            <Badge tone="accent">{activeScope.length} randevu</Badge>
-            {pendingCount > 0 && <Badge tone="amber" pulse>{pendingCount} onay bekliyor</Badge>}
-            {view === "gun" && isSameDay(cursor, new Date()) && <Badge tone="green" dot>Bugün</Badge>}
+            <Badge tone="accent">{t("{count} randevu", { count: activeScope.length })}</Badge>
+            {pendingCount > 0 && <Badge tone="amber" pulse>{t("{count} onay bekliyor", { count: pendingCount })}</Badge>}
+            {view === "gun" && isSameDay(cursor, new Date()) && <Badge tone="green" dot>{t("Bugün")}</Badge>}
           </div>
         </div>
         <div className={styles.headActions}>
-          <Button variant="secondary" size="sm" icon={RefreshCw} iconOnly aria-label="Yenile" onClick={() => void refreshAppointments()} />
-          <Button variant="primary" icon={Plus} onClick={() => openCreate(view === "gun" ? withHour(cursor, 9) : undefined)} className={styles.newBtn}>Yeni randevu</Button>
+          <Button variant="secondary" size="sm" icon={RefreshCw} iconOnly aria-label={t("Yenile")} onClick={() => void refreshAppointments()} />
+          <Button variant="primary" icon={Plus} onClick={() => openCreate(view === "gun" ? withHour(cursor, 9) : undefined)} className={styles.newBtn}>{t("Yeni randevu")}</Button>
         </div>
       </header>
 
       <div className={styles.toolbar}>
         <div className={styles.nav}>
-          <Button variant="secondary" size="sm" icon={ChevronLeft} iconOnly aria-label="Önceki" onClick={() => move(-1)} />
-          <Button variant="secondary" size="sm" onClick={() => setCursor(startOfDay(new Date()))}>Bugün</Button>
-          <Button variant="secondary" size="sm" icon={ChevronRight} iconOnly aria-label="Sonraki" onClick={() => move(1)} />
+          <Button variant="secondary" size="sm" icon={ChevronLeft} iconOnly aria-label={t("Önceki")} onClick={() => move(-1)} />
+          <Button variant="secondary" size="sm" onClick={() => setCursor(startOfDay(new Date()))}>{t("Bugün")}</Button>
+          <Button variant="secondary" size="sm" icon={ChevronRight} iconOnly aria-label={t("Sonraki")} onClick={() => move(1)} />
         </div>
-        <SegmentedControl ariaLabel="Takvim görünümü" value={view} onChange={setView} options={VIEW_OPTIONS} />
+        <SegmentedControl ariaLabel={t("Takvim görünümü")} value={view} onChange={setView} options={viewOptions} />
         {columns.length > 1 && (
-          <NativeSelect className={styles.staffSelect} value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} aria-label="Çalışan filtresi">
-            <option value="all">Tüm ekip</option>
+          <NativeSelect className={styles.staffSelect} value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} aria-label={t("Çalışan filtresi")}>
+            <option value="all">{t("Tüm ekip")}</option>
             {columns.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
           </NativeSelect>
         )}
       </div>
 
       {view !== "ay" && (
-        <div className={styles.strip} role="tablist" aria-label="Haftanın günleri">
+        <div className={styles.strip} role="tablist" aria-label={t("Haftanın günleri")}>
           {weekDays.map((day) => {
             const count = visible.filter((item) => item.status !== "cancelled" && isSameDay(new Date(item.startAt), day)).length;
             const active = view === "gun" && isSameDay(day, cursor);
             return (
               <button key={day.toISOString()} type="button" role="tab" aria-selected={active} onClick={() => openDay(day)}
                 className={cn(styles.stripDay, active && styles.stripDayActive, isSameDay(day, new Date()) && styles.stripToday)}>
-                <small>{format(day, "EEE", { locale: tr })}</small>
+                <small>{format(day, "EEE", { locale: dateLocale })}</small>
                 <b>{format(day, "d")}</b>
-                <i aria-label={`${count} randevu`}>{count > 0 ? Array.from({ length: Math.min(count, 3) }).map((_, index) => <span key={index} />) : null}</i>
+                <i aria-label={t("{count} randevu", { count })}>{count > 0 ? Array.from({ length: Math.min(count, 3) }).map((_, index) => <span key={index} />) : null}</i>
               </button>
             );
           })}
         </div>
       )}
 
-      {error && <Callout tone="red" title="Takvim yüklenemedi" action={<Button size="sm" variant="secondary" onClick={() => void refreshAppointments()}>Tekrar dene</Button>}>{error}</Callout>}
+      {error && <Callout tone="red" title={t("Takvim yüklenemedi")} action={<Button size="sm" variant="secondary" onClick={() => void refreshAppointments()}>{t("Tekrar dene")}</Button>}>{t(error)}</Callout>}
 
       <section className={styles.board} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {loading ? (
@@ -205,7 +210,7 @@ export default function CalendarPage() {
           <>
             <div className={styles.desktopOnly}>
               <TimeGrid
-                columns={days.map((day) => ({ key: day.toISOString(), label: format(day, "EEE d", { locale: tr }), day, today: isSameDay(day, new Date()), items: visible.filter((item) => isSameDay(new Date(item.startAt), day)) }))}
+                columns={days.map((day) => ({ key: day.toISOString(), label: format(day, "EEE d", { locale: dateLocale }), day, today: isSameDay(day, new Date()), items: visible.filter((item) => isSameDay(new Date(item.startAt), day)) }))}
                 hours={hoursRange} now={now} onSelect={setSelected} onCreate={openCreate} showStaff
               />
             </div>
@@ -217,7 +222,7 @@ export default function CalendarPage() {
           <TimeGrid
             columns={showStaffColumns
               ? columns.map((column) => ({ key: column.id, label: column.name, day: cursor, today: isSameDay(cursor, new Date()), staffId: column.id, items: dayItems.filter((item) => (item.staffId || UNASSIGNED) === column.id) }))
-              : [{ key: "day", label: format(cursor, "EEEE", { locale: tr }), day: cursor, today: isSameDay(cursor, new Date()), items: dayItems }]}
+              : [{ key: "day", label: format(cursor, "EEEE", { locale: dateLocale }), day: cursor, today: isSameDay(cursor, new Date()), items: dayItems }]}
             hours={hoursRange} now={now} onSelect={setSelected} onCreate={openCreate} showStaff={!showStaffColumns} staffColumns={showStaffColumns}
           />
         )}

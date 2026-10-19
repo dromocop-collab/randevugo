@@ -10,6 +10,7 @@ import type { ServiceCategory } from "@/types/service-category";
 import { OrderButtons, cx } from "../_workspace/kit";
 import { formatPrice } from "./service-shared";
 import styles from "./services.module.css";
+import { useT } from "@/i18n/client";
 
 export function ServiceRow({
   service, category, staffCount, order, onEdit, onToggle, onDelete, onQuickPrice,
@@ -23,6 +24,7 @@ export function ServiceRow({
   onDelete: () => void;
   onQuickPrice: (price: number) => Promise<void>;
 }) {
+  const t = useT();
   const [quickPrice, setQuickPrice] = useState(String(service.price || ""));
   const [quickSaving, setQuickSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -33,7 +35,7 @@ export function ServiceRow({
   async function saveQuickPrice() {
     const value = Number(quickPrice);
     if (!Number.isFinite(value) || value <= 0) {
-      toast.error("Fiyat sıfırdan büyük olmalı.");
+      toast.error(t("Fiyat sıfırdan büyük olmalı."));
       return;
     }
     setQuickSaving(true);
@@ -41,7 +43,7 @@ export function ServiceRow({
       await onQuickPrice(value);
     } catch (error) {
       if (error instanceof Error && error.message === "invalid-price") return;
-      toast.error("Fiyat güncellenemedi.");
+      toast.error(t("Fiyat güncellenemedi."));
     } finally {
       setQuickSaving(false);
     }
@@ -60,10 +62,10 @@ export function ServiceRow({
         <div className={styles.rowText}>
           <button type="button" className={styles.rowName} onClick={onEdit}>{service.name}</button>
           <div className={styles.rowBadges}>
-            {isDraft ? <Badge size="sm" tone="amber" dot>Fiyat bekliyor</Badge> : !service.isActive ? <Badge size="sm" tone="neutral">Pasif</Badge> : !service.isBookableOnline ? <Badge size="sm" tone="blue" icon={Globe2}>Yalnızca işletmede</Badge> : null}
-            {service.requiresDeposit && service.depositAmount > 0 ? <Badge size="sm" tone="violet" icon={Wallet}>Kapora {formatPrice(service.depositAmount)}</Badge> : null}
-            <span className={styles.rowFact}><Clock size={13} aria-hidden="true" /> {service.durationMinutes} dk</span>
-            <span className={cx(styles.rowFact, staffCount === 0 && styles.rowFactWarn)}><Users size={13} aria-hidden="true" /> {staffCount ? `${staffCount} uzman` : "Uzman atanmadı"}</span>
+            {isDraft ? <Badge size="sm" tone="amber" dot>{t("Fiyat bekliyor")}</Badge> : !service.isActive ? <Badge size="sm" tone="neutral">{t("Pasif")}</Badge> : !service.isBookableOnline ? <Badge size="sm" tone="blue" icon={Globe2}>{t("Yalnızca işletmede")}</Badge> : null}
+            {service.requiresDeposit && service.depositAmount > 0 ? <Badge size="sm" tone="violet" icon={Wallet}>{t("Kapora {amount}", { amount: formatPrice(service.depositAmount) })}</Badge> : null}
+            <span className={styles.rowFact}><Clock size={13} aria-hidden="true" /> {t("{minutes} dk", { minutes: service.durationMinutes })}</span>
+            <span className={cx(styles.rowFact, staffCount === 0 && styles.rowFactWarn)}><Users size={13} aria-hidden="true" /> {staffCount ? t("{count} uzman", { count: staffCount }) : t("Uzman atanmadı")}</span>
           </div>
           {service.description ? <p className={styles.rowDesc}>{service.description}</p> : null}
         </div>
@@ -79,21 +81,21 @@ export function ServiceRow({
             value={quickPrice}
             onChange={(event) => setQuickPrice(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") void saveQuickPrice(); }}
-            placeholder={isDraft ? "Fiyat" : "0"}
-            aria-label={`${service.name} fiyatı`}
+            placeholder={isDraft ? t("Fiyat") : "0"}
+            aria-label={t("{name} fiyatı", { name: service.name })}
             aria-invalid={priceInvalid}
           />
           <span aria-hidden="true">₺</span>
           {priceChanged || isDraft ? (
-            <button type="button" onClick={() => void saveQuickPrice()} disabled={quickSaving || !priceChanged || priceInvalid} aria-label={isDraft ? `${service.name} fiyatını kaydet ve yayınla` : `${service.name} fiyatını kaydet`} title={isDraft ? "Kaydet ve yayınla" : "Fiyatı kaydet"}>
+            <button type="button" onClick={() => void saveQuickPrice()} disabled={quickSaving || !priceChanged || priceInvalid} aria-label={isDraft ? t("{name} fiyatını kaydet ve yayınla", { name: service.name }) : t("{name} fiyatını kaydet", { name: service.name })} title={isDraft ? t("Kaydet ve yayınla") : t("Fiyatı kaydet")}>
               {quickSaving ? <span className={styles.miniSpin} /> : <Check size={16} strokeWidth={3} />}
             </button>
           ) : null}
         </div>
         <div className={styles.rowActions}>
-          <Switch checked={service.isActive} onChange={() => void toggle()} disabled={toggling} ariaLabel={service.isActive ? `${service.name} hizmetini duraklat` : `${service.name} hizmetini yayınla`} />
-          <Button variant="ghost" iconOnly icon={Pencil} onClick={onEdit} aria-label={`${service.name} hizmetini düzenle`} />
-          <Button variant="ghost" iconOnly icon={Trash2} onClick={onDelete} aria-label={`${service.name} hizmetini sil`} className={styles.deleteBtn} />
+          <Switch checked={service.isActive} onChange={() => void toggle()} disabled={toggling} ariaLabel={service.isActive ? t("{name} hizmetini duraklat", { name: service.name }) : t("{name} hizmetini yayınla", { name: service.name })} />
+          <Button variant="ghost" iconOnly icon={Pencil} onClick={onEdit} aria-label={t("{name} hizmetini düzenle", { name: service.name })} />
+          <Button variant="ghost" iconOnly icon={Trash2} onClick={onDelete} aria-label={t("{name} hizmetini sil", { name: service.name })} className={styles.deleteBtn} />
         </div>
       </div>
     </article>

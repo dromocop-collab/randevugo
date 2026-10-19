@@ -1,14 +1,25 @@
 import { renderOgCard } from "@/lib/seo/og-card";
+import { DEFAULT_LOCALE, isLocale, translate, type TFunction } from "@/i18n/config";
+import { getMessages } from "@/i18n/messages";
 
 export const alt = "Yakındaki işletmeleri keşfet — SeninRandevun";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function Image() {
+/** Görsel rotalarında dil, kök [lang] parametresinden okunur. */
+async function translatorFor(params: Promise<{ lang?: string }>) {
+  const { lang } = await params;
+  const locale = isLocale(lang) ? lang : DEFAULT_LOCALE;
+  const messages = getMessages(locale);
+  return { locale, t: ((source, vars) => translate(locale, messages, source, vars)) as TFunction };
+}
+
+export default async function Image({ params }: { params: Promise<{ lang?: string }> }) {
+  const { t } = await translatorFor(params);
   return renderOgCard({
-    eyebrow: "Keşfet",
-    title: "Yakınındaki işletmeleri keşfet",
-    subtitle: "Şehir, kategori veya hizmet adıyla ara; puanları ve fiyatları karşılaştır.",
-    chips: ["Gerçek yorumlar", "Canlı müsaitlik"],
+    eyebrow: t("Keşfet"),
+    title: t("Yakınındaki işletmeleri keşfet"),
+    subtitle: t("Şehir, kategori veya hizmet adıyla ara; puanları ve fiyatları karşılaştır."),
+    chips: [t("Gerçek yorumlar"), t("Canlı müsaitlik")],
   });
 }

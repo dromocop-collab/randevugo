@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import { Check, LockKeyhole, ShieldCheck } from "lucide-react";
+import { useT } from "@/i18n/client";
 
 type BrandPageLoaderProps = {
   title?: string;
@@ -9,11 +12,15 @@ type BrandPageLoaderProps = {
 };
 
 export function BrandPageLoader({
-  title = "Her şey sizin için hazırlanıyor",
-  label = "Deneyiminiz birkaç saniye içinde hazır olacak.",
-  eyebrow = "SENİNRANDEVUN DENEYİMİ",
+  title,
+  label,
+  eyebrow,
   securityMode = false,
 }: BrandPageLoaderProps) {
+  const t = useT();
+  title ??= t("Her şey sizin için hazırlanıyor");
+  label ??= t("Deneyiminiz birkaç saniye içinde hazır olacak.");
+  eyebrow ??= t("SENİNRANDEVUN DENEYİMİ");
   return (
     <div className={`brand-page-loader${securityMode ? " is-security" : ""}`} role="status" aria-live="polite">
       <div className="brand-loader-aurora" aria-hidden="true"><i/><i/><i/></div>
@@ -42,14 +49,14 @@ export function BrandPageLoader({
         <div className="brand-loader-track" aria-hidden="true"><i/></div>
         {securityMode ? (
           <div className="brand-loader-checks" aria-hidden="true">
-            <span className="is-complete"><i><Check size={11}/></i>Oturum</span>
-            <span className="is-active"><i><ShieldCheck size={11}/></i>Yetki</span>
-            <span><i/>Panel</span>
+            <span className="is-complete"><i><Check size={11}/></i>{t("Oturum")}</span>
+            <span className="is-active"><i><ShieldCheck size={11}/></i>{t("Yetki")}</span>
+            <span><i/>{t("Panel")}</span>
           </div>
         ) : null}
-        <div className="brand-loader-trust"><ShieldCheck size={14}/> Bilgileriniz güvenli bağlantıyla korunuyor</div>
+        <div className="brand-loader-trust"><ShieldCheck size={14}/> {t("Bilgileriniz güvenli bağlantıyla korunuyor")}</div>
       </section>
-      <span className="sr-only">Yükleniyor</span>
+      <span className="sr-only">{t("Yükleniyor")}</span>
     </div>
   );
 }

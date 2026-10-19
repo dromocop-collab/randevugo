@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarDays, CalendarOff, CalendarPlus, Check, Clock3, Copy, Plus, RotateCcw, Save, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useBusiness } from "@/hooks/use-business";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import {
   listBusinessWorkingHours,
   updateWorkingHours,
@@ -27,14 +29,14 @@ interface SpecialDayRow {
 }
 
 const SPECIAL_TYPES = [
-  { value: "holiday", label: "Tatil", hint: "Resmî veya işletme tatili" },
-  { value: "leave", label: "İzin", hint: "Planlı izin günü" },
-  { value: "closed", label: "Kapalı", hint: "Tüm gün hizmet yok" },
-  { value: "custom", label: "Özel gün", hint: "Size özel başka bir durum" },
+  { value: "holiday", label: tk("Tatil"), hint: tk("Resmî veya işletme tatili") },
+  { value: "leave", label: tk("İzin"), hint: tk("Planlı izin günü") },
+  { value: "closed", label: tk("Kapalı"), hint: tk("Tüm gün hizmet yok") },
+  { value: "custom", label: tk("Özel gün"), hint: tk("Size özel başka bir durum") },
 ] as const;
 
 function specialTypeLabel(type: string) {
-  return SPECIAL_TYPES.find((item) => item.value === type)?.label ?? "Özel gün";
+  return SPECIAL_TYPES.find((item) => item.value === type)?.label ?? tk("Özel gün");
 }
 
 function defaultSchedule(): DaySchedule[] {
@@ -58,12 +60,15 @@ function todayKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function formatLongDate(value: string) {
-  return new Date(`${value}T12:00:00`).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric", weekday: "long" });
+function formatLongDate(value: string, locale: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric", weekday: "long" });
 }
 
 export default function WorkingHoursPage() {
   const { businessId } = useBusiness();
+  const t = useT();
+  const locale = useIntlLocale();
+  const longDate = (value: string) => formatLongDate(value, locale);
   const [hours, setHours] = useState<DaySchedule[]>(defaultSchedule());
   const [savedHours, setSavedHours] = useState<DaySchedule[]>(defaultSchedule());
   const [specialDays, setSpecialDays] = useState<SpecialDayRow[]>([]);
@@ -103,12 +108,12 @@ export default function WorkingHoursPage() {
     }).catch(() => {
       if (!cancelled) {
         setLoading(false);
-        toast.error("Çalışma saatleri yüklenemedi.");
+        toast.error(t("Çalışma saatleri yüklenemedi."));
       }
     });
 
     return () => { cancelled = true; };
-  }, [businessId]);
+  }, [businessId, t]);
 
   const hasChanges = useMemo(() => JSON.stringify(hours) !== JSON.stringify(savedHours), [hours, savedHours]);
   useUnsavedWarning(hasChanges);
@@ -142,28 +147,28 @@ export default function WorkingHoursPage() {
   function applyWithUndo(next: DaySchedule[], message: string) {
     const previous = hours;
     setHours(next);
-    toast.success(message, { action: { label: "Geri al", onClick: () => setHours(previous) } });
+    toast.success(message, { action: { label: t("Geri al"), onClick: () => setHours(previous) } });
   }
 
   function applyWeekdayPreset(start: string, end: string) {
     applyWithUndo(
       hours.map((item) => item.day === 0 ? { ...item, isOpen: false } : { ...item, isOpen: true, start, end, breakStart: "13:00", breakEnd: "14:00" }),
-      `Pazartesi–Cumartesi ${start}–${end} olarak hazırlandı.`,
+      t("Pazartesi–Cumartesi {start}–{end} olarak hazırlandı.", { start, end }),
     );
   }
 
   function applyEveryDayPreset(start: string, end: string) {
     applyWithUndo(
       hours.map((item) => ({ ...item, isOpen: true, start, end, breakStart: undefined, breakEnd: undefined })),
-      `Her gün ${start}–${end} olarak hazırlandı.`,
+      t("Her gün {start}–{end} olarak hazırlandı.", { start, end }),
     );
   }
 
   function copyDay(source: DaySchedule, target: "weekdays" | "all") {
-    const label = DAY_NAMES[source.day];
+    const label = t(DAY_NAMES[source.day]);
     applyWithUndo(
       copySchedule(hours, source, target),
-      target === "weekdays" ? `${label} saatleri hafta içine kopyalandı.` : `${label} saatleri tüm günlere kopyalandı.`,
+      target === "weekdays" ? t("{day} saatleri hafta içine kopyalandı.", { day: label }) : t("{day} saatleri tüm günlere kopyalandı.", { day: label }),
     );
   }
 
@@ -171,7 +176,7 @@ export default function WorkingHoursPage() {
     if (!businessId) return;
     const invalidDay = hours.find((item) => errors[item.day]);
     if (invalidDay) {
-      toast.error(`${DAY_NAMES[invalidDay.day]}: ${errors[invalidDay.day]}`);
+      toast.error(t("{day}: {error}", { day: t(DAY_NAMES[invalidDay.day]), error: t(errors[invalidDay.day] ?? "") }));
       document.getElementById(`day-${invalidDay.day}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -179,9 +184,9 @@ export default function WorkingHoursPage() {
     try {
       await updateWorkingHours(businessId, cleanSchedule(hours));
       setSavedHours(hours);
-      toast.success("Çalışma saatleri kaydedildi. Müşteriler yeni saatleri görüyor.");
+      toast.success(t("Çalışma saatleri kaydedildi. Müşteriler yeni saatleri görüyor."));
     } catch {
-      toast.error("Kaydetme başarısız. Bağlantınızı kontrol edip yeniden deneyin.");
+      toast.error(t("Kaydetme başarısız. Bağlantınızı kontrol edip yeniden deneyin."));
     } finally {
       setSaving(false);
     }
@@ -196,7 +201,7 @@ export default function WorkingHoursPage() {
   }
 
   const sdDuplicate = Boolean(sdDate) && specialDays.some((item) => item.date === sdDate);
-  const sdError = !sdDate ? "Bir tarih seçin." : sdDuplicate ? "Bu tarih için zaten bir özel gün var." : null;
+  const sdError = !sdDate ? t("Bir tarih seçin.") : sdDuplicate ? t("Bu tarih için zaten bir özel gün var.") : null;
 
   async function handleAddSpecialDay(e: FormEvent) {
     e.preventDefault();
@@ -212,9 +217,9 @@ export default function WorkingHoursPage() {
       setSpecialDays(await listSpecialDays(businessId));
       setSpecialView(sdDate >= todayKey() ? "upcoming" : "past");
       setShowSpecialSheet(false);
-      toast.success("Özel gün eklendi. O gün randevuya kapalı görünecek.");
+      toast.success(t("Özel gün eklendi. O gün randevuya kapalı görünecek."));
     } catch {
-      toast.error("Özel gün eklenemedi.");
+      toast.error(t("Özel gün eklenemedi."));
     } finally {
       setSpecialBusy(false);
     }
@@ -223,17 +228,17 @@ export default function WorkingHoursPage() {
   async function handleDeleteSpecialDay(row: SpecialDayRow) {
     if (!businessId) return;
     const ok = await confirm({
-      title: "Özel gün silinsin mi?",
-      description: `${formatLongDate(row.date)} (${specialTypeLabel(row.type)}) kaldırılacak; o gün normal haftalık programa döner.`,
-      confirmLabel: "Sil",
+      title: t("Özel gün silinsin mi?"),
+      description: t("{date} ({type}) kaldırılacak; o gün normal haftalık programa döner.", { date: longDate(row.date), type: t(specialTypeLabel(row.type)) }),
+      confirmLabel: t("Sil"),
     });
     if (!ok) return;
     try {
       await deleteSpecialDay(businessId, row.id);
       setSpecialDays((prev) => prev.filter((sd) => sd.id !== row.id));
-      toast.success("Özel gün silindi.");
+      toast.success(t("Özel gün silindi."));
     } catch {
-      toast.error("Silme başarısız.");
+      toast.error(t("Silme başarısız."));
     }
   }
 
@@ -242,7 +247,7 @@ export default function WorkingHoursPage() {
       <DashPage>
         <Skeleton height={150} radius={24} />
         <Skeleton height={230} radius={22} />
-        <SkeletonList rows={4} height={140} label="Çalışma saatleri yükleniyor" />
+        <SkeletonList rows={4} height={140} label={t("Çalışma saatleri yükleniyor")} />
       </DashPage>
     );
   }
@@ -250,20 +255,20 @@ export default function WorkingHoursPage() {
   return (
     <DashPage className={styles.root}>
       <PageHeader
-        eyebrow="Çalışma düzeni"
+        eyebrow={t("Çalışma düzeni")}
         icon={Clock3}
-        title="Ne zaman açıksınız?"
-        description="Günleri açıp kapatın, saatleri ve molaları ayarlayın. Müşteriler yalnızca uygun saatleri görür."
+        title={t("Ne zaman açıksınız?")}
+        description={t("Günleri açıp kapatın, saatleri ve molaları ayarlayın. Müşteriler yalnızca uygun saatleri görür.")}
         meta={<>
-          <Badge tone="accent" icon={CalendarDays}>{openDays} açık gün</Badge>
-          <Badge tone="neutral" icon={Clock3}>Haftalık {formatDuration(weeklyMinutes)}</Badge>
-          <Badge tone="neutral" icon={CalendarOff}>{sortedSpecialDays.upcoming.length} yaklaşan özel gün</Badge>
+          <Badge tone="accent" icon={CalendarDays}>{t("{count} açık gün", { count: openDays })}</Badge>
+          <Badge tone="neutral" icon={Clock3}>{t("Haftalık {duration}", { duration: formatDuration(weeklyMinutes, t) })}</Badge>
+          <Badge tone="neutral" icon={CalendarOff}>{t("{count} yaklaşan özel gün", { count: sortedSpecialDays.upcoming.length })}</Badge>
         </>}
       />
 
       {/* Haftalık görünüm */}
-      <Panel title="Haftanız bir bakışta" description="Çubuklar çalışma aralığını, taralı alan molayı gösterir. Bir güne dokunup düzenleyin." icon={CalendarDays}>
-        <ol className={styles.week} aria-label="Haftalık özet">
+      <Panel title={t("Haftanız bir bakışta")} description={t("Çubuklar çalışma aralığını, taralı alan molayı gösterir. Bir güne dokunup düzenleyin.")} icon={CalendarDays}>
+        <ol className={styles.week} aria-label={t("Haftalık özet")}>
           {hours.map((day) => {
             const startM = toMinutes(day.start);
             const endM = toMinutes(day.end);
@@ -275,34 +280,34 @@ export default function WorkingHoursPage() {
             const invalid = Boolean(errors[day.day]);
             return (
               <li key={day.day} className={styles.weekRow}>
-                <a href={`#day-${day.day}`} className={styles.weekDay} aria-label={`${DAY_NAMES[day.day]} gününe git`}>{DAY_SHORT[day.day]}</a>
+                <a href={`#day-${day.day}`} className={styles.weekDay} aria-label={t("{day} gününe git", { day: t(DAY_NAMES[day.day]) })}>{t(DAY_SHORT[day.day])}</a>
                 <span className={styles.weekTrack}>
                   {day.isOpen && !invalid ? (
                     <span className={styles.weekBar} style={{ left: `${left}%`, width: `${width}%` }}>
                       {breakWidth > 0 ? <span className={styles.weekBreak} style={{ left: `${breakLeft}%`, width: `${breakWidth}%` }} /> : null}
                     </span>
-                  ) : <span className={cx(styles.weekClosed, invalid && styles.weekInvalid)}>{invalid ? "Hatalı saat" : "Kapalı"}</span>}
+                  ) : <span className={cx(styles.weekClosed, invalid && styles.weekInvalid)}>{invalid ? t("Hatalı saat") : t("Kapalı")}</span>}
                 </span>
                 <span className={cx(styles.weekTime, ws.mono)}>{day.isOpen ? `${day.start}–${day.end}` : "—"}</span>
               </li>
             );
           })}
         </ol>
-        <div className={styles.scaleLegend} aria-hidden="true"><span>{fromMinutes(scale.from)}</span><span><i className={styles.legendBreak} /> mola</span><span>{fromMinutes(scale.to)}</span></div>
+        <div className={styles.scaleLegend} aria-hidden="true"><span>{fromMinutes(scale.from)}</span><span><i className={styles.legendBreak} /> {t("mola")}</span><span>{fromMinutes(scale.to)}</span></div>
       </Panel>
 
       {/* Hazır düzenler */}
-      <Panel title="Hızlı kurulum" description="Bir düzen seçin, sonra günleri tek tek ince ayarlayın. Her işlem geri alınabilir." icon={Copy}>
+      <Panel title={t("Hızlı kurulum")} description={t("Bir düzen seçin, sonra günleri tek tek ince ayarlayın. Her işlem geri alınabilir.")} icon={Copy}>
         <div className={ws.chips}>
-          <button type="button" className={ws.chip} onClick={() => applyWeekdayPreset("09:00", "18:00")}><Clock3 size={15} /> Pzt–Cmt 09:00–18:00</button>
-          <button type="button" className={ws.chip} onClick={() => applyWeekdayPreset("09:00", "19:00")}><Clock3 size={15} /> Pzt–Cmt 09:00–19:00</button>
-          <button type="button" className={ws.chip} onClick={() => applyEveryDayPreset("10:00", "20:00")}><Clock3 size={15} /> Her gün 10:00–20:00</button>
-          <button type="button" className={ws.chip} onClick={() => { const monday = hours.find((item) => item.day === 1); if (monday) copyDay(monday, "weekdays"); }}><Copy size={15} /> Pazartesiyi hafta içine kopyala</button>
+          <button type="button" className={ws.chip} onClick={() => applyWeekdayPreset("09:00", "18:00")}><Clock3 size={15} /> {t("Pzt–Cmt {start}–{end}", { start: "09:00", end: "18:00" })}</button>
+          <button type="button" className={ws.chip} onClick={() => applyWeekdayPreset("09:00", "19:00")}><Clock3 size={15} /> {t("Pzt–Cmt {start}–{end}", { start: "09:00", end: "19:00" })}</button>
+          <button type="button" className={ws.chip} onClick={() => applyEveryDayPreset("10:00", "20:00")}><Clock3 size={15} /> {t("Her gün {start}–{end}", { start: "10:00", end: "20:00" })}</button>
+          <button type="button" className={ws.chip} onClick={() => { const monday = hours.find((item) => item.day === 1); if (monday) copyDay(monday, "weekdays"); }}><Copy size={15} /> {t("Pazartesiyi hafta içine kopyala")}</button>
         </div>
       </Panel>
 
       {/* Gün düzenleyicileri */}
-      <section className={styles.days} aria-label="Gün gün çalışma saatleri">
+      <section className={styles.days} aria-label={t("Gün gün çalışma saatleri")}>
         {hours.map((day) => (
           <DayCard key={day.day} day={day} onChange={(patch) => updateDay(day.day, patch)} onCopy={(target) => copyDay(day, target)} />
         ))}
@@ -310,19 +315,19 @@ export default function WorkingHoursPage() {
 
       {/* Özel günler */}
       <Panel
-        title="Tatil ve özel günler"
-        description="Normal programın dışında kapalı olacağınız günler."
+        title={t("Tatil ve özel günler")}
+        description={t("Normal programın dışında kapalı olacağınız günler.")}
         icon={CalendarOff}
-        actions={<Button variant="primary" icon={CalendarPlus} onClick={openSpecialSheet}>Özel gün ekle</Button>}
+        actions={<Button variant="primary" icon={CalendarPlus} onClick={openSpecialSheet}>{t("Özel gün ekle")}</Button>}
       >
         <div className={ws.stackSm}>
           <SegmentedControl
-            ariaLabel="Özel gün görünümü"
+            ariaLabel={t("Özel gün görünümü")}
             value={specialView}
             onChange={setSpecialView}
             options={[
-              { value: "upcoming", label: "Yaklaşan", count: sortedSpecialDays.upcoming.length },
-              { value: "past", label: "Geçmiş", count: sortedSpecialDays.past.length },
+              { value: "upcoming", label: t("Yaklaşan"), count: sortedSpecialDays.upcoming.length },
+              { value: "past", label: t("Geçmiş"), count: sortedSpecialDays.past.length },
             ]}
           />
           {visibleSpecialDays.length ? (
@@ -331,12 +336,12 @@ export default function WorkingHoursPage() {
                 const date = new Date(`${row.date}T12:00:00`);
                 return (
                   <li key={row.id} className={cx(styles.special, specialView === "past" && styles.specialPast)}>
-                    <span className={styles.specialDate} aria-hidden="true"><b>{date.getDate()}</b><small>{date.toLocaleDateString("tr-TR", { month: "short" })}</small></span>
+                    <span className={styles.specialDate} aria-hidden="true"><b>{date.getDate()}</b><small>{date.toLocaleDateString(locale, { month: "short" })}</small></span>
                     <div className={styles.specialCopy}>
-                      <b>{formatLongDate(row.date)}</b>
-                      <span><Badge size="sm" tone={row.type === "custom" ? "accent" : row.type === "leave" ? "violet" : "amber"}>{specialTypeLabel(row.type)}</Badge>{row.description ? <span className={ws.truncate}>{row.description}</span> : null}</span>
+                      <b>{longDate(row.date)}</b>
+                      <span><Badge size="sm" tone={row.type === "custom" ? "accent" : row.type === "leave" ? "violet" : "amber"}>{t(specialTypeLabel(row.type))}</Badge>{row.description ? <span className={ws.truncate}>{row.description}</span> : null}</span>
                     </div>
-                    <Button variant="dangerSoft" iconOnly icon={Trash2} onClick={() => void handleDeleteSpecialDay(row)} aria-label={`${formatLongDate(row.date)} özel gününü sil`} />
+                    <Button variant="dangerSoft" iconOnly icon={Trash2} onClick={() => void handleDeleteSpecialDay(row)} aria-label={t("{date} özel gününü sil", { date: longDate(row.date) })} />
                   </li>
                 );
               })}
@@ -345,9 +350,9 @@ export default function WorkingHoursPage() {
             <EmptyState
               compact
               mascot={specialView === "upcoming" ? "happy" : "idle"}
-              title={specialView === "upcoming" ? "Yaklaşan özel gün yok" : "Geçmiş özel gün yok"}
-              description={specialView === "upcoming" ? "Bayram, tatil veya kapalı olacağınız bir günü ekleyin; o gün randevuya kapanır." : "Geçmişte eklediğiniz özel günler burada listelenir."}
-              action={specialView === "upcoming" ? <Button variant="soft" icon={CalendarPlus} onClick={openSpecialSheet}>Özel gün ekle</Button> : undefined}
+              title={specialView === "upcoming" ? t("Yaklaşan özel gün yok") : t("Geçmiş özel gün yok")}
+              description={specialView === "upcoming" ? t("Bayram, tatil veya kapalı olacağınız bir günü ekleyin; o gün randevuya kapanır.") : t("Geçmişte eklediğiniz özel günler burada listelenir.")}
+              action={specialView === "upcoming" ? <Button variant="soft" icon={CalendarPlus} onClick={openSpecialSheet}>{t("Özel gün ekle")}</Button> : undefined}
             />
           )}
         </div>
@@ -355,19 +360,19 @@ export default function WorkingHoursPage() {
 
       {/* Yapışkan kaydet çubuğu */}
       {hasChanges ? (
-        <div className={ws.saveBar} role="region" aria-label="Kaydedilmemiş değişiklikler">
+        <div className={ws.saveBar} role="region" aria-label={t("Kaydedilmemiş değişiklikler")}>
           <div className={ws.saveInner}>
             <span className={cx(ws.saveIcon, errorCount > 0 && ws.saveIconError)} aria-hidden="true">{errorCount ? <TriangleAlert size={17} /> : <Clock3 size={17} />}</span>
             <div className={ws.saveCopy}>
-              <b>{errorCount ? `${errorCount} günde hatalı saat var` : "Kaydedilmemiş değişiklikler"}</b>
-              <small>{errorCount ? "Kaydetmeden önce işaretli günleri düzeltin." : "Yeni saatlerin yayınlanması için kaydedin."}</small>
+              <b>{errorCount ? t("{count} günde hatalı saat var", { count: errorCount }) : t("Kaydedilmemiş değişiklikler")}</b>
+              <small>{errorCount ? t("Kaydetmeden önce işaretli günleri düzeltin.") : t("Yeni saatlerin yayınlanması için kaydedin.")}</small>
             </div>
-            <Button variant="ghost" icon={RotateCcw} onClick={() => setHours(savedHours)} disabled={saving}>Vazgeç</Button>
-            <Button variant="primary" icon={Save} loading={saving} onClick={() => void handleSave()} disabled={errorCount > 0}>Kaydet</Button>
+            <Button variant="ghost" icon={RotateCcw} onClick={() => setHours(savedHours)} disabled={saving}>{t("Vazgeç")}</Button>
+            <Button variant="primary" icon={Save} loading={saving} onClick={() => void handleSave()} disabled={errorCount > 0}>{t("Kaydet")}</Button>
           </div>
         </div>
       ) : (
-        <p className={styles.savedNote}><Check size={15} /> Çalışma programınız güncel.</p>
+        <p className={styles.savedNote}><Check size={15} /> {t("Çalışma programınız güncel.")}</p>
       )}
 
       <Sheet
@@ -375,30 +380,30 @@ export default function WorkingHoursPage() {
         onClose={() => setShowSpecialSheet(false)}
         dismissible={!specialBusy}
         size="sm"
-        title="Özel gün ekle"
-        description="Seçtiğiniz gün tüm gün randevuya kapatılır."
+        title={t("Özel gün ekle")}
+        description={t("Seçtiğiniz gün tüm gün randevuya kapatılır.")}
         footer={<>
-          <Button onClick={() => setShowSpecialSheet(false)} disabled={specialBusy}>Vazgeç</Button>
-          <Button type="submit" form="special-day-form" variant="primary" icon={Plus} loading={specialBusy}>Ekle</Button>
+          <Button onClick={() => setShowSpecialSheet(false)} disabled={specialBusy}>{t("Vazgeç")}</Button>
+          <Button type="submit" form="special-day-form" variant="primary" icon={Plus} loading={specialBusy}>{t("Ekle")}</Button>
         </>}
       >
         <form id="special-day-form" className={ws.stack} onSubmit={handleAddSpecialDay} noValidate>
-          <Field label="Tarih" error={sdTouched ? sdError : null}>
+          <Field label={t("Tarih")} error={sdTouched ? sdError : null}>
             <Input type="date" data-autofocus value={sdDate} min={todayKey()} onChange={(event) => { setSdDate(event.target.value); setSdTouched(true); }} aria-invalid={Boolean(sdTouched && sdError)} className={cx(sdTouched && sdError && styles.invalid)} />
           </Field>
           <fieldset className={styles.typeSet}>
-            <legend className={styles.legend}>Tür</legend>
+            <legend className={styles.legend}>{t("Tür")}</legend>
             <div className={ws.checkGrid}>
               {SPECIAL_TYPES.map((type) => (
                 <label key={type.value} className={ws.checkCard}>
                   <input type="radio" name="special-type" value={type.value} checked={sdType === type.value} onChange={() => setSdType(type.value)} />
-                  <span className={ws.checkText}><b>{type.label}</b><small>{type.hint}</small></span>
+                  <span className={ws.checkText}><b>{t(type.label)}</b><small>{t(type.hint)}</small></span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <Field label="Açıklama (isteğe bağlı)" hint="Örn. Kurban Bayramı, ekip eğitimi">
-            <Input value={sdDescription} maxLength={120} onChange={(event) => setSdDescription(event.target.value)} placeholder="Kısa bir not" />
+          <Field label={t("Açıklama (isteğe bağlı)")} hint={t("Örn. Kurban Bayramı, ekip eğitimi")}>
+            <Input value={sdDescription} maxLength={120} onChange={(event) => setSdDescription(event.target.value)} placeholder={t("Kısa bir not")} />
           </Field>
         </form>
       </Sheet>

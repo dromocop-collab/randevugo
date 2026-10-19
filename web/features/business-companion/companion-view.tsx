@@ -1,6 +1,8 @@
 "use client";
 
 import { localizeForBrowser } from "@/i18n/browser";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 import Link from "@/i18n/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
@@ -109,9 +111,13 @@ export interface ArrivalQueue {
 export function useArrivalQueue(options: { businessName: string; shouldNotifyNatively: () => boolean }): ArrivalQueue {
   const [queue, setQueue] = useState<CompanionAppointment[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  const t = useT();
+  const locale = useIntlLocale();
   const optionsRef = useRef(options);
+  const i18nRef = useRef({ t, locale });
   useEffect(() => {
     optionsRef.current = options;
+    i18nRef.current = { t, locale };
   });
 
   useEffect(() => {
@@ -123,13 +129,14 @@ export function useArrivalQueue(options: { businessName: string; shouldNotifyNat
     setQueue((current) => enqueueArrivals(current, items));
     playNotificationChime();
     const now = Date.now();
-    setAnnouncement(items.map((item) => arrivalSentence(item, now)).join(" "));
+    const { t: tr, locale: intl } = i18nRef.current;
+    setAnnouncement(items.map((item) => arrivalSentence(item, now, tr, intl)).join(" "));
     const { businessName, shouldNotifyNatively } = optionsRef.current;
     if (!shouldNotifyNatively()) return;
     for (const item of items.slice(0, 3)) {
       try {
-        const notification = new Notification(`Yeni randevu · ${businessName}`, {
-          body: [item.customerName, item.serviceName, formatWhen(item.startAtMs, now)].filter(Boolean).join(" · "),
+        const notification = new Notification(tr("Yeni randevu · {business}", { business: businessName }), {
+          body: [item.customerName, item.serviceName, formatWhen(item.startAtMs, now, tr, intl)].filter(Boolean).join(" · "),
           tag: `sr-appointment-${item.id}`,
           icon: "/logo.png",
         });
@@ -173,15 +180,16 @@ export interface CompanionViewProps {
   devTools?: React.ReactNode;
 }
 
-const ROLE_LABEL: Record<CompanionRole, string> = { owner: "Sahip", admin: "Yönetici", manager: "Müdür", staff: "Çalışan" };
+const ROLE_LABEL: Record<CompanionRole, string> = { owner: tk("Sahip"), admin: tk("Yönetici"), manager: tk("Müdür"), staff: tk("Çalışan") };
 const FOCUSABLE = 'a[href],button:not([disabled]),select:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 function initialOf(name: string) {
-  return (name.trim().charAt(0) || "İ").toLocaleUpperCase("tr-TR");
+  return (name.trim().charAt(0) || "İ").toLocaleUpperCase("tr-TR"); // i18n-ignore
 }
 
 export function CompanionView(props: CompanionViewProps) {
   const { activeBusiness, feed, arrivals, canConfirm, onConfirm, role } = props;
+  const t = useT();
   const now = useNow();
   const chimeOn = useChimeOn();
   const audioReady = useAudioReady();
@@ -199,13 +207,13 @@ export function CompanionView(props: CompanionViewProps) {
     try {
       await onConfirm(id);
       arrivals.patch(id, { status: "confirmed" });
-      toast.success("Randevu onaylandı");
+      toast.success(t("Randevu onaylandı"));
     } catch {
-      toast.error("Randevu onaylanamadı. Panelden tekrar deneyin.");
+      toast.error(t("Randevu onaylanamadı. Panelden tekrar deneyin."));
     } finally {
       setBusyId(null);
     }
-  }, [arrivals, onConfirm]);
+  }, [arrivals, onConfirm, t]);
 
   // Mobilde sayfa alt menüsü/Rovi baloncuğu açık sayfanın üstüne binmesin.
   useEffect(() => {
@@ -243,8 +251,8 @@ export function CompanionView(props: CompanionViewProps) {
 
       <div className={styles.dock}>
         {showSoundChip && !open && (
-          <button type="button" className={styles.soundChip} onClick={enableSound} title="Tarayıcı sesi engelledi; yeni randevu zili için dokun">
-            <Volume2 size={14} aria-hidden="true" /> Sesi aç
+          <button type="button" className={styles.soundChip} onClick={enableSound} title={t("Tarayıcı sesi engelledi; yeni randevu zili için dokun")}>
+            <Volume2 size={14} aria-hidden="true" /> {t("Sesi aç")}
           </button>
         )}
         <button
@@ -255,13 +263,17 @@ export function CompanionView(props: CompanionViewProps) {
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls="business-companion-sheet"
-          aria-label={`İşletme paneli kısayolu: ${activeBusiness.name}${pending.length ? `, ${pending.length} onay bekleyen` : ""}${summary.remaining ? `, bugün ${summary.remaining} randevu kaldı` : ""}`}
+          aria-label={[
+            t("İşletme paneli kısayolu: {name}", { name: activeBusiness.name }),
+            pending.length ? t("{count} onay bekleyen", { count: pending.length }) : "",
+            summary.remaining ? t("bugün {count} randevu kaldı", { count: summary.remaining }) : "",
+          ].filter(Boolean).join(", ")}
           data-open={open ? "true" : "false"}
         >
           <span className={styles.launcherIcon} aria-hidden="true"><CalendarCheck2 size={20} /></span>
           <span className={styles.launcherText} aria-hidden="true">
-            <b>Panel</b>
-            <small>{summary.next ? `${formatClock(summary.next.startAtMs)} · ${summary.next.customerName}` : feed.ready ? `Bugün ${summary.total} randevu` : "Yükleniyor"}</small>
+            <b>{t("Panel")}</b>
+            <small>{summary.next ? `${formatClock(summary.next.startAtMs)} · ${summary.next.customerName}` : feed.ready ? t("Bugün {count} randevu", { count: summary.total }) : t("Yükleniyor")}</small>
           </span>
           {badge && <span className={styles.badge} data-tone={badge.tone} aria-hidden="true">{badge.value > 99 ? "99+" : badge.value}</span>}
         </button>
@@ -299,6 +311,8 @@ function ArrivalCard({ item, more, now, canConfirm, busy, onConfirm, onClose, bu
   onClose: () => void;
   businessName: string;
 }) {
+  const t = useT();
+  const locale = useIntlLocale();
   const titleId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -320,30 +334,30 @@ function ArrivalCard({ item, more, now, canConfirm, busy, onConfirm, onClose, bu
         <span className={styles.arrivalPulse} aria-hidden="true"><BellRing size={16} /></span>
         <div className={styles.arrivalTitle}>
           <small>{businessName}</small>
-          <b id={titleId}>Yeni randevu</b>
+          <b id={titleId}>{t("Yeni randevu")}</b>
         </div>
-        {more > 0 && <span className={styles.arrivalMore}>+{more} daha</span>}
-        <button type="button" className={styles.iconBtn} onClick={onClose} aria-label="Bildirimi kapat"><X size={16} /></button>
+        {more > 0 && <span className={styles.arrivalMore}>{t("+{count} daha", { count: more })}</span>}
+        <button type="button" className={styles.iconBtn} onClick={onClose} aria-label={t("Bildirimi kapat")}><X size={16} /></button>
       </div>
       <div className={styles.arrivalBody} id={`${titleId}-d`}>
         <span className={styles.avatar} aria-hidden="true">{initialOf(item.customerName)}</span>
         <div className={styles.arrivalMeta}>
           <b>{item.customerName}</b>
-          <span>{item.serviceName || "Hizmet"}{item.staffName ? ` · ${item.staffName}` : ""}</span>
-          <span className={styles.arrivalWhen}><Clock3 size={13} aria-hidden="true" /> {formatWhen(item.startAtMs, now)}</span>
+          <span>{item.serviceName || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</span>
+          <span className={styles.arrivalWhen}><Clock3 size={13} aria-hidden="true" /> {formatWhen(item.startAtMs, now, t, locale)}</span>
         </div>
-        <span className={styles.status} data-status={item.status}>{statusLabel(item.status)}</span>
+        <span className={styles.status} data-status={item.status}>{statusLabel(item.status, t)}</span>
       </div>
       <div className={styles.arrivalActions}>
         {pending && canConfirm && (
           <button type="button" className={styles.primaryBtn} onClick={onConfirm} disabled={busy}>
-            {busy ? <LoaderCircle className={styles.spin} size={15} aria-hidden="true" /> : <BadgeCheck size={15} aria-hidden="true" />} Onayla
+            {busy ? <LoaderCircle className={styles.spin} size={15} aria-hidden="true" /> : <BadgeCheck size={15} aria-hidden="true" />} {t("Onayla")}
           </button>
         )}
         <Link href={companionLinks.appointment(item.id)} className={pending && canConfirm ? styles.secondaryBtn : styles.primaryBtn} onClick={onClose}>
-          Detay <ArrowUpRight size={15} aria-hidden="true" />
+          {t("Detay")} <ArrowUpRight size={15} aria-hidden="true" />
         </Link>
-        <button type="button" className={styles.ghostBtn} onClick={onClose}>Kapat</button>
+        <button type="button" className={styles.ghostBtn} onClick={onClose}>{t("Kapat")}</button>
       </div>
     </div>
   );
@@ -366,6 +380,8 @@ type SheetProps = CompanionViewProps & {
 
 function CompanionSheet(props: SheetProps) {
   const { businesses, activeBusiness, onSwitchBusiness, role, canConfirm, feed, now, summary, pending, busyId, chimeOn, audioReady, onEnableSound, onConfirmItem, onClose, returnFocusTo, devTools } = props;
+  const t = useT();
+  const locale = useIntlLocale();
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -422,17 +438,17 @@ function CompanionSheet(props: SheetProps) {
     const url = `${window.location.origin}${companionLinks.storefront(activeBusiness.slug)}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Mağaza linki kopyalandı", { description: url });
+      toast.success(t("Mağaza linki kopyalandı"), { description: url });
     } catch {
-      toast.error("Link kopyalanamadı", { description: url });
+      toast.error(t("Link kopyalanamadı"), { description: url });
     }
   };
 
   const hide = () => {
     setCompanionHidden(true);
-    toast("İşletme yardımcısı gizlendi", {
-      description: "Panel › Ayarlar › Randevu Motoru › Bildirimler'den yeniden açabilirsin.",
-      action: { label: "Geri al", onClick: () => setCompanionHidden(false) },
+    toast(t("İşletme yardımcısı gizlendi"), {
+      description: t("Panel › Ayarlar › Randevu Motoru › Bildirimler'den yeniden açabilirsin."),
+      action: { label: t("Geri al"), onClick: () => setCompanionHidden(false) },
       duration: 8000,
     });
   };
@@ -448,16 +464,16 @@ function CompanionSheet(props: SheetProps) {
         <header className={styles.sheetHead}>
           <span className={styles.bizMark} aria-hidden="true">{initialOf(activeBusiness.name)}</span>
           <div className={styles.sheetTitle}>
-            <small>İşletme yardımcısı · {ROLE_LABEL[role]}</small>
+            <small>{t("İşletme yardımcısı · {role}", { role: t(ROLE_LABEL[role]) })}</small>
             <h2 id={titleId}>{activeBusiness.name}</h2>
           </div>
-          <button ref={closeRef} type="button" className={styles.iconBtn} onClick={onClose} aria-label="Paneli kapat"><X size={18} /></button>
+          <button ref={closeRef} type="button" className={styles.iconBtn} onClick={onClose} aria-label={t("Paneli kapat")}><X size={18} /></button>
         </header>
 
         <div className={styles.sheetBody}>
           {businesses.length > 1 && (
             <div className={styles.switcher}>
-              <label htmlFor={switchId}>İşletme</label>
+              <label htmlFor={switchId}>{t("İşletme")}</label>
               <select id={switchId} value={activeBusiness.id} onChange={(event) => onSwitchBusiness(event.target.value)}>
                 {businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
               </select>
@@ -467,49 +483,49 @@ function CompanionSheet(props: SheetProps) {
           {chimeOn && !audioReady && (
             <button type="button" className={styles.soundBanner} onClick={onEnableSound}>
               <Volume2 size={16} aria-hidden="true" />
-              <span><b>Sesi aç</b><small>Tarayıcı sesi engelledi. Yeni randevu zili için bir kez dokun.</small></span>
+              <span><b>{t("Sesi aç")}</b><small>{t("Tarayıcı sesi engelledi. Yeni randevu zili için bir kez dokun.")}</small></span>
             </button>
           )}
 
           <section className={styles.today} aria-labelledby={`${titleId}-today`}>
             <div className={styles.sectionHead}>
-              <h3 id={`${titleId}-today`}>Bugün{role === "staff" ? " · senin randevuların" : ""}</h3>
-              <Link href={companionLinks.calendar} className={styles.sectionLink}>Takvim <ChevronRight size={14} aria-hidden="true" /></Link>
+              <h3 id={`${titleId}-today`}>{role === "staff" ? t("Bugün · senin randevuların") : t("Bugün")}</h3>
+              <Link href={companionLinks.calendar} className={styles.sectionLink}>{t("Takvim")} <ChevronRight size={14} aria-hidden="true" /></Link>
             </div>
             {!feed.ready ? (
-              <div className={styles.skeleton} aria-busy="true" aria-label="Yükleniyor"><i /><i /><i /></div>
+              <div className={styles.skeleton} aria-busy="true" aria-label={t("Yükleniyor")}><i /><i /><i /></div>
             ) : feed.error ? (
-              <p className={styles.empty}>{feed.error}</p>
+              <p className={styles.empty}>{t(feed.error)}</p>
             ) : (
               <>
                 <dl className={styles.stats}>
-                  <div><dt>Toplam</dt><dd>{summary.total}</dd></div>
-                  <div><dt>Kalan</dt><dd>{summary.remaining}</dd></div>
-                  <div data-alert={pending.length > 0 ? "true" : undefined}><dt>Onay bekleyen</dt><dd>{pending.length}</dd></div>
+                  <div><dt>{t("Toplam")}</dt><dd>{summary.total}</dd></div>
+                  <div><dt>{t("Kalan")}</dt><dd>{summary.remaining}</dd></div>
+                  <div data-alert={pending.length > 0 ? "true" : undefined}><dt>{t("Onay bekleyen")}</dt><dd>{pending.length}</dd></div>
                 </dl>
                 {current && (
-                  <p className={styles.nowLine}><span className={styles.liveDot} aria-hidden="true" /> Şu an: <b>{current.customerName}</b> · {current.serviceName || "Hizmet"}</p>
+                  <p className={styles.nowLine}><span className={styles.liveDot} aria-hidden="true" /> {t("Şu an:")} <b>{current.customerName}</b> · {current.serviceName || t("Hizmet")}</p>
                 )}
                 {next ? (
                   <Link href={companionLinks.appointment(next.id)} className={styles.nextCard}>
-                    <span className={styles.nextCountdown}><small>Sıradaki</small><b>{formatCountdown(next.startAtMs - now)}</b><small>sonra</small></span>
+                    <span className={styles.nextCountdown}><small>{t("Sıradaki")}</small><b>{formatCountdown(next.startAtMs - now, t)}</b><small>{t("sonra")}</small></span>
                     <span className={styles.nextMeta}>
                       <b>{next.customerName}</b>
-                      <span>{formatClock(next.startAtMs)} · {next.serviceName || "Hizmet"}{next.staffName ? ` · ${next.staffName}` : ""}</span>
+                      <span>{formatClock(next.startAtMs)} · {next.serviceName || t("Hizmet")}{next.staffName ? ` · ${next.staffName}` : ""}</span>
                     </span>
                     <ChevronRight size={16} aria-hidden="true" />
                   </Link>
                 ) : (
-                  <p className={styles.empty}>{summary.total ? "Bugün için sıradaki randevu yok." : "Bugün henüz randevu yok."}</p>
+                  <p className={styles.empty}>{summary.total ? t("Bugün için sıradaki randevu yok.") : t("Bugün henüz randevu yok.")}</p>
                 )}
                 {summary.upcoming.length > 1 && (
-                  <ol className={styles.list} aria-label="Sonraki randevular">
+                  <ol className={styles.list} aria-label={t("Sonraki randevular")}>
                     {summary.upcoming.slice(1).map((item) => (
                       <li key={item.id}>
                         <Link href={companionLinks.appointment(item.id)} className={styles.row}>
                           <time>{formatClock(item.startAtMs)}</time>
-                          <span><b>{item.customerName}</b><small>{item.serviceName || "Hizmet"}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
-                          <span className={styles.status} data-status={item.status}>{statusLabel(item.status)}</span>
+                          <span><b>{item.customerName}</b><small>{item.serviceName || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
+                          <span className={styles.status} data-status={item.status}>{statusLabel(item.status, t)}</span>
                         </Link>
                       </li>
                     ))}
@@ -522,22 +538,22 @@ function CompanionSheet(props: SheetProps) {
           {pending.length > 0 && (
             <section className={styles.pending} aria-labelledby={`${titleId}-pending`}>
               <div className={styles.sectionHead}>
-                <h3 id={`${titleId}-pending`}>Onay bekleyenler <span className={styles.count}>{pending.length}</span></h3>
-                <Link href={companionLinks.pending} className={styles.sectionLink}>Tümü <ChevronRight size={14} aria-hidden="true" /></Link>
+                <h3 id={`${titleId}-pending`}>{t("Onay bekleyenler")} <span className={styles.count}>{pending.length}</span></h3>
+                <Link href={companionLinks.pending} className={styles.sectionLink}>{t("Tümü")} <ChevronRight size={14} aria-hidden="true" /></Link>
               </div>
               <ul className={styles.list}>
                 {pending.slice(0, 5).map((item) => (
                   <li key={item.id} className={styles.pendingRow}>
                     <Link href={companionLinks.appointment(item.id)} className={styles.pendingInfo}>
                       <b>{item.customerName}</b>
-                      <small>{formatWhen(item.startAtMs, now)} · {item.serviceName || "Hizmet"}</small>
+                      <small>{formatWhen(item.startAtMs, now, t, locale)} · {item.serviceName || t("Hizmet")}</small>
                     </Link>
                     {canConfirm ? (
-                      <button type="button" className={styles.confirmBtn} onClick={() => onConfirmItem(item.id)} disabled={busyId === item.id} aria-label={`${item.customerName} randevusunu onayla`}>
-                        {busyId === item.id ? <LoaderCircle className={styles.spin} size={14} aria-hidden="true" /> : <BadgeCheck size={14} aria-hidden="true" />} Onayla
+                      <button type="button" className={styles.confirmBtn} onClick={() => onConfirmItem(item.id)} disabled={busyId === item.id} aria-label={t("{name} randevusunu onayla", { name: item.customerName })}>
+                        {busyId === item.id ? <LoaderCircle className={styles.spin} size={14} aria-hidden="true" /> : <BadgeCheck size={14} aria-hidden="true" />} {t("Onayla")}
                       </button>
                     ) : (
-                      <span className={styles.status} data-status="pending">Bekliyor</span>
+                      <span className={styles.status} data-status="pending">{t("Bekliyor")}</span>
                     )}
                   </li>
                 ))}
@@ -545,18 +561,18 @@ function CompanionSheet(props: SheetProps) {
             </section>
           )}
 
-          <nav className={styles.quick} aria-label="Hızlı erişim">
-            <Link href={companionLinks.calendar}><CalendarDays size={18} aria-hidden="true" /> Takvim</Link>
-            <Link href={companionLinks.appointments}><ListChecks size={18} aria-hidden="true" /> Randevular</Link>
-            {managerView && <Link href={companionLinks.newAppointment}><Plus size={18} aria-hidden="true" /> Yeni randevu</Link>}
-            <Link href={companionLinks.storefront(activeBusiness.slug)}><Store size={18} aria-hidden="true" /> Mağazamı gör</Link>
-            <button type="button" onClick={() => void copyLink()}><Link2 size={18} aria-hidden="true" /> Linki kopyala</button>
-            <Link href={companionLinks.dashboard}><LayoutDashboard size={18} aria-hidden="true" /> Panele git</Link>
+          <nav className={styles.quick} aria-label={t("Hızlı erişim")}>
+            <Link href={companionLinks.calendar}><CalendarDays size={18} aria-hidden="true" /> {t("Takvim")}</Link>
+            <Link href={companionLinks.appointments}><ListChecks size={18} aria-hidden="true" /> {t("Randevular")}</Link>
+            {managerView && <Link href={companionLinks.newAppointment}><Plus size={18} aria-hidden="true" /> {t("Yeni randevu")}</Link>}
+            <Link href={companionLinks.storefront(activeBusiness.slug)}><Store size={18} aria-hidden="true" /> {t("Mağazamı gör")}</Link>
+            <button type="button" onClick={() => void copyLink()}><Link2 size={18} aria-hidden="true" /> {t("Linki kopyala")}</button>
+            <Link href={companionLinks.dashboard}><LayoutDashboard size={18} aria-hidden="true" /> {t("Panele git")}</Link>
           </nav>
 
           <div className={styles.settings}>
             <label className={styles.toggle}>
-              <span>{chimeOn ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />} Yeni randevu sesi</span>
+              <span>{chimeOn ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />} {t("Yeni randevu sesi")}</span>
               <input
                 type="checkbox"
                 role="switch"
@@ -571,7 +587,7 @@ function CompanionSheet(props: SheetProps) {
               />
             </label>
             <CompactSoundPicker />
-            <button type="button" className={styles.hideBtn} onClick={hide}><EyeOff size={15} aria-hidden="true" /> Bu sayfalarda gösterme</button>
+            <button type="button" className={styles.hideBtn} onClick={hide}><EyeOff size={15} aria-hidden="true" /> {t("Bu sayfalarda gösterme")}</button>
           </div>
           {devTools}
         </div>

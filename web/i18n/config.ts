@@ -85,12 +85,50 @@ function pluralCategory(locale: Locale, count: number): Intl.LDMLPluralRule {
  */
 export function translate(locale: Locale, messages: Messages, source: string, vars?: TranslateVars): string {
   if (locale === DEFAULT_LOCALE) return interpolate(source, vars);
-  const target = messages[source];
+  // Bağlam: aynı Türkçe kelime farklı yerlerde farklı karşılık alabilir ("İptal" düğme → Cancel, durum → Canceled).
+  // t("İptal", { ctx: "durum" }) önce "durum::İptal" anahtarına bakar, yoksa düz "İptal"e.
+  const ctx = typeof vars?.ctx === "string" ? vars.ctx : null;
+  const target = (ctx ? messages[`${ctx}::${source}`] : undefined) ?? messages[source];
   if (!target) return interpolate(source, vars);
   if (typeof target === "string") return interpolate(target, vars);
   const count = Number(vars?.count);
   const chosen = Number.isFinite(count) ? target[pluralCategory(locale, count)] ?? target.other : target.other;
   return interpolate(chosen, vars);
+}
+
+/**
+ * Değişken içeren sunucu mesajları için kalıplar ("Lütfen 30 saniye bekleyin." ↔ "Lütfen {n} saniye bekleyin.").
+ * Yalnız birebir eşleşme bulunamayınca denenir. Yakalanan değerler de sözlükte varsa çevrilir.
+ */
+export type MessagePattern = { re: RegExp; names: string[]; target: string | PluralForms };
+
+export function compilePatterns(record: Record<string, string | PluralForms>): MessagePattern[] {
+  return Object.entries(record).map(([key, target]) => {
+    const names: string[] = [];
+    const body = key.split(/(\{\w+\})/).map((part) => {
+      const name = /^\{(\w+)\}$/.exec(part)?.[1];
+      if (name) { names.push(name); return "(.+?)"; }
+      return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }).join("");
+    return { re: new RegExp(`^${body}$`, "s"), names, target };
+  });
+}
+
+/** translate + kalıplar: önce birebir anahtar, yoksa kalıplar, yoksa kaynak metin. */
+export function translateWithPatterns(locale: Locale, messages: Messages, patterns: MessagePattern[], source: string, vars?: TranslateVars): string {
+  const ctx = typeof vars?.ctx === "string" ? vars.ctx : null;
+  if (locale === DEFAULT_LOCALE || messages[source] || (ctx && messages[`${ctx}::${source}`]) || !patterns.length) return translate(locale, messages, source, vars);
+  for (const pattern of patterns) {
+    const match = pattern.re.exec(source);
+    if (!match) continue;
+    const captured: TranslateVars = { ...vars };
+    pattern.names.forEach((name, index) => {
+      const value = match[index + 1];
+      captured[name] = typeof messages[value] === "string" ? (messages[value] as string) : value;
+    });
+    return translate(locale, { [source]: pattern.target }, source, captured);
+  }
+  return translate(locale, messages, source, vars);
 }
 
 export type TFunction = (source: string, vars?: TranslateVars) => string;

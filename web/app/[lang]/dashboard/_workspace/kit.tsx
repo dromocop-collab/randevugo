@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { ConfirmSheet } from "@/components/dashboard/ui";
+import { useT } from "@/i18n/client";
 import s from "./workspace.module.css";
 
 export { s as ws };
@@ -67,10 +68,11 @@ export function useUnsavedWarning(active: boolean) {
 
 /* ── Sürüklemesiz sıralama düğmeleri ── */
 export function OrderButtons({ label, canUp, canDown, onUp, onDown, disabled }: { label: string; canUp: boolean; canDown: boolean; onUp: () => void; onDown: () => void; disabled?: boolean }) {
+  const t = useT();
   return (
     <span className={s.order}>
-      <button type="button" className={s.orderBtn} onClick={onUp} disabled={disabled || !canUp} aria-label={`${label} yukarı taşı`}><ChevronUp size={14} /></button>
-      <button type="button" className={s.orderBtn} onClick={onDown} disabled={disabled || !canDown} aria-label={`${label} aşağı taşı`}><ChevronDown size={14} /></button>
+      <button type="button" className={s.orderBtn} onClick={onUp} disabled={disabled || !canUp} aria-label={t("{label} yukarı taşı", { label })}><ChevronUp size={14} /></button>
+      <button type="button" className={s.orderBtn} onClick={onDown} disabled={disabled || !canDown} aria-label={t("{label} aşağı taşı", { label })}><ChevronDown size={14} /></button>
     </span>
   );
 }

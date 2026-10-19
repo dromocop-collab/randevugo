@@ -5,6 +5,8 @@ import type { ServiceCategory } from "@/types/service-category";
 import type { Review } from "@/types/review";
 import { BadgeCheck, Star, UserRound } from "lucide-react";
 import Image from "next/image";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 interface Props {
   staff: Staff[];
@@ -13,18 +15,19 @@ interface Props {
 }
 
 const LEVEL_LABELS: Record<NonNullable<Staff["expertiseLevel"]>, string> = {
-  junior: "Gelişen uzman",
-  specialist: "Uzman",
-  senior: "Kıdemli uzman",
-  trainer: "Eğitmen / Usta",
+  junior: tk("Gelişen uzman"),
+  specialist: tk("Uzman"),
+  senior: tk("Kıdemli uzman"),
+  trainer: tk("Eğitmen / Usta"),
 };
 
 export function StorefrontStaff({ staff, categories, reviews }: Props) {
+  const t = useT();
   if (staff.length === 0) return null;
 
   return (
     <section className="storefront-staff-section">
-      <header><span><UserRound size={18}/></span><div><small>UZMAN KADRO</small><h2>Sizinle ilgilenecek ekip.</h2></div><b>{staff.length} uzman</b></header>
+      <header><span><UserRound size={18}/></span><div><small>{t("UZMAN KADRO")}</small><h2>{t("Sizinle ilgilenecek ekip.")}</h2></div><b>{t("{count} uzman", { count: staff.length })}</b></header>
       <div className="storefront-staff-grid">
         {staff.map((member) => {
           const memberReviews = reviews.filter((review) => review.staffId === member.id);
@@ -57,14 +60,14 @@ export function StorefrontStaff({ staff, categories, reviews }: Props) {
               )}
             </div>
             <div className="storefront-staff-info">
-              <small><BadgeCheck size={12}/> ONAYLI UZMAN</small>
+              <small><BadgeCheck size={12}/> {t("ONAYLI UZMAN")}</small>
               <p>{member.fullName}</p>
               {member.position && (
                 <span>{member.position}</span>
               )}
-              <span>{LEVEL_LABELS[member.expertiseLevel ?? "specialist"]}</span>
+              <span>{t(LEVEL_LABELS[member.expertiseLevel ?? "specialist"])}</span>
               {specialties.length > 0 && <span>{specialties.map((category) => category.name).join(" · ")}</span>}
-              {rating > 0 && <span><Star size={12} fill="currentColor" /> {rating.toFixed(1)} · {memberReviews.length} değerlendirme</span>}
+              {rating > 0 && <span><Star size={12} fill="currentColor" /> {rating.toFixed(1)} · {t("{count} değerlendirme", { count: memberReviews.length })}</span>}
             </div>
           </div>
           );

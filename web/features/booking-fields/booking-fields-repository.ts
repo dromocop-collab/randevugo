@@ -6,6 +6,7 @@ import {
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { getDb } from "@/lib/firebase/firestore";
 import { userFacingError } from "@/lib/errors/user-facing-error";
+import { tk } from "@/i18n/config";
 import { parseCustomFields, type CustomBookingField } from "./booking-fields-domain";
 
 export {
@@ -100,7 +101,7 @@ function toRequest(item: QueryDocumentSnapshot): BookingFieldRequest {
   return {
     id: item.id,
     businessId: String(data.businessId ?? ""),
-    businessName: String(data.businessName ?? "İşletme"),
+    businessName: String(data.businessName ?? tk("İşletme")),
     businessSlug: typeof data.businessSlug === "string" && data.businessSlug ? data.businessSlug : null,
     category: typeof data.category === "string" && data.category ? data.category : null,
     fields: parseCustomFields(data.fields),

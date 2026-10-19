@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { interpolate, isLocaleBypassPath, localizeHref, splitLocale, translate } from "./config.ts";
+import { compilePatterns, interpolate, isLocaleBypassPath, localizeHref, splitLocale, translate, translateWithPatterns } from "./config.ts";
 
 test("splitLocale separates the language prefix", () => {
   assert.deepEqual(splitLocale("/en/kesfet"), { locale: "en", path: "/kesfet" });
@@ -47,4 +47,30 @@ test("translate: Turkish is the key, missing falls back, variables and plurals",
   assert.equal(translate("en", messages, "{count} randevu", { count: 3 }), "3 appointments");
   assert.equal(translate("en", messages, "{count} randevu"), "{count} appointments", "count yoksa other");
   assert.equal(interpolate("{a} ve {b}", { a: 1 }), "1 ve {b}", "eksik değişken görünür kalır");
+});
+
+test("patterns translate server messages with variables", () => {
+  const messages = { "Ad Soyad": "Full name", "Kayıt başarılı.": "Saved." };
+  const patterns = compilePatterns({
+    "Lütfen {n} saniye bekleyin.": { one: "Please wait {n} second.", other: "Please wait {n} seconds." },
+    "{field} alanı zorunludur.": "{field} is required.",
+    "Yanlış kod. {count} deneme hakkınız kaldı.": { one: "Wrong code. You have {count} attempt left.", other: "Wrong code. You have {count} attempts left." },
+    "\"{label}\" {min}–{max} arasında olmalıdır.": "\"{label}\" must be between {min} and {max}.",
+  });
+  assert.equal(translateWithPatterns("en", messages, patterns, "Lütfen 42 saniye bekleyin."), "Please wait 42 seconds.");
+  assert.equal(translateWithPatterns("en", messages, patterns, "Ad Soyad alanı zorunludur."), "Full name is required.", "yakalanan değer de çevrilir");
+  assert.equal(translateWithPatterns("en", messages, patterns, "Yanlış kod. 1 deneme hakkınız kaldı."), "Wrong code. You have 1 attempt left.");
+  assert.equal(translateWithPatterns("en", messages, patterns, "Yanlış kod. 3 deneme hakkınız kaldı."), "Wrong code. You have 3 attempts left.");
+  assert.equal(translateWithPatterns("en", messages, patterns, '"Yaş" 1–99 arasında olmalıdır.'), '"Yaş" must be between 1 and 99.');
+  assert.equal(translateWithPatterns("en", messages, patterns, "Kayıt başarılı."), "Saved.", "birebir anahtar önce");
+  assert.equal(translateWithPatterns("en", messages, patterns, "Bilinmeyen mesaj."), "Bilinmeyen mesaj.");
+  assert.equal(translateWithPatterns("tr", messages, patterns, "Lütfen 42 saniye bekleyin."), "Lütfen 42 saniye bekleyin.");
+});
+
+test("context disambiguates the same Turkish word", () => {
+  const messages = { "İptal": "Cancel", "durum::İptal": "Canceled" };
+  assert.equal(translate("en", messages, "İptal"), "Cancel");
+  assert.equal(translate("en", messages, "İptal", { ctx: "durum" }), "Canceled");
+  assert.equal(translate("en", messages, "İptal", { ctx: "baska" }), "Cancel", "bağlam karşılığı yoksa düz anahtar");
+  assert.equal(translate("tr", messages, "İptal", { ctx: "durum" }), "İptal", "Türkçe etkilenmez");
 });

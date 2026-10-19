@@ -35,11 +35,13 @@ import { CategoryEditorSheet, CategoryManagerSheet, DeleteCategorySheet } from "
 import { TemplateLibrarySheet } from "./template-library-sheet";
 import { bySortOrder, reorderPatch, serviceStatus, type ServiceStatusFilter } from "./service-shared";
 import styles from "./services.module.css";
+import { useT } from "@/i18n/client";
 
 const UNCATEGORIZED = "__none__";
 
 export default function ServicesPage() {
   const { businessId } = useBusiness();
+  const t = useT();
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -82,13 +84,13 @@ export default function ServicesPage() {
     }).catch(() => {
       if (cancelled) return;
       setLoading(false);
-      toast.error("Hizmetler yüklenemedi.");
+      toast.error(t("Hizmetler yüklenemedi."));
     });
 
     return () => {
       cancelled = true;
     };
-  }, [businessId]);
+  }, [businessId, t]);
 
   const reload = useCallback(async () => {
     if (!businessId) return;
@@ -118,8 +120,8 @@ export default function ServicesPage() {
   };
   const missingTemplates = sectorTemplates.filter((template) => missingServiceCountForTemplate(template) > 0);
   const seededCategories = categories.filter((category) => category.templateSource === canonicalSector);
-  const sectorLabel = SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel";
-  const businessTypeLabel = businessType === "kadin" ? "Kadın işletmesi" : businessType === "erkek" ? "Erkek işletmesi" : "Unisex işletme";
+  const sectorLabel = t(SECTOR_TEMPLATES[canonicalSector]?.label ?? "Genel");
+  const businessTypeLabel = businessType === "kadin" ? t("Kadın işletmesi") : businessType === "erkek" ? t("Erkek işletmesi") : t("Unisex işletme");
 
   async function handleSeedCategories(selectedTemplates: string[]) {
     if (!businessId || selectedTemplates.length === 0) return;
@@ -128,16 +130,18 @@ export default function ServicesPage() {
       const result = await seedDefaultCategories(businessId, businessSector, selectedTemplates, businessType);
       await reload();
       setShowTemplatePicker(false);
-      const migratedText = result.servicesMigrated > 0 ? ` ${result.servicesMigrated} mevcut hizmet doğru başlığa taşındı.` : "";
+      const counts = { groups: result.categoriesAdded, count: result.servicesAdded, migrated: result.servicesMigrated };
       toast.success(
         result.categoriesAdded > 0 || result.servicesAdded > 0 || result.servicesMigrated > 0
-          ? `${result.categoriesAdded} ana başlık ve ${result.servicesAdded} hazır hizmet eklendi.${migratedText} Fiyat girilen hizmetler otomatik yayına alınır.`
-          : "Seçtiğiniz hizmet grupları zaten eksiksiz.",
+          ? result.servicesMigrated > 0
+            ? t("{groups} ana başlık ve {count} hazır hizmet eklendi. {migrated} mevcut hizmet doğru başlığa taşındı. Fiyat girilen hizmetler otomatik yayına alınır.", counts)
+            : t("{groups} ana başlık ve {count} hazır hizmet eklendi. Fiyat girilen hizmetler otomatik yayına alınır.", counts)
+          : t("Seçtiğiniz hizmet grupları zaten eksiksiz."),
         { duration: 7000 },
       );
       if (result.servicesAdded > 0) setStatusFilter("draft");
     } catch {
-      toast.error("Şablon yüklenirken hata oluştu.");
+      toast.error(t("Şablon yüklenirken hata oluştu."));
     } finally {
       setTemplateBusy(false);
     }
@@ -147,11 +151,11 @@ export default function ServicesPage() {
     if (!businessId || seededCategories.length === 0) return;
     const linkedCount = services.filter((service) => seededCategories.some((category) => category.id === service.category)).length;
     const ok = await confirm({
-      title: `${seededCategories.length} hazır kategori kaldırılsın mı?`,
+      title: t("{count} hazır kategori kaldırılsın mı?", { count: seededCategories.length }),
       description: linkedCount
-        ? `Bu kategorilerdeki ${linkedCount} hizmet silinmeyecek, “Kategorisiz” alanına taşınacak. Özel kategorileriniz korunur.`
-        : "Yalnızca hazır paketten gelen kategoriler kaldırılır; özel kategorileriniz korunur.",
-      confirmLabel: "Kaldır",
+        ? t("Bu kategorilerdeki {count} hizmet silinmeyecek, “Kategorisiz” alanına taşınacak. Özel kategorileriniz korunur.", { count: linkedCount })
+        : t("Yalnızca hazır paketten gelen kategoriler kaldırılır; özel kategorileriniz korunur."),
+      confirmLabel: t("Kaldır"),
     });
     if (!ok) return;
     setTemplateBusy(true);
@@ -163,9 +167,9 @@ export default function ServicesPage() {
       ]);
       if (categoryIds.has(activeCategory)) setActiveCategory("all");
       await reload();
-      toast.success("Hazır kategori paketi kaldırıldı. Özel kategorileriniz korundu.");
+      toast.success(t("Hazır kategori paketi kaldırıldı. Özel kategorileriniz korundu."));
     } catch {
-      toast.error("Hazır kategoriler kaldırılırken hata oluştu.");
+      toast.error(t("Hazır kategoriler kaldırılırken hata oluştu."));
     } finally {
       setTemplateBusy(false);
     }
@@ -177,15 +181,15 @@ export default function ServicesPage() {
     try {
       if (category) {
         await updateServiceCategory(businessId, category.id, input);
-        toast.success("Kategori güncellendi.");
+        toast.success(t("Kategori güncellendi."));
       } else {
         await createServiceCategory(businessId, { ...input, sortOrder: categories.length });
-        toast.success("Kategori oluşturuldu.");
+        toast.success(t("Kategori oluşturuldu."));
       }
       await reload();
       return true;
     } catch {
-      toast.error(category ? "Kategori güncellenemedi." : "Kategori oluşturulamadı.");
+      toast.error(category ? t("Kategori güncellenemedi.") : t("Kategori oluşturulamadı."));
       return false;
     }
   }
@@ -197,7 +201,7 @@ export default function ServicesPage() {
       const allStaff = await listStaff(businessId);
       const linkedStaff = allStaff.filter((member) => member.specialtyCategoryIds?.includes(catId));
       if (linkedStaff.length > 0 && !replacementCategoryId) {
-        toast.error("Bağlı çalışanlar için taşınacak branşı seçin.");
+        toast.error(t("Bağlı çalışanlar için taşınacak branşı seçin."));
         return;
       }
       const replacementServiceIds = services.filter((service) => service.category === replacementCategoryId).map((service) => service.id);
@@ -217,9 +221,9 @@ export default function ServicesPage() {
       if (activeCategory === catId) setActiveCategory("all");
       setDeletingCategory(null);
       await reload();
-      toast.success("Kategori silindi.");
+      toast.success(t("Kategori silindi."));
     } catch {
-      toast.error("Kategori silinemedi.");
+      toast.error(t("Kategori silinemedi."));
     }
   }
 
@@ -233,7 +237,7 @@ export default function ServicesPage() {
     try {
       await Promise.all(patch.map((item) => updateServiceCategory(businessId, item.id, { sortOrder: item.sortOrder })));
     } catch {
-      toast.error("Sıralama kaydedilemedi.");
+      toast.error(t("Sıralama kaydedilemedi."));
       await reload();
     } finally {
       setOrderBusy(false);
@@ -244,7 +248,7 @@ export default function ServicesPage() {
   async function handleQuickPrice(item: Service, nextPrice: number) {
     if (!businessId) return;
     if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
-      toast.error("Fiyat sıfırdan büyük olmalı.");
+      toast.error(t("Fiyat sıfırdan büyük olmalı."));
       throw new Error("invalid-price");
     }
     await updateService(businessId, item.id, {
@@ -255,15 +259,15 @@ export default function ServicesPage() {
     });
     await reload();
     toast.success(item.templateDraft
-      ? `${item.name} fiyatlandırıldı ve yayına alındı.`
-      : `${item.name} fiyatı güncellendi.`);
+      ? t("{name} fiyatlandırıldı ve yayına alındı.", { name: item.name })
+      : t("{name} fiyatı güncellendi.", { name: item.name }));
   }
 
   async function handleToggleService(item: Service) {
     if (!businessId) return;
     if (!item.isActive && item.templateDraft && item.price <= 0) {
       setEditor({ key: nextKey(), service: item });
-      toast.info("Hizmeti yayınlamak için önce fiyatını girin.");
+      toast.info(t("Hizmeti yayınlamak için önce fiyatını girin."));
       return;
     }
     try {
@@ -273,26 +277,26 @@ export default function ServicesPage() {
         ...(!item.isActive ? { templateDraft: false } : {}),
       });
       await reload();
-      toast.success(item.isActive ? `${item.name} duraklatıldı.` : `${item.name} yayında.`);
+      toast.success(item.isActive ? t("{name} duraklatıldı.", { name: item.name }) : t("{name} yayında.", { name: item.name }));
     } catch {
-      toast.error("Hizmet durumu değiştirilemedi.");
+      toast.error(t("Hizmet durumu değiştirilemedi."));
     }
   }
 
   async function handleDeleteService(item: Service) {
     if (!businessId) return;
     const ok = await confirm({
-      title: "Hizmet silinsin mi?",
-      description: `“${item.name}” kalıcı olarak silinecek. Geçmiş randevular etkilenmez; geçici olarak kaldırmak isterseniz silmek yerine duraklatabilirsiniz.`,
-      confirmLabel: "Sil",
+      title: t("Hizmet silinsin mi?"),
+      description: t("“{name}” kalıcı olarak silinecek. Geçmiş randevular etkilenmez; geçici olarak kaldırmak isterseniz silmek yerine duraklatabilirsiniz.", { name: item.name }),
+      confirmLabel: t("Sil"),
     });
     if (!ok) return;
     try {
       await removeService(businessId, item.id);
       await reload();
-      toast.success("Hizmet silindi.");
+      toast.success(t("Hizmet silindi."));
     } catch {
-      toast.error("Hizmet silinemedi.");
+      toast.error(t("Hizmet silinemedi."));
     }
   }
 
@@ -306,7 +310,7 @@ export default function ServicesPage() {
     try {
       await Promise.all(patch.map((item) => updateService(businessId, item.id, { sortOrder: item.sortOrder })));
     } catch {
-      toast.error("Sıralama kaydedilemedi.");
+      toast.error(t("Sıralama kaydedilemedi."));
       await reload();
     } finally {
       setOrderBusy(false);
@@ -353,7 +357,7 @@ export default function ServicesPage() {
       <DashPage>
         <Skeleton height={150} radius={24} />
         <Skeleton height={48} radius={16} />
-        <SkeletonList rows={5} height={96} label="Hizmetler yükleniyor" />
+        <SkeletonList rows={5} height={96} label={t("Hizmetler yükleniyor")} />
       </DashPage>
     );
   }
@@ -361,54 +365,54 @@ export default function ServicesPage() {
   return (
     <DashPage>
       <PageHeader
-        eyebrow="Hizmet menüsü"
+        eyebrow={t("Hizmet menüsü")}
         icon={Scissors}
-        title="Hizmetleriniz"
-        description="Gruplarınızı, sürelerinizi ve fiyatlarınızı yönetin. Değişiklikler mağaza vitrininize anında yansır."
+        title={t("Hizmetleriniz")}
+        description={t("Gruplarınızı, sürelerinizi ve fiyatlarınızı yönetin. Değişiklikler mağaza vitrininize anında yansır.")}
         actions={<>
-          <Button variant="bright" icon={Plus} onClick={() => openCreate()}>Hizmet ekle</Button>
-          <Button variant="glass" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>Hazır kütüphane</Button>
-          <Button variant="glass" icon={FolderCog} onClick={() => setShowCategories(true)}>Kategoriler</Button>
+          <Button variant="bright" icon={Plus} onClick={() => openCreate()}>{t("Hizmet ekle")}</Button>
+          <Button variant="glass" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>{t("Hazır kütüphane")}</Button>
+          <Button variant="glass" icon={FolderCog} onClick={() => setShowCategories(true)}>{t("Kategoriler")}</Button>
         </>}
         meta={<>
-          <Badge tone="accent" icon={Scissors}>{statusCounts.live} yayında</Badge>
-          {statusCounts.draft ? <Badge tone="amber" icon={Tag} pulse>{statusCounts.draft} fiyat bekliyor</Badge> : null}
-          <Badge tone="neutral" icon={Layers3}>{categories.length} kategori</Badge>
+          <Badge tone="accent" icon={Scissors}>{t("{count} yayında", { count: statusCounts.live })}</Badge>
+          {statusCounts.draft ? <Badge tone="amber" icon={Tag} pulse>{t("{count} fiyat bekliyor", { count: statusCounts.draft })}</Badge> : null}
+          <Badge tone="neutral" icon={Layers3}>{t("{count} kategori", { count: categories.length })}</Badge>
         </>}
       />
 
       {services.length === 0 ? (
         <EmptyState
           mascot="wave"
-          title={categories.length ? "İlk hizmetinizi ekleyin" : "Hizmet menünüzü birlikte kuralım"}
+          title={categories.length ? t("İlk hizmetinizi ekleyin") : t("Hizmet menünüzü birlikte kuralım")}
           description={categories.length
-            ? "Müşterilerin randevu alacağı hizmetleri ekleyin; süre ve fiyatı belirleyin."
-            : `${sectorLabel} sektörüne uygun hazır başlıkları tek dokunuşla yükleyebilir veya kendi hizmetinizi ekleyebilirsiniz.`}
+            ? t("Müşterilerin randevu alacağı hizmetleri ekleyin; süre ve fiyatı belirleyin.")
+            : t("{sector} sektörüne uygun hazır başlıkları tek dokunuşla yükleyebilir veya kendi hizmetinizi ekleyebilirsiniz.", { sector: sectorLabel })}
           action={<>
-            <Button variant="primary" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>Hazır kütüphaneden başla</Button>
-            <Button variant="secondary" icon={categories.length ? Plus : FolderOpen} onClick={() => categories.length ? openCreate() : setCategoryEditor({ key: nextKey(), category: null })}>{categories.length ? "Hizmet ekle" : "Kategori oluştur"}</Button>
+            <Button variant="primary" icon={Rocket} onClick={() => setShowTemplatePicker(true)}>{t("Hazır kütüphaneden başla")}</Button>
+            <Button variant="secondary" icon={categories.length ? Plus : FolderOpen} onClick={() => categories.length ? openCreate() : setCategoryEditor({ key: nextKey(), category: null })}>{categories.length ? t("Hizmet ekle") : t("Kategori oluştur")}</Button>
           </>}
         />
       ) : (
         <>
           <div className={ws.stackSm}>
             <Toolbar>
-              <SearchField value={search} onChange={setSearch} placeholder="Hizmet ara" />
+              <SearchField value={search} onChange={setSearch} placeholder={t("Hizmet ara")} />
               <SegmentedControl
-                ariaLabel="Hizmet durumu"
+                ariaLabel={t("Hizmet durumu")}
                 value={statusFilter}
                 onChange={setStatusFilter}
                 options={[
-                  { value: "all", label: "Tümü", count: statusCounts.all },
-                  { value: "live", label: "Yayında", count: statusCounts.live },
-                  { value: "paused", label: "Pasif", count: statusCounts.paused },
-                  ...(statusCounts.draft ? [{ value: "draft" as const, label: "Fiyat bekleyen", count: statusCounts.draft }] : []),
+                  { value: "all", label: t("Tümü"), count: statusCounts.all },
+                  { value: "live", label: t("Yayında"), count: statusCounts.live },
+                  { value: "paused", label: t("Pasif"), count: statusCounts.paused },
+                  ...(statusCounts.draft ? [{ value: "draft" as const, label: t("Fiyat bekleyen"), count: statusCounts.draft }] : []),
                 ]}
               />
             </Toolbar>
             {categories.length > 0 && (
-              <div className={ws.chips} role="toolbar" aria-label="Kategori filtresi">
-                <button type="button" className={cx(ws.chip, activeCategory === "all" && ws.chipActive)} aria-pressed={activeCategory === "all"} onClick={() => setActiveCategory("all")}>Tümü <span className={ws.chipCount}>{services.length}</span></button>
+              <div className={ws.chips} role="toolbar" aria-label={t("Kategori filtresi")}>
+                <button type="button" className={cx(ws.chip, activeCategory === "all" && ws.chipActive)} aria-pressed={activeCategory === "all"} onClick={() => setActiveCategory("all")}>{t("Tümü")} <span className={ws.chipCount}>{services.length}</span></button>
                 {categories.map((cat) => {
                   const count = services.filter((s) => s.category === cat.id).length;
                   const active = activeCategory === cat.id;
@@ -418,24 +422,24 @@ export default function ServicesPage() {
                     </button>
                   );
                 })}
-                {uncategorized.length > 0 && <button type="button" className={cx(ws.chip, activeCategory === UNCATEGORIZED && ws.chipActive)} aria-pressed={activeCategory === UNCATEGORIZED} onClick={() => setActiveCategory(activeCategory === UNCATEGORIZED ? "all" : UNCATEGORIZED)}><FolderOpen size={15} /> Kategorisiz <span className={ws.chipCount}>{uncategorized.length}</span></button>}
+                {uncategorized.length > 0 && <button type="button" className={cx(ws.chip, activeCategory === UNCATEGORIZED && ws.chipActive)} aria-pressed={activeCategory === UNCATEGORIZED} onClick={() => setActiveCategory(activeCategory === UNCATEGORIZED ? "all" : UNCATEGORIZED)}><FolderOpen size={15} /> {t("Kategorisiz")} <span className={ws.chipCount}>{uncategorized.length}</span></button>}
               </div>
             )}
           </div>
 
           {statusFilter === "draft" && statusCounts.draft > 0 ? (
-            <div className={styles.draftHint} role="status"><Sparkles size={16} aria-hidden="true" /> Fiyat bekleyen hizmetlerin fiyatını yazıp ✓ ile kaydedin; hizmet otomatik yayına alınır.</div>
+            <div className={styles.draftHint} role="status"><Sparkles size={16} aria-hidden="true" /> {t("Fiyat bekleyen hizmetlerin fiyatını yazıp ✓ ile kaydedin; hizmet otomatik yayına alınır.")}</div>
           ) : null}
 
           {visibleCount === 0 ? (
             <EmptyState
               compact
               mascot="thinking"
-              title={filtering ? "Eşleşen hizmet yok" : "Bu kategoride hizmet yok"}
-              description={filtering ? "Aramayı veya filtreyi değiştirmeyi deneyin." : "Bu kategoriye ilk hizmeti ekleyerek müşterilerinize sunmaya başlayın."}
+              title={filtering ? t("Eşleşen hizmet yok") : t("Bu kategoride hizmet yok")}
+              description={filtering ? t("Aramayı veya filtreyi değiştirmeyi deneyin.") : t("Bu kategoriye ilk hizmeti ekleyerek müşterilerinize sunmaya başlayın.")}
               action={filtering
-                ? <Button variant="soft" onClick={() => { setSearch(""); setStatusFilter("all"); }}>Filtreleri temizle</Button>
-                : <Button variant="primary" icon={Plus} onClick={() => openCreate(activeCategory)}>Hizmet ekle</Button>}
+                ? <Button variant="soft" onClick={() => { setSearch(""); setStatusFilter("all"); }}>{t("Filtreleri temizle")}</Button>
+                : <Button variant="primary" icon={Plus} onClick={() => openCreate(activeCategory)}>{t("Hizmet ekle")}</Button>}
             />
           ) : (
             <div className={styles.groups}>
@@ -444,10 +448,10 @@ export default function ServicesPage() {
                   <header className={styles.groupHead}>
                     <span className={styles.catIcon} aria-hidden="true">{group.category ? <ServiceCategoryIcon icon={group.category.icon} name={group.category.name} size={19} /> : <FolderOpen size={18} />}</span>
                     <div className={styles.groupTitle}>
-                      <h2 id={`group-${group.id}`}>{group.category?.name ?? "Kategorisiz hizmetler"}</h2>
-                      <p>{group.items.length} hizmet{filtering ? ` · ${group.all.length} içinden` : ""}</p>
+                      <h2 id={`group-${group.id}`}>{group.category?.name ?? t("Kategorisiz hizmetler")}</h2>
+                      <p>{filtering ? t("{count} hizmet · {total} içinden", { count: group.items.length, total: group.all.length }) : t("{count} hizmet", { count: group.items.length })}</p>
                     </div>
-                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => openCreate(group.id)} aria-label={`${group.category?.name ?? "Kategorisiz"} grubuna hizmet ekle`}>Ekle</Button>
+                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => openCreate(group.id)} aria-label={t("{name} grubuna hizmet ekle", { name: group.category?.name ?? t("Kategorisiz") })}>{t("Ekle")}</Button>
                   </header>
                   <div className={styles.groupList}>
                     {group.items.map((item, index) => (

@@ -5,16 +5,18 @@ import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical } from "lucide-react";
 import { buildDashboardRows, moveItem } from "@/features/dashboard-layout/layout-domain";
 import { captureRects, playFlip, type RectMap } from "@/features/dashboard-layout/flip";
 import { cn } from "@/lib/utils/cn";
+import { useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 import styles from "./topbar.module.css";
 
 type Module = { id: string; enabled: boolean };
 type Meta = { id: string; label: string; note: string; size: "full" | "wide" | "side" };
 
 const PRESETS: Array<{ id: string; label: string; order: string[]; hidden?: string[] }> = [
-  { id: "recommended", label: "Önerilen", order: ["operations", "command", "insights", "kpis", "profile"] },
-  { id: "operations", label: "Operasyon", order: ["operations", "command", "kpis", "insights", "profile"] },
-  { id: "numbers", label: "Rakamlar", order: ["kpis", "operations", "insights", "command", "profile"] },
-  { id: "minimal", label: "Sade", order: ["kpis", "operations", "command", "insights", "profile"], hidden: ["insights", "profile"] },
+  { id: "recommended", label: tk("Önerilen"), order: ["operations", "command", "insights", "kpis", "profile"] },
+  { id: "operations", label: tk("Operasyon"), order: ["operations", "command", "kpis", "insights", "profile"] },
+  { id: "numbers", label: tk("Rakamlar"), order: ["kpis", "operations", "insights", "command", "profile"] },
+  { id: "minimal", label: tk("Sade"), order: ["kpis", "operations", "command", "insights", "profile"], hidden: ["insights", "profile"] },
 ];
 
 /**
@@ -22,12 +24,13 @@ const PRESETS: Array<{ id: string; label: string; order: string[]; hidden?: stri
  * göster/gizle, hazır düzenler ve panelin canlı mini haritası. Değişiklikler anında panele yansır.
  */
 export function ModuleOrderEditor({ modules, meta, onChange }: { modules: Module[]; meta: readonly Meta[]; onChange: (next: Module[]) => void }) {
+  const t = useT();
   const listRef = useRef<HTMLOListElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const flipRef = useRef<{ list: RectMap; map: RectMap } | null>(null);
   const dragRef = useRef<{ id: string; pointerId: number; grabY: number; lastY: number } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const labelOf = (id: string) => meta.find((item) => item.id === id)?.label ?? id;
+  const labelOf = (id: string) => { const label = meta.find((item) => item.id === id)?.label; return label ? t(label) : id; };
   const sizeOf = (id: string) => meta.find((item) => item.id === id)?.size ?? "side";
 
   function commit(next: Module[]) {
@@ -121,14 +124,14 @@ export function ModuleOrderEditor({ modules, meta, onChange }: { modules: Module
 
   return (
     <div className={styles.layoutEditor}>
-      <div className={styles.presetRow} role="group" aria-label="Hazır düzenler">
+      <div className={styles.presetRow} role="group" aria-label={t("Hazır düzenler")}>
         {PRESETS.map((preset) => (
-          <button type="button" key={preset.id} aria-pressed={activePreset?.id === preset.id} onClick={() => applyPreset(preset)}>{preset.label}</button>
+          <button type="button" key={preset.id} aria-pressed={activePreset?.id === preset.id} onClick={() => applyPreset(preset)}>{t(preset.label)}</button>
         ))}
       </div>
 
       <div ref={mapRef} className={styles.layoutMap} aria-hidden="true">
-        {rows.length === 0 ? <span className={styles.layoutMapEmpty}>Tüm modüller gizli</span> : rows.map((row) => row.kind === "full"
+        {rows.length === 0 ? <span className={styles.layoutMapEmpty}>{t("Tüm modüller gizli")}</span> : rows.map((row) => row.kind === "full"
           ? <i key={row.id} data-flip-id={row.id} className={cn(styles.mapBlock, styles[`map-${row.id}`])}><span>{labelOf(row.id)}</span></i>
           : (
             <div key={`split-${row.index}`} className={styles.mapSplit}>
@@ -138,19 +141,21 @@ export function ModuleOrderEditor({ modules, meta, onChange }: { modules: Module
           ))}
       </div>
       <p className={styles.layoutHint}>
-        Tutamaçtan sürükleyin. Kartlar boşluk kalmayacak şekilde kendiliğinden yerleşir{hiddenCount ? ` · ${hiddenCount} modül gizli` : ""}.
+        {hiddenCount
+          ? t("Tutamaçtan sürükleyin. Kartlar boşluk kalmayacak şekilde kendiliğinden yerleşir · {count} modül gizli.", { count: hiddenCount })
+          : t("Tutamaçtan sürükleyin. Kartlar boşluk kalmayacak şekilde kendiliğinden yerleşir.")}
       </p>
 
       <ol ref={listRef} className={styles.moduleList}>
         {modules.map((item, index) => {
           const info = meta.find((entry) => entry.id === item.id);
-          const label = info?.label ?? item.id;
+          const label = info?.label ? t(info.label) : item.id;
           return (
             <li key={item.id} data-flip-id={item.id} className={cn(!item.enabled && styles.moduleOff, dragId === item.id && styles.moduleDragging)}>
               <button
                 type="button"
                 className={styles.moduleGrip}
-                aria-label={`${label} modülünü sürükle`}
+                aria-label={t("{label} modülünü sürükle", { label })}
                 onPointerDown={(event) => onPointerDown(event, item.id)}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowUp") { event.preventDefault(); onKeyMove(index, -1); }
@@ -159,13 +164,13 @@ export function ModuleOrderEditor({ modules, meta, onChange }: { modules: Module
               >
                 <GripVertical size={16} aria-hidden />
               </button>
-              <button type="button" className={styles.moduleToggle} onClick={() => commit(modules.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={`${label} modülünü ${item.enabled ? "gizle" : "göster"}`} aria-pressed={item.enabled}>
+              <button type="button" className={styles.moduleToggle} onClick={() => commit(modules.map((entry) => entry.id === item.id ? { ...entry, enabled: !entry.enabled } : entry))} aria-label={item.enabled ? t("{label} modülünü gizle", { label }) : t("{label} modülünü göster", { label })} aria-pressed={item.enabled}>
                 {item.enabled ? <Eye size={15} aria-hidden /> : <EyeOff size={15} aria-hidden />}
               </button>
-              <span className={styles.moduleText}><b>{label}</b><small>{item.enabled ? info?.note : "Gizli"}</small></span>
+              <span className={styles.moduleText}><b>{label}</b><small>{item.enabled ? (info?.note ? t(info.note) : null) : t("Gizli")}</small></span>
               <div>
-                <button type="button" disabled={index === 0} onClick={() => onKeyMove(index, -1)} aria-label={`${label} yukarı taşı`}><ArrowUp size={14} aria-hidden /></button>
-                <button type="button" disabled={index === modules.length - 1} onClick={() => onKeyMove(index, 1)} aria-label={`${label} aşağı taşı`}><ArrowDown size={14} aria-hidden /></button>
+                <button type="button" disabled={index === 0} onClick={() => onKeyMove(index, -1)} aria-label={t("{label} yukarı taşı", { label })}><ArrowUp size={14} aria-hidden /></button>
+                <button type="button" disabled={index === modules.length - 1} onClick={() => onKeyMove(index, 1)} aria-label={t("{label} aşağı taşı", { label })}><ArrowDown size={14} aria-hidden /></button>
               </div>
             </li>
           );

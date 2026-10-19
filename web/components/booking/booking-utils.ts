@@ -1,22 +1,24 @@
 import { format } from "date-fns";
 import type { Staff } from "@/types/staff";
+import { interpolate, tk, type TFunction } from "@/i18n/config";
 
-export function formatServiceDuration(minutes: number) {
-  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440} gün`;
-  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} saat`;
-  if (minutes > 60) return `${Math.floor(minutes / 60)} sa ${minutes % 60} dk`;
-  return `${minutes} dk`;
+export function formatServiceDuration(minutes: number, t: TFunction = interpolate) {
+  if (minutes >= 1440 && minutes % 1440 === 0) return t("{count} gün", { count: minutes / 1440 });
+  if (minutes >= 60 && minutes % 60 === 0) return t("{count} saat", { count: minutes / 60 });
+  if (minutes > 60) return t("{hours} sa {minutes} dk", { hours: Math.floor(minutes / 60), minutes: minutes % 60 });
+  return t("{count} dk", { count: minutes });
 }
 
-export function formatPrice(value: number) {
-  return `${value.toLocaleString("tr-TR")} ₺`;
+export function formatPrice(value: number, locale = "tr-TR") {
+  return `${value.toLocaleString(locale)} ₺`;
 }
 
+/** Türkçe kaynak etiket döner; gösterirken t() ile çevrilir. */
 export function expertiseLabel(level: Staff["expertiseLevel"]) {
-  if (level === "trainer") return "Eğitmen / Usta";
-  if (level === "senior") return "Kıdemli uzman";
-  if (level === "junior") return "Gelişen uzman";
-  return "Uzman";
+  if (level === "trainer") return tk("Eğitmen / Usta");
+  if (level === "senior") return tk("Kıdemli uzman");
+  if (level === "junior") return tk("Gelişen uzman");
+  return tk("Uzman");
 }
 
 export function displayName(value: string) {

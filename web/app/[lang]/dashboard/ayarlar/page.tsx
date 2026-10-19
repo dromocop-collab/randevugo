@@ -28,44 +28,46 @@ import { InstagramShareSheet } from "@/features/share/instagram-share-sheet";
 import st from "./settings.module.css";
 import { CitySelect, DistrictSelect } from "@/components/ui/place-combobox";
 import { BusinessLocationPicker } from "@/features/businesses/business-location-picker";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { localizeHref, tk } from "@/i18n/config";
 
-const DEFAULT_CATEGORY_OPTIONS = [
-  { value: "kuafor", label: "Kuaför" },
-  { value: "berber", label: "Berber" },
-  { value: "guzellik", label: "Güzellik Merkezi" },
+const DEFAULT_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: "kuafor", label: tk("Kuaför") },
+  { value: "berber", label: tk("Berber") },
+  { value: "guzellik", label: tk("Güzellik Merkezi") },
   { value: "nail", label: "Nail Studio" },
-  { value: "spor", label: "Spor / Personal Training" },
-  { value: "danismanlik", label: "Danışmanlık" },
-  { value: "veteriner", label: "Veteriner" },
-  { value: "servis", label: "Servis / Teknik" },
-  { value: "saglik", label: "Sağlık" },
-  { value: "egitim", label: "Eğitim" },
-  { value: "yazilim", label: "Yazılım / Web / Video" },
-  { value: "diger", label: "Diğer" },
+  { value: "spor", label: tk("Spor / Personal Training") },
+  { value: "danismanlik", label: tk("Danışmanlık") },
+  { value: "veteriner", label: tk("Veteriner") },
+  { value: "servis", label: tk("Servis / Teknik") },
+  { value: "saglik", label: tk("Sağlık") },
+  { value: "egitim", label: tk("Eğitim") },
+  { value: "yazilim", label: tk("Yazılım / Web / Video") },
+  { value: "diger", label: tk("Diğer") },
 ];
 
 const BIZ_TYPE_OPTIONS = [
-  { value: "", label: "Belirtilmemiş" },
-  { value: "kadin", label: "Kadın" },
-  { value: "erkek", label: "Erkek" },
+  { value: "", label: tk("Belirtilmemiş") },
+  { value: "kadin", label: tk("Kadın") },
+  { value: "erkek", label: tk("Erkek") },
   { value: "unisex", label: "Unisex" },
 ];
 
 
 const SOCIAL_FIELDS = [
-  { key: "instagram", label: "Instagram", placeholder: "instagram.com/isletmeniz" },
-  { key: "facebook", label: "Facebook", placeholder: "facebook.com/isletmeniz" },
-  { key: "twitter", label: "Twitter / X", placeholder: "x.com/isletmeniz" },
-  { key: "tiktok", label: "TikTok", placeholder: "tiktok.com/@isletmeniz" },
-  { key: "youtube", label: "YouTube", placeholder: "youtube.com/@isletmeniz" },
+  { key: "instagram", label: "Instagram", placeholder: tk("instagram.com/isletmeniz") },
+  { key: "facebook", label: "Facebook", placeholder: tk("facebook.com/isletmeniz") },
+  { key: "twitter", label: "Twitter / X", placeholder: tk("x.com/isletmeniz") },
+  { key: "tiktok", label: "TikTok", placeholder: tk("tiktok.com/@isletmeniz") },
+  { key: "youtube", label: "YouTube", placeholder: tk("youtube.com/@isletmeniz") },
   { key: "whatsapp", label: "WhatsApp", placeholder: "05XX XXX XX XX" },
 ] as const;
 
 const SMS_FIELDS = [
-  ["confirmation", "Randevu onayı", "Randevu oluştuğunda bilgi verir"],
-  ["reminder", "1 saat önce hatırlatma", "Randevu öncesinde otomatik gönderilir"],
-  ["cancellation", "İptal bildirimi", "İptal edilen randevuyu müşteriye bildirir"],
-  ["reschedule", "Saat değişikliği", "Yeni tarih ve saati müşteriye iletir"],
+  ["confirmation", tk("Randevu onayı"), tk("Randevu oluştuğunda bilgi verir")],
+  ["reminder", tk("1 saat önce hatırlatma"), tk("Randevu öncesinde otomatik gönderilir")],
+  ["cancellation", tk("İptal bildirimi"), tk("İptal edilen randevuyu müşteriye bildirir")],
+  ["reschedule", tk("Saat değişikliği"), tk("Yeni tarih ve saati müşteriye iletir")],
 ] as const;
 
 type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu" | "gorunum";
@@ -77,11 +79,11 @@ const EMPTY_INFO: InfoForm = { name: "", category: "diger", businessType: "", de
 const DEFAULT_RULES: RulesForm = { minNotice: 60, maxDaysAhead: 45, bufferBefore: 0, bufferAfter: 10, slotInterval: 15, allowCancel: true, allowReschedule: true, allowOnlineBooking: true, cancelDeadline: 60, smsPreferences: { confirmation: true, reminder: true, cancellation: true, reschedule: true } };
 
 const TABS: { id: Tab; label: string; short: string; note: string; icon: LucideIcon }[] = [
-  { id: "bilgiler", label: "İşletme Bilgileri", short: "Profil", note: "Profil, iletişim ve konum", icon: Building2 },
-  { id: "gorseller", label: "Marka Stüdyosu", short: "Görseller", note: "Logo, kapak ve galeri", icon: Images },
-  { id: "sosyal", label: "Dijital Kanallar", short: "Kanallar", note: "Sosyal medya ve WhatsApp", icon: Share2 },
-  { id: "randevu", label: "Randevu Motoru", short: "Randevu", note: "Takvim, süre, iptal, SMS ve bildirim", icon: CalendarCog },
-  { id: "gorunum", label: "Görünüm", short: "Görünüm", note: "Panel renk atmosferi", icon: Palette },
+  { id: "bilgiler", label: tk("İşletme Bilgileri"), short: tk("Profil"), note: tk("Profil, iletişim ve konum"), icon: Building2 },
+  { id: "gorseller", label: tk("Marka Stüdyosu"), short: tk("Görseller"), note: tk("Logo, kapak ve galeri"), icon: Images },
+  { id: "sosyal", label: tk("Dijital Kanallar"), short: tk("Kanallar"), note: tk("Sosyal medya ve WhatsApp"), icon: Share2 },
+  { id: "randevu", label: tk("Randevu Motoru"), short: tk("Randevu"), note: tk("Takvim, süre, iptal, SMS ve bildirim"), icon: CalendarCog },
+  { id: "gorunum", label: tk("Görünüm"), short: tk("Görünüm"), note: tk("Panel renk atmosferi"), icon: Palette },
 ];
 
 function same(a: unknown, b: unknown) {
@@ -93,6 +95,9 @@ function cleanSocial(value: SocialMediaLinks) {
 }
 
 export default function SettingsPage() {
+  const t = useT();
+  const locale = useLocale();
+  const intl = useIntlLocale();
   const { businessId } = useBusiness();
   const [business, setBusiness] = useState<Business | null>(null);
   const [instagramOpen, setInstagramOpen] = useState(false);
@@ -193,7 +198,7 @@ export default function SettingsPage() {
         }
       });
       // "Diğer" her zaman sonda
-      merged.push({ value: "diger", label: "Diğer" });
+      merged.push({ value: "diger", label: tk("Diğer") });
       setCategoryOptions(merged);
     }).catch(() => {});
   }, []);
@@ -207,12 +212,12 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!businessId) return;
 
-    if (!info.name.trim()) { toast.error("İşletme adı zorunludur."); return; }
-    if (!info.phone.trim()) { toast.error("Telefon zorunludur."); return; }
-    if (!info.email.trim()) { toast.error("E-posta zorunludur."); return; }
-    if (!info.address.trim()) { toast.error("Adres zorunludur."); return; }
-    if (!info.city.trim()) { toast.error("Şehir zorunludur."); return; }
-    if (!info.district.trim()) { toast.error("İlçe zorunludur."); return; }
+    if (!info.name.trim()) { toast.error(t("İşletme adı zorunludur.")); return; }
+    if (!info.phone.trim()) { toast.error(t("Telefon zorunludur.")); return; }
+    if (!info.email.trim()) { toast.error(t("E-posta zorunludur.")); return; }
+    if (!info.address.trim()) { toast.error(t("Adres zorunludur.")); return; }
+    if (!info.city.trim()) { toast.error(t("Şehir zorunludur.")); return; }
+    if (!info.district.trim()) { toast.error(t("İlçe zorunludur.")); return; }
 
     setSaving(true);
     try {
@@ -232,14 +237,14 @@ export default function SettingsPage() {
       await submitBusinessProfileChange(businessId, updateData);
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
       setInfoBase(info);
-      toast.success("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır.");
+      toast.success(t("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır."));
     } catch (err) {
       console.error("updateBusiness error:", err);
       const msg = (err as Error)?.message ?? "";
       if (msg.includes("permission-denied")) {
-        toast.error("Yetki hatası: Bu işletmeyi güncelleme yetkiniz yok.");
+        toast.error(t("Yetki hatası: Bu işletmeyi güncelleme yetkiniz yok."));
       } else {
-        toast.error("Güncelleme başarısız: " + msg);
+        toast.error(t("Güncelleme başarısız: {message}", { message: t(msg) }));
       }
     } finally {
       setSaving(false);
@@ -254,9 +259,9 @@ export default function SettingsPage() {
       await submitBusinessProfileChange(businessId, { socialMedia: social });
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
       setSocialBase(social);
-      toast.success("Dijital kanallar süper admin onayına gönderildi.");
+      toast.success(t("Dijital kanallar süper admin onayına gönderildi."));
     } catch {
-      toast.error("Güncelleme başarısız.");
+      toast.error(t("Güncelleme başarısız."));
     } finally {
       setSaving(false);
     }
@@ -266,10 +271,10 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!businessId) return;
     const { minNotice, maxDaysAhead, bufferBefore, bufferAfter, cancelDeadline } = rules;
-    if (minNotice < 0 || minNotice > 10080) { toast.error("Minimum bildirim süresi 0 ile 10.080 dakika arasında olmalıdır."); return; }
-    if (maxDaysAhead < 1 || maxDaysAhead > 365) { toast.error("Randevu penceresi 1 ile 365 gün arasında olmalıdır."); return; }
-    if (bufferBefore < 0 || bufferBefore > 180 || bufferAfter < 0 || bufferAfter > 180) { toast.error("Hazırlık süreleri en fazla 180 dakika olabilir."); return; }
-    if (cancelDeadline < 0 || cancelDeadline > 10080) { toast.error("İptal süresi 0 ile 10.080 dakika arasında olmalıdır."); return; }
+    if (minNotice < 0 || minNotice > 10080) { toast.error(t("Minimum bildirim süresi 0 ile 10.080 dakika arasında olmalıdır.")); return; }
+    if (maxDaysAhead < 1 || maxDaysAhead > 365) { toast.error(t("Randevu penceresi 1 ile 365 gün arasında olmalıdır.")); return; }
+    if (bufferBefore < 0 || bufferBefore > 180 || bufferAfter < 0 || bufferAfter > 180) { toast.error(t("Hazırlık süreleri en fazla 180 dakika olabilir.")); return; }
+    if (cancelDeadline < 0 || cancelDeadline > 10080) { toast.error(t("İptal süresi 0 ile 10.080 dakika arasında olmalıdır.")); return; }
     setSaving(true);
     try {
       await updateBusiness(businessId, {
@@ -286,9 +291,9 @@ export default function SettingsPage() {
         smsPreferences: rules.smsPreferences,
       });
       setRulesBase(rules);
-      toast.success("Randevu ayarları güncellendi.");
+      toast.success(t("Randevu ayarları güncellendi."));
     } catch {
-      toast.error("Güncelleme başarısız.");
+      toast.error(t("Güncelleme başarısız."));
     } finally {
       setSaving(false);
     }
@@ -300,9 +305,9 @@ export default function SettingsPage() {
     try {
       await createCategoryRequest(businessId, info.name, customCategory.trim());
       setCategoryRequested(true);
-      toast.success("Kategori isteğiniz Super Admin onayına gönderildi.");
+      toast.success(t("Kategori isteğiniz Super Admin onayına gönderildi."));
     } catch {
-      toast.error("Kategori isteği gönderilemedi.");
+      toast.error(t("Kategori isteği gönderilemedi."));
     } finally {
       setRequestingCategory(false);
     }
@@ -315,10 +320,10 @@ export default function SettingsPage() {
     try {
       await submitBusinessProfileChange(businessId, { galleryUrls: updated });
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-      toast.success("Galeri değişikliği onaya gönderildi.");
+      toast.success(t("Galeri değişikliği onaya gönderildi."));
       setGalleryToRemove(null);
     } catch {
-      toast.error("Değişiklik gönderilemedi.");
+      toast.error(t("Değişiklik gönderilemedi."));
     } finally {
       setRemovingGallery(false);
     }
@@ -328,17 +333,17 @@ export default function SettingsPage() {
     if (preset === "flexible") setRules((r) => ({ ...r, minNotice: 30, maxDaysAhead: 60, bufferBefore: 0, bufferAfter: 5, slotInterval: 15 }));
     if (preset === "balanced") setRules((r) => ({ ...r, minNotice: 60, maxDaysAhead: 45, bufferBefore: 5, bufferAfter: 10, slotInterval: 15 }));
     if (preset === "protected") setRules((r) => ({ ...r, minNotice: 180, maxDaysAhead: 30, bufferBefore: 10, bufferAfter: 15, slotInterval: 15 }));
-    toast.success("Randevu profili uygulandı. Kaydederek etkinleştirebilirsiniz.");
+    toast.success(t("Randevu profili uygulandı. Kaydederek etkinleştirebilirsiniz."));
   }
 
   const filteredTabs = useMemo(() => {
-    const term = settingsSearch.trim().toLocaleLowerCase("tr-TR");
-    return term ? TABS.filter((tab) => `${tab.label} ${tab.note}`.toLocaleLowerCase("tr-TR").includes(term)) : TABS;
-  }, [settingsSearch]);
+    const term = settingsSearch.trim().toLocaleLowerCase(intl);
+    return term ? TABS.filter((tab) => `${t(tab.label)} ${t(tab.note)}`.toLocaleLowerCase(intl).includes(term)) : TABS;
+  }, [settingsSearch, t, intl]);
 
   if (loading) {
     return (
-      <StudioPage label="Ayarlar yükleniyor">
+      <StudioPage label={t("Ayarlar yükleniyor")}>
         <div role="status" aria-live="polite" className={st.skeleton}>
           <Sk h={170} r={26} />
           <div className={st.layout}>
@@ -348,7 +353,7 @@ export default function SettingsPage() {
               {Array.from({ length: 5 }, (_, i) => <Sk key={i} h={50} r={14} />)}
             </div>
           </div>
-          <span className={k.srOnly}>Ayarlar yükleniyor</span>
+          <span className={k.srOnly}>{t("Ayarlar yükleniyor")}</span>
         </div>
       </StudioPage>
     );
@@ -361,52 +366,52 @@ export default function SettingsPage() {
   const activeMeta = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
 
   const saveBar = activeTab === "bilgiler"
-    ? <SaveBar visible={infoDirty} saving={saving} form="settings-info-form" saveLabel="Onaya gönder" note="Onaya kadar mevcut profil yayında" onReset={() => { setInfo(infoBase); setCategoryRequested(false); }} />
+    ? <SaveBar visible={infoDirty} saving={saving} form="settings-info-form" saveLabel={t("Onaya gönder")} note={t("Onaya kadar mevcut profil yayında")} onReset={() => { setInfo(infoBase); setCategoryRequested(false); }} />
     : activeTab === "sosyal"
-      ? <SaveBar visible={socialDirty} saving={saving} form="settings-social-form" saveLabel="Onaya gönder" note="Kontrol sonrası yayınlanır" onReset={() => setSocial(socialBase)} />
+      ? <SaveBar visible={socialDirty} saving={saving} form="settings-social-form" saveLabel={t("Onaya gönder")} note={t("Kontrol sonrası yayınlanır")} onReset={() => setSocial(socialBase)} />
       : activeTab === "randevu"
-        ? <SaveBar visible={rulesDirty} saving={saving} form="settings-rules-form" saveLabel="Kaydet" note="Uygunluk motoruna anında yansır" onReset={() => setRules(rulesBase)} />
+        ? <SaveBar visible={rulesDirty} saving={saving} form="settings-rules-form" saveLabel={t("Kaydet")} note={t("Uygunluk motoruna anında yansır")} onReset={() => setRules(rulesBase)} />
         : null;
 
   return (
     <StudioPage className={st.page}>
       <StudioHero
-        eyebrow="İşletme kontrol merkezi"
+        eyebrow={t("İşletme kontrol merkezi")}
         icon={Sparkles}
-        title="Ayarlar"
-        description="Profil, marka, kanallar ve randevu kurallarını tek yerden, güvenle yönet."
+        title={t("Ayarlar")}
+        description={t("Profil, marka, kanallar ve randevu kurallarını tek yerden, güvenle yönet.")}
         actions={business?.slug
           ? <>
-              <a className={cx(k.btn, k.btnGlass)} href={`/isletme/${business.slug}`} target="_blank" rel="noreferrer"><Globe2 size={16} aria-hidden /> Profili önizle</a>
+              <a className={cx(k.btn, k.btnGlass)} href={localizeHref(`/isletme/${business.slug}`, locale)} target="_blank" rel="noreferrer"><Globe2 size={16} aria-hidden /> {t("Profili önizle")}</a>
               {business.status === "active" && business.isPublished
-                ? <button type="button" className={cx(k.btn, k.btnGlass)} onClick={() => setInstagramOpen(true)} aria-haspopup="dialog"><InstagramGlyph size={16} /> Instagram için görsel</button>
+                ? <button type="button" className={cx(k.btn, k.btnGlass)} onClick={() => setInstagramOpen(true)} aria-haspopup="dialog"><InstagramGlyph size={16} /> {t("Instagram için görsel")}</button>
                 : null}
             </>
           : null}
       >
-        <HeroChip icon={ShieldCheck} value={`%${profileScore}`} label="profil" />
-        <HeroChip icon={AtSign} value={`${socialCount}/6`} label="kanal" />
-        <HeroChip icon={Clock3} value={`${rules.slotInterval} dk`} label="slot" />
+        <HeroChip icon={ShieldCheck} value={t("%{percent}", { percent: profileScore })} label={t("profil")} />
+        <HeroChip icon={AtSign} value={`${socialCount}/6`} label={t("kanal")} />
+        <HeroChip icon={Clock3} value={t("{minutes} dk", { minutes: rules.slotInterval })} label={t("slot")} />
       </StudioHero>
       {business?.slug ? <InstagramShareSheet open={instagramOpen} onClose={closeInstagram} slug={business.slug} businessName={business.name} version={business.updatedAt} /> : null}
 
       {business?.profileReviewStatus === "pending" && (
-        <Notice tone="warn" icon={ShieldCheck} title="Yayın öncesi inceleme sürüyor">
-          Gönderdiğiniz profil değişiklikleri güvenlik ve içerik kontrolünden sonra yayına alınacak. Bu sırada mevcut profiliniz kesintisiz görünür.
+        <Notice tone="warn" icon={ShieldCheck} title={t("Yayın öncesi inceleme sürüyor")}>
+          {t("Gönderdiğiniz profil değişiklikleri güvenlik ve içerik kontrolünden sonra yayına alınacak. Bu sırada mevcut profiliniz kesintisiz görünür.")}
         </Notice>
       )}
       {business?.profileReviewStatus === "rejected" && (
-        <Notice tone="bad" icon={ShieldAlert} title="Son profil değişikliği onaylanmadı">
-          {business.profileReviewNote || "Bilgileri gözden geçirip yeniden gönderebilirsiniz."}
+        <Notice tone="bad" icon={ShieldAlert} title={t("Son profil değişikliği onaylanmadı")}>
+          {business.profileReviewNote || t("Bilgileri gözden geçirip yeniden gönderebilirsiniz.")}
         </Notice>
       )}
 
       <div className={st.layout}>
-        <nav className={st.nav} aria-label="Ayar bölümleri">
+        <nav className={st.nav} aria-label={t("Ayar bölümleri")}>
           <label className={st.navSearch}>
             <Search size={16} aria-hidden />
-            <span className={k.srOnly}>Ayarlarda ara</span>
-            <input type="search" value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder="Ayarlarda ara…" />
+            <span className={k.srOnly}>{t("Ayarlarda ara")}</span>
+            <input type="search" value={settingsSearch} onChange={(event) => setSettingsSearch(event.target.value)} placeholder={t("Ayarlarda ara…")} />
           </label>
           <div className={st.navList} role="tablist" aria-orientation="vertical">
             {filteredTabs.map((tab) => {
@@ -415,74 +420,74 @@ export default function SettingsPage() {
               return (
                 <button key={tab.id} type="button" role="tab" aria-selected={selected} aria-controls="settings-panel" className={st.navItem} onClick={() => setActiveTab(tab.id)}>
                   <i aria-hidden><Icon size={17} strokeWidth={1.9} /></i>
-                  <span><b><em className={st.long}>{tab.label}</em><em className={st.short}>{tab.short}</em></b><small>{tab.note}</small></span>
-                  {dirtyByTab[tab.id] ? <span className={st.dirtyDot} aria-label="Kaydedilmemiş değişiklik" /> : null}
+                  <span><b><em className={st.long}>{t(tab.label)}</em><em className={st.short}>{t(tab.short)}</em></b><small>{t(tab.note)}</small></span>
+                  {dirtyByTab[tab.id] ? <span className={st.dirtyDot} aria-label={t("Kaydedilmemiş değişiklik")} /> : null}
                 </button>
               );
             })}
-            {!filteredTabs.length && <p className={st.navEmpty}>Bu ifadeyle eşleşen ayar bulunamadı.</p>}
+            {!filteredTabs.length && <p className={st.navEmpty}>{t("Bu ifadeyle eşleşen ayar bulunamadı.")}</p>}
           </div>
         </nav>
 
-        <div id="settings-panel" role="tabpanel" aria-label={activeMeta.label} className={st.content} key={activeTab}>
+        <div id="settings-panel" role="tabpanel" aria-label={t(activeMeta.label)} className={st.content} key={activeTab}>
           {activeTab === "bilgiler" && (
             <>
               <div className={st.storeCard}>
                 <span className={st.storeLogo}>{business?.logoUrl ? <Image src={business.logoUrl} alt="" width={56} height={56} /> : <Store size={24} aria-hidden />}</span>
-                <span className={st.storeText}><small>Canlı mağaza kartı</small><b>{info.name || "İşletme adınız"}</b><em><MapPin size={13} aria-hidden /> {info.district || "İlçe"}, {info.city || "Şehir"}</em></span>
-                <span className={st.scoreRing} style={{ ["--score" as string]: `${profileScore}` }} aria-label={`Profil %${profileScore} tamamlandı`}><b>%{profileScore}</b></span>
+                <span className={st.storeText}><small>{t("Canlı mağaza kartı")}</small><b>{info.name || t("İşletme adınız")}</b><em><MapPin size={13} aria-hidden /> {info.district || t("İlçe")}, {info.city || t("Şehir")}</em></span>
+                <span className={st.scoreRing} style={{ ["--score" as string]: `${profileScore}` }} aria-label={t("Profil %{percent} tamamlandı", { percent: profileScore })}><b>{t("%{percent}", { percent: profileScore })}</b></span>
               </div>
 
               <form id="settings-info-form" className={st.form} onSubmit={handleSaveInfo}>
-                <p className={k.sectionLabel}>Kimlik</p>
+                <p className={k.sectionLabel}>{t("Kimlik")}</p>
                 <div className={st.card}>
                   <div className={cx(k.fields, k.fields2)}>
-                    <label className={k.field}><span className={k.label}>İşletme adı *</span><input className={k.input} value={info.name} onChange={(e) => setInfoField("name", e.target.value)} required placeholder="Örn: Güzel Saçlar Kuaförü" /></label>
-                    <label className={k.field}><span className={k.label}>Kategori *</span>
+                    <label className={k.field}><span className={k.label}>{t("İşletme adı *")}</span><input className={k.input} value={info.name} onChange={(e) => setInfoField("name", e.target.value)} required placeholder={t("Örn: Güzel Saçlar Kuaförü")} /></label>
+                    <label className={k.field}><span className={k.label}>{t("Kategori *")}</span>
                       <select className={k.select} value={info.category} onChange={(e) => { setInfoField("category", e.target.value as BusinessCategory); setCategoryRequested(false); }}>
-                        {categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        {categoryOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
                       </select>
                     </label>
                     {info.category === "diger" && (
                       <div className={cx(k.span2, st.categoryRequest)}>
-                        <b>Kategorin listede yok mu?</b>
-                        <span>İstediğin kategoriyi yaz; onay sonrası listeye eklenir ve profilin otomatik güncellenir.</span>
+                        <b>{t("Kategorin listede yok mu?")}</b>
+                        <span>{t("İstediğin kategoriyi yaz; onay sonrası listeye eklenir ve profilin otomatik güncellenir.")}</span>
                         <div className={st.inline}>
-                          <input className={k.input} value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Örn: Diş Kliniği, Müzik Stüdyosu..." aria-label="Yeni kategori adı" />
+                          <input className={k.input} value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder={t("Örn: Diş Kliniği, Müzik Stüdyosu...")} aria-label={t("Yeni kategori adı")} />
                           <button type="button" className={cx(k.btn, categoryRequested ? k.btnSoft : k.btnPrimary)} disabled={requestingCategory || !customCategory.trim() || categoryRequested} onClick={requestCategory}>
-                            {requestingCategory ? <><LoaderCircle size={16} className={k.spin} aria-hidden /> Gönderiliyor</> : categoryRequested ? <><CheckCircle2 size={16} aria-hidden /> Gönderildi</> : <><Send size={16} aria-hidden /> Onay iste</>}
+                            {requestingCategory ? <><LoaderCircle size={16} className={k.spin} aria-hidden /> {t("Gönderiliyor")}</> : categoryRequested ? <><CheckCircle2 size={16} aria-hidden /> {t("Gönderildi")}</> : <><Send size={16} aria-hidden /> {t("Onay iste")}</>}
                           </button>
                         </div>
-                        {categoryRequested && <small>İsteğiniz inceleniyor. Onaylanma sonrası kategoriniz otomatik olarak güncellenecektir.</small>}
+                        {categoryRequested && <small>{t("İsteğiniz inceleniyor. Onaylanma sonrası kategoriniz otomatik olarak güncellenecektir.")}</small>}
                       </div>
                     )}
-                    <label className={k.field}><span className={k.label}>İşletme tipi</span>
+                    <label className={k.field}><span className={k.label}>{t("İşletme tipi")}</span>
                       <select className={k.select} value={info.businessType} onChange={(e) => setInfoField("businessType", e.target.value as BusinessType | "")}>
-                        {BIZ_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        {BIZ_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
                       </select>
                     </label>
-                    <label className={k.field}><span className={k.label}>Website</span><input className={k.input} type="url" inputMode="url" value={info.website} onChange={(e) => setInfoField("website", e.target.value)} placeholder="https://" /></label>
-                    <label className={cx(k.field, k.span2)}><span className={k.label}>Açıklama</span><textarea className={k.textarea} rows={3} value={info.description} onChange={(e) => setInfoField("description", e.target.value)} placeholder="İşletmenizi kısaca tanıtın..." /><span className={k.help}>{info.description.length} karakter · Keşfet ve mağaza sayfasında görünür.</span></label>
+                    <label className={k.field}><span className={k.label}>{t("Website")}</span><input className={k.input} type="url" inputMode="url" value={info.website} onChange={(e) => setInfoField("website", e.target.value)} placeholder="https://" /></label>
+                    <label className={cx(k.field, k.span2)}><span className={k.label}>{t("Açıklama")}</span><textarea className={k.textarea} rows={3} value={info.description} onChange={(e) => setInfoField("description", e.target.value)} placeholder={t("İşletmenizi kısaca tanıtın...")} /><span className={k.help}>{t("{count} karakter · Keşfet ve mağaza sayfasında görünür.", { count: info.description.length })}</span></label>
                   </div>
                 </div>
 
-                <p className={k.sectionLabel}>İletişim</p>
+                <p className={k.sectionLabel}>{t("İletişim")}</p>
                 <div className={st.card}>
                   <div className={cx(k.fields, k.fields2)}>
-                    <label className={k.field}><span className={k.label}>Telefon *</span><input className={k.input} type="tel" inputMode="tel" autoComplete="tel" value={info.phone} onChange={(e) => setInfoField("phone", e.target.value)} required placeholder="05XX XXX XX XX" /></label>
-                    <label className={k.field}><span className={k.label}>E-posta *</span><input className={k.input} type="email" inputMode="email" autoComplete="email" value={info.email} onChange={(e) => setInfoField("email", e.target.value)} required /></label>
+                    <label className={k.field}><span className={k.label}>{t("Telefon *")}</span><input className={k.input} type="tel" inputMode="tel" autoComplete="tel" value={info.phone} onChange={(e) => setInfoField("phone", e.target.value)} required placeholder="05XX XXX XX XX" /></label>
+                    <label className={k.field}><span className={k.label}>{t("E-posta *")}</span><input className={k.input} type="email" inputMode="email" autoComplete="email" value={info.email} onChange={(e) => setInfoField("email", e.target.value)} required /></label>
                   </div>
                 </div>
 
-                <p className={k.sectionLabel}>Konum</p>
+                <p className={k.sectionLabel}>{t("Konum")}</p>
                 <div className={st.card}>
                   <div className={cx(k.fields, k.fields3)}>
-                    <label className={k.field}><span className={k.label}>Adres *</span><input className={k.input} value={info.address} onChange={(e) => setInfoField("address", e.target.value)} required placeholder="Cadde / Sokak / No" /></label>
-                    <div className={k.field}><label htmlFor="settings-city" className={k.label}>Şehir *</label>
-                      <CitySelect id="settings-city" value={info.city} onChange={(city) => { if (city !== info.city) setInfoField("district", ""); setInfoField("city", city); }} placeholder="Şehir seç veya yaz" inputClassName={k.input} />
+                    <label className={k.field}><span className={k.label}>{t("Adres *")}</span><input className={k.input} value={info.address} onChange={(e) => setInfoField("address", e.target.value)} required placeholder={t("Cadde / Sokak / No")} /></label>
+                    <div className={k.field}><label htmlFor="settings-city" className={k.label}>{t("Şehir *")}</label>
+                      <CitySelect id="settings-city" value={info.city} onChange={(city) => { if (city !== info.city) setInfoField("district", ""); setInfoField("city", city); }} placeholder={t("Şehir seç veya yaz")} inputClassName={k.input} />
                     </div>
-                    <div className={k.field}><label htmlFor="settings-district" className={k.label}>İlçe *</label>
-                      <DistrictSelect id="settings-district" city={info.city} value={info.district} onChange={(district) => setInfoField("district", district)} placeholder="İlçe seç veya yaz" inputClassName={k.input} />
+                    <div className={k.field}><label htmlFor="settings-district" className={k.label}>{t("İlçe *")}</label>
+                      <DistrictSelect id="settings-district" city={info.city} value={info.district} onChange={(district) => setInfoField("district", district)} placeholder={t("İlçe seç veya yaz")} inputClassName={k.input} />
                     </div>
                   </div>
                   {business ? (
@@ -492,48 +497,48 @@ export default function SettingsPage() {
                     />
                   ) : null}
                 </div>
-                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Profil değişiklikleri süper admin onayından sonra yayınlanır; o zamana kadar mevcut profil yayında kalır.</p>
+                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> {t("Profil değişiklikleri süper admin onayından sonra yayınlanır; o zamana kadar mevcut profil yayında kalır.")}</p>
               </form>
             </>
           )}
 
           {activeTab === "gorseller" && (
             <>
-              <Notice tone="accent" icon={Sparkles} title={`Marka kalite rehberi · ${assetCount} varlık`}>
-                Net logo, yatay kapak ve gerçek işletme fotoğrafları keşfet görünümünüzü güçlendirir. Yüklenen görseller onaydan sonra yayınlanır.
+              <Notice tone="accent" icon={Sparkles} title={t("Marka kalite rehberi · {count} varlık", { count: assetCount })}>
+                {t("Net logo, yatay kapak ve gerçek işletme fotoğrafları keşfet görünümünüzü güçlendirir. Yüklenen görseller onaydan sonra yayınlanır.")}
               </Notice>
-              <Panel title="Logo ve kapak" icon={Images} description="Kare logo ve yatay (16:9) kapak önerilir.">
+              <Panel title={t("Logo ve kapak")} icon={Images} description={t("Kare logo ve yatay (16:9) kapak önerilir.")}>
                 <div className={st.uploadGrid}>
                   <ImageUploader
-                    label="Logo"
+                    label={t("Logo")}
                     currentUrl={business?.logoUrl}
                     shape="square"
                     uploadFn={(file) => uploadBusinessImage(businessId!, "logo", file)}
                     onUpload={async (url) => {
                       await submitBusinessProfileChange(businessId!, { logoUrl: url });
                       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                      toast.success("Yeni logo onaya gönderildi.");
+                      toast.success(t("Yeni logo onaya gönderildi."));
                     }}
                   />
                   <ImageUploader
-                    label="Kapak Fotoğrafı"
+                    label={t("Kapak Fotoğrafı")}
                     currentUrl={business?.coverUrl}
                     shape="wide"
                     uploadFn={(file) => uploadBusinessImage(businessId!, "cover", file)}
                     onUpload={async (url) => {
                       await submitBusinessProfileChange(businessId!, { coverUrl: url });
                       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                      toast.success("Yeni kapak görseli onaya gönderildi.");
+                      toast.success(t("Yeni kapak görseli onaya gönderildi."));
                     }}
                   />
                 </div>
               </Panel>
-              <Panel title="Galeri" icon={Images} description={`${business?.galleryUrls?.length ?? 0} fotoğraf · İşletmenizin içinden gerçek kareler ekleyin.`}>
+              <Panel title={t("Galeri")} icon={Images} description={t("{count} fotoğraf · İşletmenizin içinden gerçek kareler ekleyin.", { count: business?.galleryUrls?.length ?? 0 })}>
                 <div className={st.gallery}>
                   {(business?.galleryUrls ?? []).map((url, i) => (
                     <figure key={url} className={st.galleryItem}>
-                      <Image src={url} alt={`Galeri ${i + 1}`} width={240} height={180} />
-                      <button type="button" aria-label={`Galeri ${i + 1} görselini kaldır`} onClick={() => setGalleryToRemove(url)}><Trash2 size={15} aria-hidden /></button>
+                      <Image src={url} alt={t("Galeri {number}", { number: i + 1 })} width={240} height={180} />
+                      <button type="button" aria-label={t("Galeri {number} görselini kaldır", { number: i + 1 })} onClick={() => setGalleryToRemove(url)}><Trash2 size={15} aria-hidden /></button>
                     </figure>
                   ))}
                   <div className={st.galleryAdd}>
@@ -546,7 +551,7 @@ export default function SettingsPage() {
                         const updated = [...current, url];
                         await submitBusinessProfileChange(businessId!, { galleryUrls: updated });
                         setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
-                        toast.success("Galeri görseli onaya gönderildi.");
+                        toast.success(t("Galeri görseli onaya gönderildi."));
                       }}
                     />
                   </div>
@@ -559,7 +564,7 @@ export default function SettingsPage() {
             <form id="settings-social-form" className={st.form} onSubmit={handleSaveSocial}>
               <div className={st.socialHealth}>
                 <span className={k.panelIcon}><Share2 size={19} aria-hidden /></span>
-                <span><small>Dijital ayak izi</small><b>{socialCount ? `${socialCount} kanal müşterilere açık` : "Henüz kanal bağlanmadı"}</b></span>
+                <span><small>{t("Dijital ayak izi")}</small><b>{socialCount ? t("{count} kanal müşterilere açık", { count: socialCount }) : t("Henüz kanal bağlanmadı")}</b></span>
                 <i aria-hidden><em style={{ width: `${socialCount / 6 * 100}%` }} /></i>
               </div>
               <div className={st.card}>
@@ -568,96 +573,96 @@ export default function SettingsPage() {
                     const connected = Boolean(social[item.key]?.trim());
                     return (
                       <label key={item.key} className={k.field}>
-                        <span className={st.socialLabel}><span className={k.label}>{item.label}</span><span className={cx(k.pill, connected ? k.pillOk : undefined)}>{connected ? <><CheckCircle2 size={12} aria-hidden /> Bağlı</> : "Bekleniyor"}</span></span>
-                        <input className={k.input} value={social[item.key] ?? ""} onChange={(e) => setSocial({ ...social, [item.key]: e.target.value })} placeholder={item.placeholder} inputMode={item.key === "whatsapp" ? "tel" : "url"} />
+                        <span className={st.socialLabel}><span className={k.label}>{item.label}</span><span className={cx(k.pill, connected ? k.pillOk : undefined)}>{connected ? <><CheckCircle2 size={12} aria-hidden /> {t("Bağlı")}</> : t("Bekleniyor")}</span></span>
+                        <input className={k.input} value={social[item.key] ?? ""} onChange={(e) => setSocial({ ...social, [item.key]: e.target.value })} placeholder={t(item.placeholder)} inputMode={item.key === "whatsapp" ? "tel" : "url"} />
                       </label>
                     );
                   })}
                 </div>
               </div>
-              <p className={st.footnote}><Globe2 size={14} aria-hidden /> Kanallar kontrol sonrası mağaza profilinde yayınlanır.</p>
+              <p className={st.footnote}><Globe2 size={14} aria-hidden /> {t("Kanallar kontrol sonrası mağaza profilinde yayınlanır.")}</p>
             </form>
           )}
 
           {activeTab === "randevu" && (
             <>
               <form id="settings-rules-form" className={st.form} onSubmit={handleSaveAppointment}>
-                <p className={k.sectionLabel}>Hazır profiller</p>
+                <p className={k.sectionLabel}>{t("Hazır profiller")}</p>
                 <div className={st.presets}>
-                  <button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={17} aria-hidden /><span><b>Esnek</b><small>Daha fazla müsaitlik</small></span></button>
-                  <button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={17} aria-hidden /><span><b>Dengeli</b><small>Önerilen düzen</small></span></button>
-                  <button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={17} aria-hidden /><span><b>Korumalı</b><small>Geniş hazırlık süresi</small></span></button>
+                  <button type="button" onClick={() => applyBookingPreset("flexible")}><Sparkles size={17} aria-hidden /><span><b>{t("Esnek")}</b><small>{t("Daha fazla müsaitlik")}</small></span></button>
+                  <button type="button" onClick={() => applyBookingPreset("balanced")}><Gauge size={17} aria-hidden /><span><b>{t("Dengeli")}</b><small>{t("Önerilen düzen")}</small></span></button>
+                  <button type="button" onClick={() => applyBookingPreset("protected")}><ShieldCheck size={17} aria-hidden /><span><b>{t("Korumalı")}</b><small>{t("Geniş hazırlık süresi")}</small></span></button>
                 </div>
 
-                <p className={k.sectionLabel}>Online randevu</p>
+                <p className={k.sectionLabel}>{t("Online randevu")}</p>
                 <div className={k.group}>
-                  <ToggleRow title="Müşteri online randevusu" note="Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir." checked={rules.allowOnlineBooking} onChange={(v) => setRule("allowOnlineBooking", v)} />
+                  <ToggleRow title={t("Müşteri online randevusu")} note={t("Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir.")} checked={rules.allowOnlineBooking} onChange={(v) => setRule("allowOnlineBooking", v)} />
                 </div>
 
-                <p className={k.sectionLabel}>Takvim penceresi</p>
+                <p className={k.sectionLabel}>{t("Takvim penceresi")}</p>
                 <div className={st.card}>
                   <div className={cx(k.fields, k.fields2)}>
-                    <NumberField label="Minimum bildirim süresi" unit="dk" value={rules.minNotice} min={0} max={10080} onChange={(v) => setRule("minNotice", v)} help="Müşteri en az bu süre öncesinden randevu alabilir." />
-                    <NumberField label="Maksimum ileri gün" unit="gün" value={rules.maxDaysAhead} min={1} max={365} onChange={(v) => setRule("maxDaysAhead", v)} help="Müşteri en fazla bu kadar gün sonrası için randevu alabilir." />
-                    <label className={cx(k.field, k.span2)}><span className={k.label}>Slot aralığı</span>
-                      <div className={k.seg} role="group" aria-label="Slot aralığı">
-                        {[10, 15, 20, 30, 60].map((value) => <button key={value} type="button" className={k.segBtn} aria-pressed={rules.slotInterval === value} onClick={() => setRule("slotInterval", value)}>{value} dk</button>)}
+                    <NumberField label={t("Minimum bildirim süresi")} unit={t("dk")} value={rules.minNotice} min={0} max={10080} onChange={(v) => setRule("minNotice", v)} help={t("Müşteri en az bu süre öncesinden randevu alabilir.")} />
+                    <NumberField label={t("Maksimum ileri gün")} unit={t("gün")} value={rules.maxDaysAhead} min={1} max={365} onChange={(v) => setRule("maxDaysAhead", v)} help={t("Müşteri en fazla bu kadar gün sonrası için randevu alabilir.")} />
+                    <label className={cx(k.field, k.span2)}><span className={k.label}>{t("Slot aralığı")}</span>
+                      <div className={k.seg} role="group" aria-label={t("Slot aralığı")}>
+                        {[10, 15, 20, 30, 60].map((value) => <button key={value} type="button" className={k.segBtn} aria-pressed={rules.slotInterval === value} onClick={() => setRule("slotInterval", value)}>{t("{minutes} dk", { minutes: value })}</button>)}
                       </div>
                     </label>
                   </div>
                 </div>
 
-                <p className={k.sectionLabel}>Hazırlık süreleri (buffer)</p>
+                <p className={k.sectionLabel}>{t("Hazırlık süreleri (buffer)")}</p>
                 <div className={st.card}>
                   <div className={cx(k.fields, k.fields2)}>
-                    <NumberField label="Randevu öncesi hazırlık" unit="dk" value={rules.bufferBefore} min={0} max={180} onChange={(v) => setRule("bufferBefore", Math.max(0, v))} help="Hizmet başlamadan önce takvimde ayrılan süre." />
-                    <NumberField label="Randevu sonrası buffer" unit="dk" value={rules.bufferAfter} min={0} max={180} onChange={(v) => setRule("bufferAfter", Math.max(0, v))} help="Temizlik, hazırlık veya mola için ayrılan süre." />
+                    <NumberField label={t("Randevu öncesi hazırlık")} unit={t("dk")} value={rules.bufferBefore} min={0} max={180} onChange={(v) => setRule("bufferBefore", Math.max(0, v))} help={t("Hizmet başlamadan önce takvimde ayrılan süre.")} />
+                    <NumberField label={t("Randevu sonrası buffer")} unit={t("dk")} value={rules.bufferAfter} min={0} max={180} onChange={(v) => setRule("bufferAfter", Math.max(0, v))} help={t("Temizlik, hazırlık veya mola için ayrılan süre.")} />
                   </div>
                 </div>
 
-                <p className={k.sectionLabel}>İptal ve yeniden planlama</p>
+                <p className={k.sectionLabel}>{t("İptal ve yeniden planlama")}</p>
                 <div className={k.group}>
-                  <ToggleRow title="İptal izni" note="Müşteri randevuyu iptal edebilir" checked={rules.allowCancel} onChange={(v) => setRule("allowCancel", v)} />
-                  <ToggleRow title="Yeniden planlama" note="Müşteri uygun başka saate geçebilir" checked={rules.allowReschedule} onChange={(v) => setRule("allowReschedule", v)} />
+                  <ToggleRow title={t("İptal izni")} note={t("Müşteri randevuyu iptal edebilir")} checked={rules.allowCancel} onChange={(v) => setRule("allowCancel", v)} />
+                  <ToggleRow title={t("Yeniden planlama")} note={t("Müşteri uygun başka saate geçebilir")} checked={rules.allowReschedule} onChange={(v) => setRule("allowReschedule", v)} />
                   <div className={cx(k.row, st.rowField)}>
-                    <span className={k.rowText}><b>İptal son tarihi</b><small>Randevuya bu süreden az kala iptal kapanır.</small></span>
-                    <span className={cx(k.inputAffix, st.rowInput)}><input className={k.input} type="number" inputMode="numeric" min={0} value={String(rules.cancelDeadline)} onChange={(e) => setRule("cancelDeadline", Number(e.target.value))} aria-label="İptal son tarihi (dakika)" /><span>dk</span></span>
+                    <span className={k.rowText}><b>{t("İptal son tarihi")}</b><small>{t("Randevuya bu süreden az kala iptal kapanır.")}</small></span>
+                    <span className={cx(k.inputAffix, st.rowInput)}><input className={k.input} type="number" inputMode="numeric" min={0} value={String(rules.cancelDeadline)} onChange={(e) => setRule("cancelDeadline", Number(e.target.value))} aria-label={t("İptal son tarihi (dakika)")} /><span>{t("dk")}</span></span>
                   </div>
                 </div>
 
-                <p className={k.sectionLabel}>Müşteri SMS bildirimleri</p>
+                <p className={k.sectionLabel}>{t("Müşteri SMS bildirimleri")}</p>
                 <div className={k.group}>
                   {SMS_FIELDS.map(([key, label, note]) => (
-                    <ToggleRow key={key} icon={MessageSquareText} title={label} note={note} checked={rules.smsPreferences[key] !== false} onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, [key]: checked })} />
+                    <ToggleRow key={key} icon={MessageSquareText} title={t(label)} note={t(note)} checked={rules.smsPreferences[key] !== false} onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, [key]: checked })} />
                   ))}
                 </div>
                 <div className={k.group}>
-                  <ToggleRow icon={MessageSquareText} title="Önce WhatsApp'tan gönder"
-                    note="Açık bildirimler önce WhatsApp'tan gider ve SMS kotanızdan düşmez; WhatsApp'ı olmayan müşteriye otomatik SMS gönderilir."
+                  <ToggleRow icon={MessageSquareText} title={t("Önce WhatsApp'tan gönder")}
+                    note={t("Açık bildirimler önce WhatsApp'tan gider ve SMS kotanızdan düşmez; WhatsApp'ı olmayan müşteriye otomatik SMS gönderilir.")}
                     checked={rules.smsPreferences.whatsappFirst === true}
                     onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, whatsappFirst: checked })} />
                 </div>
-                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır. WhatsApp kanalı platformda etkinleştirilene kadar tüm bildirimler SMS ile gider.</p>
+                <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> {t("Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır. WhatsApp kanalı platformda etkinleştirilene kadar tüm bildirimler SMS ile gider.")}</p>
 
                 <div className={st.rulePreview}>
                   <Clock3 size={20} aria-hidden />
-                  <span><small>Canlı kural özeti</small><b>Müşteri en erken {rules.minNotice} dk sonra, en fazla {rules.maxDaysAhead} gün ileriye randevu alabilir.</b><em>{rules.bufferBefore + rules.bufferAfter} dk toplam hazırlık · {rules.slotInterval} dk slot · iptal {rules.allowCancel ? `${rules.cancelDeadline} dk öncesine kadar` : "kapalı"}</em></span>
+                  <span><small>{t("Canlı kural özeti")}</small><b>{t("Müşteri en erken {minutes} dk sonra, en fazla {days} gün ileriye randevu alabilir.", { minutes: rules.minNotice, days: rules.maxDaysAhead })}</b><em>{t("{buffer} dk toplam hazırlık · {slot} dk slot", { buffer: rules.bufferBefore + rules.bufferAfter, slot: rules.slotInterval })} · {rules.allowCancel ? t("iptal {minutes} dk öncesine kadar", { minutes: rules.cancelDeadline }) : t("iptal kapalı")}</em></span>
                 </div>
               </form>
 
               {business && (
                 <div className={st.mounted}>
-                  <p className={k.sectionLabel}>Canlı sıra ve müsaitlik</p>
+                  <p className={k.sectionLabel}>{t("Canlı sıra ve müsaitlik")}</p>
                   <LiveQueueSettings business={business} onChanged={(liveQueueEnabled) =>
                     setBusiness((current) => current ? { ...current, liveQueueEnabled } : current)} />
                   <BusinessAvailabilitySettings business={business} onChanged={(setting, value) =>
                     setBusiness((current) => current ? { ...current, [setting]: value } : current)} />
-                  <p className={k.sectionLabel}>Randevu formu</p>
+                  <p className={k.sectionLabel}>{t("Randevu formu")}</p>
                   <BusinessBookingFieldsEditor business={business} />
                 </div>
               )}
               <div className={st.mounted}>
-                <p className={k.sectionLabel}>Bildirimler</p>
+                <p className={k.sectionLabel}>{t("Bildirimler")}</p>
                 <PushToggleCard audience="business" />
                 <NotificationSoundSection />
                 <div className={k.group}><CompanionToggleRow /></div>
@@ -673,9 +678,9 @@ export default function SettingsPage() {
 
       <ConfirmSheet
         open={Boolean(galleryToRemove)}
-        title="Görsel galeriden kaldırılsın mı?"
-        description="Değişiklik onaya gönderilir; onaylandığında görsel mağaza profilinizden kalkar."
-        confirmLabel="Kaldır"
+        title={t("Görsel galeriden kaldırılsın mı?")}
+        description={t("Değişiklik onaya gönderilir; onaylandığında görsel mağaza profilinizden kalkar.")}
+        confirmLabel={t("Kaldır")}
         busy={removingGallery}
         onConfirm={removeGalleryImage}
         onClose={() => setGalleryToRemove(null)}
@@ -688,12 +693,13 @@ export default function SettingsPage() {
 
 /** Herkese açık sayfalardaki işletme yardımcısı (canlı randevu zili + mini panel); cihaz başına tercih. */
 function CompanionToggleRow() {
+  const t = useT();
   const hidden = useCompanionHidden();
   return (
     <ToggleRow
       icon={Store}
-      title="Sitede işletme yardımcısı"
-      note="Giriş yapmışken ana sayfa, keşfet ve mağaza sayfalarında yeni randevu zili, bildirim kartı ve mini panel (bu cihaz)."
+      title={t("Sitede işletme yardımcısı")}
+      note={t("Giriş yapmışken ana sayfa, keşfet ve mağaza sayfalarında yeni randevu zili, bildirim kartı ve mini panel (bu cihaz).")}
       checked={!hidden}
       onChange={(checked) => setCompanionHidden(!checked)}
     />

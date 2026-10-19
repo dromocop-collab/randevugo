@@ -22,11 +22,14 @@ import { bySortOrder, reorderPatch } from "../hizmetler/service-shared";
 import { StaffCreateSheet } from "./staff-create-sheet";
 import { StaffEditorSheet } from "./staff-editor-sheet";
 import styles from "./staff.module.css";
+import { useIntlLocale, useT } from "@/i18n/client";
 
 type StaffFilter = "all" | "active" | "paused" | "unlinked" | "archived";
 
 export default function StaffPage() {
   const { businessId } = useBusiness();
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -59,11 +62,11 @@ export default function StaffPage() {
     ).catch(() => {
       if (cancelled) return;
       setLoading(false);
-      toast.error("Ekip bilgileri yüklenemedi.");
+      toast.error(t("Ekip bilgileri yüklenemedi."));
     });
 
     return () => { cancelled = true; };
-  }, [businessId]);
+  }, [businessId, t]);
 
   const refreshStaff = useCallback(async () => {
     if (!businessId) return;
@@ -108,7 +111,7 @@ export default function StaffPage() {
     try {
       await Promise.all(patch.map((item) => updateStaff(businessId, item.id, { sortOrder: item.sortOrder })));
     } catch {
-      toast.error("Sıralama kaydedilemedi.");
+      toast.error(t("Sıralama kaydedilemedi."));
       await refreshStaff();
     } finally {
       setOrderBusy(false);
@@ -123,7 +126,7 @@ export default function StaffPage() {
       <DashPage>
         <Skeleton height={150} radius={24} />
         <Skeleton height={48} radius={16} />
-        <SkeletonList rows={4} height={84} label="Ekip yükleniyor" />
+        <SkeletonList rows={4} height={84} label={t("Ekip yükleniyor")} />
       </DashPage>
     );
   }
@@ -131,49 +134,49 @@ export default function StaffPage() {
   return (
     <DashPage>
       <PageHeader
-        eyebrow="Ekip yönetimi"
+        eyebrow={t("Ekip yönetimi")}
         icon={UsersRound}
-        title="Ekibiniz"
-        description="Çalışan ekleyin; hizmetlerini, çalışma saatlerini ve panel yetkilerini tek yerden düzenleyin."
-        actions={<Button variant="bright" icon={UserPlus} onClick={() => setShowCreate(true)}>Çalışan ekle</Button>}
+        title={t("Ekibiniz")}
+        description={t("Çalışan ekleyin; hizmetlerini, çalışma saatlerini ve panel yetkilerini tek yerden düzenleyin.")}
+        actions={<Button variant="bright" icon={UserPlus} onClick={() => setShowCreate(true)}>{t("Çalışan ekle")}</Button>}
         meta={<>
-          <Badge tone="accent" icon={UsersRound}>{counts.active} aktif</Badge>
-          {counts.paused ? <Badge tone="neutral">{counts.paused} pasif</Badge> : null}
-          {counts.unlinked ? <Badge tone="amber" icon={Link2Off}>{counts.unlinked} panel daveti bekliyor</Badge> : null}
+          <Badge tone="accent" icon={UsersRound}>{t("{count} aktif", { count: counts.active })}</Badge>
+          {counts.paused ? <Badge tone="neutral">{t("{count} pasif", { count: counts.paused })}</Badge> : null}
+          {counts.unlinked ? <Badge tone="amber" icon={Link2Off}>{t("{count} panel daveti bekliyor", { count: counts.unlinked })}</Badge> : null}
         </>}
       />
 
       {current.length === 0 && archived.length === 0 ? (
         <EmptyState
           mascot="wave"
-          title="Ekibinizi kuralım"
-          description="İlk çalışanınızı ekleyin; e-posta adresine çalışan paneli daveti otomatik gönderilir."
-          action={<Button variant="primary" icon={UserPlus} onClick={() => setShowCreate(true)}>İlk çalışanı ekle</Button>}
+          title={t("Ekibinizi kuralım")}
+          description={t("İlk çalışanınızı ekleyin; e-posta adresine çalışan paneli daveti otomatik gönderilir.")}
+          action={<Button variant="primary" icon={UserPlus} onClick={() => setShowCreate(true)}>{t("İlk çalışanı ekle")}</Button>}
         />
       ) : (
         <>
           <Toolbar>
-            <SearchField value={search} onChange={setSearch} placeholder="İsim, telefon veya e-posta ara" />
+            <SearchField value={search} onChange={setSearch} placeholder={t("İsim, telefon veya e-posta ara")} />
             <SegmentedControl
-              ariaLabel="Çalışan durumu"
+              ariaLabel={t("Çalışan durumu")}
               value={filter}
               onChange={setFilter}
               options={[
-                { value: "all", label: "Tümü", count: counts.all },
-                { value: "active", label: "Aktif", count: counts.active },
-                ...(counts.paused ? [{ value: "paused" as const, label: "Pasif", count: counts.paused }] : []),
-                ...(counts.unlinked ? [{ value: "unlinked" as const, label: "Davet bekleyen", count: counts.unlinked }] : []),
-                ...(counts.archived ? [{ value: "archived" as const, label: "Arşiv", count: counts.archived }] : []),
+                { value: "all", label: t("Tümü"), count: counts.all },
+                { value: "active", label: t("Aktif"), count: counts.active },
+                ...(counts.paused ? [{ value: "paused" as const, label: t("Pasif"), count: counts.paused }] : []),
+                ...(counts.unlinked ? [{ value: "unlinked" as const, label: t("Davet bekleyen"), count: counts.unlinked }] : []),
+                ...(counts.archived ? [{ value: "archived" as const, label: t("Arşiv"), count: counts.archived }] : []),
               ]}
             />
           </Toolbar>
 
           {visible.length === 0 ? (
-            <EmptyState compact mascot="thinking" title="Eşleşen çalışan yok" description="Aramayı veya filtreyi değiştirmeyi deneyin." action={<Button variant="soft" onClick={() => { setSearch(""); setFilter("all"); }}>Filtreleri temizle</Button>} />
+            <EmptyState compact mascot="thinking" title={t("Eşleşen çalışan yok")} description={t("Aramayı veya filtreyi değiştirmeyi deneyin.")} action={<Button variant="soft" onClick={() => { setSearch(""); setFilter("all"); }}>{t("Filtreleri temizle")}</Button>} />
           ) : (
-            <section className={styles.list} aria-label="Çalışanlar">
+            <section className={styles.list} aria-label={t("Çalışanlar")}>
               <div className={styles.listHead} aria-hidden="true">
-                <span>Çalışan</span><span>Hizmet</span><span>Yaklaşan</span><span>Puan</span><span>Panel</span><span />
+                <span>{t("Çalışan")}</span><span>{t("Hizmet")}</span><span>{t("Yaklaşan")}</span><span>{t("Puan")}</span><span>{t("Panel")}</span><span />
               </div>
               {visible.map((member, index) => {
                 const stat = stats[member.id] ?? { upcoming: 0, rating: 0, reviews: 0 };
@@ -181,22 +184,22 @@ export default function StaffPage() {
                 return (
                   <article key={member.id} className={cx(styles.row, !member.isActive && styles.rowPaused)}>
                     {!filtering ? <OrderButtons label={member.fullName} canUp={index > 0} canDown={index < visible.length - 1} onUp={() => void moveStaff(index, -1)} onDown={() => void moveStaff(index, 1)} disabled={orderBusy} /> : null}
-                    <button type="button" className={styles.rowButton} onClick={() => setEditing({ key: nextKey(), id: member.id })} aria-label={`${member.fullName} profilini aç`}>
+                    <button type="button" className={styles.rowButton} onClick={() => setEditing({ key: nextKey(), id: member.id })} aria-label={t("{name} profilini aç", { name: member.fullName })}>
                       <span className={styles.identity}>
                         <Avatar name={member.fullName} photoUrl={member.photoUrl} muted={!member.isActive} />
                         <span className={styles.identityText}>
                           <b>{member.fullName}</b>
                           <small>{member.position}{branches ? ` · ${branches}` : ""}</small>
                           <span className={styles.badges}>
-                            {member.archivedAt ? <Badge size="sm" tone="neutral">Arşivde</Badge> : !member.isActive ? <Badge size="sm" tone="neutral">Pasif</Badge> : null}
-                            <span className={styles.mobileOnly}>{member.linkedUid ? <Badge size="sm" tone="green" icon={ShieldCheck}>Panel</Badge> : <Badge size="sm" tone="amber" icon={MailCheck}>Davet bekliyor</Badge>}</span>
+                            {member.archivedAt ? <Badge size="sm" tone="neutral">{t("Arşivde")}</Badge> : !member.isActive ? <Badge size="sm" tone="neutral">{t("Pasif")}</Badge> : null}
+                            <span className={styles.mobileOnly}>{member.linkedUid ? <Badge size="sm" tone="green" icon={ShieldCheck}>{t("Panel")}</Badge> : <Badge size="sm" tone="amber" icon={MailCheck}>{t("Davet bekliyor")}</Badge>}</span>
                           </span>
                         </span>
                       </span>
-                      <span className={styles.metric}><Scissors size={14} aria-hidden="true" /><b>{member.serviceIds.length}</b><small>hizmet</small></span>
-                      <span className={styles.metric}><CalendarClock size={14} aria-hidden="true" /><b>{stat.upcoming}</b><small>yaklaşan</small></span>
-                      <span className={styles.metric}><Star size={14} aria-hidden="true" /><b>{stat.rating ? stat.rating.toFixed(1) : "—"}</b><small>{stat.reviews ? `${stat.reviews} yorum` : "puan"}</small></span>
-                      <span className={cx(styles.metric, styles.desktopOnly)}>{member.linkedUid ? <Badge size="sm" tone="green" icon={ShieldCheck}>Bağlı</Badge> : <Badge size="sm" tone="amber" icon={MailCheck}>Bekliyor</Badge>}</span>
+                      <span className={styles.metric}><Scissors size={14} aria-hidden="true" /><b>{member.serviceIds.length}</b><small>{t("hizmet")}</small></span>
+                      <span className={styles.metric}><CalendarClock size={14} aria-hidden="true" /><b>{stat.upcoming}</b><small>{t("yaklaşan")}</small></span>
+                      <span className={styles.metric}><Star size={14} aria-hidden="true" /><b>{stat.rating ? stat.rating.toFixed(1) : "—"}</b><small>{stat.reviews ? t("{count} yorum", { count: stat.reviews }) : t("Puan").toLocaleLowerCase(intlLocale)}</small></span>
+                      <span className={cx(styles.metric, styles.desktopOnly)}>{member.linkedUid ? <Badge size="sm" tone="green" icon={ShieldCheck}>{t("Bağlı")}</Badge> : <Badge size="sm" tone="amber" icon={MailCheck}>{t("Bekliyor")}</Badge>}</span>
                       <ChevronRight className={styles.chevron} size={18} aria-hidden="true" />
                     </button>
                   </article>

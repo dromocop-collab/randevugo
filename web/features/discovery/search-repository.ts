@@ -11,6 +11,7 @@ import {
 import { getDb } from "@/lib/firebase/firestore";
 import type { Business } from "@/types/business";
 import { businessCategoryQueryValues, canonicalBusinessCategory } from "@/lib/business-categories";
+import { tk } from "@/i18n/config";
 
 export interface SearchFilters {
   searchText?: string;
@@ -49,7 +50,7 @@ function normalizeSearch(value: unknown) {
     .toLocaleLowerCase("tr-TR")
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-    .replace(/ı/g, "i")
+    .replace(/ı/g, "i") // i18n-ignore — arama normalleştirme
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -67,7 +68,7 @@ async function findServiceMatches(searchTerm: string) {
       if (data.isBookableOnline === false) return;
       if (![data.name, data.description, data.category].some((value) => includesSearch(value, searchTerm))) return;
       const businessId = serviceDoc.ref.parent.parent?.id;
-      if (businessId && !matches.has(businessId)) matches.set(businessId, typeof data.name === "string" ? data.name : "Eşleşen hizmet");
+      if (businessId && !matches.has(businessId)) matches.set(businessId, typeof data.name === "string" ? data.name : tk("Eşleşen hizmet"));
     });
   } catch {
     // Some legacy Firebase projects may not yet have the collection-group index.

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { cx, studio } from "@/app/[lang]/dashboard/_studio";
+import { useT } from "@/i18n/client";
 import css from "./analitik.module.css";
 
 /* Kütüphanesiz, saf CSS / satır içi SVG grafikler. Her grafik role="img" + ekran okuyucu özeti taşır. */
@@ -9,13 +10,13 @@ import css from "./analitik.module.css";
 export type ColumnDatum = { key: string; label: string; short: string; value: number; display?: string };
 
 /** Dikey sütun grafiği. Dokunulan/odaklanan sütunun değeri üstte okunur. */
-export function ColumnChart({ data, label, unit = "randevu", height = 180, labelEvery = 1 }: {
+export function ColumnChart({ data, label, height = 180, labelEvery = 1 }: {
   data: ColumnDatum[];
   label: string;
-  unit?: string;
   height?: number;
   labelEvery?: number;
 }) {
+  const t = useT();
   const [active, setActive] = useState<number | null>(null);
   const max = Math.max(...data.map((item) => item.value), 1);
   const peakIndex = data.reduce((best, item, index) => item.value > data[best].value ? index : best, 0);
@@ -25,9 +26,9 @@ export function ColumnChart({ data, label, unit = "randevu", height = 180, label
   return (
     <figure className={css.chart}>
       <figcaption className={css.chartReadout} aria-live="polite">
-        {focused ? <><b>{focused.display ?? focused.value}</b><span>{active === null ? "en yüksek · " : ""}{focused.label}</span></> : null}
+        {focused ? <><b>{focused.display ?? focused.value}</b><span>{active === null ? t("en yüksek · ") : ""}{focused.label}</span></> : null}
       </figcaption>
-      <div className={css.columns} style={{ height }} role="img" aria-label={`${label}. Toplam ${total} ${unit}.`} onMouseLeave={() => setActive(null)}>
+      <div className={css.columns} style={{ height }} role="img" aria-label={t("{label}. Toplam {count} randevu.", { label, count: total })} onMouseLeave={() => setActive(null)}>
         {data.map((item, index) => (
           <span
             key={item.key}
@@ -46,7 +47,7 @@ export function ColumnChart({ data, label, unit = "randevu", height = 180, label
         ))}
       </div>
       <ul className={studio.srOnly}>
-        {data.map((item) => <li key={item.key}>{item.label}: {item.display ?? `${item.value} ${unit}`}</li>)}
+        {data.map((item) => <li key={item.key}>{item.label}: {item.display ?? t("{count} randevu", { count: item.value })}</li>)}
       </ul>
     </figure>
   );
@@ -106,9 +107,10 @@ export function RankBars({ data, label }: { data: BarDatum[]; label: string }) {
 
 /** Tek şeritli yığılmış dağılım + açıklama. */
 export function StackBar({ data, label, total }: { data: Array<{ key: string; label: string; value: number; percent: number; tone: string }>; label: string; total: number }) {
+  const t = useT();
   return (
     <div className={css.stack}>
-      <div className={css.stackTrack} role="img" aria-label={`${label}: ${data.map((item) => `${item.label} ${item.value}`).join(", ")}. Toplam ${total}.`}>
+      <div className={css.stackTrack} role="img" aria-label={t("{label}: {items}. Toplam {total}.", { label, items: data.map((item) => `${item.label} ${item.value}`).join(", "), total })}>
         {total ? data.filter((item) => item.value > 0).map((item) => (
           <i key={item.key} className={css.tone} data-tone={item.tone} style={{ flexGrow: item.value }} title={`${item.label}: ${item.value}`} />
         )) : null}
@@ -119,7 +121,7 @@ export function StackBar({ data, label, total }: { data: Array<{ key: string; la
             <span className={cx(css.legendDot, css.tone)} data-tone={item.tone} aria-hidden />
             <span className={css.legendLabel}>{item.label}</span>
             <b>{item.value}</b>
-            <small>%{item.percent}</small>
+            <small>{t("%{percent}", { percent: item.percent })}</small>
           </li>
         ))}
       </ul>

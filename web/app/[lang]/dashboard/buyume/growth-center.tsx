@@ -9,6 +9,8 @@ import { listCustomers } from "@/features/customers/customer-repository";
 import type { Appointment } from "@/types/appointments";
 import type { Customer } from "@/types/customer";
 import { EmptyState, Notice, Panel, Pill, Sk, StatTile, StudioHero, StudioPage, cx, studio } from "@/app/[lang]/dashboard/_studio";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 import css from "./buyume.module.css";
 
 const DAY = 86_400_000;
@@ -19,19 +21,21 @@ function dateValue(value: unknown) {
   return null;
 }
 
-function whatsapp(phone: string, name: string) {
+function whatsapp(phone: string, name: string, t: TFunction) {
   const digits = phone.replace(/\D/g, "").replace(/^0/, "90");
-  return `https://wa.me/${digits}?text=${encodeURIComponent(`Merhaba ${name}, sizi özledik! Size uygun yeni randevu saatlerimiz var.`)}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(t("Merhaba {name}, sizi özledik! Size uygun yeni randevu saatlerimiz var.", { name }))}`;
 }
 
 const ACTIONS = [
-  { title: "Boşlukları doldur", text: "Yaklaşan boş saatleri sadık müşterilerinizle paylaşın.", href: "/dashboard/takvim", icon: CalendarPlus2 },
-  { title: "İptali azalt", text: "Randevu öncesi hatırlatma ve iptal süresini gözden geçirin.", href: "/dashboard/ayarlar", icon: Target },
-  { title: "Hizmetleri güçlendir", text: "Yoğun saatlerde en çok tercih edilen hizmetlerinizi öne çıkarın.", href: "/dashboard/hizmetler", icon: Sparkles },
+  { title: tk("Boşlukları doldur"), text: tk("Yaklaşan boş saatleri sadık müşterilerinizle paylaşın."), href: "/dashboard/takvim", icon: CalendarPlus2 },
+  { title: tk("İptali azalt"), text: tk("Randevu öncesi hatırlatma ve iptal süresini gözden geçirin."), href: "/dashboard/ayarlar", icon: Target },
+  { title: tk("Hizmetleri güçlendir"), text: tk("Yoğun saatlerde en çok tercih edilen hizmetlerinizi öne çıkarın."), href: "/dashboard/hizmetler", icon: Sparkles },
 ] as const;
 
 /** Büyüme merkezi. `embedded` iken Analiz & Büyüme sayfasının içinde (o sayfanın hero'su altında) çizilir. */
 export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
+  const t = useT();
+  const intl = useIntlLocale();
   const { businessId } = useBusinessContext();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -44,7 +48,7 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
     let active = true;
     Promise.all([listAppointments(businessId), listCustomers(businessId)])
       .then(([nextAppointments, nextCustomers]) => { if (active) { setAppointments(nextAppointments); setCustomers(nextCustomers); setError(""); } })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Büyüme verileri alınamadı."); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : tk("Büyüme verileri alınamadı.")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [businessId]);
@@ -70,10 +74,10 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
     return { recent, revenue, growth, returning: returningIds.size, inactive, peaks, cancelled, health, now };
   }, [appointments, customers, reportTime]);
 
-  const calendarCta = <Link href="/dashboard/takvim" className={cx(studio.btn, embedded ? studio.btnPrimary : studio.btnBright)}><CalendarPlus2 size={17} aria-hidden /> Takvimi optimize et</Link>;
+  const calendarCta = <Link href="/dashboard/takvim" className={cx(studio.btn, embedded ? studio.btnPrimary : studio.btnBright)}><CalendarPlus2 size={17} aria-hidden /> {t("Takvimi optimize et")}</Link>;
 
   const body = loading ? (
-    <div role="status" aria-live="polite" aria-label="Büyüme verileri yükleniyor" className={css.stackY}>
+    <div role="status" aria-live="polite" aria-label={t("Büyüme verileri yükleniyor")} className={css.stackY}>
       <div className={studio.stats}>{[1, 2, 3, 4].map((i) => <Sk key={i} h={112} r={18} />)}</div>
       <div className={css.grid}><Sk h={260} r={26} /><Sk h={260} r={26} /></div>
     </div>
@@ -83,25 +87,25 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
         <div className={css.intro}>
           <span className={css.introIcon}><Sparkles size={20} aria-hidden /></span>
           <div className={css.introText}>
-            <b>Veriyi aksiyona dönüştürün</b>
-            <small>Yoğun saatleri görün, geri kazanılabilecek müşterileri bulun ve haftayı daha dolu planlayın.</small>
+            <b>{t("Veriyi aksiyona dönüştürün")}</b>
+            <small>{t("Yoğun saatleri görün, geri kazanılabilecek müşterileri bulun ve haftayı daha dolu planlayın.")}</small>
           </div>
           {calendarCta}
         </div>
       ) : null}
 
-      {error ? <Notice tone="bad" title="Veriler alınamadı">{error}</Notice> : null}
+      {error ? <Notice tone="bad" title={t("Veriler alınamadı")}>{t(error)}</Notice> : null}
 
       <div className={studio.stats}>
-        <StatTile accent icon={TrendingUp} label="30 günlük gelir" value={`${data.revenue.toLocaleString("tr-TR")} ₺`} hint={`${data.growth >= 0 ? "+" : ""}%${data.growth} önceki döneme göre`} />
-        <StatTile icon={Target} label="Tamamlama kalitesi" value={`%${data.health}`} hint={`${data.cancelled} iptal veya gelmedi`} />
-        <StatTile icon={UsersRound} label="Aktif müşteri" value={String(data.returning)} hint="son 30 günde hizmet alan" />
-        <StatTile icon={RefreshCw} label="Geri kazanım fırsatı" value={String(data.inactive.length)} hint="45+ gündür gelmeyen" />
+        <StatTile accent icon={TrendingUp} label={t("30 günlük gelir")} value={`${data.revenue.toLocaleString(intl)} ₺`} hint={t("{change} önceki döneme göre", { change: `${data.growth >= 0 ? "+" : ""}${t("%{percent}", { percent: data.growth })}` })} />
+        <StatTile icon={Target} label={t("Tamamlama kalitesi")} value={t("%{percent}", { percent: data.health })} hint={t("{count} iptal veya gelmedi", { count: data.cancelled })} />
+        <StatTile icon={UsersRound} label={t("Aktif müşteri")} value={String(data.returning)} hint={t("son 30 günde hizmet alan")} />
+        <StatTile icon={RefreshCw} label={t("Geri kazanım fırsatı")} value={String(data.inactive.length)} hint={t("45+ gündür gelmeyen")} />
       </div>
 
       <div className={css.grid}>
-        <Panel icon={MessageCircleMore} title="Sizi özleyen müşteriler" description="Müşteri geri kazanımı · 45+ gündür gelmeyenler"
-          actions={data.inactive.length ? <Pill tone="accent">{data.inactive.length} kişi</Pill> : undefined}>
+        <Panel icon={MessageCircleMore} title={t("Sizi özleyen müşteriler")} description={t("Müşteri geri kazanımı · 45+ gündür gelmeyenler")}
+          actions={data.inactive.length ? <Pill tone="accent">{t("{count} kişi", { count: data.inactive.length })}</Pill> : undefined}>
           {data.inactive.length ? (
             <ul className={css.people}>
               {data.inactive.map((customer) => {
@@ -112,37 +116,37 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
                     <span className={css.avatar} aria-hidden>{customer.fullName.charAt(0)}</span>
                     <div className={css.personText}>
                       <b>{customer.fullName}</b>
-                      <small>{customer.totalAppointments} randevu · {customer.totalSpent.toLocaleString("tr-TR")} ₺{away ? ` · ${away} gün önce` : ""}</small>
+                      <small>{t("{count} randevu", { count: customer.totalAppointments })} · {customer.totalSpent.toLocaleString(intl)} ₺{away ? ` · ${t("{count} gün önce", { count: away })}` : ""}</small>
                     </div>
-                    <a href={whatsapp(customer.phone, customer.fullName)} target="_blank" rel="noreferrer" className={cx(studio.btn, studio.btnSoft, studio.btnSm, css.waBtn)}>
-                      <MessageCircleMore size={15} aria-hidden /><span>Mesaj gönder</span>
+                    <a href={whatsapp(customer.phone, customer.fullName, t)} target="_blank" rel="noreferrer" className={cx(studio.btn, studio.btnSoft, studio.btnSm, css.waBtn)}>
+                      <MessageCircleMore size={15} aria-hidden /><span>{t("Mesaj gönder")}</span>
                     </a>
                   </li>
                 );
               })}
             </ul>
-          ) : <EmptyState mood="happy" size={80} title="Herkes yakında" description="Şimdilik geri kazanım bekleyen müşteri yok." />}
+          ) : <EmptyState mood="happy" size={80} title={t("Herkes yakında")} description={t("Şimdilik geri kazanım bekleyen müşteri yok.")} />}
         </Panel>
 
-        <Panel icon={Clock3} title="En yoğun saatler" description="Talep radarı · son 30 gün">
+        <Panel icon={Clock3} title={t("En yoğun saatler")} description={t("Talep radarı · son 30 gün")}>
           {data.peaks.length ? (
-            <ol className={css.peaks} aria-label="En yoğun saat aralıkları">
+            <ol className={css.peaks} aria-label={t("En yoğun saat aralıkları")}>
               {data.peaks.map(([hour, count], index) => (
                 <li key={hour} className={css.peak}>
                   <div className={css.peakTop}>
                     <b>{String(hour).padStart(2, "0")}:00 – {String(hour + 1).padStart(2, "0")}:00</b>
-                    <span>{count} randevu</span>
+                    <span>{t("{count} randevu", { count })}</span>
                   </div>
                   <span className={css.peakTrack} aria-hidden><i style={{ width: `${Math.max(22, 100 - index * 24)}%` }} /></span>
                 </li>
               ))}
             </ol>
-          ) : <EmptyState mood="thinking" size={80} title="Radar ısınıyor" description="Talep haritası için randevu verisi bekleniyor." />}
-          <Link href="/dashboard/calisma-saatleri" className={cx(studio.btn, studio.btnSoft, studio.btnBlock, css.panelCta)}>Çalışma saatlerini düzenle <ArrowRight size={15} aria-hidden /></Link>
+          ) : <EmptyState mood="thinking" size={80} title={t("Radar ısınıyor")} description={t("Talep haritası için randevu verisi bekleniyor.")} />}
+          <Link href="/dashboard/calisma-saatleri" className={cx(studio.btn, studio.btnSoft, studio.btnBlock, css.panelCta)}>{t("Çalışma saatlerini düzenle")} <ArrowRight size={15} aria-hidden /></Link>
         </Panel>
       </div>
 
-      <Panel icon={Rocket} title="Bu haftanın akıllı aksiyonları" description="Verilerinize göre en etkili sırayla">
+      <Panel icon={Rocket} title={t("Bu haftanın akıllı aksiyonları")} description={t("Verilerinize göre en etkili sırayla")}>
         <div className={css.actions}>
           {ACTIONS.map((action, index) => {
             const Icon = action.icon;
@@ -150,11 +154,11 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
               <Link key={action.title} href={action.href} className={css.action}>
                 <span className={css.actionTop}>
                   <span className={css.actionIcon}><Icon size={19} aria-hidden /></span>
-                  <span className={css.actionStep}>{index + 1}. adım</span>
+                  <span className={css.actionStep}>{t("{step}. adım", { step: index + 1 })}</span>
                 </span>
-                <b>{action.title}</b>
-                <small>{action.text}</small>
-                <span className={css.actionGo}>Uygula <ArrowRight size={14} aria-hidden /></span>
+                <b>{t(action.title)}</b>
+                <small>{t(action.text)}</small>
+                <span className={css.actionGo}>{t("Uygula")} <ArrowRight size={14} aria-hidden /></span>
               </Link>
             );
           })}
@@ -165,9 +169,9 @@ export function GrowthCenter({ embedded = false }: { embedded?: boolean }) {
 
   if (embedded) return body;
   return (
-    <StudioPage label="Büyüme merkezi">
-      <StudioHero eyebrow="Akıllı büyüme motoru" icon={Sparkles} title="Veriyi aksiyona dönüştür."
-        description="Yoğun saatleri görün, geri kazanılabilecek müşterileri bulun ve önümüzdeki haftayı daha dolu planlayın."
+    <StudioPage label={t("Büyüme merkezi")}>
+      <StudioHero eyebrow={t("Akıllı büyüme motoru")} icon={Sparkles} title={t("Veriyi aksiyona dönüştür.")}
+        description={t("Yoğun saatleri görün, geri kazanılabilecek müşterileri bulun ve önümüzdeki haftayı daha dolu planlayın.")}
         actions={calendarCta} mascot="happy" />
       {body}
     </StudioPage>

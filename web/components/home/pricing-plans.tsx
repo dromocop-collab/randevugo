@@ -6,8 +6,9 @@ import { ArrowUpRight, BadgeCheck, Check, Gift, MessageSquareText, Minus, Sparkl
 import { PLAN_FEATURE_LIST } from "@/constants/plans";
 import { ALL_SUBSCRIPTION_ENTITLEMENTS, SUBSCRIPTION_ENTITLEMENTS } from "@/constants/subscription-entitlements";
 import type { PlatformPlan } from "@/features/subscriptions/platform-plan-repository";
-import { smsQuotaLabel, staffLimitLabel, storeLimitLabel } from "@/features/subscriptions/platform-plan-domain";
 import { useAuth } from "@/hooks/use-auth";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 import { currencySymbol, formatPrice, yearlySavingPercent } from "./public-plans";
 import styles from "./business.module.css";
 
@@ -17,32 +18,49 @@ type Cycle = "monthly" | "yearly";
 export function useBusinessCta() {
   const { user, status } = useAuth();
   const signedIn = status === "authenticated" && Boolean(user);
-  return signedIn ? { href: "/dashboard", label: "Panelime devam et" } : { href: "/isletmeler/kayit", label: "Ücretsiz denemeyi başlat" };
+  // label tk() ile işaretli; gösterirken t(cta.label).
+  return signedIn ? { href: "/dashboard", label: tk("Panelime devam et") } : { href: "/isletmeler/kayit", label: tk("Ücretsiz denemeyi başlat") };
 }
 
 export function PricingPlans({ plans }: { plans: PlatformPlan[] }) {
+  const t = useT();
   const [cycle, setCycle] = useState<Cycle>("monthly");
   const cta = useBusinessCta();
   const bestSaving = Math.max(0, ...plans.map(yearlySavingPercent));
 
   return <div className={styles.pricing}>
-    <div className={styles.cycle} role="radiogroup" aria-label="Ödeme dönemi">
-      <button type="button" role="radio" aria-checked={cycle === "monthly"} className={cycle === "monthly" ? styles.cycleOn : ""} onClick={() => setCycle("monthly")}>Aylık</button>
-      <button type="button" role="radio" aria-checked={cycle === "yearly"} className={cycle === "yearly" ? styles.cycleOn : ""} onClick={() => setCycle("yearly")}>Yıllık{bestSaving > 0 && <small>%{bestSaving} avantaj</small>}</button>
+    <div className={styles.cycle} role="radiogroup" aria-label={t("Ödeme dönemi")}>
+      <button type="button" role="radio" aria-checked={cycle === "monthly"} className={cycle === "monthly" ? styles.cycleOn : ""} onClick={() => setCycle("monthly")}>{t("Aylık")}</button>
+      <button type="button" role="radio" aria-checked={cycle === "yearly"} className={cycle === "yearly" ? styles.cycleOn : ""} onClick={() => setCycle("yearly")}>{t("Yıllık")}{bestSaving > 0 && <small>{t("%{percent} avantaj", { percent: bestSaving })}</small>}</button>
       <span className={styles.cycleThumb} data-cycle={cycle} aria-hidden="true" />
     </div>
     {/* data-count: 1 → yatay tek kart, 2–3 → yan yana, 4+ → sarmalanan ızgara (CSS). */}
     <div className={`${styles.planGrid} ${plans.length === 1 ? styles.planGridSingle : ""}`} data-count={Math.min(plans.length, 4)}>
-      {plans.map((plan) => <PlanCard key={plan.id} plan={plan} cycle={cycle} href={cta.href} label={cta.label} single={plans.length === 1} compare={plans.length > 1} />)}
+      {plans.map((plan) => <PlanCard key={plan.id} plan={plan} cycle={cycle} href={cta.href} label={t(cta.label)} single={plans.length === 1} compare={plans.length > 1} />)}
     </div>
   </div>;
 }
 
 /** Everything every plan has (shown once per card, not as a differentiator). */
-const BASE_FEATURES = ["Online randevu sayfası", "Keşfet'te görünme", "QR randevu linki", "Destek"];
+const BASE_FEATURES = [tk("Online randevu sayfası"), tk("Keşfet'te görünme"), tk("QR randevu linki"), tk("Destek")];
 const DEFAULT_FEATURE_TEXTS = new Set<string>(PLAN_FEATURE_LIST);
 
+function staffLimitText(t: TFunction, maxStaff: number) {
+  return maxStaff >= 100 ? t("Sınırsız çalışan") : t("{count} çalışan", { count: maxStaff });
+}
+
+function storeLimitText(t: TFunction, maxStores: number) {
+  return maxStores <= 1 ? t("1 şube") : t("{count} şubeye kadar", { count: maxStores });
+}
+
+function smsQuotaText(t: TFunction, quota: number | null, locale: string) {
+  return quota === null ? null : t("Ayda {quota} SMS", { quota: quota.toLocaleString(locale) });
+}
+
 function PlanCard({ plan, cycle, href, label, single, compare }: { plan: PlatformPlan; cycle: Cycle; href: string; label: string; single: boolean; compare: boolean }) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
+  const smsText = smsQuotaText(t, plan.smsMonthlyQuota, intlLocale);
   const symbol = currencySymbol(plan.currency);
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const monthlyEquivalent = plan.yearlyPrice > 0 ? plan.yearlyPrice / 12 : 0;
@@ -62,41 +80,42 @@ function PlanCard({ plan, cycle, href, label, single, compare }: { plan: Platfor
     <div className={styles.planMain}>
       <div className={styles.planTop}>
         <h3>{plan.label}</h3>
-        {plan.isRecommended && <span className={styles.planBadge}><Sparkles size={12} aria-hidden="true" /> Önerilen</span>}
+        {plan.isRecommended && <span className={styles.planBadge}><Sparkles size={12} aria-hidden="true" /> {t("Önerilen")}</span>}
       </div>
-      <p className={styles.planDesc}>{plan.description || (single ? "İşletmenizin tüm randevu operasyonu için tek paket." : `${includedCount} özellik dahil.`)}</p>
+      <p className={styles.planDesc}>{plan.description || (single ? t("İşletmenizin tüm randevu operasyonu için tek paket.") : t("{count} özellik dahil.", { count: includedCount }))}</p>
       <div className={styles.planPrice} aria-live="polite">
-        <b>{formatPrice(price)} {symbol}</b><span>/ {cycle === "yearly" ? "yıl" : "ay"}</span>
+        <b>{formatPrice(price, intlLocale)} {symbol}</b><span>/ {cycle === "yearly" ? t("yıl") : t("ay")}</span>
       </div>
       <p className={styles.planSub}>
         {cycle === "yearly"
-          ? monthlyEquivalent > 0 ? <>Aylık yaklaşık <b>{formatPrice(monthlyEquivalent)} {symbol}</b>{saving > 0 && <> · %{saving} tasarruf</>}</> : "Yıllık ödeme"
-          : saving > 0 ? <>Yıllık öderseniz %{saving} tasarruf</> : "Aylık ödeme, istediğiniz zaman bırakın"}
+          ? monthlyEquivalent > 0 ? <>{t("Aylık yaklaşık")} <b>{formatPrice(monthlyEquivalent, intlLocale)} {symbol}</b>{saving > 0 && <> · {t("%{percent} tasarruf", { percent: saving })}</>}</> : t("Yıllık ödeme")
+          : saving > 0 ? t("Yıllık öderseniz %{percent} tasarruf", { percent: saving }) : t("Aylık ödeme, istediğiniz zaman bırakın")}
       </p>
-      {plan.trialDays > 0 && <p className={styles.planTrial}><Gift size={15} aria-hidden="true" /> İlk {plan.trialDays} gün ücretsiz · Kredi kartı gerekmez</p>}
+      {plan.trialDays > 0 && <p className={styles.planTrial}><Gift size={15} aria-hidden="true" /> {t("İlk {count} gün ücretsiz · Kredi kartı gerekmez", { count: plan.trialDays })}</p>}
       <Link href={href} className={`${styles.planCta} ${!single && !plan.isRecommended ? styles.planCtaQuiet : ""}`}>{label} <ArrowUpRight size={17} aria-hidden="true" /></Link>
       <div className={styles.planLimits}>
-        <span><Store size={14} aria-hidden="true" /> {storeLimitLabel(plan.maxStores)}</span>
-        <span><UsersRound size={14} aria-hidden="true" /> {staffLimitLabel(plan.maxStaff)}</span>
-        {smsQuotaLabel(plan.smsMonthlyQuota) ? <span><MessageSquareText size={14} aria-hidden="true" /> {smsQuotaLabel(plan.smsMonthlyQuota)}</span> : null}
+        <span><Store size={14} aria-hidden="true" /> {storeLimitText(t, plan.maxStores)}</span>
+        <span><UsersRound size={14} aria-hidden="true" /> {staffLimitText(t, plan.maxStaff)}</span>
+        {smsText ? <span><MessageSquareText size={14} aria-hidden="true" /> {smsText}</span> : null}
       </div>
     </div>
     <div className={styles.planFeatures}>
-      <span className={styles.planFeaturesLabel}>{single ? "PAKETTE HER ŞEY DAHİL" : "PAKETTE NELER VAR"}</span>
+      <span className={styles.planFeaturesLabel}>{single ? t("PAKETTE HER ŞEY DAHİL") : t("PAKETTE NELER VAR")}</span>
       <ul>
-        {BASE_FEATURES.map((feature) => <li key={feature}><span><Check size={12} aria-hidden="true" /></span>{feature}</li>)}
+        {BASE_FEATURES.map((feature) => <li key={feature}><span><Check size={12} aria-hidden="true" /></span>{t(feature)}</li>)}
         {extras.map((feature) => <li key={`x-${feature}`}><span><Check size={12} aria-hidden="true" /></span>{feature}</li>)}
         {rows.map((row) => row.included
-          ? <li key={row.key}><span><Check size={12} aria-hidden="true" /></span>{row.label}</li>
-          : <li key={row.key} className={styles.planFeatureOff} aria-label={`${row.label}: bu pakette yok`}><span><Minus size={12} aria-hidden="true" /></span>{row.label}</li>)}
+          ? <li key={row.key}><span><Check size={12} aria-hidden="true" /></span>{t(row.label)}</li>
+          : <li key={row.key} className={styles.planFeatureOff} aria-label={t("{feature}: bu pakette yok", { feature: t(row.label) })}><span><Minus size={12} aria-hidden="true" /></span>{t(row.label)}</li>)}
       </ul>
-      <p className={styles.planNote}><BadgeCheck size={14} aria-hidden="true" /> Siz onaylamadan ücretli dönem başlamaz.</p>
+      <p className={styles.planNote}><BadgeCheck size={14} aria-hidden="true" /> {t("Siz onaylamadan ücretli dönem başlamaz.")}</p>
     </div>
   </article>;
 }
 
 /** Oturuma göre "Panelime devam et" / "Ücretsiz denemeyi başlat" bağlantısı. */
 export function BusinessCtaLink({ className }: { className?: string }) {
+  const t = useT();
   const cta = useBusinessCta();
-  return <Link href={cta.href} className={className}>{cta.label} <ArrowUpRight size={17} aria-hidden="true" /></Link>;
+  return <Link href={cta.href} className={className}>{t(cta.label)} <ArrowUpRight size={17} aria-hidden="true" /></Link>;
 }

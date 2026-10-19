@@ -11,6 +11,8 @@ import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { encodeQr, qrSvgPath } from "@/features/businesses/qr-code";
 import { storeDisplayUrl, storeUrl, whatsappShareUrl } from "@/features/businesses/setup-helpers";
 import { InstagramGlyph } from "@/features/share/instagram-glyph";
+import { tk } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 import r from "./store-ready.module.css";
 
 export interface StoreReadyProps {
@@ -52,6 +54,7 @@ async function copyText(text: string) {
 
 /** "Mağazan hazır" — işletme oluşturulduktan sonra paylaşım ve ilk adımlar ekranı. */
 export function StoreReady({ businessName, slug, pendingApproval, servicesCreated, servicesFailed, onRetryServices, logoUploaded, coverUploaded, onGoToDashboard }: StoreReadyProps) {
+  const t = useT();
   const url = storeUrl(slug);
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
@@ -64,15 +67,15 @@ export function StoreReady({ businessName, slug, pendingApproval, servicesCreate
   async function copyLink(source: "link" | "instagram") {
     const ok = await copyText(url);
     if (!ok) {
-      toast.error("Kopyalanamadı. Bağlantıyı elle seçip kopyalayabilirsin.");
+      toast.error(t("Kopyalanamadı. Bağlantıyı elle seçip kopyalayabilirsin."));
       return;
     }
     setCopied(true);
     setShared(true);
     window.setTimeout(() => setCopied(false), 2200);
     toast.success(source === "instagram"
-      ? "Link kopyalandı. Instagram › Profili düzenle › Bağlantılar › Bağlantı ekle adımıyla biyografine yapıştır."
-      : "Mağaza linkin kopyalandı.");
+      ? t("Link kopyalandı. Instagram › Profili düzenle › Bağlantılar › Bağlantı ekle adımıyla biyografine yapıştır.")
+      : t("Mağaza linkin kopyalandı."));
   }
 
   function downloadQr() {
@@ -95,79 +98,84 @@ export function StoreReady({ businessName, slug, pendingApproval, servicesCreate
   }
 
   const steps = [
-    { id: "logo", label: "Logo yükle", hint: "Müşteriler seni tanısın", href: "/dashboard/ayarlar", icon: ImagePlus, done: Boolean(logoUploaded) },
-    { id: "cover", label: "Kapak fotoğrafı ekle", hint: "Vitrinin ilk izlenimi", href: "/dashboard/ayarlar", icon: Camera, done: Boolean(coverUploaded) },
-    { id: "staff", label: "İlk çalışanını davet et", hint: "Takvimler ve yetkiler", href: "/dashboard/calisanlar", icon: UserPlus, done: false },
-    { id: "test", label: "Test randevusu al", hint: "Akışı kendin dene", href: "/dashboard/randevular", icon: CalendarPlus, done: false },
-    { id: "share", label: "Linkini paylaş", hint: "WhatsApp, Instagram, QR", href: null, icon: Link2, done: shared },
+    { id: "logo", label: tk("Logo yükle"), hint: tk("Müşteriler seni tanısın"), href: "/dashboard/ayarlar", icon: ImagePlus, done: Boolean(logoUploaded) },
+    { id: "cover", label: tk("Kapak fotoğrafı ekle"), hint: tk("Vitrinin ilk izlenimi"), href: "/dashboard/ayarlar", icon: Camera, done: Boolean(coverUploaded) },
+    { id: "staff", label: tk("İlk çalışanını davet et"), hint: tk("Takvimler ve yetkiler"), href: "/dashboard/calisanlar", icon: UserPlus, done: false },
+    { id: "test", label: tk("Test randevusu al"), hint: tk("Akışı kendin dene"), href: "/dashboard/randevular", icon: CalendarPlus, done: false },
+    { id: "share", label: tk("Linkini paylaş"), hint: "WhatsApp, Instagram, QR", href: null, icon: Link2, done: shared },
   ];
   const doneCount = steps.filter((item) => item.done).length;
+  // İşletme adı kalın yazılır: {name} yer tutucusu çeviriden sonra bölünür.
+  const createdSentence = servicesCreated
+    ? t("{name} için randevu sayfan oluşturuldu; {count} hizmet online randevuya açıldı.", { count: servicesCreated })
+    : t("{name} için randevu sayfan oluşturuldu.");
+  const [createdBefore = "", createdAfter = ""] = createdSentence.split("{name}");
 
   return (
     <section className={r.root} aria-labelledby="store-ready-title">
       <div className={r.confetti} aria-hidden="true">{CONFETTI.map((index) => <i key={index} style={{ ["--i" as string]: index }} />)}</div>
 
       <header className={r.hero}>
-        <RoviMascot size={104} mood="happy" alt="Rovi kutluyor" priority />
+        <RoviMascot size={104} mood="happy" alt={t("Rovi kutluyor")} priority />
         <div>
-          <span className={r.eyebrow}>KURULUM TAMAMLANDI</span>
-          <h1 id="store-ready-title">Mağazan hazır!</h1>
-          <p><b>{businessName}</b> için randevu sayfan oluşturuldu{servicesCreated ? `; ${servicesCreated} hizmet online randevuya açıldı` : ""}.</p>
+          <span className={r.eyebrow}>{t("KURULUM TAMAMLANDI")}</span>
+          <h1 id="store-ready-title">{t("Mağazan hazır!")}</h1>
+          <p>{createdBefore}<b>{businessName}</b>{createdAfter}</p>
         </div>
       </header>
 
       {pendingApproval ? (
-        <p className={r.notice}><ShieldCheck size={17} aria-hidden="true" /><span>Mağazan kısa bir kontrolden sonra herkese açık yayına girer. Bu sürede paneli hazırlayabilir, linkini şimdiden paylaşmaya hazır tutabilirsin.</span></p>
+        <p className={r.notice}><ShieldCheck size={17} aria-hidden="true" /><span>{t("Mağazan kısa bir kontrolden sonra herkese açık yayına girer. Bu sürede paneli hazırlayabilir, linkini şimdiden paylaşmaya hazır tutabilirsin.")}</span></p>
       ) : null}
       {servicesFailed ? (
         <p className={`${r.notice} ${r.warn}`}>
           <RefreshCw size={17} aria-hidden="true" />
-          <span>Seçtiğin hizmetlerin bir kısmı eklenemedi.</span>
-          {onRetryServices ? <button type="button" onClick={retry} disabled={retrying}>{retrying ? "Deneniyor…" : "Tekrar dene"}</button> : null}
+          <span>{t("Seçtiğin hizmetlerin bir kısmı eklenemedi.")}</span>
+          {onRetryServices ? <button type="button" onClick={retry} disabled={retrying}>{retrying ? t("Deneniyor…") : t("Tekrar dene")}</button> : null}
         </p>
       ) : null}
 
       <div className={r.grid}>
         <div className={r.share}>
-          <span className={r.label}>Mağaza linkin</span>
+          <span className={r.label}>{t("Mağaza linkin")}</span>
           <div className={r.linkRow}>
             <code title={url}>{storeDisplayUrl(slug)}</code>
-            <button type="button" className={r.copy} onClick={() => copyLink("link")} aria-label="Mağaza linkini kopyala">
-              {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}<span>{copied ? "Kopyalandı" : "Kopyala"}</span>
+            <button type="button" className={r.copy} onClick={() => copyLink("link")} aria-label={t("Mağaza linkini kopyala")}>
+              {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}<span>{copied ? t("Kopyalandı") : t("Kopyala")}</span>
             </button>
           </div>
-          <span className="sr-only" aria-live="polite">{copied ? "Link panoya kopyalandı" : ""}</span>
+          <span className="sr-only" aria-live="polite">{copied ? t("Link panoya kopyalandı") : ""}</span>
           <div className={r.actions}>
-            <a className={r.whatsapp} href={whatsappShareUrl(businessName, url)} target="_blank" rel="noopener noreferrer" onClick={() => setShared(true)}>
-              <MessageCircle size={18} aria-hidden="true" /> WhatsApp&apos;ta paylaş
+            <a className={r.whatsapp} href={whatsappShareUrl(businessName, url, t)} target="_blank" rel="noopener noreferrer" onClick={() => setShared(true)}>
+              <MessageCircle size={18} aria-hidden="true" /> {t("WhatsApp'ta paylaş")}
             </a>
             <button type="button" className={r.instagram} onClick={() => copyLink("instagram")}>
-              <InstagramGlyph /> Instagram biyografine ekle
+              <InstagramGlyph /> {t("Instagram biyografine ekle")}
             </button>
           </div>
-          <p className={r.igHint}>Instagram&apos;da <b>Profili düzenle › Bağlantılar</b> bölümüne yapıştır; takipçilerin tek dokunuşla randevu alsın.</p>
-          {!pendingApproval ? <a className={r.visit} href={url} target="_blank" rel="noopener noreferrer">Mağazamı aç <ExternalLink size={14} aria-hidden="true" /></a> : null}
+          <p className={r.igHint}>{t("Instagram'da Profili düzenle › Bağlantılar bölümüne yapıştır; takipçilerin tek dokunuşla randevu alsın.")}</p>
+          {!pendingApproval ? <a className={r.visit} href={url} target="_blank" rel="noopener noreferrer">{t("Mağazamı aç")} <ExternalLink size={14} aria-hidden="true" /></a> : null}
         </div>
 
         <div className={r.qrCard}>
-          <svg viewBox={`-4 -4 ${qr.size + 8} ${qr.size + 8}`} role="img" aria-label={`${storeDisplayUrl(slug)} adresinin QR kodu`} shapeRendering="crispEdges" className={r.qr}>
+          <svg viewBox={`-4 -4 ${qr.size + 8} ${qr.size + 8}`} role="img" aria-label={t("{url} adresinin QR kodu", { url: storeDisplayUrl(slug) })} shapeRendering="crispEdges" className={r.qr}>
             <rect x={-4} y={-4} width={qr.size + 8} height={qr.size + 8} fill="#fff" />
             <path d={qr.path} fill="#0c2a1b" />
           </svg>
-          <p>Kasaya, vitrine veya kartvizite koy; müşterin okutunca randevu sayfan açılsın.</p>
-          <button type="button" className={r.ghost} onClick={downloadQr}><Download size={16} aria-hidden="true" /> QR&apos;ı indir</button>
+          <p>{t("Kasaya, vitrine veya kartvizite koy; müşterin okutunca randevu sayfan açılsın.")}</p>
+          <button type="button" className={r.ghost} onClick={downloadQr}><Download size={16} aria-hidden="true" /> {t("QR'ı indir")}</button>
         </div>
       </div>
 
       <div className={r.checklist}>
         <div className={r.checkHead}>
-          <h2>İlk adımların</h2>
+          <h2>{t("İlk adımların")}</h2>
           <span>{doneCount}/{steps.length}</span>
         </div>
         <div className={r.meter} aria-hidden="true"><i style={{ width: `${(doneCount / steps.length) * 100}%` }} /></div>
         <ul>
           {steps.map(({ id, label, hint, href, icon: Icon, done }) => {
-            const body = <><span className={`${r.dot} ${done ? r.dotDone : ""}`} aria-hidden="true">{done ? <Check size={14} /> : <Icon size={15} />}</span><span className={r.itemText}><b>{label}</b><small>{done ? "Tamamlandı" : hint}</small></span>{!done ? <ArrowRight size={16} aria-hidden="true" className={r.itemArrow} /> : null}</>;
+            const body = <><span className={`${r.dot} ${done ? r.dotDone : ""}`} aria-hidden="true">{done ? <Check size={14} /> : <Icon size={15} />}</span><span className={r.itemText}><b>{t(label)}</b><small>{done ? t("Tamamlandı") : t(hint)}</small></span>{!done ? <ArrowRight size={16} aria-hidden="true" className={r.itemArrow} /> : null}</>;
             return (
               <li key={id} className={done ? r.itemDone : ""}>
                 {href ? <Link href={href}>{body}</Link> : <button type="button" onClick={() => copyLink("link")}>{body}</button>}
@@ -177,7 +185,7 @@ export function StoreReady({ businessName, slug, pendingApproval, servicesCreate
         </ul>
       </div>
 
-      <button type="button" className={r.primary} onClick={onGoToDashboard}>Panele git <ArrowRight size={18} aria-hidden="true" /></button>
+      <button type="button" className={r.primary} onClick={onGoToDashboard}>{t("Panele git")} <ArrowRight size={18} aria-hidden="true" /></button>
     </section>
   );
 }

@@ -15,6 +15,7 @@ import { breadcrumbJsonLd, graph, storefrontJsonLd, webPageJsonLd, type Crumb } 
 import { categoryCounts, getSeoIndex, sortForListing } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { displayPlace, locative, seoSlug } from "@/lib/seo/text";
+import { getLocale, getT } from "@/i18n/server";
 import styles from "@/components/seo/seo-blocks.module.css";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ function serializable<T>(value: T): T {
 
 export default async function BusinessProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const t = await getT();
+  const turkish = (await getLocale()) === "tr";
+  const inPlace = (place: string) => (turkish ? locative(place) : place);
   const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || business.status !== "active" || !business.isPublished) notFound();
   const [workingHours, services, staff, reviews, serviceCategories, index] = await Promise.all([
@@ -45,9 +49,9 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
   const cityPageExists = cityRows.length > 0;
   const cityCategoryExists = cityPageExists && isSeoCategory(category) && cityRows.some((row) => row.category === category);
   const crumbs: Crumb[] = [
-    { name: "Ana Sayfa", path: "/" },
+    { name: t("Ana Sayfa"), path: "/" },
     ...(cityPageExists ? [{ name: cityName, path: `/sehir/${citySlug}` }] : []),
-    ...(cityCategoryExists ? [{ name: `${cityName} ${categoryDisplayName(category)}`, path: `/sehir/${citySlug}/${category}` }] : []),
+    ...(cityCategoryExists ? [{ name: `${cityName} ${t(categoryDisplayName(category))}`, path: `/sehir/${citySlug}/${category}` }] : []),
     { name: business.name, path },
   ];
 
@@ -56,11 +60,11 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
   const similar = sortForListing(others.filter((row) => row.category === category));
   const related = [...similar, ...sortForListing(others.filter((row) => row.category !== category))].slice(0, 8);
   const otherCategories = categoryCounts(cityRows).filter((item) => item.slug !== category).slice(0, 10);
-  const noun = seoCategory(category)?.noun;
+  const noun = turkish ? seoCategory(category)?.noun : seoCategory(category) ? t(categoryDisplayName(category)).toLowerCase() : undefined;
 
   const pageUrl = absoluteUrl(path);
   const jsonLd = graph(
-    webPageJsonLd({ path, name: business.name, description: business.description?.trim() || `${business.name} online randevu`, breadcrumbId: `${pageUrl}#breadcrumb`, mainEntityId: `${pageUrl}#business`, image: business.coverUrl || business.logoUrl }),
+    webPageJsonLd({ path, name: business.name, description: business.description?.trim() || t("{name} online randevu", { name: business.name }), breadcrumbId: `${pageUrl}#breadcrumb`, mainEntityId: `${pageUrl}#business`, image: business.coverUrl || business.logoUrl }),
     breadcrumbJsonLd(crumbs, `${pageUrl}#breadcrumb`),
     storefrontJsonLd({
       slug: business.slug || slug,
@@ -94,17 +98,17 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
       {related.length > 0 && (
         <LinkCloud
           id="benzer-isletmeler"
-          kicker="BENZER İŞLETMELER"
-          title={similar.length > 0 && noun ? `${locative(cityName)} diğer ${noun} işletmeleri` : `${locative(cityName)} diğer işletmeler`}
+          kicker={t("BENZER İŞLETMELER")}
+          title={similar.length > 0 && noun ? t("{place} diğer {noun} işletmeleri", { place: inPlace(cityName), noun }) : t("{place} diğer işletmeler", { place: inPlace(cityName) })}
           links={related.map((row) => ({ href: businessPath(row.slug), label: row.name, meta: [row.district, row.reviewCount > 0 ? `★ ${row.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ") }))}
         />
       )}
       {otherCategories.length > 0 && (
         <LinkCloud
           id="bolgedeki-kategoriler"
-          kicker="BU BÖLGEDE"
-          title={`${locative(cityName)} diğer kategoriler`}
-          links={otherCategories.map((item) => ({ href: `/sehir/${citySlug}/${item.slug}`, label: `${cityName} ${item.label.toLocaleLowerCase("tr-TR")}`, meta: `${item.count} işletme` }))}
+          kicker={t("BU BÖLGEDE")}
+          title={t("{place} diğer kategoriler", { place: inPlace(cityName) })}
+          links={otherCategories.map((item) => ({ href: `/sehir/${citySlug}/${item.slug}`, label: `${cityName} ${turkish ? item.label.toLocaleLowerCase("tr-TR") : t(item.label).toLowerCase()}`, meta: t("{count} işletme", { count: item.count }) }))}
         />
       )}
     </div>

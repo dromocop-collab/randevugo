@@ -61,7 +61,9 @@ for (const file of files) {
   const originalLines = original.split("\n");
   for (const match of source.matchAll(T_CALL)) {
     if (match[1] === "`" && match[2].includes("${")) continue; // dinamik anahtar (ör. t(errorMessage)) denetlenemez
-    const key = unescape(match[2], match[1]);
+    const plain = unescape(match[2], match[1]);
+    const ctx = /^\s*,\s*\{[^}]*?\bctx\s*:\s*["']([\w-]+)["']/.exec(source.slice(match.index + match[0].length - 1))?.[1];
+    const key = ctx ? `${ctx}::${plain}` : plain;
     keyCount += 1;
     for (const [locale, dict] of Object.entries(dictionaries)) {
       if (!dict[key]) {

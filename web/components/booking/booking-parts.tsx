@@ -3,11 +3,17 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
-import { tr } from "date-fns/locale";
+import { enGB, tr } from "date-fns/locale";
 import { CheckCircle2, ChevronLeft, ChevronRight, MoonStar, ShieldCheck, Sun, Sunrise, X } from "lucide-react";
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import { dateFromIso, dayPartOf, type DayPart } from "./booking-utils";
+import { useLocale, useT } from "@/i18n/client";
+import { localizeHref, tk } from "@/i18n/config";
 import s from "./booking.module.css";
+
+function useDateLocale() {
+  return useLocale() === "tr" ? tr : enGB;
+}
 
 /* ━━━ Alt sayfa (iOS benzeri) ━━━ */
 export function BottomSheet({
@@ -27,6 +33,7 @@ export function BottomSheet({
   footer?: ReactNode;
   busy?: boolean;
 }) {
+  const t = useT();
   const titleId = useId();
   const sheetRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -70,7 +77,7 @@ export function BottomSheet({
             <h3 id={titleId}>{title}</h3>
             {description && <p>{description}</p>}
           </div>
-          <button type="button" className={s.iconBtn} onClick={onClose} disabled={busy} aria-label="Kapat"><X size={19} /></button>
+          <button type="button" className={s.iconBtn} onClick={onClose} disabled={busy} aria-label={t("Kapat")}><X size={19} /></button>
         </header>
         <div className={s.sheetBody}>{children}</div>
         {footer && <footer className={s.sheetFoot}>{footer}</footer>}
@@ -96,6 +103,8 @@ export function DateStrip({
   loading: boolean;
   onSelect: (value: string) => void;
 }) {
+  const t = useT();
+  const dateLocale = useDateLocale();
   const stripRef = useRef<HTMLDivElement>(null);
   const tomorrow = days[days.indexOf(today) + 1];
 
@@ -107,29 +116,29 @@ export function DateStrip({
     strip.scrollTo({ left: Math.max(0, chip.offsetLeft - strip.clientWidth / 2 + chip.clientWidth / 2), behavior: reduce ? "auto" : "smooth" });
   }, [value]);
 
-  return <div ref={stripRef} className={s.dateStrip} role="group" aria-label="Tarih seçin">
+  return <div ref={stripRef} className={s.dateStrip} role="group" aria-label={t("Tarih seçin")}>
     {days.map((iso) => {
       const date = dateFromIso(iso);
       const known = iso in counts;
       const count = counts[iso] ?? 0;
       const disabled = known && count === 0 && iso !== value;
       const selected = iso === value;
-      const dow = iso === today ? "Bugün" : iso === tomorrow ? "Yarın" : format(date, "EEE", { locale: tr });
+      const dow = iso === today ? t("Bugün") : iso === tomorrow ? t("Yarın") : format(date, "EEE", { locale: dateLocale });
       const stateClass = !known ? (loading ? s.dateLoading : "") : count > 3 ? s.dateAvail : count > 0 ? s.dateFew : "";
-      const availabilityText = !known ? (loading ? "müsaitlik yükleniyor" : "seçince saatler kontrol edilir") : count > 0 ? `${count} müsait saat` : "müsait saat yok";
+      const availabilityText = !known ? (loading ? t("müsaitlik yükleniyor") : t("seçince saatler kontrol edilir")) : count > 0 ? t("{count} müsait saat", { count }) : t("müsait saat yok");
       return <button
         key={iso}
         type="button"
         data-date={iso}
         disabled={disabled}
         aria-pressed={selected}
-        aria-label={`${format(date, "d MMMM EEEE", { locale: tr })}, ${availabilityText}`}
+        aria-label={`${format(date, dateLocale === tr ? "d MMMM EEEE" : "EEEE d MMMM", { locale: dateLocale })}, ${availabilityText}`}
         className={`${s.dateChip} ${stateClass} ${selected ? s.dateChipOn : ""}`}
         onClick={() => onSelect(iso)}
       >
         <span className={s.dateDow}>{dow}</span>
         <span className={s.dateNum}>{format(date, "d")}</span>
-        <span className={s.dateMon}>{format(date, "MMM", { locale: tr })}</span>
+        <span className={s.dateMon}>{format(date, "MMM", { locale: dateLocale })}</span>
         <i className={s.dateDot} aria-hidden="true" />
       </button>;
     })}
@@ -138,19 +147,20 @@ export function DateStrip({
 
 /* ━━━ Saat grupları ━━━ */
 const DAY_PARTS: Array<{ key: DayPart; label: string; icon: typeof Sun }> = [
-  { key: "morning", label: "Sabah", icon: Sunrise },
-  { key: "noon", label: "Öğle", icon: Sun },
-  { key: "evening", label: "Akşam", icon: MoonStar },
+  { key: "morning", label: tk("Sabah"), icon: Sunrise },
+  { key: "noon", label: tk("Öğle"), icon: Sun },
+  { key: "evening", label: tk("Akşam"), icon: MoonStar },
 ];
 
 export function SlotGroups({ slots, value, onSelect }: { slots: AvailableAppointmentSlot[]; value: string; onSelect: (slot: AvailableAppointmentSlot) => void }) {
+  const t = useT();
   return <>
     {DAY_PARTS.map((part, partIndex) => {
       const items = slots.filter((slot) => dayPartOf(slot.label) === part.key);
       if (!items.length) return null;
       const Icon = part.icon;
-      return <div key={part.key} className={s.slotGroup} style={{ animationDelay: `${partIndex * 70}ms` }} role="group" aria-label={`${part.label} saatleri`}>
-        <div className={s.slotGroupHead}><i><Icon size={16} /></i>{part.label}<small>{items.length} saat</small></div>
+      return <div key={part.key} className={s.slotGroup} style={{ animationDelay: `${partIndex * 70}ms` }} role="group" aria-label={t("{part} saatleri", { part: t(part.label) })}>
+        <div className={s.slotGroupHead}><i><Icon size={16} /></i>{t(part.label)}<small>{t("{count} saat", { count: items.length })}</small></div>
         <div className={s.slotGrid}>
           {items.map((slot) => <button
             key={slot.startAtMillis}
@@ -185,6 +195,8 @@ export function CalendarSheet({
   onSelect: (value: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const dateLocale = useDateLocale();
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(dateFromIso(value)));
   const minMonth = startOfMonth(dateFromIso(min));
   const maxMonth = startOfMonth(dateFromIso(max));
@@ -199,20 +211,20 @@ export function CalendarSheet({
   }, [onRangeChange, rangeEnd, rangeStart]);
 
   return <BottomSheet
-    eyebrow="TÜM TARİHLER"
-    title={format(visibleMonth, "MMMM yyyy", { locale: tr })}
+    eyebrow={t("TÜM TARİHLER")}
+    title={format(visibleMonth, "MMMM yyyy", { locale: dateLocale })}
     onClose={onClose}
     footer={<>
       <span className={s.calLegend}>
-        <span><i style={{ background: "var(--soft)", border: "1px solid var(--line-strong)" }} />Müsait</span>
-        <span><i style={{ background: "var(--green-2)" }} />Seçili</span>
-        {loading && <b>Yükleniyor…</b>}
+        <span><i style={{ background: "var(--soft)", border: "1px solid var(--line-strong)" }} />{t("Müsait")}</span>
+        <span><i style={{ background: "var(--green-2)" }} />{t("Seçili")}</span>
+        {loading && <b>{t("Yükleniyor…")}</b>}
       </span>
-      <button type="button" className={s.iconBtn} onClick={() => setVisibleMonth((month) => addMonths(month, -1))} disabled={visibleMonth <= minMonth} aria-label="Önceki ay"><ChevronLeft size={18} /></button>
-      <button type="button" className={s.iconBtn} onClick={() => setVisibleMonth((month) => addMonths(month, 1))} disabled={visibleMonth >= maxMonth} aria-label="Sonraki ay"><ChevronRight size={18} /></button>
+      <button type="button" className={s.iconBtn} onClick={() => setVisibleMonth((month) => addMonths(month, -1))} disabled={visibleMonth <= minMonth} aria-label={t("Önceki ay")}><ChevronLeft size={18} /></button>
+      <button type="button" className={s.iconBtn} onClick={() => setVisibleMonth((month) => addMonths(month, 1))} disabled={visibleMonth >= maxMonth} aria-label={t("Sonraki ay")}><ChevronRight size={18} /></button>
     </>}
   >
-    <div className={s.calWeek} aria-hidden="true">{["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((day) => <span key={day}>{day}</span>)}</div>
+    <div className={s.calWeek} aria-hidden="true">{[tk("Pzt"), tk("Sal"), tk("Çar"), tk("Per"), tk("Cum"), tk("Cmt"), tk("Paz")].map((day) => <span key={day}>{t(day)}</span>)}</div>
     <div className={s.calDays} aria-busy={loading}>
       {days.map((day) => {
         const iso = format(day, "yyyy-MM-dd");
@@ -222,13 +234,13 @@ export function CalendarSheet({
         const count = counts[iso] ?? 0;
         const disabled = outsideRange || (known && count === 0);
         const selected = iso === value;
-        const label = outsideRange ? "randevu aralığı dışında" : !known ? (loading ? "müsaitlik yükleniyor" : "seçince kontrol edilir") : count > 0 ? `${count} müsait saat` : "müsait saat yok";
+        const label = outsideRange ? t("randevu aralığı dışında") : !known ? (loading ? t("müsaitlik yükleniyor") : t("seçince kontrol edilir")) : count > 0 ? t("{count} müsait saat", { count }) : t("müsait saat yok");
         return <button
           key={iso}
           type="button"
           disabled={disabled}
           aria-pressed={selected}
-          aria-label={`${format(day, "d MMMM yyyy EEEE", { locale: tr })}, ${label}`}
+          aria-label={`${format(day, dateLocale === tr ? "d MMMM yyyy EEEE" : "EEEE d MMMM yyyy", { locale: dateLocale })}, ${label}`}
           className={`${s.calDay} ${outside ? s.calOutside : ""} ${iso === min ? s.calToday : ""} ${known && count > 0 ? s.calAvail : ""} ${selected ? s.calOn : ""}`}
           onClick={() => { onSelect(iso); onClose(); }}
         >
@@ -241,27 +253,30 @@ export function CalendarSheet({
 }
 
 /* ━━━ KVKK aydınlatma (alt sayfa) ━━━ */
+const PRIVACY_ITEMS = [
+  [tk("Hangi bilgiler işlenir?"), tk("Telefon numaran; işletmenin ayarına göre ad-soyad, e-posta ve isteğe bağlı randevu notun; seçtiğin hizmet, çalışan, tarih ve saat bilgileri.")],
+  [tk("Neden işlenir?"), tk("Randevuyu oluşturmak ve yönetmek, telefonunu doğrulamak, çakışmayı önlemek, randevu bildirimlerini iletmek ve işlem güvenliğini sağlamak için.")],
+  [tk("Kimlerle paylaşılır?"), tk("Randevunun yürütülmesi için seçtiğin işletmeyle; hizmetin çalışması için gerekli barındırma, doğrulama, SMS/e-posta ve güvenlik sağlayıcılarıyla amaçla sınırlı olarak.")],
+  [tk("Hukuki sebep ve saklama"), tk("Veriler sözleşmenin kurulması/ifası, hukuki yükümlülük, hakkın tesisi ve meşru menfaat sebeplerine dayanılarak; amaç ve yasal saklama yükümlülüğü sürdüğü kadar işlenir.")],
+];
+
 export function PrivacySheet({ onClose }: { onClose: () => void }) {
-  const items = [
-    ["Hangi bilgiler işlenir?", "Telefon numaran; işletmenin ayarına göre ad-soyad, e-posta ve isteğe bağlı randevu notun; seçtiğin hizmet, çalışan, tarih ve saat bilgileri."],
-    ["Neden işlenir?", "Randevuyu oluşturmak ve yönetmek, telefonunu doğrulamak, çakışmayı önlemek, randevu bildirimlerini iletmek ve işlem güvenliğini sağlamak için."],
-    ["Kimlerle paylaşılır?", "Randevunun yürütülmesi için seçtiğin işletmeyle; hizmetin çalışması için gerekli barındırma, doğrulama, SMS/e-posta ve güvenlik sağlayıcılarıyla amaçla sınırlı olarak."],
-    ["Hukuki sebep ve saklama", "Veriler sözleşmenin kurulması/ifası, hukuki yükümlülük, hakkın tesisi ve meşru menfaat sebeplerine dayanılarak; amaç ve yasal saklama yükümlülüğü sürdüğü kadar işlenir."],
-  ];
+  const t = useT();
+  const locale = useLocale();
   return <BottomSheet
-    eyebrow="KVKK · RANDEVU SÜRECİ"
-    title="Randevu Aydınlatma Metni"
-    description="Bilgilerinin neden ve nasıl işlendiğini sade biçimde incele."
+    eyebrow={t("KVKK · RANDEVU SÜRECİ")}
+    title={t("Randevu Aydınlatma Metni")}
+    description={t("Bilgilerinin neden ve nasıl işlendiğini sade biçimde incele.")}
     onClose={onClose}
     footer={<>
-      <a className={s.textLink} href="/kvkk#randevu-aydinlatmasi" target="_blank" rel="noreferrer">Tam KVKK metni</a>
-      <button type="button" className={s.primary} onClick={onClose}>Anladım <CheckCircle2 size={17} /></button>
+      <a className={s.textLink} href={localizeHref("/kvkk#randevu-aydinlatmasi", locale)} target="_blank" rel="noreferrer">{t("Tam KVKK metni")}</a>
+      <button type="button" className={s.primary} onClick={onClose}>{t("Anladım")} <CheckCircle2 size={17} /></button>
     </>}
   >
-    {items.map(([title, text], index) => <article key={title} className={s.privacyItem}>
+    {PRIVACY_ITEMS.map(([title, text], index) => <article key={title} className={s.privacyItem}>
       <b>{String(index + 1).padStart(2, "0")}</b>
-      <div><h4>{title}</h4><p>{text}</p></div>
+      <div><h4>{t(title)}</h4><p>{t(text)}</p></div>
     </article>)}
-    <aside className={s.privacyAside}><ShieldCheck size={17} /><p style={{ margin: 0 }}>Telefon doğrulama kodu yalnızca güvenlik içindir. Bu bilgilendirme pazarlama izni veya açık rıza talebi değildir.</p></aside>
+    <aside className={s.privacyAside}><ShieldCheck size={17} /><p style={{ margin: 0 }}>{t("Telefon doğrulama kodu yalnızca güvenlik içindir. Bu bilgilendirme pazarlama izni veya açık rıza talebi değildir.")}</p></aside>
   </BottomSheet>;
 }

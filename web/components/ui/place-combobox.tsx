@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, MapPin } from "lucide-react";
 import { districtsOf, geoSearchKey, normalizeDistrictName, normalizeCityName, TURKEY_CITIES } from "@/lib/geo/turkey-districts";
+import { useT } from "@/i18n/client";
 import styles from "./place-combobox.module.css";
 
 type ComboboxProps = {
@@ -163,17 +164,19 @@ export function PlaceCombobox({ id, value, options, onChange, normalize, placeho
 }
 
 export function CitySelect(props: Omit<ComboboxProps, "options" | "normalize" | "emptyText">) {
-  return <PlaceCombobox {...props} options={TURKEY_CITIES} normalize={normalizeCityName} emptyText="Bu isimde şehir bulunamadı." autoComplete={props.autoComplete} />;
+  const t = useT();
+  return <PlaceCombobox {...props} options={TURKEY_CITIES} normalize={normalizeCityName} emptyText={t("Bu isimde şehir bulunamadı.")} autoComplete={props.autoComplete} />;
 }
 
 export function DistrictSelect({ city, ...props }: Omit<ComboboxProps, "options" | "normalize" | "emptyText"> & { city: string }) {
+  const t = useT();
   const options = districtsOf(city);
   return <PlaceCombobox
     {...props}
     options={options}
     normalize={(value) => normalizeDistrictName(city, value)}
     disabled={props.disabled || options.length === 0}
-    placeholder={options.length ? props.placeholder ?? "İlçe seç" : "Önce şehir seç"}
-    emptyText="Bu şehirde böyle bir ilçe yok."
+    placeholder={options.length ? props.placeholder ?? t("İlçe seç") : t("Önce şehir seç")}
+    emptyText={t("Bu şehirde böyle bir ilçe yok.")}
   />;
 }

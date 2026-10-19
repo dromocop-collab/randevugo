@@ -10,6 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { tk } from "@/i18n/config";
 import { getFunctions, httpsCallable as call } from "firebase/functions";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
@@ -22,7 +23,7 @@ async function staffScope(businessId: string): Promise<string | null> {
   const member = await getDoc(doc(getDb(), "businesses", businessId, "members", user.uid));
   if (!member.exists() || member.data().role !== "staff") return null;
   const staffId = member.data().staffId;
-  if (typeof staffId !== "string" || !staffId) throw new Error("Çalışan profiliniz işletme hesabına bağlı değil.");
+  if (typeof staffId !== "string" || !staffId) throw new Error(tk("Çalışan profiliniz işletme hesabına bağlı değil."));
   return staffId;
 }
 
@@ -37,7 +38,7 @@ function appointmentPhoneKey(value: unknown): string {
 function isSavedCustomerName(value: unknown): boolean {
   const name = String(value ?? "").trim();
   const normalized = name.toLocaleLowerCase("tr-TR");
-  return Boolean(name) && normalized !== "müşteri" && !normalized.startsWith("telefon müşterisi");
+  return Boolean(name) && normalized !== "müşteri" && !normalized.startsWith("telefon müşterisi"); // i18n-ignore — kayıtlı veri karşılaştırması
 }
 
 async function hydrateCurrentCustomerNames(businessId: string, appointments: Appointment[]): Promise<Appointment[]> {

@@ -7,6 +7,8 @@ import { CheckCircle2, Crosshair, Info, LoaderCircle, MapPin, RotateCcw, Save } 
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { getFirebaseApp } from "@/lib/firebase/client";
+import { tk } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 import type { Business } from "@/types/business";
 import styles from "./business-location-picker.module.css";
 
@@ -19,11 +21,12 @@ type Geo = NonNullable<Business["geo"]>;
 
 const call = <I, O>(name: string) => httpsCallable<I, O>(getFunctions(getFirebaseApp(), "europe-west1"), name);
 
+/** Başlık ve not çeviri anahtarıdır; gösterirken t() ile çevrilir. */
 function precisionText(geo: Geo | undefined) {
-  if (!geo) return { tone: "warn", title: "Konum henüz bulunamadı", note: "Haritada kapınızı işaretleyin; müşteriler sizi “Yakınımdaki işletmeler”de doğru mesafeyle görsün." };
-  if (geo.precision === "pin") return { tone: "ok", title: "Tam konum işaretli", note: "Müşteriler size olan uzaklığı metre hassasiyetinde görür." };
-  if (geo.precision === "address") return { tone: "info", title: "Adresten otomatik bulundu", note: "Genelde doğrudur; sapma varsa pini kapınıza sürükleyip kaydedin." };
-  return { tone: "warn", title: `Yaklaşık konum (${geo.precision === "district" ? "ilçe" : "il"} merkezi)`, note: "Adresiniz haritada tam bulunamadı. Pini kapınıza taşıyıp kaydedin; mesafeler doğru görünsün." };
+  if (!geo) return { tone: "warn", title: tk("Konum henüz bulunamadı"), note: tk("Haritada kapınızı işaretleyin; müşteriler sizi “Yakınımdaki işletmeler”de doğru mesafeyle görsün.") };
+  if (geo.precision === "pin") return { tone: "ok", title: tk("Tam konum işaretli"), note: tk("Müşteriler size olan uzaklığı metre hassasiyetinde görür.") };
+  if (geo.precision === "address") return { tone: "info", title: tk("Adresten otomatik bulundu"), note: tk("Genelde doğrudur; sapma varsa pini kapınıza sürükleyip kaydedin.") };
+  return { tone: "warn", title: geo.precision === "district" ? tk("Yaklaşık konum (ilçe merkezi)") : tk("Yaklaşık konum (il merkezi)"), note: tk("Adresiniz haritada tam bulunamadı. Pini kapınıza taşıyıp kaydedin; mesafeler doğru görünsün.") };
 }
 
 /**
@@ -31,6 +34,7 @@ function precisionText(geo: Geo | undefined) {
  * (Türkiye içinde, adresteki ilçeye en fazla 40 km); işletme istemciden "geo" yazamaz.
  */
 export function BusinessLocationPicker({ business, onSaved, disabled }: { business: Business; onSaved: (geo: Geo | undefined) => void; disabled?: boolean }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
@@ -76,11 +80,12 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
         });
         if (!disabled) map.on("click", (event) => { marker.setLngLat(event.lngLat); setDraft({ lat: event.lngLat.lat, lng: event.lngLat.lng }); });
         map.on("load", () => { if (!cancelled) setMapState("ready"); });
+        // i18n-ignore (konsol günlüğü)
         map.on("error", (event) => { if (!map?.loaded() && !cancelled) { console.warn("Harita yüklenemedi", event.error); setMapState("error"); } });
         mapRef.current = map;
         markerRef.current = marker;
       } catch (error) {
-        console.warn("Harita başlatılamadı", error);
+        console.warn("Harita başlatılamadı", error); // i18n-ignore
         if (!cancelled) setMapState("error");
       }
     })();
@@ -95,17 +100,17 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
   }, []);
 
   function useMyLocation() {
-    if (!("geolocation" in navigator)) { toast.error("Tarayıcınız konum özelliğini desteklemiyor."); return; }
+    if (!("geolocation" in navigator)) { toast.error(t("Tarayıcınız konum özelliğini desteklemiyor.")); return; }
     setBusy("locate");
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setBusy("");
         placeMarker({ lat: position.coords.latitude, lng: position.coords.longitude }, true);
-        toast.success("Bulunduğunuz konum işaretlendi.", { description: position.coords.accuracy > 100 ? `Doğruluk ~${Math.round(position.coords.accuracy)} m; gerekirse pini düzeltin.` : "Kaydetmeyi unutmayın." });
+        toast.success(t("Bulunduğunuz konum işaretlendi."), { description: position.coords.accuracy > 100 ? t("Doğruluk ~{meters} m; gerekirse pini düzeltin.", { meters: Math.round(position.coords.accuracy) }) : t("Kaydetmeyi unutmayın.") });
       },
       (error) => {
         setBusy("");
-        toast.error(error.code === error.PERMISSION_DENIED ? "Konum izni verilmedi. Pini haritada elle taşıyabilirsiniz." : "Konum alınamadı. Pini haritada elle taşıyabilirsiniz.");
+        toast.error(error.code === error.PERMISSION_DENIED ? t("Konum izni verilmedi. Pini haritada elle taşıyabilirsiniz.") : t("Konum alınamadı. Pini haritada elle taşıyabilirsiniz."));
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     );
@@ -117,9 +122,9 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
     try {
       const result = await call<{ businessId: string; lat: number; lng: number }, { lat: number; lng: number }>("setBusinessLocation")({ businessId: business.id, lat: draft.lat, lng: draft.lng });
       onSaved({ lat: result.data.lat, lng: result.data.lng, precision: "pin" });
-      toast.success("Konum kaydedildi.", { description: "Keşfet'te mesafeniz artık tam konumdan hesaplanır." });
+      toast.success(t("Konum kaydedildi."), { description: t("Keşfet'te mesafeniz artık tam konumdan hesaplanır.") });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message.replace(/^Firebase:\s*/i, "") : "Konum kaydedilemedi.");
+      toast.error(error instanceof Error ? t(error.message.replace(/^Firebase:\s*/i, "")) : t("Konum kaydedilemedi."));
     } finally { setBusy(""); }
   }
 
@@ -128,9 +133,9 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
     try {
       await call<{ businessId: string; reset: true }, { success: boolean }>("setBusinessLocation")({ businessId: business.id, reset: true });
       onSaved(undefined);
-      toast.success("Otomatik konuma dönüldü.", { description: "Adresiniz birkaç saniye içinde haritada yeniden aranır." });
+      toast.success(t("Otomatik konuma dönüldü."), { description: t("Adresiniz birkaç saniye içinde haritada yeniden aranır.") });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message.replace(/^Firebase:\s*/i, "") : "İşlem tamamlanamadı.");
+      toast.error(error instanceof Error ? t(error.message.replace(/^Firebase:\s*/i, "")) : t("İşlem tamamlanamadı."));
     } finally { setBusy(""); }
   }
 
@@ -138,36 +143,36 @@ export function BusinessLocationPicker({ business, onSaved, disabled }: { busine
     <div className={styles.picker}>
       <div className={styles.status} data-tone={status.tone} role="status">
         {status.tone === "ok" ? <CheckCircle2 size={18} aria-hidden /> : <MapPin size={18} aria-hidden />}
-        <span><b>{status.title}</b><small>{status.note}</small></span>
+        <span><b>{t(status.title)}</b><small>{t(status.note)}</small></span>
       </div>
 
       <div className={styles.mapWrap}>
-        <div ref={containerRef} className={styles.map} aria-label="İşletme konumu haritası" />
+        <div ref={containerRef} className={styles.map} aria-label={t("İşletme konumu haritası")} />
         {mapState !== "ready" ? (
           <div className={styles.overlay}>
-            {mapState === "loading" ? <><LoaderCircle size={20} className={styles.spin} aria-hidden /> Harita yükleniyor…</> : <>Harita yüklenemedi. Sayfayı yenileyip tekrar deneyin.</>}
+            {mapState === "loading" ? <><LoaderCircle size={20} className={styles.spin} aria-hidden /> {t("Harita yükleniyor…")}</> : <>{t("Harita yüklenemedi. Sayfayı yenileyip tekrar deneyin.")}</>}
           </div>
         ) : null}
       </div>
 
-      <p className={styles.hint}><Info size={14} aria-hidden /> Haritaya dokunun ya da kırmızı pini kapınıza sürükleyin. Konum, profil onayı beklemeden hemen kaydedilir. Haritayı yakınlaştırmak için iki parmak (bilgisayarda Ctrl/⌘ + tekerlek) kullanın.</p>
+      <p className={styles.hint}><Info size={14} aria-hidden /> {t("Haritaya dokunun ya da kırmızı pini kapınıza sürükleyin. Konum, profil onayı beklemeden hemen kaydedilir. Haritayı yakınlaştırmak için iki parmak (bilgisayarda Ctrl/⌘ + tekerlek) kullanın.")}</p>
 
       {!disabled ? (
         <div className={styles.actions}>
           <button type="button" className={styles.ghost} onClick={useMyLocation} disabled={busy !== "" || mapState !== "ready"}>
-            {busy === "locate" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <Crosshair size={16} aria-hidden />} Şu an işletmedeyim
+            {busy === "locate" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <Crosshair size={16} aria-hidden />} {t("Şu an işletmedeyim")}
           </button>
           {geo?.precision === "pin" ? (
             <button type="button" className={styles.ghost} onClick={() => void reset()} disabled={busy !== ""}>
-              {busy === "reset" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <RotateCcw size={16} aria-hidden />} Adresten otomatik bul
+              {busy === "reset" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <RotateCcw size={16} aria-hidden />} {t("Adresten otomatik bul")}
             </button>
           ) : null}
           <button type="button" className={styles.primary} onClick={() => void save()} disabled={!dirty || busy !== ""}>
-            {busy === "save" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <Save size={16} aria-hidden />} Konumu kaydet
+            {busy === "save" ? <LoaderCircle size={16} className={styles.spin} aria-hidden /> : <Save size={16} aria-hidden />} {t("Konumu kaydet")}
           </button>
         </div>
       ) : null}
-      {draft ? <p className={styles.coords}>{draft.lat.toFixed(6)}, {draft.lng.toFixed(6)}{dirty ? " · kaydedilmedi" : ""}</p> : null}
+      {draft ? <p className={styles.coords}>{draft.lat.toFixed(6)}, {draft.lng.toFixed(6)}{dirty ? ` · ${t("kaydedilmedi")}` : ""}</p> : null}
     </div>
   );
 }

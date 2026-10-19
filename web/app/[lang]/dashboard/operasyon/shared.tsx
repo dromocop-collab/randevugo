@@ -1,8 +1,10 @@
 "use client";
 
-import { useId, type InputHTMLAttributes, type ReactNode } from "react";
+import { useCallback, useId, useMemo, type InputHTMLAttributes, type ReactNode } from "react";
 import { LoaderCircle, type LucideIcon } from "lucide-react";
 import type { PaymentMethod, RewardProgramSettings } from "@/types/operations";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk, type TFunction } from "@/i18n/config";
 import { EmptyState, cx, studio } from "../_studio";
 import o from "./ops.module.css";
 
@@ -14,15 +16,29 @@ export const defaultRewardProgram: RewardProgramSettings = {
   maxRedemptionPercent: 100,
   earnOnPackages: true,
 };
-export const paymentLabels: Record<PaymentMethod, string> = { cash: "Nakit", card: "Kart", transfer: "Havale / EFT", other: "Diğer" };
-export const money = (value: number) => `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
-export const date = (value?: string) => value ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
-export const errorText = (error: unknown) => {
-  const message = error instanceof Error ? error.message : "İşlem tamamlanamadı.";
-  if (message.includes("already-exists")) return "Bu randevunun ödemesi daha önce kaydedilmiş.";
-  if (message.includes("failed-precondition")) return message.split(":").at(-1)?.trim() || "İşlem koşulları artık geçerli değil.";
-  return message;
+export const paymentLabels: Record<PaymentMethod, string> = { cash: tk("Nakit"), card: tk("Kart"), transfer: tk("Havale / EFT"), other: tk("Diğer") };
+export const money = (value: number, locale: string) => `${Number(value || 0).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₺`;
+export const date = (value: string | undefined, locale: string) => value ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
+export const errorText = (error: unknown, t: TFunction) => {
+  const message = error instanceof Error ? error.message : "";
+  if (!message) return t("İşlem tamamlanamadı.");
+  if (message.includes("already-exists")) return t("Bu randevunun ödemesi daha önce kaydedilmiş.");
+  if (message.includes("failed-precondition")) {
+    const detail = message.split(":").at(-1)?.trim();
+    return detail ? t(detail) : t("İşlem koşulları artık geçerli değil.");
+  }
+  return t(message);
 };
+
+/** Etkin dile bağlı biçimlendiriciler: para, tarih, hata metni ve çeviri. */
+export function useOps() {
+  const t = useT();
+  const locale = useIntlLocale();
+  const formatMoney = useCallback((value: number) => money(value, locale), [locale]);
+  const formatDate = useCallback((value?: string) => date(value, locale), [locale]);
+  const formatError = useCallback((error: unknown) => errorText(error, t), [t]);
+  return useMemo(() => ({ t, locale, money: formatMoney, date: formatDate, errorText: formatError }), [t, locale, formatMoney, formatDate, formatError]);
+}
 
 export interface TabProps {
   businessId: string;
@@ -66,11 +82,12 @@ export function SelectField({ label, value, onChange, options, required, disable
 }
 
 const paymentHelp: Record<PaymentMethod, string> = {
-  cash: "Kasaya nakit işlensin", card: "Kart tahsilatı olarak işlensin", transfer: "Banka transferi olarak işlensin", other: "Diğer ödeme yöntemi",
+  cash: tk("Kasaya nakit işlensin"), card: tk("Kart tahsilatı olarak işlensin"), transfer: tk("Banka transferi olarak işlensin"), other: tk("Diğer ödeme yöntemi"),
 };
 export function SelectPayment({ value, onChange }: { value: PaymentMethod; onChange: (value: PaymentMethod) => void }) {
-  return <SelectField label="Ödeme yöntemi" value={value} onChange={(next) => onChange(next as PaymentMethod)} help={paymentHelp[value]}
-    options={Object.entries(paymentLabels).map(([key, label]) => ({ value: key, label }))} />;
+  const t = useT();
+  return <SelectField label={t("Ödeme yöntemi")} value={value} onChange={(next) => onChange(next as PaymentMethod)} help={t(paymentHelp[value])}
+    options={Object.entries(paymentLabels).map(([key, label]) => ({ value: key, label: t(label) }))} />;
 }
 
 export function Line({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {

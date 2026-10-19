@@ -11,6 +11,7 @@ import type { Staff } from "@/types/staff";
 import { OrderButtons, cx, ws } from "../_workspace/kit";
 import { CATEGORY_COLORS, CATEGORY_ICONS } from "./service-shared";
 import styles from "./services.module.css";
+import { useT } from "@/i18n/client";
 
 /* ── Kategori oluştur / düzenle ── */
 export function CategoryEditorSheet({ open, category, categories, onClose, onSubmit }: {
@@ -20,13 +21,14 @@ export function CategoryEditorSheet({ open, category, categories, onClose, onSub
   onClose: () => void;
   onSubmit: (input: { name: string; icon: string; color: string }) => Promise<boolean>;
 }) {
+  const t = useT();
   const [name, setName] = useState(category?.name ?? "");
   const [icon, setIcon] = useState(category?.icon || "✂️");
   const [color, setColor] = useState(category?.color || CATEGORY_COLORS[0]);
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const duplicate = categories.some((item) => item.id !== category?.id && normalizeCategoryName(item.name) === normalizeCategoryName(name));
-  const error = !name.trim() ? "Kategori adı boş bırakılamaz." : duplicate ? "Bu isimde bir kategori zaten var." : null;
+  const error = !name.trim() ? t("Kategori adı boş bırakılamaz.") : duplicate ? t("Bu isimde bir kategori zaten var.") : null;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -47,36 +49,36 @@ export function CategoryEditorSheet({ open, category, categories, onClose, onSub
       onClose={onClose}
       dismissible={!busy}
       size="md"
-      title={category ? "Kategoriyi düzenle" : "Yeni kategori"}
-      description="Hizmetlerinizi müşterilerin kolayca bulacağı gruplara ayırın."
+      title={category ? t("Kategoriyi düzenle") : t("Yeni kategori")}
+      description={t("Hizmetlerinizi müşterilerin kolayca bulacağı gruplara ayırın.")}
       footer={<>
-        <Button variant="ghost" onClick={onClose} disabled={busy}>Vazgeç</Button>
-        <Button type="submit" form="category-editor-form" variant="primary" icon={category ? Save : FolderPlus} loading={busy}>{category ? "Kaydet" : "Oluştur"}</Button>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>{t("Vazgeç")}</Button>
+        <Button type="submit" form="category-editor-form" variant="primary" icon={category ? Save : FolderPlus} loading={busy}>{category ? t("Kaydet") : t("Oluştur")}</Button>
       </>}
     >
       <form id="category-editor-form" className={ws.stack} onSubmit={submit} noValidate>
         <div className={styles.catPreview} style={{ "--cat-color": color } as React.CSSProperties}>
           <span aria-hidden="true"><ServiceCategoryIcon icon={icon} name={name} size={24} /></span>
-          <b>{name.trim() || "Kategori adı"}</b>
+          <b>{name.trim() || t("Kategori adı")}</b>
         </div>
-        <Field label="Kategori adı" error={submitted ? error : null}>
-          <Input data-autofocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn. Saç kesim, Cilt bakımı" maxLength={48} aria-invalid={Boolean(submitted && error)} className={cx(submitted && error && styles.invalid)} />
+        <Field label={t("Kategori adı")} error={submitted ? error : null}>
+          <Input data-autofocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Örn. Saç kesim, Cilt bakımı")} maxLength={48} aria-invalid={Boolean(submitted && error)} className={cx(submitted && error && styles.invalid)} />
         </Field>
         <fieldset className={styles.fieldset}>
-          <legend>İkon</legend>
+          <legend>{t("İkon")}</legend>
           <div className={styles.iconGrid}>
             {CATEGORY_ICONS.map((item) => (
-              <button key={item} type="button" className={cx(styles.iconOption, icon === item && styles.iconOptionActive)} onClick={() => setIcon(item)} aria-pressed={icon === item} aria-label={`${item} ikonunu seç`}>
+              <button key={item} type="button" className={cx(styles.iconOption, icon === item && styles.iconOptionActive)} onClick={() => setIcon(item)} aria-pressed={icon === item} aria-label={t("{icon} ikonunu seç", { icon: item })}>
                 <ServiceCategoryIcon icon={item} size={21} />
               </button>
             ))}
           </div>
         </fieldset>
         <fieldset className={styles.fieldset}>
-          <legend>Renk</legend>
+          <legend>{t("Renk")}</legend>
           <div className={styles.swatches}>
             {CATEGORY_COLORS.map((item) => (
-              <button key={item} type="button" className={cx(styles.swatch, color === item && styles.swatchActive)} style={{ backgroundColor: item }} onClick={() => setColor(item)} aria-pressed={color === item} aria-label={`${item} rengini seç`}>
+              <button key={item} type="button" className={cx(styles.swatch, color === item && styles.swatchActive)} style={{ backgroundColor: item }} onClick={() => setColor(item)} aria-pressed={color === item} aria-label={t("{color} rengini seç", { color: item })}>
                 {color === item ? <Check size={16} strokeWidth={3} /> : null}
               </button>
             ))}
@@ -103,20 +105,21 @@ export function CategoryManagerSheet({
   onMove: (index: number, direction: -1 | 1) => void;
   onRemoveTemplates: () => void;
 }) {
+  const t = useT();
   return (
     <Sheet
       open={open}
       onClose={onClose}
       placement="side"
-      title="Kategoriler"
-      description="Sırayı oklarla değiştirin; mağazanızda bu sırayla görünür."
+      title={t("Kategoriler")}
+      description={t("Sırayı oklarla değiştirin; mağazanızda bu sırayla görünür.")}
       footer={<>
-        {seededCount > 0 ? <Button variant="dangerSoft" icon={RotateCcw} onClick={onRemoveTemplates} disabled={busy}>Hazır paketi kaldır</Button> : null}
-        <Button variant="primary" icon={FolderPlus} onClick={onCreate}>Yeni kategori</Button>
+        {seededCount > 0 ? <Button variant="dangerSoft" icon={RotateCcw} onClick={onRemoveTemplates} disabled={busy}>{t("Hazır paketi kaldır")}</Button> : null}
+        <Button variant="primary" icon={FolderPlus} onClick={onCreate}>{t("Yeni kategori")}</Button>
       </>}
     >
       {categories.length === 0 ? (
-        <EmptyState compact mascot="wave" title="Henüz kategori yok" description="Saç, cilt bakımı gibi gruplar oluşturun; hizmetleriniz düzenli görünsün." />
+        <EmptyState compact mascot="wave" title={t("Henüz kategori yok")} description={t("Saç, cilt bakımı gibi gruplar oluşturun; hizmetleriniz düzenli görünsün.")} />
       ) : (
         <ul className={styles.catList}>
           {categories.map((category, index) => {
@@ -127,10 +130,10 @@ export function CategoryManagerSheet({
                 <span className={styles.catIcon} aria-hidden="true"><ServiceCategoryIcon icon={category.icon} name={category.name} size={19} /></span>
                 <span className={styles.catText}>
                   <b>{category.name}</b>
-                  <small>{count} hizmet{category.templateSource ? " · hazır paket" : ""}</small>
+                  <small>{t("{count} hizmet", { count })}{category.templateSource ? ` · ${t("hazır paket")}` : ""}</small>
                 </span>
-                <Button variant="ghost" iconOnly icon={Pencil} onClick={() => onEdit(category)} aria-label={`${category.name} kategorisini düzenle`} />
-                <Button variant="ghost" iconOnly icon={Trash2} onClick={() => onDelete(category)} aria-label={`${category.name} kategorisini sil`} className={styles.deleteBtn} />
+                <Button variant="ghost" iconOnly icon={Pencil} onClick={() => onEdit(category)} aria-label={t("{name} kategorisini düzenle", { name: category.name })} />
+                <Button variant="ghost" iconOnly icon={Trash2} onClick={() => onDelete(category)} aria-label={t("{name} kategorisini sil", { name: category.name })} className={styles.deleteBtn} />
               </li>
             );
           })}
@@ -150,6 +153,7 @@ export function DeleteCategorySheet({ open, category, categories, services, staf
   onClose: () => void;
   onConfirm: (replacementCategoryId: string) => Promise<void>;
 }) {
+  const t = useT();
   const [replacementId, setReplacementId] = useState("");
   const [busy, setBusy] = useState(false);
   if (!category) return null;
@@ -176,30 +180,30 @@ export function DeleteCategorySheet({ open, category, categories, services, staf
       onClose={onClose}
       dismissible={!busy}
       size="sm"
-      title={`“${category.name}” silinsin mi?`}
+      title={t("“{name}” silinsin mi?", { name: category.name })}
       footer={<>
-        <Button onClick={onClose} disabled={busy}>Vazgeç</Button>
-        <Button variant="danger" icon={Trash2} onClick={() => void confirm()} loading={busy} disabled={!canConfirm}>Kategoriyi sil</Button>
+        <Button onClick={onClose} disabled={busy}>{t("Vazgeç")}</Button>
+        <Button variant="danger" icon={Trash2} onClick={() => void confirm()} loading={busy} disabled={!canConfirm}>{t("Kategoriyi sil")}</Button>
       </>}
     >
       <div className={ws.stack}>
         <span className={styles.dangerIcon} aria-hidden="true"><TriangleAlert size={22} /></span>
         <p className={styles.dangerText}>
           {linkedServices.length > 0
-            ? `İçindeki ${linkedServices.length} hizmet silinmez; “Kategorisiz” alanına taşınır.`
-            : "Bu kategori kalıcı olarak silinecek."}
+            ? t("İçindeki {count} hizmet silinmez; “Kategorisiz” alanına taşınır.", { count: linkedServices.length })
+            : t("Bu kategori kalıcı olarak silinecek.")}
         </p>
         {needsReplacement ? (
           blocked ? (
-            <Callout tone="red" title={`Bu branşa bağlı ${linkedStaff.length} çalışan var.`}>Önce yeni bir kategori oluşturun, sonra bu kategoriyi silin.</Callout>
+            <Callout tone="red" title={t("Bu branşa bağlı {count} çalışan var.", { count: linkedStaff.length })}>{t("Önce yeni bir kategori oluşturun, sonra bu kategoriyi silin.")}</Callout>
           ) : (
             <>
-              <Callout tone="amber" title={`${linkedStaff.length} çalışanın branşı bu kategori`}>
+              <Callout tone="amber" title={t("{count} çalışanın branşı bu kategori", { count: linkedStaff.length })}>
                 <span className={ws.row} style={{ marginTop: 6 }}>{linkedStaff.map((member) => <Badge key={member.id} size="sm">{member.fullName}</Badge>)}</span>
               </Callout>
-              <Field label="Çalışanlar hangi branşa taşınsın?">
+              <Field label={t("Çalışanlar hangi branşa taşınsın?")}>
                 <NativeSelect value={replacementId} onChange={(event) => setReplacementId(event.target.value)}>
-                  <option value="" disabled>Branş seçin…</option>
+                  <option value="" disabled>{t("Branş seçin…")}</option>
                   {alternatives.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </NativeSelect>
               </Field>

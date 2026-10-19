@@ -1,32 +1,33 @@
 "use client";
 
 import { createContext, use, useCallback, useContext, useMemo, type ReactNode } from "react";
-import { DEFAULT_LOCALE, LOCALE_LABELS, translate, type Locale, type Messages, type TFunction } from "./config";
+import { DEFAULT_LOCALE, LOCALE_LABELS, translateWithPatterns, type Locale, type MessagePattern, type Messages, type TFunction } from "./config";
 
 // Sözlükler ayrı JS parçası olarak yüklenir (tarayıcı önbelleğinde kalır); Türkçe için hiç yüklenmez.
 // Yeni dil: bundles/<dil>.ts ve aşağıya bir satır.
-const LOADERS: Partial<Record<Locale, () => Promise<{ default: Messages }>>> = {
+type Bundle = { messages: Messages; patterns: MessagePattern[] };
+const LOADERS: Partial<Record<Locale, () => Promise<{ default: Messages; patterns?: MessagePattern[] }>>> = {
   en: () => import("./bundles/en"),
 };
-const EMPTY: Messages = {};
-const cache = new Map<Locale, Promise<Messages>>();
-function loadMessages(locale: Locale): Promise<Messages> {
+const EMPTY: Bundle = { messages: {}, patterns: [] };
+const cache = new Map<Locale, Promise<Bundle>>();
+function loadBundle(locale: Locale): Promise<Bundle> {
   let promise = cache.get(locale);
   if (!promise) {
     const loader = LOADERS[locale];
-    promise = loader ? loader().then((module) => module.default) : Promise.resolve(EMPTY);
+    promise = loader ? loader().then((module) => ({ messages: module.default, patterns: module.patterns ?? [] })) : Promise.resolve(EMPTY);
     cache.set(locale, promise);
   }
   return promise;
 }
 
-type I18nValue = { locale: Locale; messages: Messages };
-const I18nContext = createContext<I18nValue>({ locale: DEFAULT_LOCALE, messages: EMPTY });
+type I18nValue = { locale: Locale; bundle: Bundle };
+const I18nContext = createContext<I18nValue>({ locale: DEFAULT_LOCALE, bundle: EMPTY });
 
 /** Kök yerleşim (app/[lang]/layout.tsx) sarar. Sözlük gelene kadar sunucudan gelen HTML görünür kalır. */
 export function I18nProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
-  const messages = locale === DEFAULT_LOCALE ? EMPTY : use(loadMessages(locale));
-  const value = useMemo(() => ({ locale, messages }), [locale, messages]);
+  const bundle = locale === DEFAULT_LOCALE ? EMPTY : use(loadBundle(locale));
+  const value = useMemo(() => ({ locale, bundle }), [locale, bundle]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
@@ -36,8 +37,8 @@ export function useLocale(): Locale {
 
 /** İstemci bileşenleri için çeviri: const t = useT(); t("Randevu al"). */
 export function useT(): TFunction {
-  const { locale, messages } = useContext(I18nContext);
-  return useCallback<TFunction>((source, vars) => translate(locale, messages, source, vars), [locale, messages]);
+  const { locale, bundle } = useContext(I18nContext);
+  return useCallback<TFunction>((source, vars) => translateWithPatterns(locale, bundle.messages, bundle.patterns, source, vars), [locale, bundle]);
 }
 
 /** Intl için dil etiketi: "tr-TR" / "en-GB". */

@@ -11,6 +11,7 @@ import { TERMS_VERSION } from "@/lib/legal/seller";
 import { entitlementLabel } from "@/constants/subscription-entitlements";
 import { isSubscriptionActive, type Subscription } from "@/types/subscription";
 import { ConfirmSheet, EmptyState, Panel, Segmented, StudioPage, StudioSkeleton } from "@/app/[lang]/dashboard/_studio";
+import { useIntlLocale, useT } from "@/i18n/client";
 import css from "./abonelik.module.css";
 import { CompareTable, CurrentSubscription, PlanCard, money, yearlySaving, type Cycle, type PlanRelation } from "./plan-cards";
 import { SmsCreditsPanel } from "./sms-credits-panel";
@@ -18,6 +19,8 @@ import { BillingProfilePanel, BillingProfileSheet } from "./billing-profile";
 
 
 export default function SubscriptionPage() {
+  const t = useT();
+  const intl = useIntlLocale();
   const { businessId, businesses } = useBusiness();
   const business = businesses.find((item) => item.id === businessId) ?? null;
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -37,10 +40,10 @@ export default function SubscriptionPage() {
     let alive = true;
     Promise.all([getBusinessSubscription(businessId), listPlatformPlans(), getBillingProfile(businessId).catch(() => null)])
       .then(([current, rows, profile]) => { if (alive) { setSubscription(current); setAllPlans(rows); setPlans(activePlatformPlans(rows)); setBilling(profile); } })
-      .catch(() => { if (alive) toast.error("Paket bilgileri alınamadı."); })
+      .catch(() => { if (alive) toast.error(t("Paket bilgileri alınamadı.")); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [businessId]);
+  }, [businessId, t]);
 
   async function choosePlan(plan: PlatformPlan) {
     if (!businessId || busyPlan) return;
@@ -63,12 +66,12 @@ export default function SubscriptionPage() {
       if (result.checkoutUrl) return window.location.assign(result.checkoutUrl);
       if (result.status === "completed") {
         setSubscription(await getBusinessSubscription(businessId));
-        toast.success(`${plan.label} paketi hesabınıza tanımlandı.`);
-      } else toast.success("Paket talebiniz ödeme bekleyen işlemlere alındı.");
+        toast.success(t("{plan} paketi hesabınıza tanımlandı.", { plan: plan.label }));
+      } else toast.success(t("Paket talebiniz ödeme bekleyen işlemlere alındı."));
     } catch (error) {
       const message = String((error as Error).message ?? "");
-      if (message.includes("BILLING_PROFILE_REQUIRED")) { setBillingOpen(true); toast.error("Ödemeden önce fatura bilgilerinizi tamamlayın."); return; }
-      toast.error(message || "Paket seçimi tamamlanamadı.");
+      if (message.includes("BILLING_PROFILE_REQUIRED")) { setBillingOpen(true); toast.error(t("Ödemeden önce fatura bilgilerinizi tamamlayın.")); return; }
+      toast.error(message ? t(message) : t("Paket seçimi tamamlanamadı."));
     } finally { setBusyPlan(null); }
   }
 
@@ -78,7 +81,7 @@ export default function SubscriptionPage() {
     void choosePlan(plan).finally(() => setConfirmPlan(null));
   }
 
-  if (loading) return <StudioPage label="Abonelik"><StudioSkeleton stats={0} rows={3} label="Paket bilgileri yükleniyor" /></StudioPage>;
+  if (loading) return <StudioPage label={t("Abonelik")}><StudioSkeleton stats={0} rows={3} label={t("Paket bilgileri yükleniyor")} /></StudioPage>;
   const active = isSubscriptionActive(subscription);
   const lifetime = subscription?.isLifetime === true || subscription?.accessMode === "lifetime";
   const trialing = subscription?.status === "trialing" && active;
@@ -88,14 +91,14 @@ export default function SubscriptionPage() {
   const cheapest = plans.reduce<PlatformPlan | null>((min, plan) => !min || plan.monthlyPrice < min.monthlyPrice ? plan : min, null);
   const bestSaving = plans.reduce((max, plan) => Math.max(max, yearlySaving(plan)), 0);
   const cycleOptions = [
-    { value: "monthly" as const, label: "Aylık" },
-    { value: "yearly" as const, label: bestSaving ? <>Yıllık <span className={css.saveTag}>-%{bestSaving}</span></> : "Yıllık" },
+    { value: "monthly" as const, label: t("Aylık") },
+    { value: "yearly" as const, label: bestSaving ? <>{t("Yıllık")} <span className={css.saveTag}>{t("-%{percent}", { percent: bestSaving })}</span></> : t("Yıllık") },
   ];
   const confirmPrice = confirmPlan ? (cycle === "yearly" ? confirmPlan.yearlyPrice : confirmPlan.monthlyPrice) : 0;
   const lostOnSwitch = confirmPlan && currentPlan && active && !trialing && confirmPlan.id !== currentPlan.id
     ? currentPlan.entitlements.filter((key) => !confirmPlan.entitlements.includes(key))
     : [];
-  const needsBilling = () => { if (billing) return false; toast.message("Önce fatura bilgilerinizi ekleyin; e-Arşiv faturanız bu bilgilerle kesilir."); setBillingOpen(true); return true; };
+  const needsBilling = () => { if (billing) return false; toast.message(t("Önce fatura bilgilerinizi ekleyin; e-Arşiv faturanız bu bilgilerle kesilir.")); setBillingOpen(true); return true; };
   const open = (plan: PlatformPlan) => {
     const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
     if (price > 0 && needsBilling()) return;
@@ -103,7 +106,7 @@ export default function SubscriptionPage() {
   };
 
   return (
-    <StudioPage label="Abonelik">
+    <StudioPage label={t("Abonelik")}>
       <CurrentSubscription
         subscription={subscription} plan={currentPlan ?? null} active={active} lifetime={lifetime} trialing={trialing}
         busy={busyPlan !== null}
@@ -113,14 +116,14 @@ export default function SubscriptionPage() {
       <section className={css.section} aria-labelledby="plans-title" id="paketler">
         <div className={css.sectionHead}>
           <div>
-            <h2 id="plans-title">{trialing ? "Deneme bitmeden paketinizi seçin" : "Paketler"}</h2>
-            <p>{trialing ? "Deneme süresince tüm özellikler açık. Kalan gün, seçtiğiniz paketin önüne eklenir." : "İstediğiniz zaman geçiş yapın; verileriniz her zaman korunur."}</p>
+            <h2 id="plans-title">{trialing ? t("Deneme bitmeden paketinizi seçin") : t("Paketler")}</h2>
+            <p>{trialing ? t("Deneme süresince tüm özellikler açık. Kalan gün, seçtiğiniz paketin önüne eklenir.") : t("İstediğiniz zaman geçiş yapın; verileriniz her zaman korunur.")}</p>
           </div>
-          {plans.length ? <Segmented label="Ödeme dönemi" options={cycleOptions} value={cycle} onChange={setCycle} /> : null}
+          {plans.length ? <Segmented label={t("Ödeme dönemi")} options={cycleOptions} value={cycle} onChange={setCycle} /> : null}
         </div>
 
         {plans.length === 0
-          ? <Panel><EmptyState mood="thinking" title="Şu anda satışa açık paket bulunmuyor." description="Yeni paketler yayınlandığında burada görünecek." /></Panel>
+          ? <Panel><EmptyState mood="thinking" title={t("Şu anda satışa açık paket bulunmuyor.")} description={t("Yeni paketler yayınlandığında burada görünecek.")} /></Panel>
           : (
             <div className={css.plans} data-count={plans.length}>
               {plans.map((plan) => {
@@ -137,14 +140,14 @@ export default function SubscriptionPage() {
 
         {plans.length > 1 ? <CompareTable plans={plans} currentId={subscription?.plan ?? null} /> : null}
 
-        <ul className={css.trust} aria-label="Ödeme güvencesi">
+        <ul className={css.trust} aria-label={t("Ödeme güvencesi")}>
           <li><ShieldCheck size={15} aria-hidden /> PayTR · 3D Secure</li>
-          <li><RefreshCcw size={15} aria-hidden /> Otomatik yenileme yok</li>
-          <li><CalendarClock size={15} aria-hidden /> Kalan süre kaybolmaz</li>
-          <li><ReceiptText size={15} aria-hidden /> Fiyatlara KDV dahil</li>
+          <li><RefreshCcw size={15} aria-hidden /> {t("Otomatik yenileme yok")}</li>
+          <li><CalendarClock size={15} aria-hidden /> {t("Kalan süre kaybolmaz")}</li>
+          <li><ReceiptText size={15} aria-hidden /> {t("Fiyatlara KDV dahil")}</li>
         </ul>
         <p className={css.footnote}>
-          Ödeme öncesinde <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>, <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link> onayınıza sunulur.
+          {t("Ödeme öncesinde şu belgeler onayınıza sunulur:")}{" "}<Link href="/on-bilgilendirme-formu" target="_blank">{t("Ön Bilgilendirme Formu")}</Link>, <Link href="/mesafeli-satis-sozlesmesi" target="_blank">{t("Mesafeli Satış Sözleşmesi")}</Link>, <Link href="/iptal-ve-iade" target="_blank">{t("İptal ve İade Koşulları")}</Link>.
         </p>
       </section>
 
@@ -160,9 +163,9 @@ export default function SubscriptionPage() {
       <ConfirmSheet
         open={confirmPlan !== null}
         tone="primary"
-        title={confirmPlan ? (confirmPlan.id === subscription?.plan ? `${confirmPlan.label} · süreyi uzat` : `${confirmPlan.label} paketine geç`) : "Paket seçimi"}
-        description="PayTR güvenli ödeme sayfasına yönlendirileceksiniz. Ödeme onaylanınca paketiniz otomatik tanımlanır."
-        confirmLabel={busyPlan ? "Hazırlanıyor…" : confirmPrice > 0 ? "Ödemeye geç" : "Onayla"}
+        title={confirmPlan ? (confirmPlan.id === subscription?.plan ? t("{plan} · süreyi uzat", { plan: confirmPlan.label }) : t("{plan} paketine geç", { plan: confirmPlan.label })) : t("Paket seçimi")}
+        description={t("PayTR güvenli ödeme sayfasına yönlendirileceksiniz. Ödeme onaylanınca paketiniz otomatik tanımlanır.")}
+        confirmLabel={busyPlan ? t("Hazırlanıyor…") : confirmPrice > 0 ? t("Ödemeye geç") : t("Onayla")}
         busy={busyPlan !== null}
         confirmDisabled={confirmPrice > 0 && !acceptedTerms}
         onConfirm={confirmChoice}
@@ -170,23 +173,24 @@ export default function SubscriptionPage() {
       >
         {confirmPlan ? (
           <div className={css.confirmSummary}>
-            <span>{cycle === "yearly" ? "1 yıl" : "1 ay"} · {confirmPlan.label}</span>
-            <b>{money(confirmPrice, confirmPlan.currency)}</b>
+            <span>{cycle === "yearly" ? t("1 yıl") : t("1 ay")} · {confirmPlan.label}</span>
+            <b>{money(confirmPrice, confirmPlan.currency, intl)}</b>
           </div>
         ) : null}
         {lostOnSwitch.length ? (
           <p className={css.downgradeNote}>
-            <TriangleAlert size={15} aria-hidden /> Geçişle birlikte şu özellikler kapanır: {lostOnSwitch.map(entitlementLabel).join(", ")}. Kalan süreniz yeni paketin önüne eklenir.
+            <TriangleAlert size={15} aria-hidden /> {t("Geçişle birlikte şu özellikler kapanır: {features}. Kalan süreniz yeni paketin önüne eklenir.", { features: lostOnSwitch.map((key) => t(entitlementLabel(key))).join(", ") })}
           </p>
         ) : null}
         {confirmPlan && confirmPrice > 0 ? (
           <label className={css.terms}>
             <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
             <span>
-              <Link href="/on-bilgilendirme-formu" target="_blank">Ön Bilgilendirme Formu</Link>&apos;nu,{" "}
-              <Link href="/mesafeli-satis-sozlesmesi" target="_blank">Mesafeli Satış Sözleşmesi</Link>&apos;ni ve{" "}
-              <Link href="/iptal-ve-iade" target="_blank">İptal ve İade Koşulları</Link>&apos;nı okudum, onaylıyorum. Hizmetin ödeme anında
-              başlamasını talep ediyorum ve bu nedenle cayma hakkımın bulunmadığını biliyorum.
+              {t("Şunları okudum ve onaylıyorum:")}{" "}
+              <Link href="/on-bilgilendirme-formu" target="_blank">{t("Ön Bilgilendirme Formu")}</Link>,{" "}
+              <Link href="/mesafeli-satis-sozlesmesi" target="_blank">{t("Mesafeli Satış Sözleşmesi")}</Link>,{" "}
+              <Link href="/iptal-ve-iade" target="_blank">{t("İptal ve İade Koşulları")}</Link>.{" "}
+              {t("Hizmetin ödeme anında başlamasını talep ediyorum ve bu nedenle cayma hakkımın bulunmadığını biliyorum.")}
             </span>
           </label>
         ) : null}

@@ -2,6 +2,10 @@
 // ciro = tamamlanan randevuların servicePrice toplamı, prim = ciro × oran.
 // Test: commission.test.mjs
 
+// Saf modül (node testinde alias çözülmediği için i18n içe aktarılmaz): çeviri fonksiyonu parametre olarak gelir.
+type TFunction = (source: string) => string;
+const identity: TFunction = (source) => source;
+
 type CommissionAppointment = { staffId: string; status: string; startAt: string; servicePrice?: number };
 type CommissionStaff = { id: string; fullName: string; commissionRate?: number; isActive?: boolean; commissionPayouts?: Array<{ amount: number }> };
 
@@ -22,7 +26,7 @@ const clampRate = (value: unknown) => {
 };
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export function buildCommissionReport(appointments: readonly CommissionAppointment[], staff: readonly CommissionStaff[], days: number, nowMillis = Date.now()) {
+export function buildCommissionReport(appointments: readonly CommissionAppointment[], staff: readonly CommissionStaff[], days: number, nowMillis = Date.now(), t: TFunction = identity) {
   const from = nowMillis - days * 86_400_000;
   const rows: CommissionRow[] = staff
     .filter((member) => member.isActive !== false || (member.commissionPayouts?.length ?? 0) > 0)
@@ -37,7 +41,7 @@ export function buildCommissionReport(appointments: readonly CommissionAppointme
       const allTimeEarned = done.reduce((sum, item) => sum + Number(item.servicePrice ?? 0), 0) * rate / 100;
       const paid = (member.commissionPayouts ?? []).reduce((sum, payout) => sum + Number(payout.amount ?? 0), 0);
       return {
-        staffId: member.id, name: member.fullName || "Çalışan", rate, completed: inRange.length,
+        staffId: member.id, name: member.fullName || t("Çalışan"), rate, completed: inRange.length,
         revenue: round2(revenue), earned: round2(revenue * rate / 100), outstanding: round2(Math.max(0, allTimeEarned - paid)),
       };
     })
@@ -50,13 +54,13 @@ export function buildCommissionReport(appointments: readonly CommissionAppointme
 }
 
 /** Excel'in Türkçe ayarlarında açılan CSV (noktalı virgül + BOM). */
-export function commissionCsv(rows: readonly CommissionRow[], periodLabel: string): string {
+export function commissionCsv(rows: readonly CommissionRow[], periodLabel: string, t: TFunction = identity, locale = "tr-TR"): string {
   const cell = (value: string | number) => {
-    const text = typeof value === "number" ? value.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : value;
+    const text = typeof value === "number" ? value.toLocaleString(locale, { maximumFractionDigits: 2 }) : value;
     return /[;"\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [
-    ["Dönem", "Çalışan", "Tamamlanan randevu", "Ciro (₺)", "Prim oranı (%)", "Hak edilen prim (₺)", "Ödenmemiş prim - tüm zamanlar (₺)"],
+    [t("Dönem"), t("Çalışan"), t("Tamamlanan randevu"), t("Ciro (₺)"), t("Prim oranı (%)"), t("Hak edilen prim (₺)"), t("Ödenmemiş prim - tüm zamanlar (₺)")],
     ...rows.map((row) => [periodLabel, row.name, row.completed, row.revenue, row.rate, row.earned, row.outstanding]),
   ];
   return "﻿" + lines.map((line) => line.map(cell).join(";")).join("\r\n");

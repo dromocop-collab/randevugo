@@ -15,11 +15,12 @@ import { displayPlace } from "@/lib/seo/text";
  * Yayındaki işletme için Instagram Hikâye (1080×1920) ya da gönderi (1080×1350) PNG'si.
  * Yayında olmayan / bulunamayan işletmede 404. CDN'de 1 saat tutulur; `v` (işletmenin updatedAt'i)
  * değişince yeni anahtar oluşur, yani güncellenen işletmenin görseli de tazelenir.
+ * Görsel işletmenin Türkçe Instagram paylaşımı içindir; metinleri bilerek Türkçe kalır (i18n-ignore).
  */
 const CACHE_CONTROL = "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400";
 
 function notFound() {
-  return new Response("İşletme bulunamadı.", { status: 404, headers: { "Cache-Control": "public, max-age=60", "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response("İşletme bulunamadı.", { status: 404, headers: { "Cache-Control": "public, max-age=60", "Content-Type": "text/plain; charset=utf-8" } }); // i18n-ignore
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const sample = process.env.NODE_ENV !== "production" ? await devSample(slug, format) : null;
   const input = sample ?? (await loadBusinessCard(slug, format));
-  if (input === "error") return new Response("Görsel şu anda oluşturulamadı.", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } });
+  if (input === "error") return new Response("Görsel şu anda oluşturulamadı.", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } }); // i18n-ignore
   if (!input) return notFound();
 
   try {
@@ -40,8 +41,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     });
   } catch (error) {
-    console.error("[instagram-gorseli] çizim hatası", error);
-    return new Response("Görsel şu anda oluşturulamadı.", { status: 500, headers: { "Cache-Control": "no-store" } });
+    console.error("[instagram-gorseli] çizim hatası", error); // i18n-ignore
+    return new Response("Görsel şu anda oluşturulamadı.", { status: 500, headers: { "Cache-Control": "no-store" } }); // i18n-ignore
   }
 }
 
@@ -86,40 +87,40 @@ async function devSample(slug: string, format: ShareFormat): Promise<InstagramCa
   if (slug === "ornek-kuafor") {
     return {
       ...base,
-      name: "Şığ Güzellik & Saç Tasarım İstanbul",
-      category: "Kuaför",
-      place: "Kadıköy, İstanbul",
+      name: "Şığ Güzellik & Saç Tasarım İstanbul", // i18n-ignore
+      category: "Kuaför", // i18n-ignore
+      place: "Kadıköy, İstanbul", // i18n-ignore
       rating: formatRating(4.86),
       reviewCount: 128,
       verified: true,
       onlineBooking: true,
       services: pickShowcaseServices([
-        { name: "Saç kesimi & fön", price: 450, durationMinutes: 45 },
+        { name: "Saç kesimi & fön", price: 450, durationMinutes: 45 }, // i18n-ignore
         { name: "Ombre / Balyaj", price: 2250, durationMinutes: 180 },
-        { name: "Keratin bakımı", price: 1800, durationMinutes: 120 },
-        { name: "Gelin saçı (prova dahil)", price: 6500, durationMinutes: 150 },
+        { name: "Keratin bakımı", price: 1800, durationMinutes: 120 }, // i18n-ignore
+        { name: "Gelin saçı (prova dahil)", price: 6500, durationMinutes: 150 }, // i18n-ignore
       ], format === "story" ? 4 : 3),
       cover: await localImageDataUrl("/images/home-hero-studio-v2.jpg"),
-      monogram: "Ş",
+      monogram: "Ş", // i18n-ignore
     };
   }
   if (slug === "ornek-berber") {
     return {
       ...base,
-      name: "Çağrı Berber",
+      name: "Çağrı Berber", // i18n-ignore
       category: "Berber",
-      place: "Fethiye, Muğla",
+      place: "Fethiye, Muğla", // i18n-ignore
       rating: null,
       reviewCount: 0,
       verified: false,
       onlineBooking: true,
       services: pickShowcaseServices([
-        { name: "Saç + sakal", price: 600, durationMinutes: 50 },
-        { name: "Çocuk tıraşı", price: 300, durationMinutes: 25 },
-        { name: "Ağda & yüz bakımı", price: 0, durationMinutes: 30 },
+        { name: "Saç + sakal", price: 600, durationMinutes: 50 }, // i18n-ignore
+        { name: "Çocuk tıraşı", price: 300, durationMinutes: 25 }, // i18n-ignore
+        { name: "Ağda & yüz bakımı", price: 0, durationMinutes: 30 }, // i18n-ignore
       ], format === "story" ? 4 : 3),
       cover: null,
-      monogram: "Ç",
+      monogram: "Ç", // i18n-ignore
     };
   }
   return null;

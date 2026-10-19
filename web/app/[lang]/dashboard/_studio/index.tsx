@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { AlertTriangle, LoaderCircle, Search, X, type LucideIcon } from "lucide-react";
 import { RoviMascot, type RoviMood } from "@/components/brand/rovi-mascot";
+import { useT } from "@/i18n/client";
 import s from "./studio.module.css";
 
 export { s as studio };
@@ -114,12 +115,13 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
 }
 
 export function SearchField({ value, onChange, placeholder, label }: { value: string; onChange: (value: string) => void; placeholder: string; label?: string }) {
+  const t = useT();
   return (
     <label className={s.search}>
       <Search size={17} aria-hidden />
       <span className={s.srOnly}>{label ?? placeholder}</span>
       <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
-      {value ? <button type="button" className={cx(s.btn, s.btnGhost, s.btnSm)} style={{ padding: "0 8px", minHeight: 32 }} onClick={() => onChange("")} aria-label="Aramayı temizle"><X size={15} /></button> : null}
+      {value ? <button type="button" className={cx(s.btn, s.btnGhost, s.btnSm)} style={{ padding: "0 8px", minHeight: 32 }} onClick={() => onChange("")} aria-label={t("Aramayı temizle")}><X size={15} /></button> : null}
     </label>
   );
 }
@@ -164,9 +166,10 @@ export function Sk({ h = 16, w = "100%", r, style }: { h?: number | string; w?: 
 }
 
 /** Sayfa iskeleti: hero + istatistik + liste. */
-export function StudioSkeleton({ stats = 4, rows = 4, label = "Yükleniyor" }: { stats?: number; rows?: number; label?: string }) {
+export function StudioSkeleton({ stats = 4, rows = 4, label }: { stats?: number; rows?: number; label?: string }) {
+  const t = useT();
   return (
-    <div role="status" aria-live="polite" aria-label={label} style={{ display: "grid", gap: 16 }}>
+    <div role="status" aria-live="polite" aria-label={label ?? t("Yükleniyor")} style={{ display: "grid", gap: 16 }}>
       <Sk h={150} r={26} />
       {stats ? <div className={s.stats}>{Array.from({ length: stats }, (_, i) => <Sk key={i} h={104} r={18} />)}</div> : null}
       <div className={s.panel} style={{ display: "grid", gap: 12 }}>
@@ -197,6 +200,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lab
   footer?: ReactNode;
   labelledBy?: string;
 }) {
+  const t = useT();
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -225,7 +229,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lab
               <h2 id={titleId} className={s.sheetTitle}>{title}</h2>
               {description ? <p className={s.sheetText}>{description}</p> : null}
             </div>
-            <button type="button" className={cx(s.btn, s.btnGhost, s.iconBtn)} onClick={onClose} aria-label="Kapat"><X size={18} /></button>
+            <button type="button" className={cx(s.btn, s.btnGhost, s.iconBtn)} onClick={onClose} aria-label={t("Kapat")}><X size={18} /></button>
           </div>
         ) : null}
         {children}
@@ -237,7 +241,7 @@ export function Sheet({ open, onClose, title, description, children, footer, lab
 }
 
 /** Yıkıcı/geri alınamaz işlemler için onay. */
-export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla", cancelLabel = "Vazgeç", tone = "danger", busy, confirmDisabled, onConfirm, onClose, children }: {
+export function ConfirmSheet({ open, title, description, confirmLabel, cancelLabel, tone = "danger", busy, confirmDisabled, onConfirm, onClose, children }: {
   open: boolean;
   title: string;
   description?: ReactNode;
@@ -250,13 +254,14 @@ export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla"
   onClose: () => void;
   children?: ReactNode;
 }) {
+  const t = useT();
   const titleId = useId();
   return (
     <Sheet open={open} onClose={busy ? () => undefined : onClose} labelledBy={titleId}
       footer={<>
-        <button type="button" className={s.btn} onClick={onClose} disabled={busy}>{cancelLabel}</button>
+        <button type="button" className={s.btn} onClick={onClose} disabled={busy}>{cancelLabel ?? t("Vazgeç")}</button>
         <button type="button" data-autofocus className={cx(s.btn, tone === "danger" ? s.btnDanger : s.btnPrimary)} onClick={onConfirm} disabled={busy || confirmDisabled}>
-          {busy ? <LoaderCircle size={16} className={s.spin} aria-hidden /> : null}{confirmLabel}
+          {busy ? <LoaderCircle size={16} className={s.spin} aria-hidden /> : null}{confirmLabel ?? t("Onayla")}
         </button>
       </>}>
       {tone === "danger" ? <span className={s.sheetIcon}><AlertTriangle size={22} aria-hidden /></span> : null}
@@ -268,7 +273,7 @@ export function ConfirmSheet({ open, title, description, confirmLabel = "Onayla"
 }
 
 /** Yalnızca değişiklik varken görünen yapışkan kaydet çubuğu. */
-export function SaveBar({ visible, saving, onSave, onReset, label = "Kaydedilmemiş değişiklikler", saveLabel = "Kaydet", note, form }: {
+export function SaveBar({ visible, saving, onSave, onReset, label, saveLabel, note, form }: {
   visible: boolean;
   saving?: boolean;
   onSave?: () => void;
@@ -279,14 +284,15 @@ export function SaveBar({ visible, saving, onSave, onReset, label = "Kaydedilmem
   /** Bir <form> id'si verilirse kaydet butonu o formu gönderir. */
   form?: string;
 }) {
+  const t = useT();
   if (!visible) return null;
   return (
-    <div className={s.saveBar} role="region" aria-label="Kaydet">
-      <span><i aria-hidden />{label}{note ? <em style={{ fontStyle: "normal", color: "var(--k-faint)" }}>· {note}</em> : null}</span>
+    <div className={s.saveBar} role="region" aria-label={t("Kaydet")}>
+      <span><i aria-hidden />{label ?? t("Kaydedilmemiş değişiklikler")}{note ? <em style={{ fontStyle: "normal", color: "var(--k-faint)" }}>· {note}</em> : null}</span>
       <div className={s.saveBarActions}>
-        {onReset ? <button type="button" className={cx(s.btn, s.btnGhost)} onClick={onReset} disabled={saving}>Geri al</button> : null}
+        {onReset ? <button type="button" className={cx(s.btn, s.btnGhost)} onClick={onReset} disabled={saving}>{t("Geri al")}</button> : null}
         <button type={form ? "submit" : "button"} form={form} className={cx(s.btn, s.btnPrimary)} onClick={form ? undefined : onSave} disabled={saving}>
-          {saving ? <LoaderCircle size={16} className={s.spin} aria-hidden /> : null}{saveLabel}
+          {saving ? <LoaderCircle size={16} className={s.spin} aria-hidden /> : null}{saveLabel ?? t("Kaydet")}
         </button>
       </div>
     </div>

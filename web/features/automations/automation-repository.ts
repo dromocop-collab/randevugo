@@ -65,8 +65,8 @@ export async function listAutomationRules(businessId: string): Promise<Automatio
       name: String(data.name ?? "Otomasyon"),
       trigger: data.trigger as AutomationTrigger,
       enabled: data.enabled !== false,
-      title: String(data.title ?? "İşletme bildirimi"),
-      message: String(data.message ?? "Yeni bir işlem var."),
+      title: String(data.title ?? "İşletme bildirimi"), // i18n-ignore — kayıtlı veri varsayılanı
+      message: String(data.message ?? "Yeni bir işlem var."), // i18n-ignore — kayıtlı veri varsayılanı
       customerTitle: String(data.customerTitle ?? ""),
       customerMessage: String(data.customerMessage ?? ""),
       conditions: {

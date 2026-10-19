@@ -6,6 +6,7 @@
 import { SITE_CONTACT, SITE_DESCRIPTION, SITE_LANGUAGE, SITE_LOGO_PATH, SITE_NAME, SITE_SAME_AS, SITE_URL, absoluteUrl } from "./site.ts";
 import { schemaTypeForCategory } from "./categories.ts";
 import { shortPersonName } from "./text.ts";
+import { DEFAULT_LOCALE, LOCALE_LABELS, localizeHref, type Locale } from "../../i18n/config.ts";
 
 export type JsonLdObject = Record<string, unknown>;
 
@@ -229,7 +230,7 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
     ...(offers.length ? {
       hasOfferCatalog: {
         "@type": "OfferCatalog",
-        name: `${input.name} hizmetleri`,
+        name: `${input.name} hizmetleri`, // i18n-ignore — vitrin JSON-LD (vitrin grubu)
         itemListElement: offers.map((service) => ({
           "@type": "Offer",
           itemOffered: {
@@ -271,7 +272,7 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
           inLanguage: SITE_LANGUAGE,
           actionPlatform: ["https://schema.org/DesktopWebPlatform", "https://schema.org/MobileWebPlatform"],
         },
-        result: { "@type": "Reservation", name: `${input.name} online randevu` },
+        result: { "@type": "Reservation", name: `${input.name} online randevu` }, // i18n-ignore — vitrin JSON-LD (vitrin grubu)
       },
     }),
     isPartOf: { "@id": WEBSITE_ID },
@@ -279,7 +280,7 @@ export function storefrontJsonLd(input: StorefrontSchemaInput): JsonLdObject {
 }
 
 /** Kategori tanıtım sayfası için Service düğümü. */
-export function serviceJsonLd(input: { path: string; name: string; description: string; serviceType: string; image?: string; areaServed?: string }): JsonLdObject {
+export function serviceJsonLd(input: { path: string; name: string; description: string; serviceType: string; image?: string; areaServed?: string; locale?: Locale }): JsonLdObject {
   const url = absoluteUrl(input.path);
   return {
     "@type": "Service",
@@ -290,12 +291,12 @@ export function serviceJsonLd(input: { path: string; name: string; description: 
     url,
     ...(input.image ? { image: absoluteUrl(input.image) } : {}),
     provider: { "@id": ORGANIZATION_ID },
-    areaServed: input.areaServed ? { "@type": "City", name: input.areaServed } : { "@type": "Country", name: "Türkiye" },
-    availableChannel: { "@type": "ServiceChannel", serviceUrl: url, availableLanguage: "Turkish" },
+    areaServed: input.areaServed ? { "@type": "City", name: input.areaServed } : { "@type": "Country", name: "Türkiye" }, // i18n-ignore — ülke adı
+    availableChannel: { "@type": "ServiceChannel", serviceUrl: url, availableLanguage: input.locale && input.locale !== DEFAULT_LOCALE ? ["Turkish", "English"] : "Turkish" },
   };
 }
 
-export function webPageJsonLd(input: { path: string; name: string; description: string; type?: "WebPage" | "CollectionPage" | "AboutPage" | "ContactPage" | "FAQPage"; image?: string; breadcrumbId?: string; mainEntityId?: string }): JsonLdObject {
+export function webPageJsonLd(input: { path: string; name: string; description: string; type?: "WebPage" | "CollectionPage" | "AboutPage" | "ContactPage" | "FAQPage"; image?: string; breadcrumbId?: string; mainEntityId?: string; locale?: Locale }): JsonLdObject {
   const url = absoluteUrl(input.path);
   return {
     "@type": input.type ?? "WebPage",
@@ -303,12 +304,17 @@ export function webPageJsonLd(input: { path: string; name: string; description: 
     url,
     name: input.name,
     description: input.description,
-    inLanguage: SITE_LANGUAGE,
+    inLanguage: input.locale ? LOCALE_LABELS[input.locale].intl : SITE_LANGUAGE,
     isPartOf: { "@id": WEBSITE_ID },
     ...(input.image ? { primaryImageOfPage: { "@type": "ImageObject", url: absoluteUrl(input.image) } } : {}),
     ...(input.breadcrumbId ? { breadcrumb: { "@id": input.breadcrumbId } } : {}),
     ...(input.mainEntityId ? { mainEntity: { "@id": input.mainEntityId } } : {}),
   };
+}
+
+/** Site içi yolu sayfanın diline göre yazar (JSON-LD adresleri ve sayfa yolu için): "/kesfet" → "/en/kesfet". */
+export function localePath(path: string, locale: Locale = DEFAULT_LOCALE): string {
+  return localizeHref(path, locale);
 }
 
 /** `<script type="application/ld+json">` içine güvenle yazılabilir metin. */

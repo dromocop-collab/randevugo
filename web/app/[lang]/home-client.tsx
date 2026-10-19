@@ -12,20 +12,22 @@ import type { Business } from "@/types/business";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import styles from "@/components/home/home.module.css";
 import { categoryImageFor } from "@/components/marketing/category-catalog";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { tk } from "@/i18n/config";
 
 export type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
 
 export const DEFAULT_CATEGORIES: HomeCategory[] = [
-  { slug: "kuafor", label: "Kuaför", emoji: "✦", tone: "mint", image: "/images/categories/kuafor.png", description: "Kesim, renklendirme ve bakım" },
-  { slug: "berber", label: "Berber", emoji: "✂", tone: "blue", image: "/images/categories/berber.png", description: "Saç, sakal ve modern bakım" },
-  { slug: "guzellik", label: "Güzellik", emoji: "◇", tone: "rose", image: "/images/categories/guzellik.png", description: "Cilt bakımı ve güzellik ritüelleri" },
-  { slug: "spa", label: "Spa & Masaj", emoji: "◌", tone: "sand", image: "/images/categories/spa.png", description: "Rahatlama ve yenilenme" },
-  { slug: "nail", label: "Nail Studio", emoji: "◆", tone: "violet", image: "/images/categories/nail.png", description: "Manikür, pedikür ve nail art" },
-  { slug: "spor", label: "Spor & PT", emoji: "↗", tone: "lime", image: "/images/categories/spor.png", description: "Sana özel antrenman planları" },
-  { slug: "saglik", label: "Sağlık", emoji: "+", tone: "cyan", image: "/images/categories/saglik.png", description: "Uzman sağlık hizmetleri" },
-  { slug: "danismanlik", label: "Danışmanlık", emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.png", description: "Doğru uzmanla yeni bir adım" },
-  { slug: "veteriner", label: "Veteriner", emoji: "♥", tone: "coral", image: "/images/categories/veteriner.png", description: "Dostların için güvenilir bakım" },
-  { slug: "yazilim", label: "Yazılım", emoji: "</>", tone: "blue", image: "/images/categories/yazilim.png", description: "Web, mobil ve dijital çözümler" },
+  { slug: "kuafor", label: tk("Kuaför"), emoji: "✦", tone: "mint", image: "/images/categories/kuafor.png", description: tk("Kesim, renklendirme ve bakım") },
+  { slug: "berber", label: tk("Berber"), emoji: "✂", tone: "blue", image: "/images/categories/berber.png", description: tk("Saç, sakal ve modern bakım") },
+  { slug: "guzellik", label: tk("Güzellik"), emoji: "◇", tone: "rose", image: "/images/categories/guzellik.png", description: tk("Cilt bakımı ve güzellik ritüelleri") },
+  { slug: "spa", label: tk("Spa & Masaj"), emoji: "◌", tone: "sand", image: "/images/categories/spa.png", description: tk("Rahatlama ve yenilenme") },
+  { slug: "nail", label: tk("Nail Studio"), emoji: "◆", tone: "violet", image: "/images/categories/nail.png", description: tk("Manikür, pedikür ve nail art") },
+  { slug: "spor", label: tk("Spor & PT"), emoji: "↗", tone: "lime", image: "/images/categories/spor.png", description: tk("Sana özel antrenman planları") },
+  { slug: "saglik", label: tk("Sağlık"), emoji: "+", tone: "cyan", image: "/images/categories/saglik.png", description: tk("Uzman sağlık hizmetleri") },
+  { slug: "danismanlik", label: tk("Danışmanlık"), emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.png", description: tk("Doğru uzmanla yeni bir adım") },
+  { slug: "veteriner", label: tk("Veteriner"), emoji: "♥", tone: "coral", image: "/images/categories/veteriner.png", description: tk("Dostların için güvenilir bakım") },
+  { slug: "yazilim", label: tk("Yazılım"), emoji: "</>", tone: "blue", image: "/images/categories/yazilim.png", description: tk("Web, mobil ve dijital çözümler") },
 ];
 
 /** Gerçek, yayında olan işletmelerden türetilen sayılar (sahte istatistik yok). */
@@ -54,8 +56,8 @@ function updateRailEdges(rail: HTMLElement | null) {
   rail.dataset.atEnd = String(rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 8);
 }
 
-function formatCount(value: number) {
-  return value.toLocaleString("tr-TR");
+function formatCount(value: number, locale = "tr-TR") {
+  return value.toLocaleString(locale);
 }
 
 /**
@@ -64,6 +66,8 @@ function formatCount(value: number) {
  * Başlık (intro) ve görsel (art) sunucuda çizilip buraya yuva olarak verilir.
  */
 export function HomeInteractive({ initialData, intro, art }: { initialData?: HomeInitialData | null; intro?: ReactNode; art?: ReactNode }) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const [popular, setPopular] = useState<Business[]>(initialData?.businesses ?? []);
   const [results, setResults] = useState<Business[]>([]);
   const [cities, setCities] = useState<string[]>(initialData?.cities ?? []);
@@ -92,7 +96,7 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
       setStats({ totalBusinesses: facets.totalBusinesses, cityCount: facets.cities.length, categoryCounts: facets.categoryCounts });
       setCategories(mergeCategories(dynamic));
     } catch {
-      setErrorMessage("İşletmeler şu anda yüklenemedi. Bağlantını kontrol edip yeniden deneyebilirsin.");
+      setErrorMessage(tk("İşletmeler şu anda yüklenemedi. Bağlantını kontrol edip yeniden deneyebilirsin."));
     } finally {
       setLoading(false);
     }
@@ -110,7 +114,7 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
   async function runSearch(params: { searchText: string; category: string; city: string }) {
     setLoading(true); setErrorMessage(null); setSearched(true); setActiveCategory(params.category); setLastQuery(params);
     try { setResults(await searchBusinesses({ searchText: params.searchText, category: params.category || undefined, city: params.city || undefined })); }
-    catch { setResults([]); setErrorMessage("Arama şu anda tamamlanamadı. Lütfen yeniden dene."); } finally { setLoading(false); }
+    catch { setResults([]); setErrorMessage(tk("Arama şu anda tamamlanamadı. Lütfen yeniden dene.")); } finally { setLoading(false); }
     revealResults();
   }
 
@@ -127,7 +131,7 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
 
   const visibleBusinesses = useMemo(() => searched ? results : popular, [searched, results, popular]);
   const counts = stats?.categoryCounts ?? {};
-  const categoryLabel = (slug: string) => categories.find((item) => item.slug === slug)?.label ?? slug;
+  const categoryLabel = (slug: string) => { const label = categories.find((item) => item.slug === slug)?.label; return label ? t(label) : slug; };
 
   const quickCategories = useMemo(() => {
     const ranked = Object.entries(stats?.categoryCounts ?? {})
@@ -158,26 +162,26 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
         <div className={styles.heroCopy}>
           {intro}
 
-          <div className={styles.searchCard} role="search" aria-label="İşletme ve hizmet ara">
-            <div className={styles.searchHead}><span aria-hidden="true"><Search size={15} /></span><div><strong>Randevuna buradan başla</strong><small>Hizmet, işletme, kategori veya şehir seç</small></div></div>
+          <div className={styles.searchCard} role="search" aria-label={t("İşletme ve hizmet ara")}>
+            <div className={styles.searchHead}><span aria-hidden="true"><Search size={15} /></span><div><strong>{t("Randevuna buradan başla")}</strong><small>{t("Hizmet, işletme, kategori veya şehir seç")}</small></div></div>
             <SearchBar onSearch={runSearch} cities={cities} dynamicCategories={categories.slice(DEFAULT_CATEGORIES.length).map(item => ({ value: item.slug, label: item.label }))} className={styles.searchForm} />
           </div>
 
           <div className={styles.quick}>
-            <span className={styles.quickLabel}><Sparkles size={13} aria-hidden="true" /> Popüler</span>
+            <span className={styles.quickLabel}><Sparkles size={13} aria-hidden="true" /> {t("Popüler")}</span>
             {quickCategories.map((slug) => <button key={slug} type="button" className={`${styles.quickChip} ${activeCategory === slug ? styles.quickChipActive : ""}`} onClick={() => selectCategory(slug)} aria-pressed={activeCategory === slug}>
-              {categoryLabel(slug)}{hasStats && counts[slug] > 0 && <small>{formatCount(counts[slug])}</small>}
+              {categoryLabel(slug)}{hasStats && counts[slug] > 0 && <small>{formatCount(counts[slug], intlLocale)}</small>}
             </button>)}
           </div>
 
-          {hasStats && stats ? <dl className={styles.stats} aria-label="SeninRandevun'da şu anda">
-            <div><dt>Yayında işletme</dt><dd>{formatCount(stats.totalBusinesses)}</dd></div>
-            <div><dt>Şehir</dt><dd>{formatCount(stats.cityCount)}</dd></div>
-            <div><dt>Aktif kategori</dt><dd>{formatCount(activeCategoryCount)}</dd></div>
-          </dl> : <ul className={styles.trustRow} aria-label="Neden SeninRandevun">
-            <li><BadgeCheck size={14} aria-hidden="true" /> Müşteriler için ücretsiz</li>
-            <li><ShieldCheck size={14} aria-hidden="true" /> Güvenli randevu</li>
-            <li><Clock3 size={14} aria-hidden="true" /> 7/24 online</li>
+          {hasStats && stats ? <dl className={styles.stats} aria-label={t("SeninRandevun'da şu anda")}>
+            <div><dt>{t("Yayında işletme")}</dt><dd>{formatCount(stats.totalBusinesses, intlLocale)}</dd></div>
+            <div><dt>{t("Şehir")}</dt><dd>{formatCount(stats.cityCount, intlLocale)}</dd></div>
+            <div><dt>{t("Aktif kategori")}</dt><dd>{formatCount(activeCategoryCount, intlLocale)}</dd></div>
+          </dl> : <ul className={styles.trustRow} aria-label={t("Neden SeninRandevun")}>
+            <li><BadgeCheck size={14} aria-hidden="true" /> {t("Müşteriler için ücretsiz")}</li>
+            <li><ShieldCheck size={14} aria-hidden="true" /> {t("Güvenli randevu")}</li>
+            <li><Clock3 size={14} aria-hidden="true" /> {t("7/24 online")}</li>
           </ul>}
         </div>
         {art}
@@ -188,10 +192,10 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
     <section className={styles.section} id="kategoriler" aria-labelledby="home-categories-title">
       <div className={styles.wrap}>
         <div className={styles.sectionHead} data-reveal="">
-          <div><span className={styles.kicker}>KATEGORİLER</span><h2 id="home-categories-title">Bugün neye ihtiyacın var?</h2><p>Bir kategoriye dokun; o alandaki yayında işletmeleri hemen aşağıda gösterelim.</p></div>
+          <div><span className={styles.kicker}>{t("KATEGORİLER")}</span><h2 id="home-categories-title">{t("Bugün neye ihtiyacın var?")}</h2><p>{t("Bir kategoriye dokun; o alandaki yayında işletmeleri hemen aşağıda gösterelim.")}</p></div>
           <div className={styles.headActions}>
-            <div className={styles.arrows}><button type="button" onClick={() => scrollRail(categoryRailRef.current, -1)} aria-label="Önceki kategoriler"><ChevronLeft size={18} /></button><button type="button" onClick={() => scrollRail(categoryRailRef.current, 1)} aria-label="Sonraki kategoriler"><ChevronRight size={18} /></button></div>
-            <Link href="/kategoriler" className={styles.textLink}>Tüm kategoriler <ArrowRight size={15} /></Link>
+            <div className={styles.arrows}><button type="button" onClick={() => scrollRail(categoryRailRef.current, -1)} aria-label={t("Önceki kategoriler")}><ChevronLeft size={18} /></button><button type="button" onClick={() => scrollRail(categoryRailRef.current, 1)} aria-label={t("Sonraki kategoriler")}><ChevronRight size={18} /></button></div>
+            <Link href="/kategoriler" className={styles.textLink}>{t("Tüm kategoriler")} <ArrowRight size={15} /></Link>
           </div>
         </div>
       </div>
@@ -204,10 +208,10 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
               {category.image ? <Image src={category.image} alt="" fill sizes="(max-width: 720px) 62vw, 260px" /> : <b aria-hidden="true">{category.emoji}</b>}
             </span>
             <span className={styles.categoryShade} aria-hidden="true" />
-            <span className={styles.categoryCount}>{hasStats && count > 0 ? `${formatCount(count)} işletme` : "Keşfet"}</span>
+            <span className={styles.categoryCount}>{hasStats && count > 0 ? t("{formatted} işletme", { count, formatted: formatCount(count, intlLocale) }) : t("Keşfet")}</span>
             <span className={styles.categoryBody}>
-              <strong>{category.label}</strong>
-              <em>{category.description || "Yakınındaki uzmanları keşfet"}</em>
+              <strong>{t(category.label)}</strong>
+              <em>{category.description ? t(category.description) : t("Yakınındaki uzmanları keşfet")}</em>
             </span>
             <span className={styles.categoryGo} aria-hidden="true">{active ? <X size={16} /> : <ArrowUpRight size={17} />}</span>
           </button>;
@@ -220,25 +224,25 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
       <div className={styles.wrap}>
         <div className={styles.sectionHead}>
           <div>
-            <span className={styles.kicker}>{searched ? "ARAMA SONUÇLARI" : "ÖNE ÇIKAN İŞLETMELER"}</span>
-            <h2 id="home-business-title">{searched ? (loading ? "Aranıyor…" : `${visibleBusinesses.length} eşleşme bulundu`) : "Sevilen yerleri keşfet."}</h2>
-            {searched && !loading && <p>{[lastQuery.searchText && `“${lastQuery.searchText}”`, lastQuery.category && categoryLabel(lastQuery.category), lastQuery.city].filter(Boolean).join(" · ") || "Tüm işletmeler"}</p>}
-            {!searched && <p>Müşterilerin en çok ilgilendiği, randevuya açık işletmeler.</p>}
+            <span className={styles.kicker}>{searched ? t("ARAMA SONUÇLARI") : t("ÖNE ÇIKAN İŞLETMELER")}</span>
+            <h2 id="home-business-title">{searched ? (loading ? t("Aranıyor…") : t("{count} eşleşme bulundu", { count: visibleBusinesses.length })) : t("Sevilen yerleri keşfet.")}</h2>
+            {searched && !loading && <p>{[lastQuery.searchText && `“${lastQuery.searchText}”`, lastQuery.category && categoryLabel(lastQuery.category), lastQuery.city].filter(Boolean).join(" · ") || t("Tüm işletmeler")}</p>}
+            {!searched && <p>{t("Müşterilerin en çok ilgilendiği, randevuya açık işletmeler.")}</p>}
           </div>
           <div className={styles.headActions}>
-            {visibleBusinesses.length > 1 && !loading && <div className={styles.arrows}><button type="button" onClick={() => scrollRail(businessRailRef.current, -1)} aria-label="Önceki işletmeler"><ChevronLeft size={18} /></button><button type="button" onClick={() => scrollRail(businessRailRef.current, 1)} aria-label="Sonraki işletmeler"><ChevronRight size={18} /></button></div>}
-            {searched ? <button type="button" className={styles.clearButton} onClick={clearSearch}><X size={14} /> Aramayı temizle</button> : <Link href="/kesfet" className={styles.textLink}>Tümünü keşfet <ArrowRight size={15} /></Link>}
+            {visibleBusinesses.length > 1 && !loading && <div className={styles.arrows}><button type="button" onClick={() => scrollRail(businessRailRef.current, -1)} aria-label={t("Önceki işletmeler")}><ChevronLeft size={18} /></button><button type="button" onClick={() => scrollRail(businessRailRef.current, 1)} aria-label={t("Sonraki işletmeler")}><ChevronRight size={18} /></button></div>}
+            {searched ? <button type="button" className={styles.clearButton} onClick={clearSearch}><X size={14} /> {t("Aramayı temizle")}</button> : <Link href="/kesfet" className={styles.textLink}>{t("Tümünü keşfet")} <ArrowRight size={15} /></Link>}
           </div>
         </div>
       </div>
 
-      {loading ? <div className={`${styles.rail} ${styles.businessRail}`} role="status" aria-label="İşletmeler yükleniyor">{[1, 2, 3, 4].map(item => <div key={item} className={styles.skeleton} />)}</div>
-        : errorMessage ? <div className={styles.wrap}><div className={styles.empty}><WifiOff size={26} aria-hidden="true" /><h3>Bağlantı kurulamadı.</h3><p>{errorMessage}</p><button type="button" onClick={() => searched ? runSearch(lastQuery) : loadHomepage()}><RefreshCw size={14} /> Yeniden dene</button></div></div>
+      {loading ? <div className={`${styles.rail} ${styles.businessRail}`} role="status" aria-label={t("İşletmeler yükleniyor")}>{[1, 2, 3, 4].map(item => <div key={item} className={styles.skeleton} />)}</div>
+        : errorMessage ? <div className={styles.wrap}><div className={styles.empty}><WifiOff size={26} aria-hidden="true" /><h3>{t("Bağlantı kurulamadı.")}</h3><p>{t(errorMessage)}</p><button type="button" onClick={() => searched ? runSearch(lastQuery) : loadHomepage()}><RefreshCw size={14} /> {t("Yeniden dene")}</button></div></div>
         : visibleBusinesses.length > 0 ? <div ref={businessRailRef} onScroll={(event) => updateRailEdges(event.currentTarget)} className={`${styles.rail} ${styles.businessRail}`} data-at-start="true" data-at-end="false">
-          {visibleBusinesses.slice(0, searched ? 24 : 8).map((business, index) => <FeaturedBusinessCard key={business.id} business={business} index={index} />)}
-          {!searched && <Link href="/kesfet" className={styles.moreCard}><span><ArrowUpRight size={22} /></span><strong>Daha fazla işletme</strong><small>Şehrine ve kategorine göre keşfet</small></Link>}
+          {visibleBusinesses.slice(0, searched ? 24 : 8).map((business, index) => <FeaturedBusinessCard key={business.id} business={business} index={index} t={t} intlLocale={intlLocale} />)}
+          {!searched && <Link href="/kesfet" className={styles.moreCard}><span><ArrowUpRight size={22} /></span><strong>{t("Daha fazla işletme")}</strong><small>{t("Şehrine ve kategorine göre keşfet")}</small></Link>}
         </div>
-        : <div className={styles.wrap}><div className={styles.empty}><Search size={26} aria-hidden="true" /><h3>Şimdilik eşleşme bulamadık.</h3><p>Başka bir kategori, hizmet veya şehir deneyebilirsin.</p><button type="button" onClick={clearSearch}>Öne çıkanlara dön</button></div></div>}
+        : <div className={styles.wrap}><div className={styles.empty}><Search size={26} aria-hidden="true" /><h3>{t("Şimdilik eşleşme bulamadık.")}</h3><p>{t("Başka bir kategori, hizmet veya şehir deneyebilirsin.")}</p><button type="button" onClick={clearSearch}>{t("Öne çıkanlara dön")}</button></div></div>}
     </section>
   </>;
 }

@@ -10,6 +10,7 @@ import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Staff } from "@/types/staff";
 import { formatDuration, formatPrice, initials, normalizeSearchText } from "./utils";
+import { useIntlLocale, useT } from "@/i18n/client";
 import styles from "../storefront.module.css";
 
 type Group = { id: string; name: string; icon: string; color: string; items: Service[] };
@@ -25,6 +26,8 @@ interface Props {
 }
 
 export function ServicesSection({ services, categories, staff, bookingHref, businessName }: Props) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("all");
   const [detail, setDetail] = useState<Service | null>(null);
@@ -45,9 +48,9 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
       .filter((group) => group.items.length > 0);
     const known = new Set(sortedCats.map((category) => category.id));
     const rest = bookable.filter((service) => !service.category || !known.has(service.category)).sort(bySort);
-    if (rest.length > 0) rows.push({ id: "other", name: rows.length ? "Diğer hizmetler" : "Tüm hizmetler", icon: "✦", color: DEFAULT_COLOR, items: rest });
+    if (rest.length > 0) rows.push({ id: "other", name: rows.length ? t("Diğer hizmetler") : t("Tüm hizmetler"), icon: "✦", color: DEFAULT_COLOR, items: rest });
     return rows;
-  }, [bookable, categories]);
+  }, [bookable, categories, t]);
 
   const safeCat = activeCat === "all" || groups.some((group) => group.id === activeCat) ? activeCat : "all";
   const needle = normalizeSearchText(query);
@@ -65,10 +68,10 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
   if (bookable.length === 0) {
     return (
       <div className={styles.empty}>
-        <RoviMascot size={92} mood="thinking" alt="Rovi düşünüyor" />
-        <h3>Hizmet menüsü hazırlanıyor</h3>
-        <p>{businessName} henüz online hizmet eklemedi. Yine de randevu sayfasından uygun saatlere göz atabilir ya da işletmeye mesaj gönderebilirsin.</p>
-        <Link href={bookingHref} className={`${styles.pill} ${styles.pillPrimary}`} style={{ marginTop: 10 }}><CalendarCheck2 size={16} /> Randevu sayfasına git</Link>
+        <RoviMascot size={92} mood="thinking" alt={t("Rovi düşünüyor")} />
+        <h3>{t("Hizmet menüsü hazırlanıyor")}</h3>
+        <p>{t("{name} henüz online hizmet eklemedi. Yine de randevu sayfasından uygun saatlere göz atabilir ya da işletmeye mesaj gönderebilirsin.", { name: businessName })}</p>
+        <Link href={bookingHref} className={`${styles.pill} ${styles.pillPrimary}`} style={{ marginTop: 10 }}><CalendarCheck2 size={16} /> {t("Randevu sayfasına git")}</Link>
       </div>
     );
   }
@@ -78,16 +81,16 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
       {bookable.length > 5 && (
         <div className={styles.search} role="search">
           <Search size={20} aria-hidden="true" />
-          <label htmlFor="storefront-service-search" className={styles.srOnly}>Hizmet ara</label>
-          <input id="storefront-service-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Hizmet ara (örn. saç kesimi)" autoComplete="off" enterKeyHint="search" />
-          {query && <button type="button" className={styles.iconBtn} onClick={() => setQuery("")} aria-label="Aramayı temizle"><X size={17} /></button>}
+          <label htmlFor="storefront-service-search" className={styles.srOnly}>{t("Hizmet ara")}</label>
+          <input id="storefront-service-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Hizmet ara (örn. saç kesimi)")} autoComplete="off" enterKeyHint="search" />
+          {query && <button type="button" className={styles.iconBtn} onClick={() => setQuery("")} aria-label={t("Aramayı temizle")}><X size={17} /></button>}
         </div>
       )}
 
       {groups.length > 1 && (
-        <div className={styles.chips} role="group" aria-label="Hizmet kategorileri">
+        <div className={styles.chips} role="group" aria-label={t("Hizmet kategorileri")}>
           <button type="button" aria-pressed={safeCat === "all"} className={`${styles.chip} ${safeCat === "all" ? styles.chipActive : ""}`} onClick={() => setActiveCat("all")}>
-            <span className={styles.chipIcon} aria-hidden="true"><Layers3 size={16} /></span>Tümü <small>{bookable.length}</small>
+            <span className={styles.chipIcon} aria-hidden="true"><Layers3 size={16} /></span>{t("Tümü")} <small>{bookable.length}</small>
           </button>
           {groups.map((group) => (
             <button key={group.id} type="button" aria-pressed={safeCat === group.id} className={`${styles.chip} ${safeCat === group.id ? styles.chipActive : ""}`} style={{ "--cat": group.color } as CSSProperties} onClick={() => setActiveCat(safeCat === group.id ? "all" : group.id)}>
@@ -98,7 +101,7 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
         </div>
       )}
 
-      <p className={styles.srOnly} aria-live="polite">{visibleCount} hizmet gösteriliyor</p>
+      <p className={styles.srOnly} aria-live="polite">{t("{count} hizmet gösteriliyor", { count: visibleCount })}</p>
 
       <div className={styles.groups}>
         {visible.map((group) => (
@@ -107,24 +110,24 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
               <header className={styles.groupHead}>
                 <span className={styles.groupIcon} aria-hidden="true"><ServiceCategoryIcon icon={group.icon} name={group.name} size={18} /></span>
                 <h3 id={`svc-group-${group.id}`}>{group.name}</h3>
-                <span>{group.items.length} hizmet</span>
+                <span>{t("{count} hizmet", { count: group.items.length })}</span>
               </header>
             )}
             <div className={styles.serviceList}>
               {group.items.map((service, index) => (
                 <article key={service.id} className={styles.service} style={{ "--i": Math.min(index, 8) } as CSSProperties}>
-                  <button type="button" className={styles.serviceOpen} onClick={() => setDetail(service)} aria-label={`${service.name} detaylarını gör`} />
+                  <button type="button" className={styles.serviceOpen} onClick={() => setDetail(service)} aria-label={t("{name} detaylarını gör", { name: service.name })} />
                   <div className={styles.serviceInfo}>
                     <h4>{service.name}</h4>
                     {service.description && <p>{service.description}</p>}
                     <div className={styles.serviceMeta}>
-                      <span className={styles.metaTag}><Clock3 size={13} aria-hidden="true" /> {formatDuration(service.durationMinutes)}</span>
-                      {service.requiresDeposit && service.depositAmount > 0 && <span className={`${styles.metaTag} ${styles.metaDeposit}`}><Wallet size={13} aria-hidden="true" /> Kapora {formatPrice(service.depositAmount, service.currency)}</span>}
+                      <span className={styles.metaTag}><Clock3 size={13} aria-hidden="true" /> {formatDuration(service.durationMinutes, t)}</span>
+                      {service.requiresDeposit && service.depositAmount > 0 && <span className={`${styles.metaTag} ${styles.metaDeposit}`}><Wallet size={13} aria-hidden="true" /> {t("Kapora {amount}", { amount: formatPrice(service.depositAmount, service.currency, intlLocale) })}</span>}
                     </div>
                   </div>
                   <div className={styles.serviceSide}>
-                    <span className={styles.servicePrice}>{service.price > 0 ? formatPrice(service.price, service.currency) : "Ücretsiz"}</span>
-                    <Link href={hrefFor(service.id)} className={styles.selectBtn} aria-label={`${service.name} için randevu al`}>Seç</Link>
+                    <span className={styles.servicePrice}>{service.price > 0 ? formatPrice(service.price, service.currency, intlLocale) : t("Ücretsiz")}</span>
+                    <Link href={hrefFor(service.id)} className={styles.selectBtn} aria-label={t("{name} için randevu al", { name: service.name })}>{t("Seç")}</Link>
                   </div>
                 </article>
               ))}
@@ -134,17 +137,17 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
         {visible.length === 0 && (
           <div className={styles.noResults}>
             <Search size={24} aria-hidden="true" />
-            <strong>“{query}” ile eşleşen hizmet yok</strong>
-            <span>Daha kısa bir kelimeyle tekrar dene.</span>
-            <button type="button" className={styles.pill} onClick={() => { setQuery(""); setActiveCat("all"); }}>Aramayı temizle</button>
+            <strong>{t("“{query}” ile eşleşen hizmet yok", { query })}</strong>
+            <span>{t("Daha kısa bir kelimeyle tekrar dene.")}</span>
+            <button type="button" className={styles.pill} onClick={() => { setQuery(""); setActiveCat("all"); }}>{t("Aramayı temizle")}</button>
           </div>
         )}
       </div>
 
       <div className={styles.assurance}>
-        <span><CheckCircle2 size={15} aria-hidden="true" /> Şeffaf fiyat</span>
-        <span><CalendarCheck2 size={15} aria-hidden="true" /> Anlık uygunluk</span>
-        <span><ShieldCheck size={15} aria-hidden="true" /> Güvenli online randevu</span>
+        <span><CheckCircle2 size={15} aria-hidden="true" /> {t("Şeffaf fiyat")}</span>
+        <span><CalendarCheck2 size={15} aria-hidden="true" /> {t("Anlık uygunluk")}</span>
+        <span><ShieldCheck size={15} aria-hidden="true" /> {t("Güvenli online randevu")}</span>
       </div>
 
       {detail && <ServiceSheet service={detail} staff={staff} groups={groups} hrefFor={hrefFor} onClose={() => setDetail(null)} />}
@@ -153,6 +156,8 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
 }
 
 function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: Service; staff: Staff[]; groups: Group[]; hrefFor: (serviceId: string, staffId?: string) => string; onClose: () => void }) {
+  const t = useT();
+  const intlLocale = useIntlLocale();
   const group = groups.find((item) => item.items.some((row) => row.id === service.id));
   const experts = staff.filter((member) => member.serviceIds?.includes(service.id) || service.assignableStaffIds?.includes(member.id));
 
@@ -170,21 +175,21 @@ function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: S
         <div className={styles.grabber} aria-hidden="true" />
         <header className={styles.sheetHead}>
           <div>
-            <small>{group?.name?.toLocaleUpperCase("tr-TR") ?? "HİZMET"}</small>
+            <small>{group?.name?.toLocaleUpperCase(group.id === "other" ? intlLocale : "tr-TR") ?? t("HİZMET")}</small>
             <h3 id="service-sheet-title">{service.name}</h3>
           </div>
-          <button type="button" className={styles.iconBtn} onClick={onClose} aria-label="Kapat" autoFocus><X size={18} /></button>
+          <button type="button" className={styles.iconBtn} onClick={onClose} aria-label={t("Kapat")} autoFocus><X size={18} /></button>
         </header>
         <div className={styles.sheetBody}>
-          {service.description ? <p>{service.description}</p> : <p>Detaylar için işletmeye mesaj gönderebilir ya da doğrudan randevu oluşturabilirsin.</p>}
+          {service.description ? <p>{service.description}</p> : <p>{t("Detaylar için işletmeye mesaj gönderebilir ya da doğrudan randevu oluşturabilirsin.")}</p>}
           <div className={styles.facts}>
-            <div className={styles.fact}><small>ÜCRET</small><b>{service.price > 0 ? formatPrice(service.price, service.currency) : "Ücretsiz"}</b></div>
-            <div className={styles.fact}><small>SÜRE</small><b>{formatDuration(service.durationMinutes)}</b></div>
-            {service.requiresDeposit && service.depositAmount > 0 && <div className={styles.fact}><small>KAPORA</small><b>{formatPrice(service.depositAmount, service.currency)}</b></div>}
-            <div className={styles.fact}><small>RANDEVU</small><b><Sparkles size={14} aria-hidden="true" /> Online</b></div>
+            <div className={styles.fact}><small>{t("ÜCRET")}</small><b>{service.price > 0 ? formatPrice(service.price, service.currency, intlLocale) : t("Ücretsiz")}</b></div>
+            <div className={styles.fact}><small>{t("SÜRE")}</small><b>{formatDuration(service.durationMinutes, t)}</b></div>
+            {service.requiresDeposit && service.depositAmount > 0 && <div className={styles.fact}><small>{t("KAPORA")}</small><b>{formatPrice(service.depositAmount, service.currency, intlLocale)}</b></div>}
+            <div className={styles.fact}><small>{t("RANDEVU")}</small><b><Sparkles size={14} aria-hidden="true" /> Online</b></div>
           </div>
           {experts.length > 0 && <>
-            <span className={styles.sheetLabel}>UZMAN SEÇEREK RANDEVU AL</span>
+            <span className={styles.sheetLabel}>{t("UZMAN SEÇEREK RANDEVU AL")}</span>
             <div className={styles.sheetStaff}>
               {experts.map((member) => (
                 <Link key={member.id} href={hrefFor(service.id, member.id)}>
@@ -196,7 +201,7 @@ function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: S
           </>}
         </div>
         <footer className={styles.sheetFoot}>
-          <Link href={hrefFor(service.id)} className={`${styles.pill} ${styles.pillPrimary}`}><CalendarCheck2 size={17} /> Bu hizmetle randevu al</Link>
+          <Link href={hrefFor(service.id)} className={`${styles.pill} ${styles.pillPrimary}`}><CalendarCheck2 size={17} /> {t("Bu hizmetle randevu al")}</Link>
         </footer>
       </section>
     </div>

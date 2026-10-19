@@ -1,0 +1,41 @@
+{
+  "Lütfen {n} saniye bekleyin.": {
+    "one": "Please wait {n} second.",
+    "other": "Please wait {n} seconds."
+  },
+  "Yanlış kod. {count} deneme hakkınız kaldı.": {
+    "one": "Wrong code. You have {count} attempt left.",
+    "other": "Wrong code. You have {count} attempts left."
+  },
+  "Randevuya {n} dakikadan az kaldığı için online iptal yapılamaz.": "Online cancellation isn't possible less than {n} minutes before the appointment.",
+  "Randevuya {n} dakikadan az kaldığı için online saat değişikliği yapılamaz.": "Online rescheduling isn't possible less than {n} minutes before the appointment.",
+  "{field} alanı zorunludur.": "{field} is required.",
+  "{field} en fazla {n} karakter olabilir.": "{field} can be at most {n} characters.",
+  "{field} geçerli bir bağlantı olmalıdır.": "{field} must be a valid link.",
+  "{field} güvenli bir bağlantı olmalıdır.": "{field} must be a secure (https) link.",
+  "{field} tutarı geçersiz.": "The {field} amount is invalid.",
+  "{field} geçersiz.": "{field} is invalid.",
+  "{item} canlı sıra için uygun değil.": "{item} isn't available for the live queue.",
+  "{product} için yeterli stok yok.": "Not enough stock for {product}.",
+  "{count} gelecek randevu için aktarım yapılacak çalışan seçmelisiniz.": {
+    "one": "Choose a staff member to take over {count} upcoming appointment.",
+    "other": "Choose a staff member to take over {count} upcoming appointments."
+  },
+  "Bu adisyonda en fazla {n} puan kullanılabilir.": "At most {n} points can be used on this bill.",
+  "En az {n} puan kullanılabilir.": "At least {n} points must be redeemed.",
+  "PLAN_FEATURE_REQUIRED: Bu özellik {plan} paketinde bulunmuyor.": "PLAN_FEATURE_REQUIRED: This feature isn't included in the {plan} plan.",
+  "Paketiniz en fazla {n} aktif çalışana izin veriyor.": "Your plan allows at most {n} active staff members.",
+  "Paketiniz en fazla {n} şubeye izin veriyor.": "Your plan allows at most {n} branches.",
+  "BILLING_PROFILE_REQUIRED: {message}": "BILLING_PROFILE_REQUIRED: {message}",
+  "\"{label}\" {min}–{max} arasında olmalıdır.": "\"{label}\" must be between {min} and {max}.",
+  "\"{label}\" en fazla {n} karakter olabilir.": "\"{label}\" can be at most {n} characters.",
+  "\"{label}\" için geçerli bir seçenek seçin.": "Choose a valid option for \"{label}\".",
+  "\"{label}\" tam sayı olmalıdır.": "\"{label}\" must be a whole number.",
+  "\"{label}\" alanı birden fazla kez eklenmiş.": "The \"{label}\" field was added more than once.",
+  "\"{label}\" alanının türü geçersiz.": "The \"{label}\" field type is invalid.",
+  "\"{label}\" için en küçük değer en büyükten büyük olamaz.": "The minimum for \"{label}\" can't be greater than the maximum.",
+  "\"{label}\" seçim alanı için en az 2 seçenek gerekli.": "The \"{label}\" choice field needs at least 2 options.",
+  "\"{label}\" zaten standart formda var.": "\"{label}\" already exists in the standard form.",
+  "{n}. alanın adı en az 2 karakter olmalı.": "The name of field {n} must be at least 2 characters.",
+  "En fazla {n} ek alan eklenebilir.": "You can add at most {n} custom fields."
+}

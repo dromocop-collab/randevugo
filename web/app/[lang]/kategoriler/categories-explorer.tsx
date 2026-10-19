@@ -5,6 +5,7 @@ import Link from "@/i18n/link";
 import { useDeferredValue, useMemo, useState, type CSSProperties } from "react";
 import { ArrowRight, Search, SearchX, X } from "lucide-react";
 import { categoryHref } from "@/components/marketing/category-catalog";
+import { useT } from "@/i18n/client";
 import styles from "./kategoriler.module.css";
 
 export type CategoryCardData = {
@@ -25,11 +26,12 @@ function normalize(value: string) {
     .toLocaleLowerCase("tr-TR")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .replaceAll("ı", "i")
+    .replaceAll("ı", "i") // i18n-ignore — arama normalleştirme
     .trim();
 }
 
 export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardData[]; hasCounts: boolean }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const deferredQuery = useDeferredValue(query);
@@ -51,9 +53,9 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
 
   const filters: { value: Filter; label: string; total: number }[] = hasCounts
     ? [
-        { value: "all", label: "Tümü", total: cards.length },
-        { value: "active", label: "Aktif", total: activeTotal },
-        ...(soonTotal > 0 ? [{ value: "soon" as const, label: "Yakında", total: soonTotal }] : []),
+        { value: "all", label: t("Tümü"), total: cards.length },
+        { value: "active", label: t("Aktif"), total: activeTotal },
+        ...(soonTotal > 0 ? [{ value: "soon" as const, label: t("Yakında"), total: soonTotal }] : []),
       ]
     : [];
 
@@ -67,25 +69,25 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
       <div className={styles.toolbar}>
         <form className={styles.search} role="search" onSubmit={(event) => event.preventDefault()}>
           <Search size={19} className={styles.searchIcon} aria-hidden="true" />
-          <label htmlFor="category-search" className={styles.srOnly}>Kategori ara</label>
+          <label htmlFor="category-search" className={styles.srOnly}>{t("Kategori ara")}</label>
           <input
             id="category-search"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Kategori ara: kuaför, masaj, veteriner…"
+            placeholder={t("Kategori ara: kuaför, masaj, veteriner…")}
             autoComplete="off"
             enterKeyHint="search"
             className={styles.searchInput}
           />
           {query && (
-            <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label="Aramayı temizle">
+            <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label={t("Aramayı temizle")}>
               <X size={16} />
             </button>
           )}
         </form>
         {filters.length > 0 && (
-          <div className={styles.filters} role="group" aria-label="Kategori filtresi">
+          <div className={styles.filters} role="group" aria-label={t("Kategori filtresi")}>
             {filters.map((item) => (
               <button
                 key={item.value}
@@ -102,8 +104,8 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
       </div>
 
       <div className={styles.gridHead}>
-        <h2 id="category-grid-title">{filter === "active" ? "Aktif kategoriler" : filter === "soon" ? "Yakında gelecek kategoriler" : "Tüm kategoriler"}</h2>
-        <p aria-live="polite">{visible.length} kategori</p>
+        <h2 id="category-grid-title">{filter === "active" ? t("Aktif kategoriler") : filter === "soon" ? t("Yakında gelecek kategoriler") : t("Tüm kategoriler")}</h2>
+        <p aria-live="polite">{t("{count} kategori", { count: visible.length })}</p>
       </div>
 
       {visible.length > 0 ? (
@@ -117,7 +119,7 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
                   href={categoryHref(card.slug)}
                   className={`${styles.card} ${soon ? styles.cardSoon : ""}`}
                   style={{ "--accent": card.accent } as CSSProperties}
-                  aria-label={`${card.label}: ${count === null ? "işletmeleri keşfet" : soon ? "yakında" : `${count} işletme`}`}
+                  aria-label={`${card.label}: ${count === null ? t("işletmeleri keşfet") : soon ? t("yakında") : t("{count} işletme", { count })}`}
                 >
                   <span className={styles.cardMedia}>
                     {card.image ? (
@@ -129,14 +131,14 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
                     <span className={styles.cardEmoji} aria-hidden="true">{card.emoji}</span>
                     {count !== null && (
                       <span className={`${styles.cardBadge} ${soon ? styles.cardBadgeSoon : ""}`} aria-hidden="true">
-                        {soon ? "Yakında" : <><i />{count} işletme</>}
+                        {soon ? t("Yakında") : <><i />{t("{count} işletme", { count })}</>}
                       </span>
                     )}
                   </span>
                   <span className={styles.cardBody}>
                     <b className={styles.cardTitle}>{card.label}</b>
                     <small className={styles.cardText}>{card.description}</small>
-                    <span className={styles.cardCta} aria-hidden="true">{soon ? "Göz at" : "Keşfet"} <ArrowRight size={14} /></span>
+                    <span className={styles.cardCta} aria-hidden="true">{soon ? t("Göz at") : t("Keşfet")} <ArrowRight size={14} /></span>
                   </span>
                 </Link>
               </li>
@@ -146,11 +148,11 @@ export function CategoriesExplorer({ cards, hasCounts }: { cards: CategoryCardDa
       ) : (
         <div className={styles.empty}>
           <span className={styles.emptyIcon} aria-hidden="true"><SearchX size={26} /></span>
-          <h3>Bu aramaya uygun kategori bulamadık</h3>
-          <p>Farklı bir kelime dene ya da tüm mağazalarda hizmet adıyla ara.</p>
+          <h3>{t("Bu aramaya uygun kategori bulamadık")}</h3>
+          <p>{t("Farklı bir kelime dene ya da tüm mağazalarda hizmet adıyla ara.")}</p>
           <div className={styles.emptyActions}>
-            <button type="button" className={styles.emptyGhost} onClick={reset}>Filtreleri temizle</button>
-            <Link href={query.trim() ? `/kesfet?q=${encodeURIComponent(query.trim())}` : "/kesfet"} className={styles.emptyPrimary}>Mağazalarda ara <ArrowRight size={15} /></Link>
+            <button type="button" className={styles.emptyGhost} onClick={reset}>{t("Filtreleri temizle")}</button>
+            <Link href={query.trim() ? `/kesfet?q=${encodeURIComponent(query.trim())}` : "/kesfet"} className={styles.emptyPrimary}>{t("Mağazalarda ara")} <ArrowRight size={15} /></Link>
           </div>
         </div>
       )}
