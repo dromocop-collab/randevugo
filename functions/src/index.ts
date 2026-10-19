@@ -33,6 +33,7 @@ import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, n
 import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
+import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
 initializeApp();
 
@@ -9328,4 +9329,115 @@ export const sendWhatsAppTest = onCall(
     });
     return { success: true, messageId };
   },
+);
+
+/* ── İşletme widget'ı (iOS ana ekran / kilit ekranı) ───────────────────────────────────────────────────────── */
+
+/** Widget anahtarının hâlâ geçerli olduğu üyelik: sahip ya da members kaydı; çalışan ise staffId kapsamı. */
+async function widgetAccess(uid: string, businessId: string): Promise<{ business: FirebaseFirestore.DocumentData; staffId: string | null } | null> {
+  const [businessSnap, memberSnap] = await Promise.all([
+    db.doc(`businesses/${businessId}`).get(),
+    db.doc(`businesses/${businessId}/members/${uid}`).get(),
+  ]);
+  if (!businessSnap.exists) return null;
+  const business = businessSnap.data()!;
+  if (business.ownerUid === uid) return { business, staffId: null };
+  const role = String(memberSnap.data()?.role ?? "");
+  if (["owner", "admin", "manager"].includes(role)) return { business, staffId: null };
+  if (role === "staff") {
+    const staffId = String(memberSnap.data()?.staffId ?? "").trim();
+    return staffId ? { business, staffId } : null;
+  }
+  return null;
+}
+
+/** Uygulama, widget için cihaza özel salt okunur anahtar alır. Aynı cihaz/işletme için eskisi iptal edilir. */
+export const issueWidgetToken = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const businessId = requireString(request.data?.businessId, "businessId");
+  const deviceId = String(request.data?.deviceId ?? "").trim().slice(0, 80);
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(deviceId)) throw new HttpsError("invalid-argument", "Cihaz kimliği geçersiz.");
+  const access = await widgetAccess(uid, businessId);
+  if (!access) throw new HttpsError("permission-denied", "Bu işletme işlemi için yetkiniz bulunmuyor.");
+  const previous = await db.collection("widgetTokens").where("uid", "==", uid).where("deviceId", "==", deviceId).limit(20).get();
+  const token = newWidgetToken();
+  const batch = db.batch();
+  previous.docs.forEach((document) => batch.delete(document.ref));
+  batch.set(db.doc(`widgetTokens/${widgetTokenId(token)}`), {
+    uid, businessId, deviceId, createdAt: FieldValue.serverTimestamp(), lastUsedAt: null,
+  });
+  await batch.commit();
+  return { token };
+});
+
+/** Çıkışta/işletme değişince uygulama bu cihazın widget anahtarlarını siler. */
+export const revokeWidgetToken = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  const deviceId = String(request.data?.deviceId ?? "").trim().slice(0, 80);
+  const query = deviceId
+    ? db.collection("widgetTokens").where("uid", "==", uid).where("deviceId", "==", deviceId)
+    : db.collection("widgetTokens").where("uid", "==", uid);
+  const snapshot = await query.limit(50).get();
+  const batch = db.batch();
+  snapshot.docs.forEach((document) => batch.delete(document.ref));
+  await batch.commit();
+  return { revoked: snapshot.size };
+});
+
+/**
+ * Widget veri akışı: GET, Authorization: Bearer <widget anahtarı>. Bugün ve yarının randevuları (işletme saat dilimi),
+ * bugünün özeti, işletme adı ve kullanıcının panel teması. Üyelik her çağrıda yeniden doğrulanır.
+ */
+export const businessWidgetFeed = onRequest(
+  { region: "europe-west1", memory: "256MiB", maxInstances: 20, timeoutSeconds: 20 },
+  async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    if (req.method !== "GET") { res.status(405).json({ error: "method" }); return; }
+    const token = bearerWidgetToken(req.headers.authorization);
+    if (!token) { res.status(401).json({ error: "token" }); return; }
+    const tokenRef = db.doc(`widgetTokens/${widgetTokenId(token)}`);
+    const tokenSnap = await tokenRef.get();
+    if (!tokenSnap.exists) { res.status(401).json({ error: "token" }); return; }
+    const { uid, businessId } = tokenSnap.data() as { uid: string; businessId: string };
+    const access = await widgetAccess(uid, businessId);
+    if (!access) {
+      await tokenRef.delete().catch(() => undefined);
+      res.status(403).json({ error: "access" });
+      return;
+    }
+    const timeZone = typeof access.business.timeZone === "string" ? access.business.timeZone : "Europe/Istanbul";
+    const now = Date.now();
+    const todayKey = localParts(new Date(now), timeZone).dateKey;
+    const dayStart = zonedTimeToMillis(todayKey, 0, timeZone);
+    const tomorrowStart = zonedTimeToMillis(addDaysToDateKey(todayKey, 1), 0, timeZone);
+    const windowEnd = zonedTimeToMillis(addDaysToDateKey(todayKey, 2), 0, timeZone);
+    let query: FirebaseFirestore.Query = db.collection(`businesses/${businessId}/appointments`)
+      .where("startAt", ">=", Timestamp.fromMillis(dayStart))
+      .where("startAt", "<", Timestamp.fromMillis(windowEnd));
+    if (access.staffId) query = query.where("staffId", "==", access.staffId);
+    const [appointments, appearance] = await Promise.all([
+      query.orderBy("startAt", "asc").limit(200).get(),
+      db.doc(`users/${uid}/preferences/dashboardAppearance`).get().catch(() => null),
+    ]);
+    const items = widgetAppointments(appointments.docs.map((document) => ({ id: document.id, data: document.data() })));
+    const lastUsed = (tokenSnap.data()?.lastUsedAt as Timestamp | null | undefined)?.toMillis() ?? 0;
+    if (now - lastUsed > 10 * 60_000) await tokenRef.update({ lastUsedAt: FieldValue.serverTimestamp() }).catch(() => undefined);
+    res.status(200).json({
+      business: {
+        id: businessId,
+        name: String(access.business.name ?? "").slice(0, 80),
+        slug: String(access.business.slug ?? ""),
+        skin: typeof appearance?.data()?.skin === "string" ? appearance!.data()!.skin : null,
+      },
+      scope: access.staffId ? "staff" : "business",
+      timeZone,
+      generatedAt: now,
+      dayStart,
+      tomorrowStart,
+      today: widgetTodaySummary(items, dayStart, tomorrowStart, now),
+      appointments: items,
+    });
+  }
 );
