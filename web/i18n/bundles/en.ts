@@ -13,9 +13,12 @@ import en_dashboard_b from "../messages/en/dashboard-b.json";
 import en_dashboard_c from "../messages/en/dashboard-c.json";
 import en_businesses from "../messages/en/businesses.json";
 import en_errors from "../messages/en/errors.json";
+import en_services_editor from "../messages/en/services-editor.json";
+import en_services_storefront from "../messages/en/services-storefront.json";
+import en_services_ops from "../messages/en/services-ops.json";
 
 // İngilizce sözlük paketi: messages/en/*.json burada birleşir. Yeni sözlük dosyası → buraya bir satır.
-const en: Messages = { ...en_common, ...en_marketing, ...en_marketing_pages, ...en_legal, ...en_seo, ...en_storefront, ...en_account, ...en_dashboard_shell, ...en_dashboard_a, ...en_dashboard_b, ...en_dashboard_c, ...en_businesses, ...en_errors };
+const en: Messages = { ...en_common, ...en_marketing, ...en_marketing_pages, ...en_legal, ...en_seo, ...en_storefront, ...en_account, ...en_dashboard_shell, ...en_dashboard_a, ...en_dashboard_b, ...en_dashboard_c, ...en_businesses, ...en_errors, ...en_services_editor, ...en_services_storefront, ...en_services_ops };
 export default en;
 
 /** Değişkenli sunucu mesajı kalıpları (messages/en/error-patterns.json). */

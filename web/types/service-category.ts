@@ -5,6 +5,8 @@ export interface ServiceCategory extends EntityBase {
   icon: string;
   color: string;
   sortOrder: number;
+  /** Dil kodu → kategori adı (ör. { en: { name: "Hair" } }). */
+  translations?: Partial<Record<string, { name?: string }>>;
   templateSource?: string;
   templateKey?: string;
 }

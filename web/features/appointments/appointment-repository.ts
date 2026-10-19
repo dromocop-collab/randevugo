@@ -124,11 +124,17 @@ export async function updateDashboardAppointment(
 export async function updateAppointmentStatus(
   businessId: string,
   appointmentId: string,
-  status: AppointmentStatus
+  status: AppointmentStatus,
+  /** Tamamlarken kesinleşen hizmet tutarı (ek hizmetler dahil toplam) ve ek hizmetlerin toplamı. */
+  finalPrice?: { total: number; extrasTotal: number }
 ): Promise<void> {
   const db = getDb();
   await updateDoc(doc(db, "businesses", businessId, "appointments", appointmentId), {
     status,
+    ...(finalPrice ? {
+      servicePrice: Math.max(0, Math.round(finalPrice.total * 100) / 100),
+      primaryServicePrice: Math.max(0, Math.round((finalPrice.total - finalPrice.extrasTotal) * 100) / 100),
+    } : {}),
     updatedAt: Timestamp.now(),
   });
 }
@@ -193,6 +199,7 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
     ...(input.notes ? { notes: input.notes } : {}),
     startAtMillis: input.startAtMillis,
+    ...(input.variantId ? { variantId: input.variantId } : {}),
     ...(input.customFields ? { customFields: input.customFields } : {}),
   });
 
@@ -212,6 +219,7 @@ export interface AvailableAppointmentSlot {
 export async function listAvailableSlots(input: {
   businessId: string;
   serviceId: string;
+  variantId?: string;
   staffId?: string;
   date: string;
 }): Promise<AvailableAppointmentSlot[]> {
@@ -241,6 +249,7 @@ export interface AvailableAppointmentDate {
 export async function listAvailableDates(input: {
   businessId: string;
   serviceId: string;
+  variantId?: string;
   staffId?: string;
   startDate: string;
   endDate: string;
