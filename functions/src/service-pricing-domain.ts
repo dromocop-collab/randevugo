@@ -128,3 +128,62 @@ export function parseTranslationResponse(body: string, keys: string[]): Record<s
   }
   return out;
 }
+
+/* ── Otomatik çeviri (hizmet/kategori kaydedilince sunucu tetikleyicisi) ─────────────────────── */
+
+/** Otomatik çevrilen hedef diller. Yeni dil: buraya ekle (ad modele söylenir). */
+export const AUTO_TRANSLATE_LANGUAGES: Record<string, string> = { en: "English" };
+
+function shortHash(text: string): string {
+  // FNV-1a 32 bit — yalnız "kaynak metin değişti mi" karşılaştırması için.
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+export type TranslationSource = { items: Array<{ key: string; text: string }>; hash: string };
+
+/** Hizmetin çevrilecek metinleri: ad, açıklama, seçenek adları. Fiyat/süre değişimi hash'i etkilemez. */
+export function serviceTranslationSource(service: Record<string, unknown>): TranslationSource {
+  const items: Array<{ key: string; text: string }> = [];
+  const name = String(service.name ?? "").trim().slice(0, 120);
+  const description = String(service.description ?? "").trim().slice(0, 400);
+  if (name) items.push({ key: "name", text: name });
+  if (description) items.push({ key: "description", text: description });
+  for (const variant of serviceVariants(service)) items.push({ key: `v.${variant.id}`, text: variant.name });
+  return { items, hash: shortHash(JSON.stringify(items)) };
+}
+
+export function categoryTranslationSource(category: Record<string, unknown>): TranslationSource {
+  const name = String(category.name ?? "").trim().slice(0, 120);
+  const items = name ? [{ key: "name", text: name }] : [];
+  return { items, hash: shortHash(JSON.stringify(items)) };
+}
+
+/**
+ * Bu dil için çeviri gerekiyor mu? Elle düzeltilmiş (manual) çeviri hiç ezilmez; kaynak metin
+ * değişmediyse (hash aynı) tekrar çevrilmez — kendi yazımımızın tetiklemesi de böylece durur.
+ */
+export function needsAutoTranslation(document: Record<string, unknown>, locale: string, source: TranslationSource): boolean {
+  if (source.items.length === 0) return false;
+  const translations = document.translations && typeof document.translations === "object" ? document.translations as Record<string, unknown> : {};
+  const current = translations[locale] && typeof translations[locale] === "object" ? translations[locale] as Record<string, unknown> : null;
+  if (current?.manual === true) return false;
+  return current?.sourceHash !== source.hash;
+}
+
+/** Model çıktısından translations.<dil> nesnesi kurar. */
+export function buildServiceTranslation(result: Record<string, string>, hash: string) {
+  const variants: Record<string, string> = {};
+  for (const [key, value] of Object.entries(result)) if (key.startsWith("v.")) variants[key.slice(2)] = value;
+  return {
+    ...(result.name ? { name: result.name } : {}),
+    ...(result.description ? { description: result.description } : {}),
+    ...(Object.keys(variants).length ? { variants } : {}),
+    auto: true,
+    sourceHash: hash,
+  };
+}

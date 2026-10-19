@@ -59,3 +59,19 @@ test("translation input and model output are sanitised", () => {
   assert.deepEqual(parseTranslationResponse('```json\n{"s1.name":"Brow","evil":"x","s2":5}\n```', ["s1.name", "s2"]), { "s1.name": "Brow" });
   assert.deepEqual(parseTranslationResponse("no json", ["a"]), {});
 });
+
+test("auto translation runs only when source text changes and never overwrites manual edits", async () => {
+  const { serviceTranslationSource, categoryTranslationSource, needsAutoTranslation, buildServiceTranslation } = await import("../lib/service-pricing-domain.js");
+  const service = { name: "Saç Boyama", description: "Kök boya", price: 500, variants };
+  const source = serviceTranslationSource(service);
+  assert.deepEqual(source.items.map((item) => item.key), ["name", "description", "v.kisa", "v.uzun"]);
+  assert.equal(serviceTranslationSource({ ...service, price: 999, durationMinutes: 10 }).hash, source.hash, "price change must not retranslate");
+  assert.notEqual(serviceTranslationSource({ ...service, name: "Saç Boyası" }).hash, source.hash);
+  assert.equal(needsAutoTranslation(service, "en", source), true);
+  assert.equal(needsAutoTranslation({ ...service, translations: { en: { sourceHash: source.hash } } }, "en", source), false);
+  assert.equal(needsAutoTranslation({ ...service, translations: { en: { manual: true, sourceHash: "old" } } }, "en", source), false);
+  assert.equal(needsAutoTranslation({ name: "" }, "en", serviceTranslationSource({ name: "" })), false);
+  assert.equal(categoryTranslationSource({ name: "Saç" }).items.length, 1);
+  assert.deepEqual(buildServiceTranslation({ name: "Hair coloring", "v.uzun": "Long hair" }, "h1"),
+    { name: "Hair coloring", variants: { uzun: "Long hair" }, auto: true, sourceHash: "h1" });
+});

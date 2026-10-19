@@ -5,9 +5,10 @@ import { addDays, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOf
 import type { Locale as DateLocale } from "date-fns";
 import { BadgeCheck, Check, Clock3, CreditCard, ExternalLink, Pencil, Plus, UserRound } from "lucide-react";
 import { AppointmentCustomFields } from "@/features/booking-fields/appointment-custom-fields";
-import { Button, KeyValueList, Sheet, StatusPill, appointmentStatusMeta } from "@/components/dashboard/ui";
+import { Badge, Button, KeyValueList, Sheet, StatusPill, appointmentStatusMeta } from "@/components/dashboard/ui";
+import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
 import { cn } from "@/lib/utils/cn";
-import { useIntlLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 import { DATE_FNS_LOCALES, useDateFnsLocale } from "@/i18n/date";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
 import styles from "./calendar.module.css";
@@ -39,6 +40,7 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
   const height = hourList.length * HOUR_H;
   const scrollRef = useRef<HTMLDivElement>(null);
   const t = useT();
+  const siteLocale = useLocale();
   const locale = useDateLocale();
 
   // Bugün görünüyorsa "şimdi" çizgisine kaydır.
@@ -103,7 +105,7 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
                 >
                   <span className={styles.evTime}>{format(start, "HH:mm")}{durationMin >= 55 ? `–${format(end, "HH:mm")}` : ""}</span>
                   <b>{item.customerName}</b>
-                  {durationMin >= 55 && <small>{item.serviceName || t("Randevu")}{showStaff && item.staffName ? ` · ${item.staffName}` : ""}</small>}
+                  {durationMin >= 55 && <small>{localizedAppointmentServiceName(item, siteLocale) || t("Randevu")}{showStaff && item.staffName ? ` · ${item.staffName}` : ""}</small>}
                 </button>
               );
             })}
@@ -138,6 +140,7 @@ function layoutEvents(items: Appointment[]) {
 /* ── Mobil hafta listesi ── */
 export function WeekAgenda({ days, appointments, onSelect, onCreate }: { days: Date[]; appointments: Appointment[]; onSelect: (item: Appointment) => void; onCreate: (date: Date) => void }) {
   const t = useT();
+  const siteLocale = useLocale();
   const locale = useDateLocale();
   return (
     <div className={styles.agenda}>
@@ -152,7 +155,7 @@ export function WeekAgenda({ days, appointments, onSelect, onCreate }: { days: D
             {items.length ? items.map((item) => (
               <button type="button" key={item.id} className={cn(styles.agendaRow, styles[`ev-${item.status}`])} onClick={() => onSelect(item)}>
                 <time>{format(new Date(item.startAt), "HH:mm")}</time>
-                <span><b>{item.customerName}</b><small>{item.serviceName || t("Randevu")}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
+                <span><b>{item.customerName}</b><small>{localizedAppointmentServiceName(item, siteLocale) || t("Randevu")}{item.staffName ? ` · ${item.staffName}` : ""}</small></span>
                 <StatusPill status={item.status} size="sm" />
               </button>
             )) : <p className={styles.agendaEmpty}>{t("Randevu yok")}</p>}
@@ -206,7 +209,8 @@ export function AppointmentDrawer({ appointment, canManage, updating, onClose, o
   onEdit: () => void;
   onStatus: (status: AppointmentStatus) => void;
 }) {
-  const services = appointment ? [appointment.serviceName, ...(appointment.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + ") : "";
+  const siteLocale = useLocale();
+  const services = appointment ? [localizedAppointmentServiceName(appointment, siteLocale), ...(appointment.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + ") : "";
   const open = ["pending", "confirmed"].includes(appointment?.status ?? "");
   const t = useT();
   const locale = useDateLocale();
@@ -230,7 +234,7 @@ export function AppointmentDrawer({ appointment, canManage, updating, onClose, o
             { label: t("Hizmet"), value: services || t("Hizmet bilgisi girilmemiş"), wide: true },
             { label: <><UserRound size={11} aria-hidden /> {t("Çalışan")}</>, value: appointment.staffName || t("Atanmamış") },
             { label: <><CreditCard size={11} aria-hidden /> {t("Ödeme")}</>, value: appointment.paymentStatus === "paid" ? t("Ödendi") : appointment.paymentStatus === "deposit_paid" ? t("Kapora ödendi") : appointment.paymentStatus === "refunded" ? t("İade edildi") : t("Ödeme bekliyor") },
-            ...(appointment.servicePrice ? [{ label: t("Tutar"), value: `${appointment.servicePrice.toLocaleString(intlLocale)} ₺` }] : []),
+            ...(appointment.servicePrice || (appointment.servicePriceType ?? "fixed") !== "fixed" ? [{ label: t("Tutar"), value: <span className={styles.priceValue}>{appointmentPriceLabel(appointment, t, (value) => `${value.toLocaleString(intlLocale)} ₺`)}{needsFinalPrice(appointment) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}</span> }] : []),
           ]} />
           {appointment.notes && <div className={styles.note}><small>{t("Randevu notu")}</small><p>{appointment.notes}</p></div>}
           <AppointmentCustomFields values={appointment.customFields} />

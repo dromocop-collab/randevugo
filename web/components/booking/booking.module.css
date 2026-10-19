@@ -201,6 +201,34 @@
   font-weight: 800;
 }
 .choiceOn .choiceTile { background: linear-gradient(150deg, var(--green-2), var(--green)); color: var(--lime); }
+.choiceTileImg { position: relative; overflow: hidden; }
+.choiceOn .choiceTileImg { box-shadow: 0 0 0 2px var(--green-2); }
+
+/* ── Hizmet seçenekleri (seçili kartın altında) ── */
+.choiceGroup { display: grid; gap: 8px; }
+.variants { display: grid; gap: 8px; padding: 2px 4px 4px; animation: rise 0.32s var(--ease) both; }
+.variantsHint { color: var(--muted); font-size: 12px; font-weight: 750; letter-spacing: 0.02em; }
+.variantsHintOn { color: var(--green-ink); }
+.variantList { display: flex; flex-wrap: wrap; gap: 8px; }
+.variantChip {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 13px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.variantChip:hover { border-color: color-mix(in srgb, var(--green-2) 35%, var(--line)); }
+.variantChip:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--green-2) 55%, transparent); outline-offset: 2px; }
+.variantChipOn { border-color: var(--green-2); background: var(--selected-bg); box-shadow: 0 0 0 1px var(--green-2); }
+.variantName { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 720; line-height: 1.25; text-overflow: ellipsis; }
+.variantMeta { color: var(--muted); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.variantMeta b { color: var(--ink); font-weight: 800; }
+@media (max-width: 480px) { .variantChip { flex: 1 1 calc(50% - 4px); } }
 .choiceBody { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .choiceName { overflow: hidden; font-size: 15.5px; font-weight: 720; line-height: 1.25; text-overflow: ellipsis; }
 .choiceDesc { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 13px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -840,3 +868,7 @@ textarea.input { min-height: 96px; padding-top: 14px; padding-bottom: 14px; line
   .confetti { display: none; }
   .stepBar::after { transition: none; }
 }
+
+/* Fiyat işletmede kesinleşecekse özet notu */
+.totalNote { margin: 0; padding: 0 16px 14px; background: var(--soft); color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+@media (prefers-reduced-motion: reduce) { .variants { animation: none; } }

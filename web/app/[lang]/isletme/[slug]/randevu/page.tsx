@@ -23,6 +23,7 @@ export default function BookingPage() {
   const intlLocale = useIntlLocale();
   const searchParams = useSearchParams();
   const [preselectedServiceId] = useState<string | null>(searchParams.get("service"));
+  const [preselectedVariantId] = useState<string | null>(searchParams.get("variant"));
   const [preselectedStaffId] = useState<string | null>(searchParams.get("staff"));
   const [preselectedDate] = useState<string | null>(searchParams.get("date"));
   const [preselectedStartAtMillis] = useState<number | null>(() => {
@@ -177,6 +178,7 @@ export default function BookingPage() {
           maximumBookingDaysAhead={business.maximumBookingDaysAhead}
           slotIntervalMinutes={business.slotIntervalMinutes ?? 15}
           preselectedServiceId={preselectedServiceId}
+          preselectedVariantId={preselectedVariantId}
           preselectedStaffId={preselectedStaffId}
           preselectedDate={preselectedDate && /^\d{4}-\d{2}-\d{2}$/.test(preselectedDate) ? preselectedDate : null}
           preselectedStartAtMillis={preselectedStartAtMillis}

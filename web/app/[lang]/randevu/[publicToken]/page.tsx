@@ -23,7 +23,8 @@ import { formatCustomFieldValue, parseCustomFieldValues } from "@/features/booki
 import type { PublicAppointmentPolicy } from "@/types/appointment-change";
 import { BottomSheet } from "@/components/booking/booking-parts";
 import bookingStyles from "@/components/booking/booking.module.css";
-import { useIntlLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
 import { useDateFnsLocale } from "@/i18n/date";
 import { tk, type TFunction } from "@/i18n/config";
 import styles from "./ticket.module.css";
@@ -51,6 +52,7 @@ function formatPrice(value:number,locale="tr-TR"){return `${value.toLocaleString
 export default function AppointmentDetailPage() {
   const params = useParams<{ publicToken: string }>();
   const t = useT();
+  const locale = useLocale();
   const intlLocale = useIntlLocale();
   const dateLocale = useDateFnsLocale();
   const { status: authStatus } = useAuth();
@@ -122,7 +124,8 @@ export default function AppointmentDetailPage() {
   const time=`${start.toLocaleTimeString(intlLocale,{hour:"2-digit",minute:"2-digit"})}${Number.isNaN(end.getTime())?"":` — ${end.toLocaleTimeString(intlLocale,{hour:"2-digit",minute:"2-digit"})}`}`;
   const additional=appointment.additionalServices??[];
   const customFieldRows=parseCustomFieldValues(appointment.customFields);
-  const serviceSummary=[appointment.serviceName,...additional.map(service=>service.name)].filter(Boolean).join(" + ")||t("Belirtilmedi");
+  const primaryName=localizedAppointmentServiceName(appointment,locale);
+  const serviceSummary=[primaryName,...additional.map(service=>service.name)].filter(Boolean).join(" + ")||t("Belirtilmedi");
   // Backend servicePrice / serviceDurationMinutes ek hizmetler dahil TOPLAM değerleri tutar
   // (updateAppointmentServices: servicePrice = ana hizmet + ek hizmetler). Ana hizmet payı farktan bulunur.
   const additionalPrice=additional.reduce((sum,item)=>sum+(Number(item.price)||0),0);
@@ -132,6 +135,12 @@ export default function AppointmentDetailPage() {
   const totalDuration=Math.max(appointment.serviceDurationMinutes??0,additionalDuration,spanMinutes);
   const primaryPrice=totalPrice!=null?Math.max(0,totalPrice-additionalPrice):null;
   const primaryDuration=Math.max(0,totalDuration-additionalDuration);
+  // Başlangıç/aralık/görüşmede fiyatlı randevu: kesin tutar işletmede girilene kadar etiket gösterilir.
+  const money=(value:number)=>formatPrice(value,intlLocale);
+  const priceOpen=needsFinalPrice(appointment);
+  // servicePriceMax yalnız ana hizmetin üst sınırıdır; toplamda ek hizmetler eklenir.
+  const totalPriceLabel=priceOpen?appointmentPriceLabel({...appointment,servicePrice:totalPrice??0,servicePriceMax:appointment.servicePriceMax!=null?appointment.servicePriceMax+additionalPrice:undefined},t,money):totalPrice!=null?formatPrice(totalPrice,intlLocale):null;
+  const primaryPriceLabel=priceOpen?appointmentPriceLabel({...appointment,servicePrice:primaryPrice??0},t,money):primaryPrice!=null?formatPrice(primaryPrice,intlLocale):null;
   const upcomingActive=["pending","confirmed"].includes(appointment.status)&&!Number.isNaN(start.getTime())&&start.getTime()>now;
   const calendarEvent:CalendarEventInput|null=upcomingActive?{
     uid:appointment.id||params.publicToken,
@@ -174,14 +183,14 @@ export default function AppointmentDetailPage() {
             <Fact icon={<BriefcaseBusiness size={13}/>} label={t("Hizmet")} value={serviceSummary} wide/>
             <Fact icon={<UserRound size={13}/>} label={t("Uzman")} value={appointment.staffName||t("İşletme ekibi")} wide/>
             <Fact icon={<Clock3 size={13}/>} label={t("Süre")} value={totalDuration?t("{count} dk",{count:totalDuration}):t("İşletme belirler")}/>
-            <Fact icon={<WalletCards size={13}/>} label={t("Tutar")} value={totalPrice!=null?formatPrice(totalPrice,intlLocale):t("İşletmede")}/>
+            <Fact icon={<WalletCards size={13}/>} label={t("Tutar")} value={totalPriceLabel??t("İşletmede")}/>
           </dl>
           {additional.length>0&&<div className={styles.block}>
             <span className={styles.blockTitle}>{t("Hizmet dökümü")}</span>
             <ul className={styles.lines}>
-              <ServiceLine name={appointment.serviceName||t("Ana hizmet")} duration={primaryDuration} price={primaryPrice}/>
-              {additional.map((item,index)=><ServiceLine key={`${item.serviceId}-${index}`} name={`+ ${item.name}`} duration={Number(item.durationMinutes)||0} price={Number(item.price)||0}/>)}
-              <li className={styles.linesTotal}><span>{t("Toplam")}</span><span>{totalDuration?t("{count} dk",{count:totalDuration}):""}{totalDuration&&totalPrice!=null?" · ":""}{totalPrice!=null?formatPrice(totalPrice,intlLocale):""}</span></li>
+              <ServiceLine name={primaryName||t("Ana hizmet")} duration={primaryDuration} price={primaryPriceLabel}/>
+              {additional.map((item,index)=><ServiceLine key={`${item.serviceId}-${index}`} name={`+ ${item.name}`} duration={Number(item.durationMinutes)||0} price={formatPrice(Number(item.price)||0,intlLocale)}/>)}
+              <li className={styles.linesTotal}><span>{t("Toplam")}</span><span>{totalDuration?t("{count} dk",{count:totalDuration}):""}{totalDuration&&totalPriceLabel!=null?" · ":""}{totalPriceLabel??""}</span></li>
             </ul>
           </div>}
           {appointment.notes&&<div className={styles.block}><span className={styles.blockTitle}>{t("Randevu notunuz")}</span><p className={styles.note}>{appointment.notes}</p></div>}
@@ -229,7 +238,7 @@ export default function AppointmentDetailPage() {
       </aside>
     </div>
   </main><MarketingFooter/>
-    {rescheduleOpen&&upcomingActive&&<RescheduleDialog businessId={appointment.businessId} serviceId={appointment.serviceId} staffId={appointment.staffId||undefined} currentStartAt={appointment.startAt} title={business.name||t("Randevunuz")} subtitle={t("{service} · Şu an: {date} {time}",{service:serviceSummary,date,time})} timeZone={policy?.timeZone} maximumBookingDaysAhead={policy?.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
+    {rescheduleOpen&&upcomingActive&&<RescheduleDialog businessId={appointment.businessId} serviceId={appointment.serviceId} variantId={appointment.serviceVariantId} staffId={appointment.staffId||undefined} currentStartAt={appointment.startAt} title={business.name||t("Randevunuz")} subtitle={t("{service} · Şu an: {date} {time}",{service:serviceSummary,date,time})} timeZone={policy?.timeZone} maximumBookingDaysAhead={policy?.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
     {cancelOpen&&<BottomSheet
       eyebrow={t("RANDEVU İPTALİ")}
       title={t("Randevuyu iptal et")}
@@ -271,8 +280,7 @@ function Barcode({seed}:{seed:string}){
 
 function Fact({icon,label,value,wide}:{icon:ReactNode;label:string;value:string;wide?:boolean}){return <div className={`${styles.fact} ${wide?styles.factWide:""}`}><dt>{icon}{label}</dt><dd>{value}</dd></div>}
 
-function ServiceLine({name,duration,price}:{name:string;duration:number;price:number|null}){
+function ServiceLine({name,duration,price}:{name:string;duration:number;price:string|null}){
   const t=useT();
-  const intlLocale=useIntlLocale();
-  return <li><span>{name}</span><span>{duration?t("{count} dk",{count:duration}):""}{duration&&price!=null?" · ":""}{price!=null?formatPrice(price,intlLocale):""}</span></li>;
+  return <li><span>{name}</span><span>{duration?t("{count} dk",{count:duration}):""}{duration&&price!=null?" · ":""}{price??""}</span></li>;
 }

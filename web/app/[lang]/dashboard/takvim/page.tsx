@@ -9,6 +9,8 @@ import { listAppointmentsByDateRange, updateAppointmentStatus } from "@/features
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-modal";
+import { FinalPriceDialog } from "@/components/dashboard/final-price-dialog";
+import { needsFinalPrice } from "@/features/services/service-pricing";
 import { APPOINTMENTS_CHANGED_EVENT } from "@/components/dashboard/dashboard-events";
 import { Badge, Button, Callout, DashPage, NativeSelect, SegmentedControl, Skeleton, appointmentStatusMeta } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
@@ -41,6 +43,8 @@ export default function CalendarPage() {
   const [createAt, setCreateAt] = useState<Date | undefined>();
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [updating, setUpdating] = useState(false);
+  // Fiyatı iş bitince kesinleşen randevuyu tamamlarken kesin tutar sorulur.
+  const [finalPriceFor, setFinalPriceFor] = useState<Appointment | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // Aynı hafta/ay içinde gün değişince yeniden yükleme yapılmaz.
   const rangeKey = view === "ay" ? startOfMonth(cursor).getTime() : startOfWeek(cursor, { weekStartsOn: 1 }).getTime();
@@ -121,13 +125,15 @@ export default function CalendarPage() {
   function openCreate(date?: Date) { setCreateAt(date); setCreating(true); }
   function openDay(day: Date) { setCursor(startOfDay(day)); setView("gun"); }
 
-  async function changeStatus(item: Appointment, status: AppointmentStatus) {
+  async function changeStatus(item: Appointment, status: AppointmentStatus, finalPrice?: { total: number; extrasTotal: number }) {
     if (!businessId) return;
+    if (status === "completed" && !finalPrice && needsFinalPrice(item)) { setFinalPriceFor(item); return; }
     setUpdating(true);
     try {
-      await updateAppointmentStatus(businessId, item.id, status);
+      await updateAppointmentStatus(businessId, item.id, status, finalPrice);
       toast.success(t("Randevu: {status}", { status: t(appointmentStatusMeta[status].label).toLocaleLowerCase(intlLocale) }));
-      setSelected({ ...item, status });
+      setSelected(finalPrice ? { ...item, status, servicePrice: finalPrice.total, primaryServicePrice: Math.max(0, finalPrice.total - finalPrice.extrasTotal) } : { ...item, status });
+      setFinalPriceFor(null);
       await refreshAppointments();
     } catch {
       toast.error(t("Güncelleme başarısız oldu"));
@@ -235,6 +241,12 @@ export default function CalendarPage() {
         onClose={() => setSelected(null)}
         onEdit={() => { setEditing(selected); setSelected(null); }}
         onStatus={(status) => { if (selected) void changeStatus(selected, status); }}
+      />
+      <FinalPriceDialog
+        appointment={finalPriceFor}
+        busy={updating}
+        onClose={() => setFinalPriceFor(null)}
+        onConfirm={(finalPrice) => { if (finalPriceFor) void changeStatus(finalPriceFor, "completed", finalPrice); }}
       />
       {businessId && (
         <QuickAppointmentModal

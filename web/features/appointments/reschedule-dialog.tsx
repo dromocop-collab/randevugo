@@ -16,6 +16,8 @@ const DAY_COUNT = 14;
 type Props = {
   businessId: string;
   serviceId: string;
+  /** Seçenekli hizmette randevudaki seçenek (süre ondan hesaplanır). */
+  variantId?: string;
   /** Mevcut çalışan; boşsa tüm uygun çalışanların saatleri listelenir. */
   staffId?: string;
   currentStartAt: string;
@@ -32,7 +34,7 @@ function addDays(dateKey: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-export function RescheduleDialog({ businessId, serviceId, staffId, currentStartAt, title, subtitle, timeZone = DEFAULT_TIME_ZONE, maximumBookingDaysAhead, onClose, onConfirm }: Props) {
+export function RescheduleDialog({ businessId, serviceId, variantId, staffId, currentStartAt, title, subtitle, timeZone = DEFAULT_TIME_ZONE, maximumBookingDaysAhead, onClose, onConfirm }: Props) {
   const t = useT();
   const intlLocale = useIntlLocale();
   const [today] = useState(() => millisToZonedDateTime(Date.now(), timeZone).date);
@@ -51,11 +53,11 @@ export function RescheduleDialog({ businessId, serviceId, staffId, currentStartA
 
   useEffect(() => {
     let active = true;
-    listAvailableSlots({ businessId, serviceId, ...(staffId ? { staffId } : {}), date })
+    listAvailableSlots({ businessId, serviceId, ...(variantId ? { variantId } : {}), ...(staffId ? { staffId } : {}), date })
       .then((slots) => { if (active) setLoaded({ date, slots: slots.filter((slot) => slot.startAtMillis !== currentStartMillis), error: null }); })
       .catch((reason) => { if (active) setLoaded({ date, slots: [], error: appointmentChangeError(reason, tk("Müsait saatler yüklenemedi. Lütfen yeniden deneyin.")) }); });
     return () => { active = false; };
-  }, [businessId, serviceId, staffId, date, currentStartMillis]);
+  }, [businessId, serviceId, variantId, staffId, date, currentStartMillis]);
 
   async function confirm() {
     if (!selected || busy) return;

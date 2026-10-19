@@ -12,7 +12,8 @@ export interface ServiceVariant {
 }
 
 /** Dil kodu → işletmenin girdiği metnin karşılığı (ör. en). Boş alan Türkçe metne düşer. */
-export type ServiceTranslations = Partial<Record<string, { name?: string; description?: string; variants?: Record<string, string> }>>;
+/** auto: sunucu otomatik çevirdi · manual: işletme elle düzeltti (otomatik çeviri ezmez). */
+export type ServiceTranslations = Partial<Record<string, { name?: string; description?: string; variants?: Record<string, string>; auto?: boolean; manual?: boolean; sourceHash?: string }>>;
 
 export interface Service extends EntityBase {
   name: string;

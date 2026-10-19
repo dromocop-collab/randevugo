@@ -172,7 +172,7 @@ export default function SettingsPage() {
           reminder: biz.smsPreferences?.reminder !== false,
           cancellation: biz.smsPreferences?.cancellation !== false,
           reschedule: biz.smsPreferences?.reschedule !== false,
-          whatsappFirst: biz.smsPreferences?.whatsappFirst === true,
+          whatsappFirst: biz.smsPreferences?.whatsappFirst !== false,
         },
       };
       setRules(nextRules);
@@ -639,7 +639,7 @@ export default function SettingsPage() {
                 <div className={k.group}>
                   <ToggleRow icon={MessageSquareText} title={t("Önce WhatsApp'tan gönder")}
                     note={t("Açık bildirimler önce WhatsApp'tan gider ve SMS kotanızdan düşmez; WhatsApp'ı olmayan müşteriye otomatik SMS gönderilir.")}
-                    checked={rules.smsPreferences.whatsappFirst === true}
+                    checked={rules.smsPreferences.whatsappFirst !== false}
                     onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, whatsappFirst: checked })} />
                 </div>
                 <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> {t("Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır. WhatsApp kanalı platformda etkinleştirilene kadar tüm bildirimler SMS ile gider.")}</p>

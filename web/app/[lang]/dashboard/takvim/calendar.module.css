@@ -157,3 +157,6 @@
 .drawerActions > * { flex: 1 1 auto; }
 
 @media (prefers-reduced-motion: reduce) { .event { transition: none; } }
+
+/* Çekmecede tutar + "Fiyat bekliyor" rozeti */
+.priceValue { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }

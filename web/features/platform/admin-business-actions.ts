@@ -47,3 +47,9 @@ export async function backfillBusinessGeo() {
   const result = await callable<Record<string, never>, { updated: number; failed: number; remaining: number }>("backfillBusinessGeo")({});
   return result.data;
 }
+
+/** Hizmet ve kategori adlarının eksik İngilizce çevirilerini tamamlar (çağrı başına en fazla 60 belge). */
+export async function backfillServiceTranslations() {
+  const result = await callable<Record<string, never>, { updated: number; failed: number; remaining: number }>("backfillServiceTranslations")({});
+  return result.data;
+}

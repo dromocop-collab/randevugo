@@ -47,7 +47,7 @@ export const GROUPS = {
     "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendBusinessPush",
     "createBusinessSupportTicket", "submitPublicSupportRequest", "adminSupportTicketCreated", "adminSupportMessageCreated", "adminBusinessCreated",
     "adminApprovalBusinessStore", "adminApprovalProfileChange", "adminApprovalCategory", "adminPlatformAlertCreated",
-    "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "translateBusinessTexts",
+    "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "serviceAutoTranslate", "serviceCategoryAutoTranslate", "backfillServiceTranslations",
   ],
   canli: [
     "getLiveQueueWaitEstimate", "getLiveQueueWaitOptions", "getBusinessLiveWaitEstimates", "liveQueueWaitQueueChanged", "liveQueueNoticeQueueChanged",

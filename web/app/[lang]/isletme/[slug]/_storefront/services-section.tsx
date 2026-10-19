@@ -10,12 +10,21 @@ import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Staff } from "@/types/staff";
 import { formatDuration, formatPrice, initials, normalizeSearchText } from "./utils";
-import { useIntlLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import type { TFunction } from "@/i18n/config";
+import { ServiceThumb } from "@/components/booking/booking-parts";
+import { localizedCategoryName, localizedServiceDescription, localizedServiceName, localizedVariantName, priceTypeOf, servicePriceLabel, variantPriceLabel, variantsOf } from "@/features/services/service-pricing";
 import styles from "../storefront.module.css";
 
 type Group = { id: string; name: string; icon: string; color: string; items: Service[] };
 
 const DEFAULT_COLOR = "#1f7a4a";
+
+/** Vitrin fiyat etiketi: eski (sabit, seçeneksiz) hizmetler birebir eskisi gibi ("Ücretsiz" dahil). */
+function priceLabel(service: Service, t: TFunction, intlLocale: string) {
+  if (priceTypeOf(service) === "fixed" && variantsOf(service).length === 0 && !(service.price > 0)) return t("Ücretsiz");
+  return servicePriceLabel(service, t, (value) => formatPrice(value, service.currency, intlLocale));
+}
 
 interface Props {
   services: Service[];
@@ -27,6 +36,7 @@ interface Props {
 
 export function ServicesSection({ services, categories, staff, bookingHref, businessName }: Props) {
   const t = useT();
+  const locale = useLocale();
   const intlLocale = useIntlLocale();
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState("all");
@@ -40,7 +50,7 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
     const rows: Group[] = sortedCats
       .map((category) => ({
         id: category.id,
-        name: category.name,
+        name: localizedCategoryName(category, locale),
         icon: category.icon || "✦",
         color: category.color || DEFAULT_COLOR,
         items: bookable.filter((service) => service.category === category.id).sort(bySort),
@@ -50,7 +60,7 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
     const rest = bookable.filter((service) => !service.category || !known.has(service.category)).sort(bySort);
     if (rest.length > 0) rows.push({ id: "other", name: rows.length ? t("Diğer hizmetler") : t("Tüm hizmetler"), icon: "✦", color: DEFAULT_COLOR, items: rest });
     return rows;
-  }, [bookable, categories, t]);
+  }, [bookable, categories, locale, t]);
 
   const safeCat = activeCat === "all" || groups.some((group) => group.id === activeCat) ? activeCat : "all";
   const needle = normalizeSearchText(query);
@@ -58,12 +68,12 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
     .filter((group) => safeCat === "all" || group.id === safeCat)
     .map((group) => ({
       ...group,
-      items: needle ? group.items.filter((service) => normalizeSearchText(`${service.name} ${service.description ?? ""} ${group.name}`).includes(needle)) : group.items,
+      items: needle ? group.items.filter((service) => normalizeSearchText(`${service.name} ${service.description ?? ""} ${localizedServiceName(service, locale)} ${localizedServiceDescription(service, locale) ?? ""} ${group.name}`).includes(needle)) : group.items,
     }))
     .filter((group) => group.items.length > 0);
   const visibleCount = visible.reduce((total, group) => total + group.items.length, 0);
 
-  const hrefFor = (serviceId: string, staffId?: string) => `${bookingHref}?service=${encodeURIComponent(serviceId)}${staffId ? `&staff=${encodeURIComponent(staffId)}` : ""}`;
+  const hrefFor = (serviceId: string, staffId?: string, variantId?: string) => `${bookingHref}?service=${encodeURIComponent(serviceId)}${variantId ? `&variant=${encodeURIComponent(variantId)}` : ""}${staffId ? `&staff=${encodeURIComponent(staffId)}` : ""}`;
 
   if (bookable.length === 0) {
     return (
@@ -114,23 +124,30 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
               </header>
             )}
             <div className={styles.serviceList}>
-              {group.items.map((service, index) => (
-                <article key={service.id} className={styles.service} style={{ "--i": Math.min(index, 8) } as CSSProperties}>
-                  <button type="button" className={styles.serviceOpen} onClick={() => setDetail(service)} aria-label={t("{name} detaylarını gör", { name: service.name })} />
+              {group.items.map((service, index) => {
+                const name = localizedServiceName(service, locale);
+                const description = localizedServiceDescription(service, locale);
+                const optionCount = variantsOf(service).length;
+                return (
+                <article key={service.id} className={`${styles.service} ${service.imageUrl ? styles.serviceWithThumb : ""}`} style={{ "--i": Math.min(index, 8) } as CSSProperties}>
+                  <button type="button" className={styles.serviceOpen} onClick={() => setDetail(service)} aria-label={t("{name} detaylarını gör", { name })} />
+                  {service.imageUrl && <span className={styles.serviceThumb} aria-hidden="true"><ServiceThumb url={service.imageUrl} size={56} /></span>}
                   <div className={styles.serviceInfo}>
-                    <h4>{service.name}</h4>
-                    {service.description && <p>{service.description}</p>}
+                    <h4>{name}</h4>
+                    {description && <p>{description}</p>}
                     <div className={styles.serviceMeta}>
                       <span className={styles.metaTag}><Clock3 size={13} aria-hidden="true" /> {formatDuration(service.durationMinutes, t)}</span>
+                      {optionCount > 1 && <span className={styles.metaTag}>{t("{count} seçenek", { count: optionCount })}</span>}
                       {service.requiresDeposit && service.depositAmount > 0 && <span className={`${styles.metaTag} ${styles.metaDeposit}`}><Wallet size={13} aria-hidden="true" /> {t("Kapora {amount}", { amount: formatPrice(service.depositAmount, service.currency, intlLocale) })}</span>}
                     </div>
                   </div>
                   <div className={styles.serviceSide}>
-                    <span className={styles.servicePrice}>{service.price > 0 ? formatPrice(service.price, service.currency, intlLocale) : t("Ücretsiz")}</span>
-                    <Link href={hrefFor(service.id)} className={styles.selectBtn} aria-label={t("{name} için randevu al", { name: service.name })}>{t("Seç")}</Link>
+                    <span className={styles.servicePrice}>{priceLabel(service, t, intlLocale)}</span>
+                    <Link href={hrefFor(service.id)} className={styles.selectBtn} aria-label={t("{name} için randevu al", { name })}>{t("Seç")}</Link>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
@@ -155,9 +172,14 @@ export function ServicesSection({ services, categories, staff, bookingHref, busi
   );
 }
 
-function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: Service; staff: Staff[]; groups: Group[]; hrefFor: (serviceId: string, staffId?: string) => string; onClose: () => void }) {
+function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: Service; staff: Staff[]; groups: Group[]; hrefFor: (serviceId: string, staffId?: string, variantId?: string) => string; onClose: () => void }) {
   const t = useT();
+  const locale = useLocale();
   const intlLocale = useIntlLocale();
+  const name = localizedServiceName(service, locale);
+  const description = localizedServiceDescription(service, locale);
+  const options = variantsOf(service);
+  const money = (value: number) => formatPrice(value, service.currency, intlLocale);
   const group = groups.find((item) => item.items.some((row) => row.id === service.id));
   const experts = staff.filter((member) => member.serviceIds?.includes(service.id) || service.assignableStaffIds?.includes(member.id));
 
@@ -174,20 +196,34 @@ function ServiceSheet({ service, staff, groups, hrefFor, onClose }: { service: S
       <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="service-sheet-title">
         <div className={styles.grabber} aria-hidden="true" />
         <header className={styles.sheetHead}>
-          <div>
-            <small>{group?.name?.toLocaleUpperCase(group.id === "other" ? intlLocale : "tr-TR") ?? t("HİZMET")}</small>
-            <h3 id="service-sheet-title">{service.name}</h3>
+          <div className={styles.sheetTitleRow}>
+            {service.imageUrl && <span className={styles.sheetThumb} aria-hidden="true"><ServiceThumb url={service.imageUrl} size={64} /></span>}
+            <div>
+              <small>{group?.name?.toLocaleUpperCase(group.id === "other" || locale !== "tr" ? intlLocale : "tr-TR") ?? t("HİZMET")}</small>
+              <h3 id="service-sheet-title">{name}</h3>
+            </div>
           </div>
           <button type="button" className={styles.iconBtn} onClick={onClose} aria-label={t("Kapat")} autoFocus><X size={18} /></button>
         </header>
         <div className={styles.sheetBody}>
-          {service.description ? <p>{service.description}</p> : <p>{t("Detaylar için işletmeye mesaj gönderebilir ya da doğrudan randevu oluşturabilirsin.")}</p>}
+          {description ? <p>{description}</p> : <p>{t("Detaylar için işletmeye mesaj gönderebilir ya da doğrudan randevu oluşturabilirsin.")}</p>}
           <div className={styles.facts}>
-            <div className={styles.fact}><small>{t("ÜCRET")}</small><b>{service.price > 0 ? formatPrice(service.price, service.currency, intlLocale) : t("Ücretsiz")}</b></div>
+            <div className={styles.fact}><small>{t("ÜCRET")}</small><b>{priceLabel(service, t, intlLocale)}</b></div>
             <div className={styles.fact}><small>{t("SÜRE")}</small><b>{formatDuration(service.durationMinutes, t)}</b></div>
             {service.requiresDeposit && service.depositAmount > 0 && <div className={styles.fact}><small>{t("KAPORA")}</small><b>{formatPrice(service.depositAmount, service.currency, intlLocale)}</b></div>}
             <div className={styles.fact}><small>{t("RANDEVU")}</small><b><Sparkles size={14} aria-hidden="true" /> Online</b></div>
           </div>
+          {options.length > 0 && <>
+            <span className={styles.sheetLabel}>{t("SEÇENEKLER")}</span>
+            <div className={styles.sheetVariants}>
+              {options.map((option) => (
+                <Link key={option.id} href={hrefFor(service.id, undefined, option.id)} aria-label={t("{name} için randevu al", { name: `${name} · ${localizedVariantName(service, option, locale)}` })}>
+                  <span>{localizedVariantName(service, option, locale)}<small>{formatDuration(option.durationMinutes, t)}</small></span>
+                  <b>{variantPriceLabel(service, option, t, money)}</b>
+                </Link>
+              ))}
+            </div>
+          </>}
           {experts.length > 0 && <>
             <span className={styles.sheetLabel}>{t("UZMAN SEÇEREK RANDEVU AL")}</span>
             <div className={styles.sheetStaff}>

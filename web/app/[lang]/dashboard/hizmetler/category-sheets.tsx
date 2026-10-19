@@ -1,17 +1,21 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Check, FolderPlus, Pencil, RotateCcw, Save, Trash2, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, FolderPlus, Languages, Pencil, RotateCcw, Save, Trash2, TriangleAlert } from "lucide-react";
 import { Badge, Button, Callout, EmptyState, Field, Input, NativeSelect, Sheet } from "@/components/dashboard/ui";
 import { ServiceCategoryIcon } from "@/components/ui/service-category-icon";
 import { normalizeCategoryName } from "@/features/services/service-category-repository";
+import { localizedCategoryName } from "@/features/services/service-pricing";
+import { LOCALE_LABELS } from "@/i18n/config";
 import type { Service } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
 import type { Staff } from "@/types/staff";
 import { OrderButtons, cx, ws } from "../_workspace/kit";
-import { CATEGORY_COLORS, CATEGORY_ICONS } from "./service-shared";
+import { CATEGORY_COLORS, CATEGORY_ICONS, TRANSLATION_LOCALES } from "./service-shared";
 import styles from "./services.module.css";
-import { useT } from "@/i18n/client";
+import { useLocale, useT } from "@/i18n/client";
+
+export type CategoryInput = { name: string; icon: string; color: string; translations?: ServiceCategory["translations"] };
 
 /* ── Kategori oluştur / düzenle ── */
 export function CategoryEditorSheet({ open, category, categories, onClose, onSubmit }: {
@@ -19,10 +23,14 @@ export function CategoryEditorSheet({ open, category, categories, onClose, onSub
   category: ServiceCategory | null;
   categories: ServiceCategory[];
   onClose: () => void;
-  onSubmit: (input: { name: string; icon: string; color: string }) => Promise<boolean>;
+  onSubmit: (input: CategoryInput) => Promise<boolean>;
 }) {
   const t = useT();
   const [name, setName] = useState(category?.name ?? "");
+  const [translatedNames, setTranslatedNames] = useState<Record<string, string>>(() => Object.fromEntries(TRANSLATION_LOCALES.map((locale) => [locale, category?.translations?.[locale]?.name ?? ""])));
+  /** Elle değiştirilen diller; yalnız bunlar kaydedilir (diğerlerini sunucu otomatik çevirir). */
+  const [touchedLocales, setTouchedLocales] = useState<Record<string, boolean>>({});
+  const [openLocales, setOpenLocales] = useState<Record<string, boolean>>({});
   const [icon, setIcon] = useState(category?.icon || "✂️");
   const [color, setColor] = useState(category?.color || CATEGORY_COLORS[0]);
   const [submitted, setSubmitted] = useState(false);
@@ -36,7 +44,20 @@ export function CategoryEditorSheet({ open, category, categories, onClose, onSub
     if (error) return;
     setBusy(true);
     try {
-      const ok = await onSubmit({ name: name.trim(), icon, color });
+      const edited = TRANSLATION_LOCALES.filter((locale) => touchedLocales[locale]);
+      let translations: ServiceCategory["translations"] | undefined;
+      if (edited.length) {
+        const next: NonNullable<ServiceCategory["translations"]> = {};
+        Object.entries(category?.translations ?? {}).forEach(([locale, value]) => { if (value) next[locale] = value; });
+        edited.forEach((locale) => {
+          const value = translatedNames[locale]?.trim();
+          // Boşaltılan dil silinir; sunucu yeniden otomatik çevirir. Elle yazılan ad manual: true ile korunur.
+          if (value) next[locale] = { name: value, manual: true };
+          else delete next[locale];
+        });
+        translations = next;
+      }
+      const ok = await onSubmit({ name: name.trim(), icon, color, ...(translations ? { translations } : {}) });
       if (ok) onClose();
     } finally {
       setBusy(false);
@@ -64,6 +85,30 @@ export function CategoryEditorSheet({ open, category, categories, onClose, onSub
         <Field label={t("Kategori adı")} error={submitted ? error : null}>
           <Input data-autofocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Örn. Saç kesim, Cilt bakımı")} maxLength={48} aria-invalid={Boolean(submitted && error)} className={cx(submitted && error && styles.invalid)} />
         </Field>
+        {TRANSLATION_LOCALES.map((locale) => {
+          const expanded = Boolean(openLocales[locale]);
+          const bodyId = `category-lang-${locale}`;
+          return (
+            <section key={locale} className={styles.langBox}>
+              <button type="button" className={styles.langToggle} aria-expanded={expanded} aria-controls={bodyId} onClick={() => setOpenLocales((current) => ({ ...current, [locale]: !expanded }))}>
+                <Languages size={18} aria-hidden="true" />
+                <span className={styles.langTitle}>
+                  <b>{locale === "en" ? t("İngilizce metni düzelt (isteğe bağlı)") : t("{language} metni düzelt (isteğe bağlı)", { language: LOCALE_LABELS[locale].name })}</b>
+                  <small>{touchedLocales[locale] ? t("Elle düzeltildi") : translatedNames[locale]?.trim() ? translatedNames[locale] : t("Kaydettiğinizde otomatik oluşturulur")}</small>
+                </span>
+                <ChevronDown size={18} aria-hidden="true" className={cx(styles.langChevron, expanded && styles.langChevronOpen)} />
+              </button>
+              {expanded ? (
+                <div id={bodyId} className={styles.langBody}>
+                  <p className={styles.langNote}>{locale === "en" ? t("İngilizce metin kaydettiğinizde otomatik oluşturulur. İsterseniz burada düzeltebilirsiniz.") : t("Bu dildeki metin kaydettiğinizde otomatik oluşturulur. İsterseniz burada düzeltebilirsiniz.")}</p>
+                  <Field label={t("Kategori adı")}>
+                    <Input lang={locale} value={translatedNames[locale] ?? ""} onChange={(e) => { const value = e.target.value; setTouchedLocales((current) => ({ ...current, [locale]: true })); setTranslatedNames((current) => ({ ...current, [locale]: value })); }} placeholder={name} maxLength={48} />
+                  </Field>
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
         <fieldset className={styles.fieldset}>
           <legend>{t("İkon")}</legend>
           <div className={styles.iconGrid}>
@@ -106,6 +151,7 @@ export function CategoryManagerSheet({
   onRemoveTemplates: () => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   return (
     <Sheet
       open={open}
@@ -126,14 +172,14 @@ export function CategoryManagerSheet({
             const count = services.filter((service) => service.category === category.id).length;
             return (
               <li key={category.id} className={styles.catItem} style={{ "--cat-color": category.color } as React.CSSProperties}>
-                <OrderButtons label={category.name} canUp={index > 0} canDown={index < categories.length - 1} onUp={() => onMove(index, -1)} onDown={() => onMove(index, 1)} disabled={busy} />
+                <OrderButtons label={localizedCategoryName(category, locale)} canUp={index > 0} canDown={index < categories.length - 1} onUp={() => onMove(index, -1)} onDown={() => onMove(index, 1)} disabled={busy} />
                 <span className={styles.catIcon} aria-hidden="true"><ServiceCategoryIcon icon={category.icon} name={category.name} size={19} /></span>
                 <span className={styles.catText}>
-                  <b>{category.name}</b>
+                  <b>{localizedCategoryName(category, locale)}</b>
                   <small>{t("{count} hizmet", { count })}{category.templateSource ? ` · ${t("hazır paket")}` : ""}</small>
                 </span>
-                <Button variant="ghost" iconOnly icon={Pencil} onClick={() => onEdit(category)} aria-label={t("{name} kategorisini düzenle", { name: category.name })} />
-                <Button variant="ghost" iconOnly icon={Trash2} onClick={() => onDelete(category)} aria-label={t("{name} kategorisini sil", { name: category.name })} className={styles.deleteBtn} />
+                <Button variant="ghost" iconOnly icon={Pencil} onClick={() => onEdit(category)} aria-label={t("{name} kategorisini düzenle", { name: localizedCategoryName(category, locale) })} />
+                <Button variant="ghost" iconOnly icon={Trash2} onClick={() => onDelete(category)} aria-label={t("{name} kategorisini sil", { name: localizedCategoryName(category, locale) })} className={styles.deleteBtn} />
               </li>
             );
           })}

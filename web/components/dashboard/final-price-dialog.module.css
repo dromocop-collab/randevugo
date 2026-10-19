@@ -1,0 +1,13 @@
+/* Kesin tutar diyaloğu — dash-ui token'larını kullanır. */
+.form { display: grid; gap: 14px; min-width: 0; }
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--dui-soft);
+}
+.summary b { font-size: 15px; font-weight: 720; overflow-wrap: anywhere; }
+.summary small { color: var(--dui-muted); font-size: 13px; font-weight: 600; }
