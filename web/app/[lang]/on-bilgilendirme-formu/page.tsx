@@ -17,7 +17,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · {date} · SÜRÜM {version}", { date: t(TERMS_DATE_LABEL), version: TERMS_VERSION })} title={t("Ön bilgilendirme formu")} intro={note + t("Bu form, Mesafeli Sözleşmeler Yönetmeliği'nin 5. maddesi uyarınca, SeninRandevun işletme paketi satın alınmadan önce Alıcı'yı bilgilendirmek amacıyla sunulur. Satın alınan paketin adı, dönemi ve toplam bedeli ödeme ekranında ayrıca gösterilir ve bu formun ayrılmaz parçasıdır.")} cta={false} sections={[
     { title: t("Satıcı bilgileri"), body: t("Hizmeti sunan satıcıya ait bilgiler:"), bullets: sellerLines(t) },
     {

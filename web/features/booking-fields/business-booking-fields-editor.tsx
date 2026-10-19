@@ -24,7 +24,7 @@ import {
 } from "./booking-fields-repository";
 import { BLANK_TEMPLATE, BOOKING_FIELD_TEMPLATES, localizeTemplateField, suggestedTemplates, type BookingFieldTemplate } from "./templates";
 import { CustomFieldInputs } from "./custom-field-inputs";
-import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useT } from "@/i18n/client";
 import { tk } from "@/i18n/config";
 import styles from "./booking-fields-editor.module.css";
 
@@ -453,9 +453,8 @@ function FieldCard({
   onChange: (patch: Partial<CustomBookingField> | ((field: CustomBookingField) => CustomBookingField)) => void;
 }) {
   const t = useT();
-  const locale = useLocale();
-  // "Zorunlu" anahtarı çerez bandında "Essential" olarak çevrili; alan bağlamı için ayrı anahtar.
-  const requiredLabel = locale === "tr" ? "Zorunlu" /* i18n-ignore */ : t("Zorunlu (alan)");
+  // "Zorunlu" çerez bandında "Essential" olarak çevrili; alan bağlamı ctx ile ayrılır.
+  const requiredLabel = t("Zorunlu", { ctx: "alan" });
   const { field } = item;
   const panelId = `bf-panel-${item.key}`;
   const scope = field.serviceIds?.length

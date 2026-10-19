@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { format } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useParams } from "next/navigation";
 import Link from "@/i18n/link";
@@ -24,7 +23,8 @@ import { formatCustomFieldValue, parseCustomFieldValues } from "@/features/booki
 import type { PublicAppointmentPolicy } from "@/types/appointment-change";
 import { BottomSheet } from "@/components/booking/booking-parts";
 import bookingStyles from "@/components/booking/booking.module.css";
-import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { useDateFnsLocale } from "@/i18n/date";
 import { tk, type TFunction } from "@/i18n/config";
 import styles from "./ticket.module.css";
 
@@ -52,8 +52,7 @@ export default function AppointmentDetailPage() {
   const params = useParams<{ publicToken: string }>();
   const t = useT();
   const intlLocale = useIntlLocale();
-  const locale = useLocale();
-  const dateLocale = locale === "tr" ? tr : enGB;
+  const dateLocale = useDateFnsLocale();
   const { status: authStatus } = useAuth();
   const [appointment,setAppointment] = useState<Appointment|null>(null);
   const [business,setBusiness] = useState<BusinessInfo>({name:"",address:"",phone:"",slug:"",logoUrl:""});
@@ -238,7 +237,7 @@ export default function AppointmentDetailPage() {
       busy={cancelBusy}
       onClose={()=>setCancelOpen(false)}
       footer={<div className={styles.sheetBtns}>
-        <button type="button" className={bookingStyles.ghost} onClick={()=>setCancelOpen(false)} disabled={cancelBusy}>{locale==="tr"?"Vazgeç"/* i18n-ignore */:t("Randevuyu koru")}</button>
+        <button type="button" className={bookingStyles.ghost} onClick={()=>setCancelOpen(false)} disabled={cancelBusy}>{t("Vazgeç", { ctx: "iptal-onay" })}</button>
         <button type="button" className={`${bookingStyles.primary} ${styles.cancelConfirm}`} onClick={()=>void confirmCancel()} disabled={cancelBusy}>{cancelBusy?<LoaderCircle size={18} className={styles.spin}/>:<><XCircle size={18}/> {t("Evet, iptal et")}</>}</button>
       </div>}
     >

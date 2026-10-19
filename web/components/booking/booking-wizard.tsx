@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   createAppointment,
@@ -62,6 +61,7 @@ import {
   publicStaffBio,
 } from "./booking-utils";
 import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useDateFnsLocale, useDatePatterns } from "@/i18n/date";
 import { localizeHref, tk } from "@/i18n/config";
 import s from "./booking.module.css";
 
@@ -142,8 +142,9 @@ export function BookingWizard(props: Props) {
   const t = useT();
   const locale = useLocale();
   const intlLocale = useIntlLocale();
-  const dateLocale = locale === "tr" ? tr : enGB;
-  const dayPattern = locale === "tr" ? "d MMMM EEEE" : "EEEE d MMMM";
+  const dateLocale = useDateFnsLocale();
+  const datePatterns = useDatePatterns();
+  const dayPattern = datePatterns.dayLong;
   // Veri yükleyen efektler sözlük değişince yeniden çalışmasın diye t ref üzerinden okunur.
   const tRef = useRef(t);
   useEffect(() => { tRef.current = t; }, [t]);
@@ -786,7 +787,7 @@ export function BookingWizard(props: Props) {
   }
 
   /* ━━━ Alt çubuk bilgileri ━━━ */
-  const dateShort = format(dateFromIso(appointmentsDate), locale === "tr" ? "d MMM EEE" : "EEE d MMM", { locale: dateLocale });
+  const dateShort = format(dateFromIso(appointmentsDate), datePatterns.dayShort, { locale: dateLocale });
   let blockReason = "";
   if (step === "service" && !serviceId) blockReason = t("Devam etmek için bir hizmet seçin");
   else if (step === "staff" && !staffId && !anyStaff) blockReason = t("Bir uzman seçin");
@@ -807,7 +808,7 @@ export function BookingWizard(props: Props) {
         <div className={s.stepperTop}>
           <div className={s.stepMeta}>
             <span className={s.stepCount}>{t("Adım {current} / {total}", { current: currentStepIndex + 1, total: activeSteps.length })}</span>
-            <span className={s.stepTitle}>{t(STEP_TITLES[step])}</span>
+            <span className={s.stepTitle}>{t(STEP_TITLES[step], { ctx: "adim" })}</span>
           </div>
           <span className={s.stepPercent} aria-hidden="true">{t("%{percent}", { percent: progressPercent })}</span>
         </div>
@@ -815,9 +816,9 @@ export function BookingWizard(props: Props) {
           {activeSteps.map((item, index) => {
             const state = index < currentStepIndex ? s.stepDone : index === currentStepIndex ? s.stepCurrent : "";
             return <li key={item} className={`${s.stepItem} ${state}`} aria-current={index === currentStepIndex ? "step" : undefined}>
-              <button type="button" className={s.stepBtn} disabled={index >= currentStepIndex || submitting} onClick={() => jumpTo(item)} aria-label={index < currentStepIndex ? t("{number}. adım: {label} (tamamlandı, düzenlemek için dokunun)", { number: index + 1, label: t(STEP_LABELS[item]) }) : t("{number}. adım: {label}", { number: index + 1, label: t(STEP_LABELS[item]) })}>
+              <button type="button" className={s.stepBtn} disabled={index >= currentStepIndex || submitting} onClick={() => jumpTo(item)} aria-label={index < currentStepIndex ? t("{number}. adım: {label} (tamamlandı, düzenlemek için dokunun)", { number: index + 1, label: t(STEP_LABELS[item], { ctx: "adim" }) }) : t("{number}. adım: {label}", { number: index + 1, label: t(STEP_LABELS[item], { ctx: "adim" }) })}>
                 <span className={s.stepBar} />
-                <span className={s.stepLabel}>{index < currentStepIndex && <Check size={11} strokeWidth={3} />}{t(STEP_LABELS[item])}</span>
+                <span className={s.stepLabel}>{index < currentStepIndex && <Check size={11} strokeWidth={3} />}{t(STEP_LABELS[item], { ctx: "adim" })}</span>
               </button>
             </li>;
           })}

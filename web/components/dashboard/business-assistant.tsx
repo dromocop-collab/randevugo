@@ -152,33 +152,35 @@ export function BusinessAssistant() {
     return Math.round(quality * 55 + setup * 30 + stats.healthySources / 6 * 15);
   }, [stats]);
 
+  // Niyet kalıpları Türkçe ve İngilizce anahtar kelimeleri birlikte tanır (arayüz dilinden bağımsız).
   function answer(raw: string): Omit<Message, "id" | "role" | "time"> {
     if (!stats) return { body: t("Mağaza verileri hazırlanıyor. Birkaç saniye sonra tekrar sorun.") };
     const text = raw.toLocaleLowerCase("tr-TR"), outcomes = stats.completed + stats.cancelled + stats.noShow;
     const lossRate = outcomes ? (stats.cancelled + stats.noShow) / outcomes * 100 : 0;
     const returnRate = stats.customers ? stats.returningCustomers / stats.customers * 100 : 0;
-    if (/^(selam|merhaba|hey|sa|günaydın|iyi akşamlar)[!. ]*$/.test(text)) return { body: t("Merhaba! Ben iyiyim ve {business} için hazırım 🙂 Bugün {today} randevu, {pending} onay ve {waitlist} bekleme listesi talebi görünüyor. Siz nasılsınız, neyi birlikte halledelim?", { business: business?.name ?? t("işletmeniz"), today: stats.today, pending: stats.pending, waitlist: stats.waitlist }) };
-    if (/nasılsın|ne haber|naber/.test(text)) return { body: t("Gayet iyiyim, teşekkür ederim 🙂 {business} verilerini de kontrol ettim; operasyon puanı {score}/100. Bugün sizin için randevuları mı, ekibi mi yoksa büyüme fırsatlarını mı ele alalım?", { business: business?.name ?? t("işletmenizin"), score }) };
-    if (/teşekkür|sağ ol|eyvallah/.test(text)) return { body: t("Rica ederim, her zaman buradayım 🙂 İsterseniz sıradaki en önemli işi de birlikte belirleyelim.") };
+    if (/^(selam|merhaba|hey|sa|günaydın|iyi akşamlar|hi|hello|good morning|good evening)[!. ]*$/.test(text)) return { body: t("Merhaba! Ben iyiyim ve {business} için hazırım 🙂 Bugün {today} randevu, {pending} onay ve {waitlist} bekleme listesi talebi görünüyor. Siz nasılsınız, neyi birlikte halledelim?", { business: business?.name ?? t("işletmeniz"), today: stats.today, pending: stats.pending, waitlist: stats.waitlist }) };
+    if (/nasılsın|ne haber|naber|how are you|what's up/.test(text)) return { body: t("Gayet iyiyim, teşekkür ederim 🙂 {business} verilerini de kontrol ettim; operasyon puanı {score}/100. Bugün sizin için randevuları mı, ekibi mi yoksa büyüme fırsatlarını mı ele alalım?", { business: business?.name ?? t("işletmenizin"), score }) };
+    if (/teşekkür|sağ ol|eyvallah|thank/.test(text)) return { body: t("Rica ederim, her zaman buradayım 🙂 İsterseniz sıradaki en önemli işi de birlikte belirleyelim.") };
 
     const directStaff = staffRows.find((item) => text.includes(item.fullName.toLocaleLowerCase("tr-TR")) || text.includes(item.fullName.split(" ")[0]!.toLocaleLowerCase("tr-TR")));
     if (directStaff) lastStaffId.current = directStaff.id;
-    const mentionedStaff = directStaff ?? (/onun|bu çalışan|aynı çalışan|az önceki/.test(text) ? staffRows.find((item) => item.id === lastStaffId.current) : undefined);
-    if (mentionedStaff && /(güncelle|değiştir|yap|ayarla)/.test(text)) {
+    const mentionedStaff = directStaff ?? (/onun|bu çalışan|aynı çalışan|az önceki|this staff|same staff|previous/.test(text) ? staffRows.find((item) => item.id === lastStaffId.current) : undefined);
+    if (mentionedStaff && /(güncelle|değiştir|yap|ayarla|update|change|set|make)/.test(text)) {
       let patch: StaffPatch | null = null; let summary = "";
-      if (/pozisyon|ünvan|unvan|görev/.test(text)) {
-        const value = raw.match(/(?:pozisyon(?:unu)?|[üu]nvan(?:ını|ini)?|görev(?:ini)?)\s+(.+?)(?:\s+(?:yap|olarak güncelle|olarak değiştir|güncelle|değiştir))?[.!]?$/i)?.[1]?.trim();
+      if (/pozisyon|ünvan|unvan|görev|position|title|role/.test(text)) {
+        const value = (raw.match(/(?:pozisyon(?:unu)?|[üu]nvan(?:ını|ini)?|görev(?:ini)?)\s+(.+?)(?:\s+(?:yap|olarak güncelle|olarak değiştir|güncelle|değiştir))?[.!]?$/i)
+          ?? raw.match(/(?:position|title|role)\s+(?:to\s+|as\s+)?(.+?)[.!]?$/i))?.[1]?.trim();
         if (value && value.length <= 80) { patch = { position: value }; summary = t("pozisyonu “{value}”", { value }); }
-      } else if (/telefon/.test(text)) {
+      } else if (/telefon|phone/.test(text)) {
         const value = raw.match(/(?:\+?\d[\d\s()-]{8,}\d)/)?.[0]?.replace(/\s+/g, " ");
         if (value) { patch = { phone: value }; summary = t("telefonu “{value}”", { value }); }
       } else if (/e-?posta|mail/.test(text)) {
         const value = raw.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0];
         if (value) { patch = { email: value }; summary = t("e-postası “{value}”", { value }); }
-      } else if (/komisyon/.test(text)) {
-        const value = Number(raw.match(/(?:%\s*)?(\d{1,3})(?:\s*%)/)?.[1] ?? raw.match(/komisyon\D+(\d{1,3})/i)?.[1]);
+      } else if (/komisyon|commission/.test(text)) {
+        const value = Number(raw.match(/(?:%\s*)?(\d{1,3})(?:\s*%)/)?.[1] ?? raw.match(/(?:komisyon|commission)\D+(\d{1,3})/i)?.[1]);
         if (Number.isFinite(value) && value >= 0 && value <= 100) { patch = { commissionRate: value }; summary = t("komisyon oranı %{value}", { value }); }
-      } else if (/uzmanlık|seviye|kıdem/.test(text)) {
+      } else if (/uzmanlık|seviye|kıdem|expertise|level|seniority/.test(text)) {
         const levels = [{ keys: /junior|başlangıç/, value: "junior" }, { keys: /specialist|uzman/, value: "specialist" }, { keys: /senior|kıdemli/, value: "senior" }, { keys: /trainer|eğitmen/, value: "trainer" }] as const;
         const level = levels.find((item) => item.keys.test(text));
         if (level) { patch = { expertiseLevel: level.value }; summary = t("uzmanlık seviyesi “{value}”", { value: level.value }); }
@@ -186,22 +188,22 @@ export function BusinessAssistant() {
       if (patch) return { body: t("{name} için değişikliği anladım: {summary} olarak güncellenecek. Yanlış işlem olmaması için uygulamadan önce onayınızı bekliyorum.", { name: mentionedStaff.fullName, summary }), actions: [{ label: t("Değişikliği onayla"), staffUpdate: { staffId: mentionedStaff.id, staffName: mentionedStaff.fullName, patch, summary } }, { label: t("Çalışan profilini aç"), href: "/dashboard/calisanlar" }] };
       return { body: t("{name} adlı çalışanı buldum; fakat hangi alanı hangi değerle değiştireceğinizi net anlayamadım. “{name} pozisyonunu Saç Uzmanı yap”, “komisyonunu %20 yap”, “telefonunu 05… olarak güncelle” veya “uzmanlık seviyesini senior yap” şeklinde yazabilirsiniz.", { name: mentionedStaff.fullName }), actions: [{ label: t("Çalışanları aç"), href: "/dashboard/calisanlar" }] };
     }
-    if (/(çalışan|personel).*(güncelle|değiştir)/.test(text) && !mentionedStaff) return { body: t("Güncellenecek çalışanı bulamadım. Adı panelde kayıtlı haliyle yazın; örneğin “Cihat pozisyonunu Yönetici yap”. Değişikliği uygulamadan önce size mutlaka onay göstereceğim."), actions: [{ label: t("Çalışan listesini aç"), href: "/dashboard/calisanlar" }] };
+    if (/(çalışan|personel|staff|employee).*(güncelle|değiştir|update|change)/.test(text) && !mentionedStaff) return { body: t("Güncellenecek çalışanı bulamadım. Adı panelde kayıtlı haliyle yazın; örneğin “Cihat pozisyonunu Yönetici yap”. Değişikliği uygulamadan önce size mutlaka onay göstereceğim."), actions: [{ label: t("Çalışan listesini aç"), href: "/dashboard/calisanlar" }] };
     const directService = serviceRows.find((item) => text.includes(item.name.toLocaleLowerCase("tr-TR")));
     if (directService) lastServiceId.current = directService.id;
-    const mentionedService = directService ?? (/onun|bu hizmet|aynı hizmet|az önceki/.test(text) ? serviceRows.find((item) => item.id === lastServiceId.current) : undefined);
-    if (mentionedService && /(güncelle|değiştir|yap|ayarla|aç|kapat)/.test(text)) {
+    const mentionedService = directService ?? (/onun|bu hizmet|aynı hizmet|az önceki|this service|same service|previous/.test(text) ? serviceRows.find((item) => item.id === lastServiceId.current) : undefined);
+    if (mentionedService && /(güncelle|değiştir|yap|ayarla|aç|kapat|update|change|set|make|enable|disable|turn)/.test(text)) {
       let patch: ServicePatch | null = null; let summary = "";
-      if (/fiyat|ücret/.test(text)) {
-        const value = Number(raw.match(/(?:fiyat(?:ını|i)?|ücret(?:ini|i)?)\D{0,12}(\d+(?:[.,]\d{1,2})?)/i)?.[1]?.replace(",", "."));
+      if (/fiyat|ücret|price/.test(text)) {
+        const value = Number(raw.match(/(?:fiyat(?:ını|i)?|ücret(?:ini|i)?|price)\D{0,12}(\d+(?:[.,]\d{1,2})?)/i)?.[1]?.replace(",", "."));
         if (Number.isFinite(value) && value >= 0 && value <= 1_000_000) { patch = { price: value }; summary = t("fiyatı {price} ₺", { price: value.toLocaleString(locale) }); }
-      } else if (/süre|dakika/.test(text)) {
-        const value = Number(raw.match(/(\d{1,3})\s*(?:dakika|dk)/i)?.[1]);
+      } else if (/süre|dakika|duration|minute|\bmins?\b/.test(text)) {
+        const value = Number(raw.match(/(\d{1,3})\s*(?:dakika|dk|minutes?|mins?)/i)?.[1]);
         if (Number.isFinite(value) && value >= 5 && value <= 720) { patch = { durationMinutes: value }; summary = t("süresi {minutes} dakika", { minutes: value }); }
       } else if (/online/.test(text)) {
-        const enabled = !/(kapat|pasif|kaldır)/.test(text); patch = { isBookableOnline: enabled }; summary = enabled ? t("online randevu açık") : t("online randevu kapalı");
-      } else if (/aktif|pasif|kapat|aç/.test(text)) {
-        const enabled = !/(pasif|kapat)/.test(text); patch = { isActive: enabled }; summary = enabled ? t("aktif") : t("pasif");
+        const enabled = !/(kapat|pasif|kaldır|disable|turn off|remove|\boff\b)/.test(text); patch = { isBookableOnline: enabled }; summary = enabled ? t("online randevu açık") : t("online randevu kapalı");
+      } else if (/aktif|pasif|kapat|aç|active|enable|disable|turn/.test(text)) {
+        const enabled = !/(pasif|kapat|inactive|disable|deactivate|turn off)/.test(text); patch = { isActive: enabled }; summary = enabled ? t("aktif") : t("pasif");
       }
       if (patch) return { body: t("{name} hizmeti için değişikliği anladım: {summary} olacak. Kaydetmeden önce onayınızı bekliyorum.", { name: mentionedService.name, summary }), actions: [{ label: t("Hizmet değişikliğini onayla"), serviceUpdate: { serviceId: mentionedService.id, serviceName: mentionedService.name, patch, summary } }, { label: t("Hizmeti incele"), href: "/dashboard/hizmetler" }] };
       return { body: t("{name} hizmetini buldum ancak değişiklik net değil. “Fiyatını 750 TL yap”, “süresini 60 dakika yap” veya “online randevuya kapat” şeklinde yazabilirsiniz.", { name: mentionedService.name }) };
@@ -209,29 +211,29 @@ export function BusinessAssistant() {
     const appointmentCandidates = appointmentRows.filter((item) => text.includes(item.customerName.toLocaleLowerCase("tr-TR"))).sort((a, b) => Math.abs(new Date(a.startAt).getTime() - Date.now()) - Math.abs(new Date(b.startAt).getTime() - Date.now()));
     const directAppointment = appointmentCandidates[0];
     if (directAppointment) lastAppointmentId.current = directAppointment.id;
-    const mentionedAppointment = directAppointment ?? (/onun|bu randevu|aynı randevu|az önceki/.test(text) ? appointmentRows.find((item) => item.id === lastAppointmentId.current) : undefined);
-    if (mentionedAppointment && /(onayla|tamamla|tamamlandı|iptal|gelmedi|no.?show)/.test(text)) {
-      const status: AppointmentStatus = /iptal/.test(text) ? "cancelled" : /gelmedi|no.?show/.test(text) ? "no_show" : /tamamla|tamamlandı/.test(text) ? "completed" : "confirmed";
+    const mentionedAppointment = directAppointment ?? (/onun|bu randevu|aynı randevu|az önceki|this appointment|same appointment|previous/.test(text) ? appointmentRows.find((item) => item.id === lastAppointmentId.current) : undefined);
+    if (mentionedAppointment && /(onayla|tamamla|tamamlandı|iptal|gelmedi|no.?show|confirm|complete|done|cancel)/.test(text)) {
+      const status: AppointmentStatus = /iptal|cancel/.test(text) ? "cancelled" : /gelmedi|no.?show/.test(text) ? "no_show" : /tamamla|tamamlandı|complete|done/.test(text) ? "completed" : "confirmed";
       const label = { confirmed: t("onaylandı"), completed: t("tamamlandı"), cancelled: t("iptal edildi"), no_show: t("gelmedi olarak işaretlendi"), pending: t("bekliyor") }[status];
       const date = new Date(mentionedAppointment.startAt).toLocaleString(locale, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
       return { body: t("{customer} adlı müşterinin {date} tarihli “{service}” kaydı {status} olarak güncellenecek. Onaylıyor musunuz?", { customer: mentionedAppointment.customerName, date, service: mentionedAppointment.serviceName || t("randevu"), status: label }), actions: [{ label: t("Randevu değişikliğini onayla"), appointmentUpdate: { appointmentId: mentionedAppointment.id, customerName: mentionedAppointment.customerName, status, summary: label } }, { label: t("Randevuyu incele"), href: `/dashboard/randevular?appointment=${encodeURIComponent(mentionedAppointment.id)}` }] };
     }
     const directWaitlist = waitlistRows.find((item) => text.includes(item.customerName.toLocaleLowerCase("tr-TR")));
     if (directWaitlist) lastWaitlistId.current = directWaitlist.id;
-    const mentionedWaitlist = directWaitlist ?? (/onun|bu talep|aynı talep|az önceki/.test(text) ? waitlistRows.find((item) => item.id === lastWaitlistId.current) : undefined);
-    if (mentionedWaitlist && /(ulaşıldı|iletişim|randevuya dönüştü|kapat|tamamla)/.test(text)) {
-      const status = /randevuya dönüştü/.test(text) ? "booked" : /kapat|tamamla/.test(text) ? "closed" : "contacted";
+    const mentionedWaitlist = directWaitlist ?? (/onun|bu talep|aynı talep|az önceki|this request|same request|previous/.test(text) ? waitlistRows.find((item) => item.id === lastWaitlistId.current) : undefined);
+    if (mentionedWaitlist && /(ulaşıldı|iletişim|randevuya dönüştü|kapat|tamamla|contacted|booked|close|complete)/.test(text)) {
+      const status = /randevuya dönüştü|booked/.test(text) ? "booked" : /kapat|tamamla|close|complete/.test(text) ? "closed" : "contacted";
       const summary = status === "booked" ? t("randevuya dönüştü") : status === "closed" ? t("kapatıldı") : t("iletişime geçildi");
       return { body: t("{customer} adlı müşterinin bekleme listesi talebi “{status}” yapılacak. Uygulamamı onaylıyor musunuz?", { customer: mentionedWaitlist.customerName, status: summary }), actions: [{ label: t("Talep değişikliğini onayla"), waitlistUpdate: { itemId: mentionedWaitlist.id, customerName: mentionedWaitlist.customerName, status, summary } }, { label: t("Bekleme listesini aç"), href: "/dashboard/bekleme-listesi" }] };
     }
-    if (/bugün|bekliyor|günlük|öncelik/.test(text)) return { body: `${t("Bugün {today} randevunuz var. {pending} randevu onay, {waitlist} bekleme listesi talebi aksiyon bekliyor.", { today: stats.today, pending: stats.pending, waitlist: stats.waitlist })} ${stats.pending ? t("Önce bekleyen randevuları doğrulamanızı öneririm.") : stats.waitlist ? t("Bekleme listesindeki müşterilere ulaşmanızı öneririm.") : t("Takvim boşluklarını büyüme kampanyasıyla değerlendirmenizi öneririm.")}`, actions: [{ label: t("Randevuları aç"), href: "/dashboard/randevular" }, { label: t("Bekleme listesi"), href: "/dashboard/bekleme-listesi" }] };
-    if (/gelir|kazanç|ciro|para/.test(text)) return { body: t("Tamamlanan randevulardan kaydedilen toplam gelir {total} ₺, bu ay {month} ₺. En çok işlem gören hizmetiniz “{service}”. Fiyat ve hizmet kırılımını büyüme analitiğinde karşılaştırabilirsiniz.", { total: stats.revenue.toLocaleString(locale), month: stats.monthRevenue.toLocaleString(locale), service: stats.topService }), actions: [{ label: t("Büyüme analitiği"), href: "/dashboard/analitik" }] };
-    if (/müşteri|kayıp|sadakat|geri/.test(text)) return { body: `${t("{customers} müşterinin {returning} tanesi tekrar gelmiş; geri dönüş oranı %{returnRate}. İptal ve gelmeme oranı %{lossRate}.", { customers: stats.customers, returning: stats.returningCustomers, returnRate: returnRate.toFixed(1), lossRate: lossRate.toFixed(1) })} ${returnRate < 30 ? t("Uzun süredir gelmeyen müşteriler için geri kazanım akışı başlatın.") : t("Sadakat tabanınız iyi; en değerli müşterilere özel teklif düşünebilirsiniz.")}`, actions: [{ label: t("Müşterileri aç"), href: "/dashboard/musteriler" }, { label: t("Analiz & Büyüme"), href: "/dashboard/analitik#growth-actions" }] };
-    if (/ekip|çalışan|personel|performans/.test(text)) return { body: t("{active}/{total} çalışan aktif. Tamamlanan randevu adedine göre öne çıkan ekip üyesi “{staff}”. Branş, hizmet ataması ve çalışma saatlerini kontrol ederek boş kapasiteyi azaltabilirsiniz.", { active: stats.activeStaff, total: stats.staff, staff: stats.topStaff }), actions: [{ label: t("Çalışanları yönet"), href: "/dashboard/calisanlar" }, { label: t("Çalışma saatleri"), href: "/dashboard/calisma-saatleri" }] };
-    if (/hizmet|fiyat|kategori/.test(text)) return { body: t("{active}/{total} hizmetiniz aktif. En çok tercih edilen hizmet “{service}”. Pasif, fiyatı eksik veya personele atanmamış hizmetleri hizmet yönetiminden tamamlayın.", { active: stats.activeServices, total: stats.services, service: stats.topService }), actions: [{ label: t("Hizmetleri yönet"), href: "/dashboard/hizmetler" }] };
-    if (/büyü|öner|geliştir|kampanya/.test(text)) return { body: t("En güçlü büyüme fırsatınız: {opportunity}. İkinci adım olarak %{lossRate} olan iptal/no-show oranını takip edin.", { opportunity: stats.waitlist ? t("{count} sıcak bekleme listesi talebini randevuya çevirmek", { count: stats.waitlist }) : returnRate < 30 ? t("eski müşterileri geri kazanmak") : t("en popüler hizmetiniz için boş saat kampanyası oluşturmak"), lossRate: lossRate.toFixed(1) }), actions: [{ label: t("Analiz & Büyüme'yi aç"), href: "/dashboard/analitik#growth-actions" }, { label: t("Bekleme listesi"), href: "/dashboard/bekleme-listesi" }] };
-    if (/yorum|puan|itibar/.test(text)) return { body: `${stats.rating ? t("{count} değerlendirmede ortalama puanınız {rating}.", { count: stats.reviews, rating: stats.rating.toFixed(1) }) : t("{count} değerlendirmede ortalama puanınız henüz oluşmadı.", { count: stats.reviews })} ${t("Tamamlanan randevulardan sonra yorum istemek mağaza görünürlüğünü güçlendirir.")}`, actions: [{ label: t("Yorumları aç"), href: "/dashboard/yorumlar" }] };
-    if (/rapor|indir|özet|analiz/.test(text)) return { body: t("{business} için {date} anlık yönetim raporu hazır. Operasyon puanı {score}/100; raporda randevu, gelir, müşteri, ekip, hizmet ve itibar göstergeleri bulunuyor.", { business: business?.name ?? t("İşletmeniz"), date: stats.updatedAt.toLocaleString(locale), score }), actions: [{ label: t("Raporu indir"), report: true }, { label: t("Analitiği aç"), href: "/dashboard/analitik" }] };
+    if (/bugün|bekliyor|günlük|öncelik|today|pending|daily|priorit/.test(text)) return { body: `${t("Bugün {today} randevunuz var. {pending} randevu onay, {waitlist} bekleme listesi talebi aksiyon bekliyor.", { today: stats.today, pending: stats.pending, waitlist: stats.waitlist })} ${stats.pending ? t("Önce bekleyen randevuları doğrulamanızı öneririm.") : stats.waitlist ? t("Bekleme listesindeki müşterilere ulaşmanızı öneririm.") : t("Takvim boşluklarını büyüme kampanyasıyla değerlendirmenizi öneririm.")}`, actions: [{ label: t("Randevuları aç"), href: "/dashboard/randevular" }, { label: t("Bekleme listesi"), href: "/dashboard/bekleme-listesi" }] };
+    if (/gelir|kazanç|ciro|para|revenue|income|earning|sales|money/.test(text)) return { body: t("Tamamlanan randevulardan kaydedilen toplam gelir {total} ₺, bu ay {month} ₺. En çok işlem gören hizmetiniz “{service}”. Fiyat ve hizmet kırılımını büyüme analitiğinde karşılaştırabilirsiniz.", { total: stats.revenue.toLocaleString(locale), month: stats.monthRevenue.toLocaleString(locale), service: stats.topService }), actions: [{ label: t("Büyüme analitiği"), href: "/dashboard/analitik" }] };
+    if (/müşteri|kayıp|sadakat|geri|customer|client|retention|loyal|churn/.test(text)) return { body: `${t("{customers} müşterinin {returning} tanesi tekrar gelmiş; geri dönüş oranı %{returnRate}. İptal ve gelmeme oranı %{lossRate}.", { customers: stats.customers, returning: stats.returningCustomers, returnRate: returnRate.toFixed(1), lossRate: lossRate.toFixed(1) })} ${returnRate < 30 ? t("Uzun süredir gelmeyen müşteriler için geri kazanım akışı başlatın.") : t("Sadakat tabanınız iyi; en değerli müşterilere özel teklif düşünebilirsiniz.")}`, actions: [{ label: t("Müşterileri aç"), href: "/dashboard/musteriler" }, { label: t("Analiz & Büyüme"), href: "/dashboard/analitik#growth-actions" }] };
+    if (/ekip|çalışan|personel|performans|team|staff|employee|performance/.test(text)) return { body: t("{active}/{total} çalışan aktif. Tamamlanan randevu adedine göre öne çıkan ekip üyesi “{staff}”. Branş, hizmet ataması ve çalışma saatlerini kontrol ederek boş kapasiteyi azaltabilirsiniz.", { active: stats.activeStaff, total: stats.staff, staff: stats.topStaff }), actions: [{ label: t("Çalışanları yönet"), href: "/dashboard/calisanlar" }, { label: t("Çalışma saatleri"), href: "/dashboard/calisma-saatleri" }] };
+    if (/hizmet|fiyat|kategori|service|price|categor/.test(text)) return { body: t("{active}/{total} hizmetiniz aktif. En çok tercih edilen hizmet “{service}”. Pasif, fiyatı eksik veya personele atanmamış hizmetleri hizmet yönetiminden tamamlayın.", { active: stats.activeServices, total: stats.services, service: stats.topService }), actions: [{ label: t("Hizmetleri yönet"), href: "/dashboard/hizmetler" }] };
+    if (/büyü|öner|geliştir|kampanya|grow|suggest|recommend|improve|campaign/.test(text)) return { body: t("En güçlü büyüme fırsatınız: {opportunity}. İkinci adım olarak %{lossRate} olan iptal/no-show oranını takip edin.", { opportunity: stats.waitlist ? t("{count} sıcak bekleme listesi talebini randevuya çevirmek", { count: stats.waitlist }) : returnRate < 30 ? t("eski müşterileri geri kazanmak") : t("en popüler hizmetiniz için boş saat kampanyası oluşturmak"), lossRate: lossRate.toFixed(1) }), actions: [{ label: t("Analiz & Büyüme'yi aç"), href: "/dashboard/analitik#growth-actions" }, { label: t("Bekleme listesi"), href: "/dashboard/bekleme-listesi" }] };
+    if (/yorum|puan|itibar|review|rating|reputation/.test(text)) return { body: `${stats.rating ? t("{count} değerlendirmede ortalama puanınız {rating}.", { count: stats.reviews, rating: stats.rating.toFixed(1) }) : t("{count} değerlendirmede ortalama puanınız henüz oluşmadı.", { count: stats.reviews })} ${t("Tamamlanan randevulardan sonra yorum istemek mağaza görünürlüğünü güçlendirir.")}`, actions: [{ label: t("Yorumları aç"), href: "/dashboard/yorumlar" }] };
+    if (/rapor|indir|özet|analiz|report|download|summary|analy/.test(text)) return { body: t("{business} için {date} anlık yönetim raporu hazır. Operasyon puanı {score}/100; raporda randevu, gelir, müşteri, ekip, hizmet ve itibar göstergeleri bulunuyor.", { business: business?.name ?? t("İşletmeniz"), date: stats.updatedAt.toLocaleString(locale), score }), actions: [{ label: t("Raporu indir"), report: true }, { label: t("Analitiği aç"), href: "/dashboard/analitik" }] };
     return { body: t("İşletme operasyon puanınız {score}/100. Bana bugün, randevular, gelir, müşteriler, ekip, hizmetler, yorumlar, büyüme veya yönetim raporu hakkında soru sorabilirsiniz.", { score }), actions: [{ label: t("Genel bakış"), href: "/dashboard" }] };
   }
 
@@ -241,15 +243,15 @@ export function BusinessAssistant() {
     const shown = (display ?? clean).trim();
     const history = messages.slice(-10).map((item) => ({ role: item.role, body: item.body }));
     const normalized = clean.toLocaleLowerCase("tr-TR");
-    const requestedIntent = /gelir|kazanç|ciro|para|tahsilat/.test(normalized) ? "revenue"
-      : /müşteri|sadakat|geri|kayıp/.test(normalized) ? "customers"
-        : /ekip|çalışan|personel|performans/.test(normalized) ? "staff"
-          : /hizmet|fiyat|kategori/.test(normalized) ? "services"
-            : /randevu|bugün|takvim|onay/.test(normalized) ? "appointments"
-              : /bekleme|boş saat/.test(normalized) ? "waitlist"
-                : /yorum|puan|itibar/.test(normalized) ? "reputation"
-                  : /büyü|öner|geliştir|kampanya/.test(normalized) ? "growth"
-                    : /rapor|özet|analiz/.test(normalized) ? "report"
+    const requestedIntent = /gelir|kazanç|ciro|para|tahsilat|revenue|income|earning|sales|payment/.test(normalized) ? "revenue"
+      : /müşteri|sadakat|geri|kayıp|customer|client|retention|loyal|churn/.test(normalized) ? "customers"
+        : /ekip|çalışan|personel|performans|team|staff|employee|performance/.test(normalized) ? "staff"
+          : /hizmet|fiyat|kategori|service|price|categor/.test(normalized) ? "services"
+            : /randevu|bugün|takvim|onay|appointment|booking|today|calendar|confirm/.test(normalized) ? "appointments"
+              : /bekleme|boş saat|waitlist|free slot|open slot/.test(normalized) ? "waitlist"
+                : /yorum|puan|itibar|review|rating|reputation/.test(normalized) ? "reputation"
+                  : /büyü|öner|geliştir|kampanya|grow|suggest|recommend|improve|campaign/.test(normalized) ? "growth"
+                    : /rapor|özet|analiz|report|summary|analy/.test(normalized) ? "report"
                       : "conversation";
     const deterministic = answer(clean);
     setInput(""); setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", body: shown, time: new Date() }]); setThinking(true);

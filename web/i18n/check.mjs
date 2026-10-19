@@ -39,7 +39,7 @@ function loadDictionaries() {
 const T_CALL = /\bt[k]?\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1\s*[,)]/g;
 const TURKISH = /[çğıöşüÇĞİÖŞÜ]/;
 
-function unescape(text, quote) {
+function unescape(text) {
   return text.replace(/\\(["'`\\])/g, "$1").replace(/\\n/g, "\n");
 }
 
@@ -61,8 +61,8 @@ for (const file of files) {
   const originalLines = original.split("\n");
   for (const match of source.matchAll(T_CALL)) {
     if (match[1] === "`" && match[2].includes("${")) continue; // dinamik anahtar (ör. t(errorMessage)) denetlenemez
-    const plain = unescape(match[2], match[1]);
-    const ctx = /^\s*,\s*\{[^}]*?\bctx\s*:\s*["']([\w-]+)["']/.exec(source.slice(match.index + match[0].length - 1))?.[1];
+    const plain = unescape(match[2]);
+    const ctx = /^\s*,\s*\{[^{}()]*?\bctx\s*:\s*["']([\w-]+)["']/.exec(source.slice(match.index + match[0].length - 1))?.[1];
     const key = ctx ? `${ctx}::${plain}` : plain;
     keyCount += 1;
     for (const [locale, dict] of Object.entries(dictionaries)) {
@@ -77,7 +77,8 @@ for (const file of files) {
   const lines = source.split("\n");
   lines.forEach((line, index) => {
     if (!TURKISH.test(line)) return;
-    const withoutT = line.replace(T_CALL, "");
+    // Düzenli ifadeler (niyet kalıpları) metin değildir; sayılmaz.
+    const withoutT = line.replace(T_CALL, "").replace(/(^|[=(:,?&|!]\s*)\/(?:\\.|\[(?:\\.|[^\]\n])*\]|[^\/\n[])+\/[dgimsuy]*/g, "$1");
     if (!TURKISH.test(withoutT)) return;
     if (/^\s*(import|export \* from)/.test(line)) return;
     if (/i18n-ignore/.test(originalLines[index] ?? "") || /i18n-ignore/.test(originalLines[index - 1] ?? "")) return;

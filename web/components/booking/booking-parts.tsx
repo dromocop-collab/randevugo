@@ -3,17 +3,15 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import { CheckCircle2, ChevronLeft, ChevronRight, MoonStar, ShieldCheck, Sun, Sunrise, X } from "lucide-react";
 import type { AvailableAppointmentSlot } from "@/features/appointments/appointment-repository";
 import { dateFromIso, dayPartOf, type DayPart } from "./booking-utils";
 import { useLocale, useT } from "@/i18n/client";
+import { useDateFnsLocale, useDatePatterns } from "@/i18n/date";
 import { localizeHref, tk } from "@/i18n/config";
 import s from "./booking.module.css";
 
-function useDateLocale() {
-  return useLocale() === "tr" ? tr : enGB;
-}
+const useDateLocale = useDateFnsLocale;
 
 /* ━━━ Alt sayfa (iOS benzeri) ━━━ */
 export function BottomSheet({
@@ -105,6 +103,7 @@ export function DateStrip({
 }) {
   const t = useT();
   const dateLocale = useDateLocale();
+  const patterns = useDatePatterns();
   const stripRef = useRef<HTMLDivElement>(null);
   const tomorrow = days[days.indexOf(today) + 1];
 
@@ -132,7 +131,7 @@ export function DateStrip({
         data-date={iso}
         disabled={disabled}
         aria-pressed={selected}
-        aria-label={`${format(date, dateLocale === tr ? "d MMMM EEEE" : "EEEE d MMMM", { locale: dateLocale })}, ${availabilityText}`}
+        aria-label={`${format(date, patterns.dayLong, { locale: dateLocale })}, ${availabilityText}`}
         className={`${s.dateChip} ${stateClass} ${selected ? s.dateChipOn : ""}`}
         onClick={() => onSelect(iso)}
       >
@@ -197,6 +196,7 @@ export function CalendarSheet({
 }) {
   const t = useT();
   const dateLocale = useDateLocale();
+  const patterns = useDatePatterns();
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(dateFromIso(value)));
   const minMonth = startOfMonth(dateFromIso(min));
   const maxMonth = startOfMonth(dateFromIso(max));
@@ -240,7 +240,7 @@ export function CalendarSheet({
           type="button"
           disabled={disabled}
           aria-pressed={selected}
-          aria-label={`${format(day, dateLocale === tr ? "d MMMM yyyy EEEE" : "EEEE d MMMM yyyy", { locale: dateLocale })}, ${label}`}
+          aria-label={`${format(day, patterns.dayYearLong, { locale: dateLocale })}, ${label}`}
           className={`${s.calDay} ${outside ? s.calOutside : ""} ${iso === min ? s.calToday : ""} ${known && count > 0 ? s.calAvail : ""} ${selected ? s.calOn : ""}`}
           onClick={() => { onSelect(iso); onClose(); }}
         >

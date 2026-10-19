@@ -16,7 +16,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · 29 EYLÜL 2026")} title={t("Çerez politikası")} intro={note + t("Hangi çerezlerin neden kullanıldığını, ne zaman çalıştığını ve tercihini nasıl değiştirebileceğini açıklar. Zorunlu olmayan çerezler varsayılan olarak kapalıdır.")} cta={false} sections={[
     { title: t("Çerez nedir?"), body: t("Çerezler ve benzer yerel depolama teknolojileri, tarayıcının hizmeti güvenli ve tutarlı biçimde çalıştırması veya izin verdiğiniz ölçüm ve pazarlama işlemlerini yapması için cihazda küçük bilgiler saklar.") },
     { title: t("Zorunlu çerezler"), body: t("Güvenli oturum, kimlik doğrulama, dolandırıcılığın önlenmesi, dil veya tema, çerez tercihi ve temel form işlevleri için gereklidir. Bu kategori hizmetin çalışması için kullanılır ve tercih panelinden kapatılamaz.") },

@@ -16,7 +16,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · 29 EYLÜL 2026")} title={t("KVKK aydınlatma metni")} intro={note + t("SeninRandevun kapsamında kişisel verilerin hangi amaçlarla, hangi hukuki sebeplerle ve kimlerle işlendiğini açıklar. Platformdaki işletmeler, kendi müşterilerine ilişkin işlemlerde ayrıca veri sorumlusu olabilir.")} cta={false} sections={[
     { title: t("Veri sorumlusu ve iletişim"), body: t("SeninRandevun hizmetinin veri sorumlusuna KVKK kapsamındaki başvurularınız için info@seninrandevun.com adresinden ulaşabilirsiniz. Başvurunun kimlik doğrulaması gerektirmesi halinde yalnızca talebin güvenli biçimde sonuçlandırılması için gerekli ek bilgiler istenir."), bullets: [
       t("Genel destek: info@seninrandevun.com"),

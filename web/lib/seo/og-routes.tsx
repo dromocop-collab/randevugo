@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { categoryDisplayName, seoCategory } from "@/lib/seo/categories";
 import { renderOgCard } from "@/lib/seo/og-card";
+import { LOCALE_LABELS, type Locale, type TFunction } from "@/i18n/config";
 
 /** public/ altındaki yerel görseli data URL olarak okur (yalnızca png/jpg). */
 export async function localImageDataUrl(publicPath: string | undefined): Promise<string | null> {
@@ -17,15 +18,16 @@ export async function localImageDataUrl(publicPath: string | undefined): Promise
   }
 }
 
-/** Kategori tanıtım sayfaları (/kuafor-randevu vb.) için paylaşım kartı. */
-export async function categoryLandingOg(slug: string, title?: string) {
+/** Kategori tanıtım sayfaları (/kuafor-randevu vb.) için paylaşım kartı; metinler t ile etkin dilde yazılır. */
+export async function categoryLandingOg({ t, locale }: { t: TFunction; locale: Locale }, slug: string, title?: string) {
   const category = seoCategory(slug);
-  const label = category?.label ?? categoryDisplayName(slug);
+  const label = t(category?.label ?? categoryDisplayName(slug));
+  const examples = category ? t(category.examples) : "";
   return renderOgCard({
-    eyebrow: `${label} · Online randevu`,
-    title: title ?? `${label} randevunu online al`,
-    subtitle: category ? `${category.examples.charAt(0).toLocaleUpperCase("tr-TR")}${category.examples.slice(1)} için uygun saati seç.` : undefined,
-    chips: ["Ücretsiz", "7/24"],
+    eyebrow: t("{label} · Online randevu", { label }),
+    title: title ?? t("{label} randevunu online al", { label }),
+    subtitle: examples ? t("{examples} için uygun saati seç.", { examples: `${examples.charAt(0).toLocaleUpperCase(LOCALE_LABELS[locale].intl)}${examples.slice(1)}` }) : undefined,
+    chips: [t("Ücretsiz"), "7/24"],
     image: await localImageDataUrl(category?.image),
   });
 }

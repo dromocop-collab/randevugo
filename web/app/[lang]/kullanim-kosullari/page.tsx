@@ -16,7 +16,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · 29 EYLÜL 2026")} title={t("Kullanım koşulları")} intro={note + t("SeninRandevun'u kullanarak hesap güvenliği, içerik doğruluğu, randevu işlemleri ve yasal kullanıma ilişkin bu koşulları kabul edersiniz.")} cta={false} sections={[
     { title: t("Hizmetin kapsamı"), body: t("SeninRandevun; işletmelerin profil, hizmet, çalışan, müsaitlik ve randevu süreçlerini yönetmesini; müşterilerin uygun işletme ve saatleri bulup randevu oluşturmasını sağlayan bir teknoloji platformudur. İşletmenin sunduğu asıl hizmetin tarafı veya sağlayıcısı değildir.") },
     { title: t("Hesap ve güvenlik"), body: t("Kayıt bilgilerinin doğru ve güncel tutulması, giriş ve doğrulama bilgilerinin korunması ve yetkisiz erişimin derhal bildirilmesi kullanıcı sorumluluğundadır. Şüpheli, kötüye kullanıma açık veya mevzuata aykırı hesaplar güvenlik incelemesi süresince sınırlandırılabilir.") },

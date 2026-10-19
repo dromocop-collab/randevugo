@@ -101,7 +101,7 @@ export function buildReport(all: Appointment[], customers: number, days: RangeDa
 
   const insights: Array<{ title: string; text: string; benefit: string; href: string; action: string; badge: string; tone: InsightTone }> = [
     current.length === 0
-      ? { title: t("İlk verinizi oluşturun"), text: t("Performans görünümünü başlatmak için ilk randevunuzu kaydedin."), benefit: t("Analiz ve günlük özetler çalışmaya başlar"), href: "/dashboard/randevular", action: t("Randevu ekle"), badge: t("Başlangıç"), tone: "info" }
+      ? { title: t("İlk verinizi oluşturun"), text: t("Performans görünümünü başlatmak için ilk randevunuzu kaydedin."), benefit: t("Analiz ve günlük özetler çalışmaya başlar"), href: "/dashboard/randevular", action: t("Randevu ekle"), badge: t("Başlangıç", { ctx: "rozet" }), tone: "info" }
       : { title: t("{day} günü kapasiteyi kontrol edin", { day: busiest.label }), text: t("{day}, son {days} gündeki en yoğun gününüz. Çalışma saatlerini ve ekip uygunluğunu bu güne göre düzenleyin.", { day: busiest.label, days }), benefit: t("Yoğun saatlerde daha dengeli iş akışı"), href: "/dashboard/calisma-saatleri", action: t("Saatleri düzenle"), badge: t("Kapasite"), tone: "info" },
     noShowRate > 10
       ? { title: t("Gelmeyen müşterileri azaltın"), text: t("Gelmeme oranınız %{rate}. Randevu teyidi ve zamanında hatırlatma akışını güçlendirin.", { rate: noShowRate }), benefit: t("Boş kalan saatlerin azalması"), href: "/dashboard/otomasyonlar", action: t("Hatırlatmaları aç"), badge: t("Öncelikli"), tone: "warn" }

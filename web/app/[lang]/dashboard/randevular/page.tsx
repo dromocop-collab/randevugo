@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, type Locale as DateLocale } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import { toast } from "sonner";
 import {
   BadgeCheck, Banknote, CalendarClock, CalendarDays, Check, CheckCircle2, CircleX, Clock3, Download, ListChecks, PackagePlus,
@@ -26,7 +25,8 @@ import {
 } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
 import { tk, type TFunction } from "@/i18n/config";
-import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { DATE_FNS_LOCALES, useDateFnsLocale } from "@/i18n/date";
 import type { Appointment, AppointmentServiceLine, AppointmentStatus } from "@/types/appointments";
 import type { Service } from "@/types/service";
 import styles from "./appointments.module.css";
@@ -38,7 +38,7 @@ const PAGE = 40;
 const SOURCE_LABEL: Record<string, string> = { online: tk("Online"), dashboard: tk("Panel"), phone: tk("Telefon"), walk_in: tk("Yürüyerek") };
 const PAYMENT_LABEL: Record<string, string> = { paid: tk("Ödendi"), deposit_paid: tk("Kapora ödendi"), refunded: tk("İade edildi"), unpaid: tk("Ödeme bekliyor") };
 
-function formatDate(value: string, locale: DateLocale = tr) { try { return format(new Date(value), "d MMM yyyy", { locale }); } catch { return value; } }
+function formatDate(value: string, locale: DateLocale = DATE_FNS_LOCALES.tr) { try { return format(new Date(value), "d MMM yyyy", { locale }); } catch { return value; } }
 function formatTime(value: string) { try { return format(new Date(value), "HH:mm"); } catch { return ""; } }
 function servicesOf(item: Appointment) { return [item.serviceName, ...(item.additionalServices ?? []).map((service) => service.name)].filter(Boolean).join(" + "); }
 function csvCell(value: string) { return `"${value.replaceAll('"', '""')}"`; }
@@ -56,7 +56,7 @@ export default function AppointmentsPage() {
   const { businessId, access } = useBusiness();
   const t = useT();
   const intlLocale = useIntlLocale();
-  const dateLocale = useLocale() === "en" ? enGB : tr;
+  const dateLocale = useDateFnsLocale();
   const fmtDate = (value: string) => formatDate(value, dateLocale);
   const money = (value: number) => `${value.toLocaleString(intlLocale)} ₺`;
   const canManageStatus = access?.role !== "staff" || Boolean(access?.permissions.manageAppointments);

@@ -74,7 +74,7 @@ export function HelpCenter({ mode }: { mode: HelpMode }) {
     return () => window.removeEventListener("hashchange", open);
   }, [index]);
 
-  const popular = (business ? POPULAR_BUSINESS : POPULAR_CUSTOMER).map((item) => t(item));
+  const popular = (business ? POPULAR_BUSINESS : POPULAR_CUSTOMER).map((item) => t(item, { ctx: "konu" }));
   const activeTopic = topics.find((topic) => topic.id === category);
 
   return (

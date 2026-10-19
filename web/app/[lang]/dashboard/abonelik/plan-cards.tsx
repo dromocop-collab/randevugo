@@ -170,7 +170,7 @@ export function CompareTable({ plans, currentId }: { plans: PlatformPlan[]; curr
       label: t(item.label),
       cell: (plan: PlatformPlan) => has(plan, item.key)
         ? <span className={css.yes}><Check size={15} strokeWidth={2.6} aria-label={t("Var")} /></span>
-        : <span className={css.no}><Minus size={15} aria-label={t("Yok")} /></span>,
+        : <span className={css.no}><Minus size={15} aria-label={t("Yok", { ctx: "plan" })} /></span>,
     })),
   ];
   return (

@@ -12,5 +12,22 @@
   "Yakınındaki kuaför, berber, güzellik, sağlık ve bakım işletmelerini keşfet; müsait saatleri gör ve online randevunu anında oluştur.": "Discover hair salons, barbers, beauty, health and wellness businesses near you; see available times and book online instantly.",
   "SeninRandevun ile yakındaki işletmeleri keşfedin": "Discover businesses near you with SeninRandevun",
   "SeninRandevun — İşletme Keşfet ve Randevu Al": "SeninRandevun — Discover Businesses and Book",
-  "Yakınınızdaki en iyi işletmeleri keşfedin, uygun saati seçin ve online randevunuzu anında oluşturun.": "Discover the best businesses near you, pick a convenient time and book your appointment online instantly."
+  "Yakınınızdaki en iyi işletmeleri keşfedin, uygun saati seçin ve online randevunuzu anında oluşturun.": "Discover the best businesses near you, pick a convenient time and book your appointment online instantly.",
+  "sayac::Şehir": "Cities",
+  "sayac::Randevu": "Appointments",
+  "sube::Merkez": "HQ",
+  "konu::İptal": "Cancellation",
+  "adim::Tamamlandı": "Done",
+  "abonelik::Paketler": "Plans",
+  "rozet::Başlangıç": "Getting started",
+  "plan::Yok": "Not included",
+  "karsilastirma::Konu": "Topic",
+  "puan-sayac::Puan": "Points",
+  "bildirim::Kapalı": "Off",
+  "bildirim::Açık": "On",
+  "Ses seviyesi": "Volume",
+  "{name} sesini dinle": "Preview the {name} sound",
+  "Dinle": "Preview",
+  "Randevu sesi": "Appointment sound",
+  "Randevu bildirim sesi": "Appointment notification sound"
 }

@@ -238,7 +238,7 @@ export default function BranchesPage() {
                   </div>
                 </header>
                 <div className={ws.row}>
-                  {isHq ? <Badge size="sm" tone="accent" icon={Crown}>{t("Merkez")}</Badge> : null}
+                  {isHq ? <Badge size="sm" tone="accent" icon={Crown}>{t("Merkez", { ctx: "sube" })}</Badge> : null}
                   <Badge size="sm" tone={status.tone} dot>{t(status.label)}</Badge>
                   {selected ? <Badge size="sm" tone="green" icon={BadgeCheck}>{t("Şu an yönetiliyor")}</Badge> : null}
                 </div>

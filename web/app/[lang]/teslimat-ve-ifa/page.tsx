@@ -17,7 +17,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · {date}", { date: t(TERMS_DATE_LABEL) })} title={t("Teslimat ve ifa koşulları")} intro={note + t("SeninRandevun bir yazılım hizmetidir. Satın alınan paketler fiziksel ürün değildir; kargo veya elden teslimat yapılmaz, hizmet elektronik ortamda sunulur.")} cta={false} sections={[
     { title: t("Kargo ve fiziksel teslimat"), body: t("Satışı yapılan işletme paketleri bulut tabanlı yazılım kullanım hakkıdır. Kargo, gönderim veya teslimat ücreti yoktur; adres bilgisi yalnız faturalama amacıyla kullanılır.") },
     { title: t("Teslim zamanı"), body: t("Ödeme, ödeme kuruluşu tarafından onaylandığı anda paket işletme hesabına otomatik olarak tanımlanır; bu işlem genellikle birkaç saniye sürer. Paketin durumu ve bitiş tarihi işletme panelindeki Abonelik ekranında ve mobil uygulamalarda görüntülenir.") },

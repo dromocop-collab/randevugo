@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { addDays, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import type { Locale as DateLocale } from "date-fns";
 import { BadgeCheck, Check, Clock3, CreditCard, ExternalLink, Pencil, Plus, UserRound } from "lucide-react";
 import { AppointmentCustomFields } from "@/features/booking-fields/appointment-custom-fields";
 import { Button, KeyValueList, Sheet, StatusPill, appointmentStatusMeta } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
-import { useIntlLocale, useLocale, useT } from "@/i18n/client";
+import { useIntlLocale, useT } from "@/i18n/client";
+import { DATE_FNS_LOCALES, useDateFnsLocale } from "@/i18n/date";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
 import styles from "./calendar.module.css";
 
@@ -17,9 +17,7 @@ export const HOUR_H = 64;
 export const UNASSIGNED = "__none";
 
 /** date-fns biçimlendirme dili (etkin site diline göre). */
-export function useDateLocale(): DateLocale {
-  return useLocale() === "en" ? enGB : tr;
-}
+export const useDateLocale: () => DateLocale = useDateFnsLocale;
 
 /* ── Zaman ızgarası (gün: ekip sütunları, hafta: gün sütunları) ── */
 export type GridColumn = { key: string; label: string; day: Date; today: boolean; items: Appointment[]; staffId?: string };
@@ -260,7 +258,7 @@ export function getRange(cursor: Date, view: ViewMode) {
   const monthStart = startOfMonth(cursor), monthEnd = endOfMonth(cursor);
   return { start: startOfWeek(monthStart, { weekStartsOn: 1 }), end: endOfWeek(monthEnd, { weekStartsOn: 1 }) };
 }
-export function rangeTitle(cursor: Date, view: ViewMode, locale: DateLocale = tr) {
+export function rangeTitle(cursor: Date, view: ViewMode, locale: DateLocale = DATE_FNS_LOCALES.tr) {
   if (view === "gun") return format(cursor, "d MMMM, EEEE", { locale });
   if (view === "ay") return format(cursor, "MMMM yyyy", { locale });
   const start = startOfWeek(cursor, { weekStartsOn: 1 }), end = endOfWeek(cursor, { weekStartsOn: 1 });

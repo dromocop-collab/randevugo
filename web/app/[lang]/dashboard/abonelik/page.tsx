@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "@/i18n/link";
+import { LegalConsentText } from "./legal-consent-text";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, ReceiptText, RefreshCcw, ShieldCheck, TriangleAlert } from "lucide-react";
@@ -116,7 +117,7 @@ export default function SubscriptionPage() {
       <section className={css.section} aria-labelledby="plans-title" id="paketler">
         <div className={css.sectionHead}>
           <div>
-            <h2 id="plans-title">{trialing ? t("Deneme bitmeden paketinizi seçin") : t("Paketler")}</h2>
+            <h2 id="plans-title">{trialing ? t("Deneme bitmeden paketinizi seçin") : t("Paketler", { ctx: "abonelik" })}</h2>
             <p>{trialing ? t("Deneme süresince tüm özellikler açık. Kalan gün, seçtiğiniz paketin önüne eklenir.") : t("İstediğiniz zaman geçiş yapın; verileriniz her zaman korunur.")}</p>
           </div>
           {plans.length ? <Segmented label={t("Ödeme dönemi")} options={cycleOptions} value={cycle} onChange={setCycle} /> : null}
@@ -186,11 +187,7 @@ export default function SubscriptionPage() {
           <label className={css.terms}>
             <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
             <span>
-              {t("Şunları okudum ve onaylıyorum:")}{" "}
-              <Link href="/on-bilgilendirme-formu" target="_blank">{t("Ön Bilgilendirme Formu")}</Link>,{" "}
-              <Link href="/mesafeli-satis-sozlesmesi" target="_blank">{t("Mesafeli Satış Sözleşmesi")}</Link>,{" "}
-              <Link href="/iptal-ve-iade" target="_blank">{t("İptal ve İade Koşulları")}</Link>.{" "}
-              {t("Hizmetin ödeme anında başlamasını talep ediyorum ve bu nedenle cayma hakkımın bulunmadığını biliyorum.")}
+              <LegalConsentText kind="plan" />
             </span>
           </label>
         ) : null}

@@ -361,7 +361,7 @@ export default function LiveOperationsPage() {
                 <div className={l.meta}>
                   <span><Clock3 size={13} aria-hidden /> {t("Katılım {time}", { time: timeAt(entry.joinedAt) })}</span>
                   <span><Timer size={13} aria-hidden /> {t("{duration} bekliyor", { duration: durationLabel(waited, t) })}</span>
-                  {estimate && <span className={l.metaAccent}>{waitEstimateLabel(estimate)}</span>}
+                  {estimate && <span className={l.metaAccent}>{waitEstimateLabel(estimate, t)}</span>}
                 </div>
                 {entry.status === "on_the_way" && <span className={cx(l.flag, l.flagInfo)}><ArrowRight size={14} aria-hidden /> {entry.declaredEtaMinutes ? t("Yola çıktı · Yaklaşık geliş: {minutes} dk", { minutes: `${entry.declaredEtaMinutes}${entry.declaredEtaMinutes === 20 ? "+" : ""}` }) : t("Yola çıktı")}</span>}
                 {entry.presenceConfirmedAt && WAITING.includes(entry.status) && <span className={cx(l.flag, l.flagOk)}><CheckCircle2 size={14} aria-hidden /> {t("Geliyorum onayı verildi")}</span>}

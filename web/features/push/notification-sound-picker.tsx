@@ -9,6 +9,7 @@ import {
   subscribeSoundPreference,
 } from "@/features/push/notification-sound";
 import { DEFAULT_SOUND_PREFERENCE, SOUND_PRESETS, getSoundPreset, type SoundPreference } from "@/features/push/notification-sound-presets";
+import { useT } from "@/i18n/client";
 import styles from "./notification-sound-picker.module.css";
 
 /** Seçili randevu sesi tercihi (cihazda anında; hesapla eşitleme useNotificationSoundSync ile). */
@@ -18,12 +19,13 @@ export function useSoundPreference(): SoundPreference {
 
 /** Ses seviyesi kaydırıcısı (0–100). Bırakınca seçili sesi o seviyede çalar. */
 export function SoundVolumeSlider({ preference, compact = false }: { preference: SoundPreference; compact?: boolean }) {
+  const t = useT();
   const id = useId();
   const percent = Math.round(preference.volume * 100);
   const Icon = preference.volume === 0 ? VolumeX : preference.volume < 0.5 ? Volume1 : Volume2;
   return (
     <div className={compact ? `${styles.volume} ${styles.volumeCompact}` : styles.volume}>
-      <label htmlFor={id}><Icon size={16} aria-hidden="true" /> <span>Ses seviyesi</span></label>
+      <label htmlFor={id}><Icon size={16} aria-hidden="true" /> <span>{t("Ses seviyesi")}</span></label>
       <input
         id={id}
         type="range"
@@ -50,10 +52,11 @@ export function SoundVolumeSlider({ preference, compact = false }: { preference:
  * Ayarlar sayfasında (tam) kullanılır; site yardımcısında CompactSoundPicker.
  */
 export function NotificationSoundGrid({ preference }: { preference: SoundPreference }) {
+  const t = useT();
   const labelId = useId();
   return (
     <div className={styles.grid} role="radiogroup" aria-labelledby={labelId} data-muted={preference.muted ? "true" : undefined}>
-      <span id={labelId} className={styles.srOnly}>Randevu bildirim sesi</span>
+      <span id={labelId} className={styles.srOnly}>{t("Randevu bildirim sesi")}</span>
       {SOUND_PRESETS.map((preset, index) => {
         const selected = preset.id === preference.soundId;
         return (
@@ -69,9 +72,9 @@ export function NotificationSoundGrid({ preference }: { preference: SoundPrefere
               }}
             >
               <span className={styles.tileIndex} aria-hidden="true">{selected ? <Check size={14} /> : index + 1}</span>
-              <span className={styles.tileText}><b>{preset.name}</b><small>{preset.description}</small></span>
+              <span className={styles.tileText}><b>{t(preset.name)}</b><small>{t(preset.description)}</small></span>
             </button>
-            <button type="button" className={styles.play} onClick={() => previewNotificationSound(preset.id)} aria-label={`${preset.name} sesini dinle`} title="Dinle">
+            <button type="button" className={styles.play} onClick={() => previewNotificationSound(preset.id)} aria-label={t("{name} sesini dinle", { name: t(preset.name) })} title={t("Dinle")}>
               <Play size={14} aria-hidden="true" />
             </button>
           </div>
@@ -83,13 +86,14 @@ export function NotificationSoundGrid({ preference }: { preference: SoundPrefere
 
 /** Sitedeki işletme yardımcısı için küçük seçici: açılır liste + ▶ + seviye. */
 export function CompactSoundPicker() {
+  const t = useT();
   const preference = useSoundPreference();
   const id = useId();
   const preset = getSoundPreset(preference.soundId);
   return (
     <div className={styles.compact}>
       <div className={styles.compactRow}>
-        <label htmlFor={id} className={styles.compactLabel}>Randevu sesi</label>
+        <label htmlFor={id} className={styles.compactLabel}>{t("Randevu sesi")}</label>
         <select
           id={id}
           value={preset.id}
@@ -99,9 +103,9 @@ export function CompactSoundPicker() {
             previewNotificationSound(event.target.value);
           }}
         >
-          {SOUND_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          {SOUND_PRESETS.map((item) => <option key={item.id} value={item.id}>{t(item.name)}</option>)}
         </select>
-        <button type="button" className={styles.play} onClick={() => previewNotificationSound(preset.id)} aria-label={`${preset.name} sesini dinle`} disabled={preference.muted}>
+        <button type="button" className={styles.play} onClick={() => previewNotificationSound(preset.id)} aria-label={t("{name} sesini dinle", { name: t(preset.name) })} disabled={preference.muted}>
           <Play size={14} aria-hidden="true" />
         </button>
       </div>

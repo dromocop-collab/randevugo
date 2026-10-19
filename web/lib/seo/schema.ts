@@ -29,20 +29,21 @@ export function organizationJsonLd(): JsonLdObject {
       email: SITE_CONTACT.email,
       contactType: "customer service",
       areaServed: "TR",
-      availableLanguage: ["Turkish"],
+      availableLanguage: ["Turkish", "English"],
     }],
     sameAs: [...SITE_SAME_AS],
   };
 }
 
-export function websiteJsonLd(): JsonLdObject {
+/** Site açıklaması etkin dilde verilir (t); verilmezse Türkçe. */
+export function websiteJsonLd(t?: (source: string) => string, locale?: Locale): JsonLdObject {
   return {
     "@type": "WebSite",
     "@id": WEBSITE_ID,
     url: SITE_URL,
     name: SITE_NAME,
-    description: SITE_DESCRIPTION,
-    inLanguage: SITE_LANGUAGE,
+    description: t ? t(SITE_DESCRIPTION) : SITE_DESCRIPTION,
+    inLanguage: locale ? LOCALE_LABELS[locale].intl : SITE_LANGUAGE,
     publisher: { "@id": ORGANIZATION_ID },
     potentialAction: {
       "@type": "SearchAction",

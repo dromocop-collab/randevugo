@@ -427,7 +427,7 @@ export default function CustomerAccountPage() {
             <button type="button" className={s.stat} onClick={()=>{setFilter("upcoming");selectTab("appointments")}}><b>{loading?"–":upcoming.length}</b><small>{t("Yaklaşan")}</small></button>
             <button type="button" className={s.stat} onClick={()=>{setFilter("history");selectTab("appointments")}}><b>{loading?"–":completed.length}</b><small>{t("Geçmiş")}</small></button>
             <button type="button" className={s.stat} onClick={()=>selectTab("favorites")}><b>{loading?"–":favorites.length}</b><small>{t("Favori")}</small></button>
-            <button type="button" className={s.stat} onClick={()=>selectTab("benefits")}><b>{loading?"–":totalLoyaltyPoints}</b><small>{t("Puanlar")}</small></button>
+            <button type="button" className={s.stat} onClick={()=>selectTab("benefits")}><b>{loading?"–":totalLoyaltyPoints}</b><small>{t("Puan", { ctx: "puan-sayac" })}</small></button>
           </div>
         </div>
         <div className={s.heroMascot} aria-hidden="true"><RoviMascot size={132} mood={next?"happy":"wave"} alt=""/></div>
@@ -467,7 +467,7 @@ export default function CustomerAccountPage() {
             <div className={s.head}><div><span className={s.eyebrow}>{t("Randevularım")}</span><h2>{t("Tüm planınız tek akışta.")}</h2></div><Link href="/kesfet" className={s.headLink}><CalendarPlus size={15}/> {t("Yeni")}</Link></div>
             <div className={s.toolbar}>
               <label className={s.search}><Search size={18} aria-hidden="true"/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder={t("İşletme, hizmet veya çalışan ara…")} aria-label={t("Randevularda ara")} enterKeyHint="search"/>{search&&<button type="button" className={s.iconBtn} onClick={()=>setSearch("")} aria-label={t("Aramayı temizle")}><X size={16}/></button>}</label>
-              <div className={s.segment} role="group" aria-label={t("Randevu filtresi")}>{([["all",tk("Tümü")],["upcoming",tk("Yaklaşan")],["history",tk("Geçmiş")],["cancelled",tk("İptal edilen")]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={filter===key} className={`${s.seg} ${filter===key?s.segOn:""}`} onClick={()=>setFilter(key)}>{t(label)}{!loading&&<small>{filterCounts[key]}</small>}</button>)}</div>
+              <div className={s.segment} role="group" aria-label={t("Randevu filtresi")}>{([["all",tk("Tümü")],["upcoming",tk("Yaklaşan")],["history",tk("Geçmiş")],["cancelled",tk("İptal")]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={filter===key} className={`${s.seg} ${filter===key?s.segOn:""}`} onClick={()=>setFilter(key)}>{t(label)}{!loading&&<small>{filterCounts[key]}</small>}</button>)}</div>
             </div>
             {loading?<div className={s.skel}>{[1,2,3].map(x=><i key={x}/>)}</div>:loadError?<ErrorBox message={t(loadError)} onRetry={()=>setReloadKey(value=>value+1)}/>:<>
               {filtered.length?<div className={s.list}>{filtered.map((item,index)=><AppointmentRow key={item.id} index={Math.min(index,10)} item={item} now={now} reviewed={reviewedIds.has(item.id)} {...rowHandlers(item)}/>)}</div>

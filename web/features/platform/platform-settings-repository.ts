@@ -29,11 +29,12 @@ const DEFAULT_SETTINGS: Omit<PlatformSettings, "id" | "createdAt" | "updatedAt">
     showDiscoveryPage: true,
     ...DISABLED_LIVE_FEATURE_FLAGS,
   },
+  // Süper admin ayar varsayılanları (iç kullanım, Türkçe kalır). i18n-ignore
   seo: {
     metaTitle: "SeninRandevun — Online Randevu Sistemi",
-    metaDescription:
+    metaDescription: // i18n-ignore
       "Türkiye'nin #1 akıllı online randevu platformu. Kuaför, güzellik merkezi, berber, sağlık, spor ve daha fazlası için hızlı randevu alın.",
-    metaKeywords: "online randevu, randevu sistemi, kuaför randevu, berber randevu",
+    metaKeywords: "online randevu, randevu sistemi, kuaför randevu, berber randevu", // i18n-ignore
   },
   social: {},
   announcement: {

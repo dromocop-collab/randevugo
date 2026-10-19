@@ -420,7 +420,6 @@
   "Tüm Kategoriler": "All Categories",
   "Berber, kuaför, güzellik merkezi veya hizmet ara...": "Search barbers, hair salons, beauty centers, or services...",
   "Tüm Şehirler": "All Cities",
-  "Arama yap": "Search",
   "Servis": "Repair Services",
   "Yeni işletmeler hazırlanıyor": "New businesses are on the way",
   "Bu alanda yayınlanan işletme olduğunda liste otomatik güncellenir.": "This list updates automatically as businesses go live in this area.",
@@ -690,5 +689,11 @@
   "Teknik Servisler": "Repair Services",
   "teknik servis": "repair service",
   "tamir, bakım ve teknik destek": "repairs, maintenance, and tech support",
-  "Profesyonel Hizmet": "Professional Service"
+  "Profesyonel Hizmet": "Professional Service",
+  "{label} · Online randevu": "{label} · Online booking",
+  "{label} randevunu online al": "{label}: book online",
+  "{examples} için uygun saati seç.": "Pick a convenient time for {examples}.",
+  "Kuaför · Berber · Güzellik · Sağlık": "Hair · Barber · Beauty · Health",
+  "Hizmetleri, fiyatları ve müsait saatleri karşılaştır.": "Compare services, prices and available times.",
+  "arama::Ara": "Search"
 }

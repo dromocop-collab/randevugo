@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "@/i18n/link";
+import { LegalConsentText } from "./legal-consent-text";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MessageSquareText, Plus } from "lucide-react";
@@ -87,11 +87,7 @@ export function SmsCreditsPanel({ businessId, quota, unlimited, needsBilling }: 
         <label className={css.terms}>
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>
-            {t("Şunları okudum ve onaylıyorum:")}{" "}
-            <Link href="/on-bilgilendirme-formu" target="_blank">{t("Ön Bilgilendirme Formu")}</Link>,{" "}
-            <Link href="/mesafeli-satis-sozlesmesi" target="_blank">{t("Mesafeli Satış Sözleşmesi")}</Link>,{" "}
-            <Link href="/iptal-ve-iade" target="_blank">{t("İptal ve İade Koşulları")}</Link>.{" "}
-            {t("Kredinin ödeme anında tanımlanmasını talep ediyorum ve bu nedenle cayma hakkımın bulunmadığını biliyorum.")}
+            <LegalConsentText kind="sms" />
           </span>
         </label>
       </ConfirmSheet>

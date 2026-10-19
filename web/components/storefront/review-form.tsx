@@ -8,7 +8,7 @@ import { uploadReviewImage } from "@/lib/firebase/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, PenLine } from "lucide-react";
-import { useLocale, useT } from "@/i18n/client";
+import { useT } from "@/i18n/client";
 import { tk } from "@/i18n/config";
 
 interface ReviewFormProps {
@@ -36,7 +36,6 @@ export function ReviewForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const t = useT();
-  const locale = useLocale();
 
   if (submitted) {
     return (
@@ -201,7 +200,7 @@ export function ReviewForm({
                     ? t("İyi")
                     : displayRating === 2
                       // "Orta" şablonlardaki "Orta" (uzunluk) ile çakışmasın diye puan için ayrı anahtar
-                      ? locale === "tr" ? "Orta" /* i18n-ignore */ : t("Orta (puan)")
+                      ? t("Orta", { ctx: "puan" })
                       : t("Kötü")}
             </span>
           )}

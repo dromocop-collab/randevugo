@@ -39,9 +39,9 @@ export function getMessagingIfSupported(): Promise<Messaging | null> {
 function waitForActive(registration: ServiceWorkerRegistration, timeoutMs = 10_000) {
   if (registration.active) return Promise.resolve();
   const incoming = registration.installing ?? registration.waiting;
-  if (!incoming) return Promise.reject(new Error("Service worker bulunamadı."));
+  if (!incoming) return Promise.reject(new Error("Service worker bulunamadı.")); // i18n-ignore — iç hata
   return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error("Service worker etkinleşmedi.")), timeoutMs);
+    const timer = window.setTimeout(() => reject(new Error("Service worker etkinleşmedi.")), timeoutMs); // i18n-ignore — iç hata
     incoming.addEventListener("statechange", () => {
       if (incoming.state === "activated") {
         window.clearTimeout(timer);

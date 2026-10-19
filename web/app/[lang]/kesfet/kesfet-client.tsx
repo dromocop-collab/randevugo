@@ -638,7 +638,7 @@ function ComparisonModal({ businesses, onClose, onRemove }: { businesses: Busine
     { label: t("Kategori"), render: (business: Business) => canonicalBusinessCategory(business.category) },
     { label: t("Güven"), render: (business: Business) => business.isVerified ? t("Doğrulanmış işletme") : t("Standart profil") },
     { label: t("Randevu değişikliği"), render: (business: Business) => business.allowReschedule === false ? t("Kapalı") : t("Kullanılabilir") },
-    { label: t("İptal"), render: (business: Business) => business.allowCancellation === false ? t("Kapalı") : t("Kullanılabilir") },
+    { label: t("İptal", { ctx: "konu" }), render: (business: Business) => business.allowCancellation === false ? t("Kapalı") : t("Kullanılabilir") },
   ];
   const comparisonStyle = { "--comparison-count": Math.max(1, businesses.length) } as CSSProperties;
 

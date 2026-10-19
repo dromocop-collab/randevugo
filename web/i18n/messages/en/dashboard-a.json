@@ -368,7 +368,7 @@
     "one": "{count} review",
     "other": "{count} reviews"
   },
-  "Bağlı": "Linked",
+  "Bağlı": "Connected",
   "Bekliyor": "Pending",
   "{sector} hizmet kütüphanesi": "{sector} service library",
   "{type} için uygun başlıkları seçin; içlerindeki hazır hizmetler eklensin. Fiyat girilene kadar müşterilere gösterilmez.": "Select the groups that fit a {type}; their ready-made services will be added. They stay hidden from customers until priced.",

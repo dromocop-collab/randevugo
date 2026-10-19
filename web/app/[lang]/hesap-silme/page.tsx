@@ -18,7 +18,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · 17 EKİM 2026")} title={t("Hesap ve veri silme")} intro={note + t("SeninRandevun hesabınızı ve hesabınıza bağlı verileri istediğiniz zaman, kimseye sormadan kalıcı olarak silebilirsiniz. Bu sayfa silme adımlarını, nelerin silindiğini ve yasal zorunluluk nedeniyle nelerin bir süre saklandığını açıklar.")} cta={false} sections={[
     { title: t("Web sitesinden silme"), body: t("Silme işlemi birkaç saniye sürer ve geri alınamaz."), bullets: [
       t("seninrandevun.com adresinde hesabınıza giriş yapın."),

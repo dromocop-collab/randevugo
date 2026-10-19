@@ -17,7 +17,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · {date}", { date: t(TERMS_DATE_LABEL) })} title={t("İptal ve iade koşulları")} intro={note + t("SeninRandevun işletme paketleri web üzerinden dönemlik (aylık veya yıllık) peşin satılır ve kendiliğinden yenilenmez. Bu sayfa, Mesafeli Satış ve Abonelik Sözleşmesi'nin ayrılmaz parçasıdır.")} cta={false} sections={[
     { title: t("Otomatik yenileme yok"), body: t("Satın alınan dönem sonunda paket kendiliğinden sona erer; kartınızdan onayınız olmadan yeni bir çekim yapılmaz. Bu nedenle ayrıca abonelik iptali yapmanız gerekmez.") },
     { title: t("Kullanımı bırakma"), body: t("Paketi dönem içinde kullanmayı dilediğiniz zaman bırakabilirsiniz; erişiminiz ödenen dönem sonuna kadar açık kalır. Kayıtlarınız (randevu, müşteri, hizmet) dönem bitince silinmez; yeniden paket aldığınızda kaldığınız yerden devam edersiniz. Hesabınızın kalıcı olarak silinmesini ayrıca talep edebilirsiniz.") },

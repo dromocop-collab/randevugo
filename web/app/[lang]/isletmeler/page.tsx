@@ -131,7 +131,7 @@ export default async function BusinessesPage() {
       <dl className={styles.proof} data-reveal="">
         {showCounts && counts ? <>
           <div><dt>{t("Yayında işletme")}</dt><dd>{counts.businesses.toLocaleString(intlLocale)}</dd></div>
-          <div><dt>{t("Şehir")}</dt><dd>{counts.cities.toLocaleString(intlLocale)}</dd></div>
+          <div><dt>{t("Şehir", { ctx: "sayac" })}</dt><dd>{counts.cities.toLocaleString(intlLocale)}</dd></div>
         </> : <>
           <div><dt>{t("randevu, ekip, müşteri ve kasa")}</dt><dd>{t("Tek panel")}</dd></div>
           <div><dt>{t("online randevu sayfası")}</dt><dd>7/24</dd></div>

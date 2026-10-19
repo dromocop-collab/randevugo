@@ -19,7 +19,7 @@ import {
   type User,
 } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
-import { tk } from "@/i18n/config";
+import { LOCALE_LABELS, tk } from "@/i18n/config";
 import { browserLocale } from "@/i18n/browser";
 
 function getAuthInstance() {
@@ -93,7 +93,7 @@ function socialAuthProvider(provider: SocialProvider) {
   const apple = new OAuthProvider("apple.com");
   apple.addScope("email");
   apple.addScope("name");
-  apple.setCustomParameters({ locale: browserLocale() === "en" ? "en_US" : "tr" });
+  apple.setCustomParameters({ locale: LOCALE_LABELS[browserLocale()].og });
   return apple;
 }
 

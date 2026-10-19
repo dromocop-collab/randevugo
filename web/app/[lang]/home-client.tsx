@@ -176,7 +176,7 @@ export function HomeInteractive({ initialData, intro, art }: { initialData?: Hom
 
           {hasStats && stats ? <dl className={styles.stats} aria-label={t("SeninRandevun'da şu anda")}>
             <div><dt>{t("Yayında işletme")}</dt><dd>{formatCount(stats.totalBusinesses, intlLocale)}</dd></div>
-            <div><dt>{t("Şehir")}</dt><dd>{formatCount(stats.cityCount, intlLocale)}</dd></div>
+            <div><dt>{t("Şehir", { ctx: "sayac" })}</dt><dd>{formatCount(stats.cityCount, intlLocale)}</dd></div>
             <div><dt>{t("Aktif kategori")}</dt><dd>{formatCount(activeCategoryCount, intlLocale)}</dd></div>
           </dl> : <ul className={styles.trustRow} aria-label={t("Neden SeninRandevun")}>
             <li><BadgeCheck size={14} aria-hidden="true" /> {t("Müşteriler için ücretsiz")}</li>

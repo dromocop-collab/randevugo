@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { tk } from "@/i18n/config";
-import { useLocale, useT } from "@/i18n/client";
+import { useT } from "@/i18n/client";
 
 const DEFAULT_CATEGORIES: { value: string; label: string }[] = [
   { value: "", label: tk("Tüm Kategoriler") },
@@ -51,7 +51,6 @@ interface SearchBarProps {
 
 export function SearchBar({ onSearch, cities, dynamicCategories, className }: SearchBarProps) {
   const t = useT();
-  const locale = useLocale();
   const [searchText, setSearchText] = useState("");
   const [category, setCategory] = useState("");
   const [city, setCity] = useState("");
@@ -143,8 +142,8 @@ export function SearchBar({ onSearch, cities, dynamicCategories, className }: Se
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          {/* "Ara" sözlükte "Call" (telefon) anlamında kullanılıyor; arama düğmesi için ayrı anahtar. */}
-          {locale === "tr" ? "Ara" : t("Arama yap")}
+          {/* "Ara" sözlükte "Call" (telefon) anlamında; arama düğmesi bağlamla ayrılır. */}
+          {t("Ara", { ctx: "arama" })}
         </button>
       </div>
     </form>

@@ -39,8 +39,8 @@ const STATUS_LABEL: Record<PushStatus, string> = {
   loading: tk("Kontrol ediliyor"),
   unsupported: tk("Desteklenmiyor"),
   blocked: tk("Engellendi"),
-  off: tk("Bildirimler kapalı"),
-  on: tk("Bildirimler açık"),
+  off: tk("Kapalı"),
+  on: tk("Açık"),
 };
 
 function StatusIcon({ status }: { status: PushStatus }) {
@@ -102,7 +102,7 @@ export function PushToggleCard({ audience, className, appearance = "card" }: { a
               {busy && <LoaderCircle className={`animate-spin ${styles.switchSpin}`} size={13} aria-hidden="true" />}
             </button>
           ) : (
-            <span className={styles.badge}>{t(STATUS_LABEL[status])}</span>
+            <span className={styles.badge}>{t(STATUS_LABEL[status], { ctx: "bildirim" })}</span>
           )}
         </div>
         {showSound && (
@@ -147,7 +147,7 @@ export function PushToggleCard({ audience, className, appearance = "card" }: { a
             <StatusIcon status={status} />
           </span>
           <div className="min-w-0" aria-live="polite">
-            <strong className="text-sm text-[var(--text-1)]">{t(STATUS_LABEL[status])}</strong>
+            <strong className="text-sm text-[var(--text-1)]">{t(STATUS_LABEL[status], { ctx: "bildirim" })}</strong>
             <p className="mt-1 text-xs text-[var(--text-3)]">{statusNote(status, audience, signedIn, t)}</p>
           </div>
         </div>

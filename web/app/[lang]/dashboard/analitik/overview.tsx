@@ -73,7 +73,7 @@ export function AnalyticsOverview() {
 
       <div className={studio.stats}>
         <StatTile accent icon={Wallet} label={t("Dönem geliri")} value={currency(report.revenue)} hint={<Delta value={report.revenueChange} note={t("tamamlanan randevular")} />} />
-        <StatTile icon={CalendarCheck2} label={t("Randevu")} value={report.total} hint={<Delta value={report.appointmentChange} note={t("{count} tamamlandı", { count: report.completed })} />} />
+        <StatTile icon={CalendarCheck2} label={t("Randevu", { ctx: "sayac" })} value={report.total} hint={<Delta value={report.appointmentChange} note={t("{count} tamamlandı", { count: report.completed })} />} />
         <StatTile icon={Gauge} label={t("Doluluk kalitesi")} value={t("%{percent}", { percent: report.completionRate })} hint={t("%{percent} gelmedi", { percent: report.noShowRate })} />
         <StatTile icon={UsersRound} label={t("Müşteri tabanı")} value={report.customers} hint={t("toplam kayıtlı müşteri")} />
       </div>
@@ -127,7 +127,7 @@ export function AnalyticsOverview() {
           <div className={css.tableWrap}>
             <table className={css.table}>
               <caption className={studio.srOnly}>{t("{period} prim raporu", { period })}</caption>
-              <thead><tr><th scope="col">{t("Çalışan")}</th><th scope="col">{t("Randevu")}</th><th scope="col">{t("Ciro")}</th><th scope="col">{t("Oran")}</th><th scope="col">{t("Hak edilen")}</th><th scope="col" title={t("Tüm zamanlarda hak edilen − ödenen")}>{t("Ödenmemiş")}</th></tr></thead>
+              <thead><tr><th scope="col">{t("Çalışan")}</th><th scope="col">{t("Randevu", { ctx: "sayac" })}</th><th scope="col">{t("Ciro")}</th><th scope="col">{t("Oran")}</th><th scope="col">{t("Hak edilen")}</th><th scope="col" title={t("Tüm zamanlarda hak edilen − ödenen")}>{t("Ödenmemiş")}</th></tr></thead>
               <tbody>
                 {commission.rows.map((row) => (
                   <tr key={row.staffId}>

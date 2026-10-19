@@ -16,7 +16,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · 29 EYLÜL 2026")} title={t("Gizlilik politikası")} intro={note + t("SeninRandevun web, iOS ve Android hizmetlerinde bilgilerin nasıl korunduğunu ve tercihlerini nasıl yönetebileceğini sade bir dille açıklar.")} cta={false} sections={[
     { title: t("Kapsam"), body: t("Bu politika ziyaretçiler, randevu alan müşteriler, işletme sahipleri, işletme çalışanları ve destek kanallarını kullanan kişiler için geçerlidir. İşletmelerin kendi müşteri süreçleri için ek bildirimleri bulunabilir.") },
     { title: t("Toplanan bilgiler"), body: t("Hesap ve iletişim bilgileri; işletme, hizmet ve çalışan profilleri; randevu ayrıntıları; destek mesajları; cihaz, oturum, IP ve güvenlik kayıtları işlenebilir. Alanlar amaçla sınırlı tutulur ve gereksiz özel nitelikli veri talep edilmez.") },

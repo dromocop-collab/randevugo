@@ -129,11 +129,11 @@
   "İşletmenize kaldığınız yerden devam edin.": "Pick up your business where you left off.",
   "Planlarınız ve favorileriniz sizi bekliyor.": "Your plans and favorites are waiting for you.",
   "Canlı operasyon merkezinize tek adımda bağlanın.": "Connect to your live operations hub in one step.",
-  "Kuaför": "Hair Salon",
+  "Kuaför": "Hair salon",
   "Kesim, renklendirme ve saç bakımı": "Cuts, coloring and hair care",
   "Berber": "Barber",
   "Saç, sakal ve modern erkek bakımı": "Hair, beard and modern men's grooming",
-  "Güzellik Merkezi": "Beauty Center",
+  "Güzellik Merkezi": "Beauty center",
   "Cilt bakımı ve güzellik ritüelleri": "Skin care and beauty rituals",
   "Spa & Masaj": "Spa & Massage",
   "Rahatlama, masaj ve yenilenme": "Relaxation, massage and renewal",
@@ -412,7 +412,7 @@
   "Popüler": "Popular",
   "SeninRandevun'da şu anda": "On SeninRandevun right now",
   "Yayında işletme": "Live businesses",
-  "Şehir": "Cities",
+  "Şehir": "City",
   "Aktif kategori": "Active categories",
   "Neden SeninRandevun": "Why SeninRandevun",
   "Güvenli randevu": "Secure booking",
@@ -494,7 +494,7 @@
   "yıl": "year",
   "ay": "month",
   "Aylık yaklaşık": "Approx. monthly",
-  "%{percent} tasarruf": "save {percent}%",
+  "%{percent} tasarruf": "Save {percent}%",
   "Yıllık ödeme": "Billed yearly",
   "Yıllık öderseniz %{percent} tasarruf": "Save {percent}% when billed yearly",
   "Aylık ödeme, istediğiniz zaman bırakın": "Billed monthly, cancel anytime",
@@ -513,7 +513,7 @@
   "Müşteri CRM": "Customer CRM",
   "Yorum yönetimi": "Review management",
   "Bekleme listesi": "Waitlist",
-  "Kasa ve adisyon": "Checkout and tabs",
+  "Kasa ve adisyon": "Checkout and bills",
   "Hizmet paketleri": "Service packages",
   "Finans ve stok": "Finance and inventory",
   "Gelişmiş analiz": "Advanced analytics",
@@ -673,7 +673,7 @@
   "Hızlı mesaj": "Quick message",
   "Mağazayı yayına": "Go live",
   "Çalışan": "Staff",
-  "İptal": "Cancel",
+  "İptal": "Canceled",
   "Şifre": "Password",
   "Ödeme": "Payment",
   "İşletme yardım merkezi": "Business help center",
@@ -699,7 +699,7 @@
     "one": "{count} article",
     "other": "{count} articles"
   },
-  "Sık sorulanlar": "Frequently asked",
+  "Sık sorulanlar": "FAQ",
   "“{query}” için {count} sonuç": {
     "one": "{count} result for “{query}”",
     "other": "{count} results for “{query}”"
@@ -917,7 +917,7 @@
     "one": "{count} appointment",
     "other": "{count} appointments"
   },
-  "Sırada": "In queue",
+  "Sırada": "Waiting",
   "{count} kişi": {
     "one": "{count} person",
     "other": "{count} people"

@@ -24,3 +24,15 @@ export async function getT(): Promise<TFunction> {
 export async function getIntlLocale(): Promise<string> {
   return LOCALE_LABELS[await getLocale()].intl;
 }
+
+/**
+ * Görsel rotaları (opengraph-image) route handler sayılır; orada kök parametre getter'ı çalışmaz.
+ * Dil, rotanın params içindeki [lang] değerinden okunur.
+ */
+export async function getTForParams(params: Promise<{ lang?: string }>): Promise<{ locale: Locale; t: TFunction }> {
+  const { lang } = await params;
+  const locale = isLocale(lang) ? lang : DEFAULT_LOCALE;
+  const messages = getMessages(locale);
+  const patterns = getPatterns(locale);
+  return { locale, t: (source, vars) => translateWithPatterns(locale, messages, patterns, source, vars) };
+}

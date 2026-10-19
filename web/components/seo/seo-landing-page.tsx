@@ -64,8 +64,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 type LandingMetadataInput = Pick<SeoLandingPageProps, "title" | "description" | "pathname" | "category" | "metaTitle" | "metaDescription">;
 
 /**
- * Kategori tanıtım sayfası meta verisi (etkin dilde). lib/profession-seo.ts › createProfessionMetadata ile
- * aynı kurallar; ek olarak canonical/hreflang sayfanın diline göre yazılır.
+ * Kategori tanıtım sayfası meta verisi (etkin dilde); canonical/hreflang sayfanın diline göre yazılır.
  */
 export async function seoLandingMetadata(content: LandingMetadataInput): Promise<Metadata> {
   const t = await getT();

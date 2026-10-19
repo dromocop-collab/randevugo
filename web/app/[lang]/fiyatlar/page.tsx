@@ -137,7 +137,7 @@ export default async function PricingPage() {
         </div>
         <div className={styles.tableWrap} data-reveal="">
           <table className={`${styles.table} ${styles.compare}`}>
-            <thead><tr><th scope="col"><span className={styles.srOnly}>{t("Konu")}</span></th><th scope="col">{t("Klasik yöntem")}</th><th scope="col" className={styles.compareUs}>SeninRandevun</th></tr></thead>
+            <thead><tr><th scope="col"><span className={styles.srOnly}>{t("Konu", { ctx: "karsilastirma" })}</span></th><th scope="col">{t("Klasik yöntem")}</th><th scope="col" className={styles.compareUs}>SeninRandevun</th></tr></thead>
             <tbody>{COMPARISON.map(([topic, before, after]) => <tr key={topic}>
               <th scope="row">{t(topic)}</th>
               <td className={styles.compareOld}><Minus size={14} aria-hidden="true" /> {t(before)}</td>

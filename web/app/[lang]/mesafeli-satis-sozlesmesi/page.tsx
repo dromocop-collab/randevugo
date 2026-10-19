@@ -17,7 +17,7 @@ export async function generateMetadata() {
 export default async function Page() {
   const t = await getT();
   const locale = await getLocale();
-  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; İngilizce çeviri bilgi amaçlıdır.")} ` : "";
+  const note = locale !== "tr" ? `${t("Bu metnin Türkçe sürümü esastır; çeviri yalnızca bilgi amaçlıdır.")} ` : "";
   return <ContentPage eyebrow={t("YASAL · {date} · SÜRÜM {version}", { date: t(TERMS_DATE_LABEL), version: TERMS_VERSION })} title={t("Mesafeli satış ve abonelik sözleşmesi")} intro={note + t("Bu sözleşme, SeninRandevun işletme paketlerinin seninrandevun.com üzerinden elektronik ortamda satın alınmasına ilişkin tarafların hak ve yükümlülüklerini düzenler. Alıcı, ödeme adımından önce Ön Bilgilendirme Formu'nu ve bu sözleşmeyi okuyup elektronik ortamda onaylar.")} cta={false} sections={[
     {
       title: t("Taraflar"),

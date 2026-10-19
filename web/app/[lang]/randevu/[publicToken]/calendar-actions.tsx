@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { enGB, tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { BellRing, ChevronRight, Download, LoaderCircle, Share2 } from "lucide-react";
 import {
@@ -14,7 +13,8 @@ import {
   type CalendarEventInput,
   type CalendarPlatform,
 } from "@/lib/calendar/appointment-calendar";
-import { useLocale, useT } from "@/i18n/client";
+import { useT } from "@/i18n/client";
+import { useDateFnsLocale } from "@/i18n/date";
 import { tk } from "@/i18n/config";
 import styles from "./calendar-actions.module.css";
 
@@ -30,7 +30,7 @@ const COPY: Record<CalendarPlatform, { title: string; hint: string }> = {
 export function CalendarActions({ event, publicToken, appleWalletEnabled }: Props) {
   // Bu bileşen yalnızca istemcide (veri yüklendikten sonra) çizilir; cihaz tespiti ilk render'da güvenli.
   const t = useT();
-  const dateLocale = useLocale() === "tr" ? tr : enGB;
+  const dateLocale = useDateFnsLocale();
   const [platform] = useState<CalendarPlatform>(() => detectCalendarPlatform());
   const [walletDevice] = useState(() => supportsAppleWallet());
   const [canShare] = useState(() => typeof navigator !== "undefined" && typeof navigator.share === "function");

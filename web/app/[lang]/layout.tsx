@@ -125,9 +125,6 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-/* ─── JSON-LD: Organization + WebSite (site bağlantıları arama kutusu) ─── */
-const jsonLd = graph(organizationJsonLd(), websiteJsonLd());
-
 // Yalnız tanımlı diller; /xx/... gibi bilinmeyen önekler 404 olur.
 export const dynamicParams = false;
 export function generateStaticParams() {
@@ -137,6 +134,8 @@ export function generateStaticParams() {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   const label = LOCALE_LABELS[locale];
+  // JSON-LD: Organization + WebSite (site bağlantıları arama kutusu), etkin dilde.
+  const jsonLd = graph(organizationJsonLd(), websiteJsonLd(await getT(), locale));
   return (
     <html lang={locale} dir={label.dir} suppressHydrationWarning className={`${jakarta.variable} ${spaceGrotesk.variable} h-full antialiased`}>
       <head>
