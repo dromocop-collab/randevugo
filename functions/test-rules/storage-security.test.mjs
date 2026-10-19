@@ -2,7 +2,7 @@ import test, { before, after } from "node:test";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, setDoc } from "firebase/firestore";
-import { ref, uploadBytes } from "firebase/storage";
+import { ref, uploadBytes, deleteObject } from "firebase/storage";
 
 let env;
 const BIZ = "biz1";
@@ -32,6 +32,16 @@ test("sahip ve müdür vitrin görseli yükleyebilir", async () => {
 test("personel ve yabancı vitrin görselini değiştiremez", async () => {
   await assertFails(uploadBytes(ref(st("staff1"), `businesses/${BIZ}/public/logo.png`), png, meta));
   await assertFails(uploadBytes(ref(st("stranger"), `businesses/${BIZ}/public/cover.png`), png, meta));
+});
+test("hizmet görselini yönetici yükler ve silebilir; personel ve yabancı silemez", async () => {
+  const path = `businesses/${BIZ}/public/services/1_a.jpg`;
+  await assertSucceeds(uploadBytes(ref(st("manager"), path), png, meta));
+  await assertFails(deleteObject(ref(st("staff1"), path)));
+  await assertFails(deleteObject(ref(st("stranger"), path)));
+  await assertSucceeds(deleteObject(ref(st("owner"), path)));
+  // Hizmet klasörü dışındaki vitrin görselleri yine silinemez.
+  await assertSucceeds(uploadBytes(ref(st("owner"), `businesses/${BIZ}/public/logo.png`), png, meta));
+  await assertFails(deleteObject(ref(st("owner"), `businesses/${BIZ}/public/logo.png`)));
 });
 test("müşteri kendi yorum görselini bir kez yükler, üzerine yazamaz, başkası adına yükleyemez", async () => {
   const path = `businesses/${BIZ}/public/reviews/cust/r1.png`;

@@ -37,6 +37,13 @@ service firebase.storage {
       allow write: if canManageBusiness(businessId) && imageUpload();
     }
 
+    // Hizmet görselleri: değiştirilen/kaldırılan eski görseli işletme yöneticisi silebilir (Storage'da birikmesin).
+    match /businesses/{businessId}/public/services/{fileName} {
+      allow read: if true;
+      allow create, update: if canManageBusiness(businessId) && imageUpload();
+      allow delete: if canManageBusiness(businessId);
+    }
+
     // Yorum görselleri yorumu yazan kullanıcıya aittir; mevcut dosyanın üzerine yazılamaz.
     match /businesses/{businessId}/public/reviews/{uid}/{fileName} {
       allow read: if true;
