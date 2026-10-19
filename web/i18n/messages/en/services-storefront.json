@@ -1,5 +1,8 @@
 {
-  "{count} seçenek": { "one": "{count} option", "other": "{count} options" },
+  "{count} seçenek": {
+    "one": "{count} option",
+    "other": "{count} options"
+  },
   "SEÇENEKLER": "OPTIONS",
   "Devam etmek için bir seçenek seçin": "Choose an option to continue",
   "{name} seçenekleri": "{name} options",
@@ -8,5 +11,9 @@
   "Kesin tutar işletmede belirlenir.": "The final price is set at the business.",
   "Fiyat görüşmede": "Price on request",
   "{min} – {max}": "{min} – {max}",
-  "{price}'den başlayan": "From {price}"
+  "{price}'den başlayan": "From {price}",
+  "sure::{count} saat": {
+    "one": "{count} hour",
+    "other": "{count} hours"
+  }
 }

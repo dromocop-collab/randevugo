@@ -4,7 +4,7 @@ import { interpolate, tk, type TFunction } from "@/i18n/config";
 
 export function formatServiceDuration(minutes: number, t: TFunction = interpolate) {
   if (minutes >= 1440 && minutes % 1440 === 0) return t("{count} gün", { count: minutes / 1440 });
-  if (minutes >= 60 && minutes % 60 === 0) return t("{count} saat", { count: minutes / 60 });
+  if (minutes >= 60 && minutes % 60 === 0) return t("{count} saat", { count: minutes / 60, ctx: "sure" });
   if (minutes > 60) return t("{hours} sa {minutes} dk", { hours: Math.floor(minutes / 60), minutes: minutes % 60 });
   return t("{count} dk", { count: minutes });
 }
