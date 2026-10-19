@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import {
   useEffect, useId, useRef,
   type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode,

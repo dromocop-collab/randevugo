@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { ArrowRight, LockKeyhole, Sparkles } from "lucide-react";
 import { DASHBOARD_ROUTE_ENTITLEMENTS, entitlementLabel } from "@/constants/subscription-entitlements";
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";

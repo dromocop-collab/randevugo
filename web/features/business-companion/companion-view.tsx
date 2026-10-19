@@ -1,6 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { localizeForBrowser } from "@/i18n/browser";
+
+import Link from "@/i18n/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
@@ -133,7 +135,7 @@ export function useArrivalQueue(options: { businessName: string; shouldNotifyNat
         });
         notification.onclick = () => {
           window.focus();
-          window.location.assign(companionLinks.appointment(item.id));
+          window.location.assign(localizeForBrowser(companionLinks.appointment(item.id)));
           notification.close();
         };
       } catch {

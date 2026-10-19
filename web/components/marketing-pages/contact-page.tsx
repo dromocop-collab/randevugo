@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { CSSProperties } from "react";
 import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Headphones, LayoutDashboard, LifeBuoy, Mail, MapPin, MessageCircleMore, Phone, ShieldCheck, Store, UserRound } from "lucide-react";
 import { SupportRequestModal } from "@/components/support/support-request-modal";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { Review } from "@/types/review";
 import { MessageCircleMore, PenLine, Scissors } from "lucide-react";

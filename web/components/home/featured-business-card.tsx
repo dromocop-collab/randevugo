@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import { ArrowUpRight, MapPin, Star } from "lucide-react";

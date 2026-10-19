@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, ChevronDown, MousePointer2, Play, Sparkles, X } from "lucide-react";

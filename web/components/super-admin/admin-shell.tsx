@@ -1,8 +1,8 @@
 "use client";
 
 import { ReactNode, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "@/i18n/link";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { BellRing, Moon, Search, ShieldCheck, Sun } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";

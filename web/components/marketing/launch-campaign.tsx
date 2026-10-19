@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Diamond, Gift, Sparkles, X } from "lucide-react";
 

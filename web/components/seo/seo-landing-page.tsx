@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { ArrowRight, BadgeCheck, CalendarCheck2, Check, Clock3, MapPin, Search, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { MarketingPage } from "@/components/marketing/marketing-shell";
 import { JsonLd } from "@/components/seo/json-ld";

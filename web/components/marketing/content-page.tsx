@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { MarketingPage } from "@/components/marketing/marketing-shell";
 
 export interface ContentSection { title: string; body: string; bullets?: string[] }

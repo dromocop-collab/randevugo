@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useDeferredValue, useEffect, useId, useMemo, useState, type CSSProperties } from "react";
 import { ArrowRight, ArrowUpRight, BookOpenCheck, CalendarCheck, ChartNoAxesCombined, ChevronDown, CircleHelp, Clock3, CreditCard, Heart, LifeBuoy, Mail, MessageCircleMore, MessagesSquare, Phone, Search, ShieldCheck, Store, UsersRound, WalletCards, X, type LucideIcon } from "lucide-react";
 import { SupportRequestModal } from "@/components/support/support-request-modal";

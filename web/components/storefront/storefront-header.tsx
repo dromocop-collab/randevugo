@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import { useState } from "react";
 import { AtSign, BadgeCheck, BriefcaseBusiness, CalendarCheck2, Camera, Clock3, ExternalLink, Images, MapPin, MessageCircle, Phone, Share2, Sparkles, Star, UsersRound } from "lucide-react";

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { CSSProperties } from "react";
 import { Apple, ArrowRight, BellRing, CalendarCheck2, Check, Clock3, Heart, ListOrdered, MapPin, Play, Search, ShieldCheck, Smartphone, Star } from "lucide-react";
 import { AppStoreButton, PlayStoreButton } from "@/components/marketing/app-store-button";

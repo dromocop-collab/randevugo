@@ -2,7 +2,7 @@
 
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { getAuth } from "firebase/auth";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import { Activity, ArrowRight, BellRing, CalendarDays, CheckCircle2, Copy, Download, RefreshCw, Send, ShieldCheck, Sparkles, Star, Trash2, TrendingUp, UserRoundSearch, UsersRound, Zap } from "lucide-react";

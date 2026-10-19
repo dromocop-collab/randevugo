@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import { Button, EmptyState, Panel, Skeleton } from "@/components/dashboard/ui";

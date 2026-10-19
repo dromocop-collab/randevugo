@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { toast } from "sonner";
 import { BellRing } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";

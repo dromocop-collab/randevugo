@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { recordPageView, type AnalyticsDevice } from "@/features/analytics/platform-analytics-repository";
 
 const PRIVATE_PREFIXES = ["/dashboard", "/super-admin", "/admin", "/onboarding", "/hesabim", "/randevu"];

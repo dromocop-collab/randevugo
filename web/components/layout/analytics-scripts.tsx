@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Script from "next/script";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 import type { PlatformAnalyticsSettings } from "@/types/platform";
 

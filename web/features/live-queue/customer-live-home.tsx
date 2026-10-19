@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { ArrowRight, BellRing, Clock3, LogIn, Sparkles, Ticket, UsersRound, X, Zap } from "lucide-react";

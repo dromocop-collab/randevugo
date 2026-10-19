@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Apple, ArrowUpRight, X } from "lucide-react";
 import { APP_STORE_URL } from "@/lib/app-store";

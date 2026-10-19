@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { BrandPageLoader } from "@/components/ui/brand-page-loader";
 

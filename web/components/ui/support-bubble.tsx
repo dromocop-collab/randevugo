@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { ArrowUpRight, Clock3, Headphones, Mail, MessageCircleMore, Phone, X } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 

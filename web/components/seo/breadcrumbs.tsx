@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { ChevronRight } from "lucide-react";
 import type { Crumb } from "@/lib/seo/schema";
 import styles from "./seo-blocks.module.css";

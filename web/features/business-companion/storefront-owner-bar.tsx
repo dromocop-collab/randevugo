@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { toast } from "sonner";
 import { ChartNoAxesCombined, PenLine, Share2, Store } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";

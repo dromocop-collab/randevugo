@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { Check, ChevronDown, CirclePlus, Clock3, Compass, ExternalLink, LogOut, Plus, Store, UserRound } from "lucide-react";
+import { useRouter } from "@/i18n/navigation";
+import { Check, ChevronDown, CirclePlus, Clock3, Compass, ExternalLink, Globe, LogOut, Plus, Store, UserRound } from "lucide-react";
 import { logout } from "@/features/auth/auth-service";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";
@@ -13,6 +13,9 @@ import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-
 import { NotificationCenter } from "@/components/dashboard/notification-center";
 import { DashboardCommandCenter } from "@/components/dashboard/command-center";
 import { AppearanceStudio } from "@/components/dashboard/appearance-studio";
+import { LanguageSwitcher, switchLocale } from "@/i18n/language-switcher";
+import { LOCALES, LOCALE_LABELS } from "@/i18n/config";
+import { useLocale } from "@/i18n/client";
 import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
 import { Badge, Button, Sheet, dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
@@ -34,6 +37,7 @@ export function DashboardTopBar() {
   const activeBusiness = businesses.find((business) => business.id === businessId) ?? businesses[0];
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const locale = useLocale();
   const [scrolled, setScrolled] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const accountRef = useRef<HTMLDivElement>(null);
@@ -109,6 +113,7 @@ export function DashboardTopBar() {
         <div className={styles.right}>
           <Button variant="primary" size="sm" icon={Plus} className={styles.newBtn} onClick={() => openQuickAppointment()}>Yeni randevu</Button>
           {!isStaff && <NotificationCenter key={businessId} businessId={businessId} triggerClassName={styles.iconBtn} />}
+          <LanguageSwitcher className={styles.hideMobile} />
           <AppearanceStudio triggerClassName={cn(styles.iconBtn, styles.hideMobile)} />
           <div className={styles.account} ref={accountRef}>
             <button type="button" className={styles.avatarBtn} onClick={toggleAccount} aria-expanded={accountOpen} aria-haspopup="menu" aria-label="Hesap menüsü">
@@ -126,6 +131,9 @@ export function DashboardTopBar() {
                   <Link role="menuitem" href="/kesfet" className={styles.menuItem} onClick={() => setAccountOpen(false)}><Compass size={16} aria-hidden /> Keşfet</Link>
                   <Link role="menuitem" href="/hesabim" className={styles.menuItem} onClick={() => setAccountOpen(false)}><UserRound size={16} aria-hidden /> Müşteri moduna geç</Link>
                   <button role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} onClick={() => { setAccountOpen(false); window.dispatchEvent(new Event("sr-dashboard-open-appearance")); }}><span className={styles.menuIcon} aria-hidden>◐</span> Görünüm stüdyosu</button>
+                  {LOCALES.filter((item) => item !== locale).map((item) => (
+                    <button key={item} role="menuitem" type="button" className={cn(styles.menuItem, styles.showMobileFlex)} lang={item} onClick={() => { setAccountOpen(false); switchLocale(item); }}><Globe size={16} aria-hidden /> {LOCALE_LABELS[item].name}</button>
+                  ))}
                   <button role="menuitem" type="button" className={cn(styles.menuItem, styles.menuDanger)} onClick={() => void signOut()}><LogOut size={16} aria-hidden /> Çıkış yap</button>
                 </div>
               </div>,

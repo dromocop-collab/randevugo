@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import { ArrowRight, ArrowUpRight, BadgeCheck, BellRing, Building2, CalendarCheck2, CalendarClock, Check, HeartHandshake, LockKeyhole, MapPin, MousePointerClick, Search, ShieldCheck, Smartphone, Sparkles, Star } from "lucide-react";

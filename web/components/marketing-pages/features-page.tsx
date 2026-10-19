@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { CSSProperties, ReactNode } from "react";
 import { ArrowRight, BarChart3, BellRing, Bot, CalendarDays, Check, ClipboardList, Gift, GitBranch, Globe2, Hourglass, ListOrdered, MessageSquareQuote, QrCode, ReceiptText, ShieldCheck, Smartphone, Sparkles, UsersRound, Workflow, Zap, Contact } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";

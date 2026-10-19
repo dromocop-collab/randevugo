@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { ArrowRight, Zap } from "lucide-react";
 import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
 import { listLastMinuteOpenings, type LastMinuteOpening } from "./availability-repository";

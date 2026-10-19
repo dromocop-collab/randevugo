@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useState, type ReactNode } from "react";
 import { ArrowRight, ArrowUpRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";

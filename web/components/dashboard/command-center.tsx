@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ElementType } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { toast } from "sonner";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";

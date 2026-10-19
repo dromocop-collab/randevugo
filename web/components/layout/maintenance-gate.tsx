@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
 

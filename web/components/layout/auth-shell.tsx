@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import { ReactNode, useEffect, useState, type CSSProperties } from "react";
 import { useAuth } from "@/hooks/use-auth";

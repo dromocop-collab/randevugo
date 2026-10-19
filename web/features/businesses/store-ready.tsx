@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {

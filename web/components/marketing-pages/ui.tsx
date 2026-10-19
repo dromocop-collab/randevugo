@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { ReactNode } from "react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import mp from "./mp.module.css";

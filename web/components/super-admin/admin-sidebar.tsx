@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/i18n/link";
+import { usePathname } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 import { collection, getCountFromServer, query, where } from "firebase/firestore";
 import { ArrowLeftToLine, Ellipsis, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Search, ShieldCheck, Sun } from "lucide-react";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import type { Business } from "@/types/business";
 import { canonicalBusinessCategory } from "@/lib/business-categories";

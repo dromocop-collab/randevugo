@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startOfLocalDay, type CompanionAppointment } from "@/features/business-companion/companion-domain";
 import { CompanionView, useArrivalQueue, useNow } from "@/features/business-companion/companion-view";
 import { dashTokensClassName } from "@/components/dashboard/ui";
-import { NotificationSoundSection } from "@/app/dashboard/ayarlar/notification-sound-section";
+import { NotificationSoundSection } from "@/app/[lang]/dashboard/ayarlar/notification-sound-section";
 import styles from "./business-companion.module.css";
 
 const NAMES = ["Ayşe Yılmaz", "Mehmet Kaya", "Zeynep Demir", "Can Öztürk", "Elif Şahin", "Burak Arslan"];

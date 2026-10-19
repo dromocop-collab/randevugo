@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/i18n/link";
+import { LanguageSwitcher } from "@/i18n/language-switcher";
+import { usePathname } from "@/i18n/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { User } from "firebase/auth";
@@ -233,6 +234,7 @@ export function MarketingHeader() {
           </nav>
 
           <div className={styles.actions}>
+            <LanguageSwitcher className={styles.hideSm} />
             <button type="button" onClick={toggleTheme} className={`${styles.iconButton} ${styles.hideSm}`} aria-label={themeLabel} title={themeLabel}>
               <ThemeIcon size={17} />
             </button>
@@ -274,6 +276,7 @@ export function MarketingHeader() {
                 <span className={styles.brandText}>Senin<span>Randevun</span></span>
               </Link>
               <div className={styles.sheetHeadActions}>
+                <LanguageSwitcher />
                 <button type="button" className={styles.iconButton} onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
                   <ThemeIcon size={18} />
                 </button>

@@ -1,5 +1,8 @@
 "use client";
 
+import { splitLocale } from "@/i18n/config";
+import { localizeForBrowser } from "@/i18n/browser";
+
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,11 +65,11 @@ function retainForegroundToasts() {
     const body = payload.notification?.body ?? data.body ?? "";
     const target = data.audience === "business" ? "/dashboard/randevular" : data.audience === "customer" ? "/hesabim?tab=appointments" : null;
     playNotificationChime();
-    const onTarget = target !== null && window.location.pathname === target.split("?")[0];
+    const onTarget = target !== null && splitLocale(window.location.pathname).path === target.split("?")[0];
     toast(title, {
       ...(body ? { description: body } : {}),
       ...(data.kind === "appointment_created" ? { duration: 8000 } : {}),
-      ...(target && !onTarget ? { action: { label: "Görüntüle", onClick: () => window.location.assign(target) } } : {}),
+      ...(target && !onTarget ? { action: { label: "Görüntüle", onClick: () => window.location.assign(localizeForBrowser(target)) } } : {}),
     });
   }).then((unsubscribe) => {
     foregroundStarting = null;

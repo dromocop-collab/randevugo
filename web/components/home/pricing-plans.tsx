@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useState } from "react";
 import { ArrowUpRight, BadgeCheck, Check, Gift, MessageSquareText, Minus, Sparkles, Store, UsersRound } from "lucide-react";
 import { PLAN_FEATURE_LIST } from "@/constants/plans";

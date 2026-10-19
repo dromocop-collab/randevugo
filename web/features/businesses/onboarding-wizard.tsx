@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import type { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import { createBusinessFromOnboarding, updateBusiness } from "@/features/businesses/business-repository";

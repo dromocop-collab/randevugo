@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { Building2, CornerDownLeft, LoaderCircle, Search } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";

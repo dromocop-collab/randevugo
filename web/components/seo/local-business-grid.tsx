@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { ArrowRight, MapPin, Star, Store } from "lucide-react";
 import { categoryDisplayName } from "@/lib/seo/categories";
 import { businessPath } from "@/lib/seo/site";

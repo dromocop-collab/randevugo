@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useMemo, useState } from "react";
 import { Bell, CalendarClock, CalendarDays, CalendarX2, CheckCheck, CircleAlert, CreditCard, Info, LoaderCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";

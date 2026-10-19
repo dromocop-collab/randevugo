@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowLeft, ArrowRight, BadgeCheck, BarChart3, CalendarCheck2, Check, ChevronDown, Clock3,

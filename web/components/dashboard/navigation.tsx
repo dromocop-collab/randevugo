@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusinessContext } from "@/features/businesses/business-context";

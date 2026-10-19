@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { doc, getDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { BellOff, BellRing, CalendarSearch, Clock3, LoaderCircle, Sparkles, UserRound } from "lucide-react";

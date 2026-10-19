@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/link";
 import type { CSSProperties, ReactNode } from "react";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { RoviMascot } from "@/components/brand/rovi-mascot";

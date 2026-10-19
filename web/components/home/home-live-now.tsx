@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/i18n/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUpRight, CalendarClock, Clock3, Ticket, Zap } from "lucide-react";
 import { subscribeLiveFeatureAvailability } from "@/features/platform/platform-settings-repository";
