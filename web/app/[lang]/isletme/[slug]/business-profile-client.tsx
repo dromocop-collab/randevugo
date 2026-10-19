@@ -513,7 +513,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
           <b>{minPrice !== null ? t("{price}'den", { price: formatPrice(minPrice, currency, intlLocale) }) : t("Online randevu")}</b>
         </div>
         <div className={styles.barMsg}>
-          <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel={t("Mesaj")} triggerClassName="storefront-bar-msg" />
+          <SupportRequestModal audience="storefront" businessId={business.id} businessName={business.name} triggerLabel={t("Mesaj")} triggerClassName="storefront-bar-msg" iconOnly />
         </div>
         <Link href={bookingHref} className={styles.barBook}><CalendarCheck2 size={18} aria-hidden="true" /> {t("Randevu Al")}</Link>
       </div>

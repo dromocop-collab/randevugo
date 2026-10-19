@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { Check, Headphones, LoaderCircle, MessageCircleMore, Send, ShieldCheck, Store, X } from "lucide-react";
@@ -32,7 +32,11 @@ function getSupportErrorMessage(reason: unknown, t: TFunction) {
   return message ? t(message) : t("Mesaj gönderilemedi. Lütfen tekrar deneyin.");
 }
 
-export function SupportRequestModal({ audience, businessId, businessName, triggerLabel, triggerClassName = "support-modal-trigger" }: { audience: SupportAudience; businessId?: string; businessName?: string; triggerLabel?: string; triggerClassName?: string }) {
+export function SupportRequestModal({ audience, businessId, businessName, triggerLabel, triggerClassName = "support-modal-trigger", iconOnly = false }: {
+  audience: SupportAudience; businessId?: string; businessName?: string; triggerLabel?: string; triggerClassName?: string;
+  /** Yalnız ikon (ör. mağazanın alt çubuğu); metin ekran okuyucu için aria-label olur. */
+  iconOnly?: boolean;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -43,7 +47,37 @@ export function SupportRequestModal({ audience, businessId, businessName, trigge
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const titleId = useId();
+  const layerRef = useRef<HTMLDivElement>(null);
   const storefront = audience === "storefront";
+
+  // Mobil klavye: iOS Safari'de klavye açılınca sabit konumlu katman klavyenin altında kalır. Katman görünür alana
+  // (visualViewport) oturtulur; pencere klavyenin üstünde kalır ve odaklanan alan görünür alana kaydırılır.
+  useEffect(() => {
+    if (!open) return;
+    const viewport = window.visualViewport;
+    const layer = layerRef.current;
+    if (!viewport || !layer) return;
+    const sync = () => {
+      layer.style.setProperty("--support-vh", `${viewport.height}px`);
+      layer.style.setProperty("--support-vt", `${viewport.offsetTop}px`);
+    };
+    const reveal = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea")) window.setTimeout(() => target.scrollIntoView({ block: "center", behavior: "smooth" }), 280);
+    };
+    sync();
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    layer.addEventListener("focusin", reveal);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+      layer.removeEventListener("focusin", reveal);
+    };
+  }, [open]);
+
+  // Masaüstünde ilk alana odaklan; dokunmatikte klavye kendiliğinden açılıp formu kapatmasın.
+  const autoFocusName = typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
   useEffect(() => {
     if (!open) return;
@@ -81,14 +115,16 @@ export function SupportRequestModal({ audience, businessId, businessName, trigge
   const label = triggerLabel ?? (storefront ? t("İşletmeye mesaj gönder") : t("Destek mesajı gönder"));
 
   return <>
-    <button type="button" className={triggerClassName} onClick={() => setOpen(true)}><MessageCircleMore size={16}/>{label}<Send size={14}/></button>
-    {open && typeof document !== "undefined" && createPortal(<div className="support-modal-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+    {iconOnly
+      ? <button type="button" className={triggerClassName} onClick={() => setOpen(true)} aria-label={label} title={label}><MessageCircleMore size={20} aria-hidden/></button>
+      : <button type="button" className={triggerClassName} onClick={() => setOpen(true)}><MessageCircleMore size={16}/>{label}<Send size={14}/></button>}
+    {open && typeof document !== "undefined" && createPortal(<div ref={layerRef} className="support-modal-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <section className="support-modal" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <button type="button" className="support-modal-close" onClick={close} aria-label={t("Pencereyi kapat")}><X size={18}/></button>
         {!success ? <>
           <div className="support-modal-heading"><span>{storefront ? <Store size={22}/> : <Headphones size={22}/>}</span><div><small>{storefront ? t("DOĞRUDAN İŞLETMEYE") : audience === "business" ? t("İŞLETME DESTEĞİ") : t("MÜŞTERİ DESTEĞİ")}</small><h2 id={titleId}>{storefront ? t("{name} ile iletişime geçin.", { name: businessName ?? t("İşletme") }) : t("Size nasıl yardımcı olabiliriz?")}</h2><p>{storefront ? t("Mesajınız ilgili mağazanın yönetim paneline güvenle iletilir.") : t("Bilgilerinizi bırakın; destek ekibimiz talebinizi super-admin ekranından takip etsin.")}</p></div></div>
           <form onSubmit={submit} className="support-modal-form">
-            <label><span>{t("İsim soyisim")}</span><input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} placeholder={t("Adınız ve soyadınız")} autoFocus/></label>
+            <label><span>{t("İsim soyisim")}</span><input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} placeholder={t("Adınız ve soyadınız")} autoFocus={autoFocusName}/></label>
             <label><span>{t("Telefon")}</span><input value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" inputMode="tel" maxLength={22} placeholder="05xx xxx xx xx"/></label>
             <label className="support-modal-message"><span>{t("Mesajınız")}</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={2000} rows={5} placeholder={storefront ? t("Hizmet, müsaitlik veya randevu hakkında sorunuzu yazın…") : t("Size yardımcı olabilmemiz için konuyu kısaca anlatın…")}/><small>{message.length}/2000</small></label>
             <label className="support-honeypot" aria-hidden="true">{t("Web sitesi")}<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)}/></label>
