@@ -30,7 +30,7 @@ test("template payload: 4 params, cancellation without link, no newlines", () =>
   const config = parseWhatsAppConfig(base);
   const params = { businessName: "Erdem\nKuaför", serviceName: "Saç kesimi", dateText: "14 Eki 15:00", detailsUrl: "https://seninrandevun.com/randevu/abc" };
   const reminder = buildTemplateMessage("reminder", "905551112233", params, config);
-  assert.equal(reminder.template.name, "randevu_hatirlatma");
+  assert.equal(reminder.template.name, "randevu_hatirlatma_v2");
   assert.equal(reminder.template.language.code, "tr");
   assert.deepEqual(reminder.template.components[0].parameters.map((p) => p.text), ["Erdem Kuaför", "Saç kesimi", "14 Eki 15:00", "https://seninrandevun.com/randevu/abc"]);
   const cancel = buildTemplateMessage("cancellation", "905551112233", { ...params, serviceName: "" }, config);

@@ -9185,7 +9185,8 @@ async function metaGet<T>(url: string, token: string): Promise<{ data: T | null;
 async function loadWhatsAppOverview() {
   const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
   const parsed = parseWhatsAppConfig({ ...raw, enabled: true });
-  const templateNames = parsed?.templates ?? DEFAULT_TEMPLATES;
+  // Kanal kapalıyken de ayardaki şablon adları gösterilsin (parsed yalnız enabled iken dolu).
+  const templateNames = parsed?.templates ?? parseWhatsAppConfig({ ...raw, enabled: true })?.templates ?? DEFAULT_TEMPLATES;
   const language = parsed?.language ?? "tr";
   const apiBase = parsed?.apiBase ?? "https://graph.facebook.com";
   const apiVersion = parsed?.apiVersion ?? "v21.0";

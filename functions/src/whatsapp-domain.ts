@@ -19,7 +19,8 @@ export type WhatsAppConfig = {
 
 export const DEFAULT_TEMPLATES: Record<AppointmentMessageType, string> = {
   confirmation: "randevu_onay",
-  reminder: "randevu_hatirlatma",
+  // İlk hatırlatma şablonu Meta incelemesinde takıldı; onaylanan v2 kullanılıyor (2026-10-20).
+  reminder: "randevu_hatirlatma_v2",
   cancellation: "randevu_iptal",
   reschedule: "randevu_degisiklik",
 };
