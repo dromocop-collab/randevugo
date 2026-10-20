@@ -81,6 +81,13 @@ export default function AppointmentDetailPage() {
       setPolicy(result.data.policy??null);
       setWalletApple(result.data.wallet?.apple===true);
       setNow(Date.now());
+      // WhatsApp "Randevu Değiştir" düğmesi (/randevu-degistir/<token> → ?degistir=1): uygunsa saat değiştirme penceresi açılır.
+      const url=new URL(window.location.href);
+      if(url.searchParams.has("degistir")){
+        url.searchParams.delete("degistir"); window.history.replaceState(null,"",url.pathname+url.search+url.hash);
+        const startMs=new Date(result.data.appointment.startAt).getTime();
+        if(result.data.policy?.canReschedule&&["pending","confirmed"].includes(result.data.appointment.status)&&startMs>Date.now())setRescheduleOpen(true);
+      }
     }catch(reason){
       if(!cancelled){
         const message=(reason as {message?:string}).message??tk("Randevu bilgilerine ulaşılamadı.");

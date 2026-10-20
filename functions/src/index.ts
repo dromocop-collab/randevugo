@@ -27,7 +27,7 @@ import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
-import { DEFAULT_TEMPLATES, buildTemplateMessage, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, toWhatsAppPhone, verifyWebhookSignature, whatsappReadiness, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
+import { DEFAULT_TEMPLATES, buildTemplateMessage, buttonTemplateReady, isButtonTemplate, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, toWhatsAppPhone, verifyWebhookSignature, whatsappReadiness, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
@@ -6090,12 +6090,21 @@ async function trySendAppointmentWhatsApp(input: {
   const to = toWhatsAppPhone(input.appointment.customerPhone);
   if (!config || !to) return false;
   const timeZone = typeof input.business.timeZone === "string" ? input.business.timeZone : "Europe/Istanbul";
-  const payload = buildTemplateMessage(input.type as AppointmentMessageType, to, {
+  const when = input.startAt.toDate();
+  const params = {
     businessName: String(input.business.name ?? "İşletme").slice(0, 70),
     serviceName: String(input.appointment.serviceName ?? "Randevu").slice(0, 70),
     dateText: appointmentSmsDate(input.startAt, timeZone),
     detailsUrl: input.appointment.publicToken ? `https://seninrandevun.com/randevu/${String(input.appointment.publicToken)}` : "https://seninrandevun.com",
-  }, config);
+    dayText: new Intl.DateTimeFormat("tr-TR", { timeZone, day: "2-digit", month: "2-digit", year: "numeric" }).format(when),
+    timeText: new Intl.DateTimeFormat("tr-TR", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
+    publicToken: typeof input.appointment.publicToken === "string" ? input.appointment.publicToken : "",
+    businessSlug: typeof input.business.slug === "string" ? input.business.slug : "",
+  };
+  const messageType = input.type as AppointmentMessageType;
+  // Düğmeli şablonda bağlantı parametresi yoksa (ör. anahtarsız panel randevusu) SMS'e bırak.
+  if (isButtonTemplate(config.templates[messageType]) && !buttonTemplateReady(messageType, params)) return false;
+  const payload = buildTemplateMessage(messageType, to, params, config);
   const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
@@ -9310,6 +9319,8 @@ export const sendWhatsAppTest = onCall(
     const startAt = Timestamp.fromMillis(Date.now() + 2 * 86_400_000);
     const payload = buildTemplateMessage(type, to, {
       businessName: "Erdem Kuaför", serviceName: "Saç kesimi", dateText: appointmentSmsDate(startAt, "Europe/Istanbul"), detailsUrl: "https://seninrandevun.com",
+      // Düğmeli şablon testi: örnek bağlantılar (randevu sayfası "bulunamadı" der, düğmenin çalıştığı görülür).
+      dayText: "22.10.2026", timeText: "13:00", publicToken: "ornek-randevu", businessSlug: "erdem-kuafor",
     }, config);
     const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
       method: "POST",

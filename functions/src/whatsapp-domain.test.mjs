@@ -105,3 +105,21 @@ test("message summary", () => {
   assert.deepEqual(sum.errors, { 131026: 1 });
   assert.equal(summarizeWhatsAppMessages([]).deliveryRate, null);
 });
+
+test("button templates: date/time split body, url buttons carry the token (cancel: business slug)", async () => {
+  const { buildTemplateMessage, buttonTemplateReady, BUTTON_TEMPLATES } = await import("../lib/whatsapp-domain.js");
+  const config = { templates: BUTTON_TEMPLATES, language: "tr" };
+  const params = { businessName: "Erdem Kuaför", serviceName: "Saç Kesimi", dateText: "22.10.2026 13:00", detailsUrl: "x", dayText: "22.10.2026", timeText: "13:00", publicToken: "tok123", businessSlug: "erdem-kuafor" };
+  const confirm = buildTemplateMessage("confirmation", "905301234567", params, config);
+  assert.equal(confirm.template.name, "sr_randevu_onay");
+  assert.deepEqual(confirm.template.components[0].parameters.map((p) => p.text), ["Erdem Kuaför", "Saç Kesimi", "22.10.2026", "13:00"]);
+  assert.deepEqual(confirm.template.components.slice(1).map((c) => [c.sub_type, c.index, c.parameters[0].text]), [["url", "0", "tok123"], ["url", "1", "tok123"]]);
+  const cancel = buildTemplateMessage("cancellation", "905301234567", params, config);
+  assert.deepEqual(cancel.template.components.slice(1).map((c) => c.parameters[0].text), ["erdem-kuafor"]);
+  assert.equal(buttonTemplateReady("reminder", { ...params, publicToken: "" }), false);
+  assert.equal(buttonTemplateReady("cancellation", { ...params, publicToken: "" }), true);
+  // Klasik şablonlar değişmedi.
+  const classic = buildTemplateMessage("reminder", "905301234567", params, { templates: { ...BUTTON_TEMPLATES, reminder: "randevu_hatirlatma_v2" }, language: "tr" });
+  assert.equal(classic.template.components.length, 1);
+  assert.equal(classic.template.components[0].parameters.length, 4);
+});

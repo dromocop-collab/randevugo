@@ -60,16 +60,60 @@ export function toWhatsAppPhone(value: unknown): string | null {
   return /^905\d{9}$/.test(digits) ? digits : null;
 }
 
-export type TemplateParams = { businessName: string; serviceName: string; dateText: string; detailsUrl: string };
+export type TemplateParams = {
+  businessName: string; serviceName: string; dateText: string; detailsUrl: string;
+  /** Düğmeli şablonlar: ayrı tarih ("22.10.2026") ve saat ("13:00"), randevu anahtarı ve işletme adresi (slug). */
+  dayText?: string; timeText?: string; publicToken?: string; businessSlug?: string;
+};
 
 /**
  * Şablon gövde değişkenleri (Meta'da şablonlar bu sırayla oluşturulmalı):
  *   onay / hatırlatma / değişiklik: {{1}} işletme, {{2}} hizmet, {{3}} tarih-saat, {{4}} randevu bağlantısı
  *   iptal: {{1}} işletme, {{2}} hizmet, {{3}} tarih-saat
  */
+/**
+ * Düğmeli şablonlar (sr_ ön ekli): gövde {{1}} işletme, {{2}} hizmet, {{3}} tarih, {{4}} saat; bağlantılar düğmede.
+ * Onay/hatırlatma/değişiklik: düğme 0 "Randevumu Gör" → /randevu/{{1}}, düğme 1 "Randevu Değiştir" → /randevu-degistir/{{1}} (randevu anahtarı).
+ * İptal: düğme 0 "Yeni Randevu Al" → /isletme/{{1}} (işletme adresi).
+ */
+export const BUTTON_TEMPLATES: Record<AppointmentMessageType, string> = {
+  confirmation: "sr_randevu_onay",
+  reminder: "sr_randevu_hatirlatma",
+  cancellation: "sr_randevu_iptal",
+  reschedule: "sr_randevu_degisiklik",
+};
+
+export function isButtonTemplate(name: string): boolean {
+  return name.startsWith("sr_");
+}
+
+/** Düğmeli şablon gönderilebilir mi? Bağlantı parametresi boş olamaz (Meta reddeder → SMS'e düşer). */
+export function buttonTemplateReady(type: AppointmentMessageType, params: TemplateParams): boolean {
+  return type === "cancellation" ? Boolean(params.businessSlug?.trim()) : Boolean(params.publicToken?.trim());
+}
+
 export function buildTemplateMessage(type: AppointmentMessageType, to: string, params: TemplateParams, config: Pick<WhatsAppConfig, "templates" | "language">) {
   // Meta: değişken boş olamaz, satır sonu/sekme ve 4+ boşluk içeremez.
   const text = (value: string, fallback: string) => (value.replace(/[\n\t]+/g, " ").replace(/ {4,}/g, "   ").trim() || fallback).slice(0, 200);
+  const name = config.templates[type];
+  if (isButtonTemplate(name)) {
+    const body = [text(params.businessName, "İşletme"), text(params.serviceName, "Randevu"), text(params.dayText ?? params.dateText, "-"), text(params.timeText ?? "", "-")];
+    const url = (index: number, value: string) => ({ type: "button", sub_type: "url", index: String(index), parameters: [{ type: "text", text: value }] });
+    const buttons = type === "cancellation"
+      ? [url(0, String(params.businessSlug ?? "").trim())]
+      : [url(0, String(params.publicToken ?? "").trim()), url(1, String(params.publicToken ?? "").trim())];
+    return {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name,
+        language: { code: config.language },
+        components: [{ type: "body", parameters: body.map((value) => ({ type: "text", text: value })) }, ...buttons],
+      },
+    };
+  }
   const values = [text(params.businessName, "İşletme"), text(params.serviceName, "Randevu"), text(params.dateText, "-")];
   if (type !== "cancellation") values.push(text(params.detailsUrl, "https://seninrandevun.com"));
   return {

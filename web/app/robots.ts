@@ -18,7 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           "/admin",
           "/onboarding",
           "/hesabim",
-          "/randevu/",
+          "/randevu/", "/randevu-degistir/",
           "/musteri/",
           "/siram",
           "/giris",
