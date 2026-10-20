@@ -12,7 +12,7 @@ test("config needs enabled flag and credentials; template names validated", () =
   assert.equal(parseWhatsAppConfig({ ...base, accessToken: "short" }), null);
   const config = parseWhatsAppConfig({ ...base, templates: { reminder: "sr_hatirlatma", confirmation: "Bad Name!" } });
   assert.equal(config.templates.reminder, "sr_hatirlatma");
-  assert.equal(config.templates.confirmation, "randevu_onay");
+  assert.equal(config.templates.confirmation, "sr_randevu_onay");
   assert.equal(config.language, "tr");
   assert.equal(config.apiVersion, "v21.0");
 });
@@ -26,8 +26,9 @@ test("Turkish mobile numbers normalise to E.164 digits", () => {
   assert.equal(toWhatsAppPhone(""), null);
 });
 
-test("template payload: 4 params, cancellation without link, no newlines", () => {
-  const config = parseWhatsAppConfig(base);
+test("classic template payload (randevu_*): 4 params, cancellation without link, no newlines", () => {
+  // Klasik şablonlar Firestore'dan ayarla seçilebilir; varsayılan artık düğmeli sr_* şablonlar.
+  const config = parseWhatsAppConfig({ ...base, templates: { confirmation: "randevu_onay", reminder: "randevu_hatirlatma_v2", cancellation: "randevu_iptal", reschedule: "randevu_degisiklik" } });
   const params = { businessName: "Erdem\nKuaför", serviceName: "Saç kesimi", dateText: "14 Eki 15:00", detailsUrl: "https://seninrandevun.com/randevu/abc" };
   const reminder = buildTemplateMessage("reminder", "905551112233", params, config);
   assert.equal(reminder.template.name, "randevu_hatirlatma_v2");

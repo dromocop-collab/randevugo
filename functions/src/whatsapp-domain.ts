@@ -17,12 +17,12 @@ export type WhatsAppConfig = {
   templates: Record<AppointmentMessageType, string>;
 };
 
+/** Kullanılan şablonlar: düğmeli sr_* (2026-10-20, Meta'da onaylı). Eski klasik şablonlar: randevu_onay, randevu_hatirlatma_v2, randevu_iptal, randevu_degisiklik. */
 export const DEFAULT_TEMPLATES: Record<AppointmentMessageType, string> = {
-  confirmation: "randevu_onay",
-  // İlk hatırlatma şablonu Meta incelemesinde takıldı; onaylanan v2 kullanılıyor (2026-10-20).
-  reminder: "randevu_hatirlatma_v2",
-  cancellation: "randevu_iptal",
-  reschedule: "randevu_degisiklik",
+  confirmation: "sr_randevu_onay",
+  reminder: "sr_randevu_hatirlatma",
+  cancellation: "sr_randevu_iptal",
+  reschedule: "sr_randevu_degisiklik",
 };
 
 export function parseWhatsAppConfig(data: Record<string, unknown> | null | undefined): WhatsAppConfig | null {
