@@ -33,6 +33,7 @@ import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, n
 import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
+import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
 initializeApp();
@@ -1314,6 +1315,13 @@ export const createBusiness = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
       transaction.set(slugRef, { businessId: businessRef.id, ownerUid: uid, createdAt: FieldValue.serverTimestamp() });
+      // Reklam takibi: ilk mağazada kayıt kaynağı (utm_*) ayrı ve istemcinin okuyamadığı belgeye yazılır.
+      if (!sourceBusiness) {
+        const attribution = sanitizeAttribution(data.attribution);
+        transaction.set(db.doc(`businessAcquisitions/${businessRef.id}`), {
+          businessId: businessRef.id, ownerUid: uid, attribution, channel: attributionChannel(attribution), createdAt: FieldValue.serverTimestamp(),
+        });
+      }
       transaction.set(businessRef.collection("members").doc(uid), {
         uid, role: "owner", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
@@ -9443,6 +9451,224 @@ export const sendWhatsAppTest = onCall(
       expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
     });
     return { success: true, messageId };
+  },
+);
+
+/* ── Reklamlar: Meta Marketing API + kayıt kaynağı (süper admin) ───────────────────────────────────────────── */
+
+const META_GRAPH = "https://graph.facebook.com/v21.0";
+type MetaAdsSettings = { token: string; adAccountId: string | null; updatedAt: string | null };
+type MetaPaged<T> = { data?: T[] };
+type MetaCampaign = { id: string; name?: string; status?: string; effective_status?: string; objective?: string; daily_budget?: string; lifetime_budget?: string; start_time?: string };
+type MetaAdSet = { id: string; name?: string; campaign_id?: string; status?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string };
+type MetaAd = { id: string; name?: string; adset_id?: string; campaign_id?: string; status?: string; effective_status?: string; creative?: { thumbnail_url?: string } };
+type MetaInsight = Record<string, unknown> & { ad_id?: string; date_start?: string };
+
+async function loadMetaAdsSettings(): Promise<MetaAdsSettings> {
+  const raw = (await db.doc(META_ADS_SETTINGS_PATH).get()).data() ?? {};
+  return {
+    token: String(raw.accessToken ?? "").trim(),
+    adAccountId: normalizeAdAccountId(raw.adAccountId),
+    updatedAt: raw.updatedAt instanceof Timestamp ? raw.updatedAt.toDate().toISOString() : null,
+  };
+}
+
+/** Meta'ya form gövdesiyle POST (durum / bütçe değişikliği). */
+async function metaPost(url: string, token: string, fields: Record<string, string>) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(fields).toString(),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = await response.json().catch(() => null) as { success?: boolean; error?: { message?: string; error_user_msg?: string; code?: number } } | null;
+  if (!response.ok || body?.error) {
+    throw new HttpsError("failed-precondition", `Meta reddetti${body?.error?.code ? ` (${body.error.code})` : ""}: ${shortText(body?.error?.error_user_msg ?? body?.error?.message ?? `HTTP ${response.status}`, 240)}`);
+  }
+}
+
+const minorToTry = (value: unknown) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n / 100 : null; };
+
+/** Süper admin › Reklamlar: Meta harcaması (kampanya/reklam seti/reklam), günlük seyir ve kayıt kaynağıyla birleşik özet. */
+export const getMetaAdsOverview = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const range = metaDateRange(Number(request.data?.days ?? 30));
+    const settings = await loadMetaAdsSettings();
+
+    // Kayıtlar (bizim verimiz): bu aralıkta açılan ilk mağazalar + ödeme yapanlar.
+    const acquisitionSnap = await db.collection("businessAcquisitions")
+      .where("createdAt", ">=", Timestamp.fromMillis(range.sinceMs)).orderBy("createdAt", "desc").limit(2000).get();
+    const businessIds = acquisitionSnap.docs.map((document) => document.id);
+    const paidIds = new Set<string>();
+    for (let index = 0; index < businessIds.length; index += 30) {
+      const chunk = businessIds.slice(index, index + 30);
+      const payments = await db.collection("subscriptionPayments").where("businessId", "in", chunk).get();
+      payments.docs.forEach((document) => {
+        const data = document.data();
+        if (data.status === "paid" && data.testMode !== true && data.kind !== "sms_pack") paidIds.add(String(data.businessId));
+      });
+    }
+    const signupRows = acquisitionSnap.docs.map((document) => {
+      const data = document.data();
+      return { attribution: (data.attribution ?? null) as Attribution | null, paid: paidIds.has(document.id), createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0 };
+    });
+    const signups = summarizeSignups(signupRows);
+    const recentDocs = acquisitionSnap.docs.slice(0, 40);
+    const businessDocs = recentDocs.length ? await db.getAll(...recentDocs.map((document) => db.doc(`businesses/${document.id}`))) : [];
+    const names = new Map(businessDocs.map((document) => [document.id, String(document.data()?.name ?? "Silinmiş işletme")]));
+    const recentSignups = recentDocs.map((document) => {
+      const data = document.data();
+      const attribution = (data.attribution ?? null) as Attribution | null;
+      return {
+        businessId: document.id, businessName: names.get(document.id) ?? "—", channel: String(data.channel ?? "direct"),
+        source: attribution?.source ?? null, medium: attribution?.medium ?? null, campaign: attribution?.campaign ?? null, content: attribution?.content ?? null,
+        paid: paidIds.has(document.id), createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : null,
+      };
+    });
+    const totalBusinesses = await db.collection("businesses").where("createdAt", ">=", Timestamp.fromMillis(range.sinceMs)).count().get()
+      .then((result) => result.data().count).catch(() => null);
+
+    const base = {
+      range: { since: range.since, until: range.until },
+      connection: { connected: Boolean(settings.token && settings.adAccountId), hasToken: settings.token.length >= 20, adAccountId: settings.adAccountId, updatedAt: settings.updatedAt },
+      signups: { ...signups, totalBusinesses, recent: recentSignups },
+    };
+    if (!settings.token || !settings.adAccountId) return { ...base, account: null, campaigns: [], daily: [], totals: null, metaErrors: [] as string[] };
+
+    const act = settings.adAccountId;
+    const timeRange = encodeURIComponent(JSON.stringify({ since: range.since, until: range.until }));
+    const insightFields = "spend,impressions,reach,inline_link_clicks,actions";
+    const [account, campaigns, adsets, ads, insights, daily] = await Promise.all([
+      metaGet<{ name?: string; currency?: string; account_status?: number; amount_spent?: string; balance?: string; disable_reason?: number }>(`${META_GRAPH}/${act}?fields=name,currency,account_status,amount_spent,balance,disable_reason`, settings.token),
+      metaGet<MetaPaged<MetaCampaign>>(`${META_GRAPH}/${act}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time&limit=100`, settings.token),
+      metaGet<MetaPaged<MetaAdSet>>(`${META_GRAPH}/${act}/adsets?fields=id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget&limit=200`, settings.token),
+      metaGet<MetaPaged<MetaAd>>(`${META_GRAPH}/${act}/ads?fields=id,name,adset_id,campaign_id,status,effective_status,creative%7Bthumbnail_url%7D&limit=200`, settings.token),
+      metaGet<MetaPaged<MetaInsight>>(`${META_GRAPH}/${act}/insights?level=ad&fields=ad_id,${insightFields}&time_range=${timeRange}&limit=500`, settings.token),
+      metaGet<MetaPaged<MetaInsight>>(`${META_GRAPH}/${act}/insights?fields=${insightFields}&time_increment=1&time_range=${timeRange}&limit=100`, settings.token),
+    ]);
+    const metaErrors = [account, campaigns, adsets, ads, insights, daily].map((result) => result.error).filter((error): error is string => Boolean(error));
+    const byAd = new Map((insights.data?.data ?? []).map((row) => [String(row.ad_id ?? ""), parseMetaInsight(row)]));
+    const empty = () => ({ spend: 0, impressions: 0, reach: 0, linkClicks: 0, landingPageViews: 0, videoViews: 0 });
+    const add = (target: ReturnType<typeof empty>, row: ReturnType<typeof empty>) => {
+      (Object.keys(target) as Array<keyof typeof target>).forEach((key) => { target[key] += row[key]; });
+    };
+    const adsetRows = adsets.data?.data ?? [];
+    const adRows = ads.data?.data ?? [];
+    const tree = (campaigns.data?.data ?? []).map((campaign) => {
+      const campaignTotals = empty();
+      const sets = adsetRows.filter((set) => set.campaign_id === campaign.id).map((set) => {
+        const setTotals = empty();
+        const setAds = adRows.filter((ad) => ad.adset_id === set.id).map((ad) => {
+          const stats = byAd.get(ad.id) ?? empty();
+          add(setTotals, stats);
+          return { id: ad.id, name: ad.name ?? "Reklam", status: ad.status ?? "", effectiveStatus: ad.effective_status ?? "", thumbnailUrl: ad.creative?.thumbnail_url ?? null, stats };
+        });
+        add(campaignTotals, setTotals);
+        return {
+          id: set.id, name: set.name ?? "Reklam seti", status: set.status ?? "", effectiveStatus: set.effective_status ?? "",
+          dailyBudget: minorToTry(set.daily_budget), lifetimeBudget: minorToTry(set.lifetime_budget), stats: setTotals, ads: setAds,
+        };
+      });
+      return {
+        id: campaign.id, name: campaign.name ?? "Kampanya", status: campaign.status ?? "", effectiveStatus: campaign.effective_status ?? "",
+        objective: campaign.objective ?? "", dailyBudget: minorToTry(campaign.daily_budget), lifetimeBudget: minorToTry(campaign.lifetime_budget),
+        startTime: campaign.start_time ?? null, stats: campaignTotals, adsets: sets,
+      };
+    });
+    const totals = empty();
+    byAd.forEach((row) => add(totals, row));
+    const metaSignups = signups.channels.meta_ads ?? 0;
+    const metaPaid = signupRows.filter((row) => row.paid && attributionChannel(row.attribution) === "meta_ads").length;
+    return {
+      ...base,
+      account: account.data ? {
+        name: account.data.name ?? "", currency: account.data.currency ?? "TRY", status: Number(account.data.account_status ?? 0),
+        amountSpent: minorToTry(account.data.amount_spent) ?? 0, balance: minorToTry(account.data.balance) ?? 0, disableReason: Number(account.data.disable_reason ?? 0),
+      } : null,
+      campaigns: tree,
+      daily: (daily.data?.data ?? []).map((row) => ({ date: String(row.date_start ?? ""), ...parseMetaInsight(row) })),
+      totals: {
+        ...totals, metaSignups, metaPaid,
+        cpc: ratio(totals.spend, totals.linkClicks), ctr: totals.impressions ? Math.round((totals.linkClicks / totals.impressions) * 10_000) / 100 : null,
+        costPerSignup: ratio(totals.spend, metaSignups), costPerPaid: ratio(totals.spend, metaPaid),
+        signupRate: totals.landingPageViews || totals.linkClicks ? Math.round((metaSignups / (totals.landingPageViews || totals.linkClicks)) * 10_000) / 100 : null,
+      },
+      metaErrors,
+    };
+  },
+);
+
+/** Meta bağlantısı: erişim anahtarı + reklam hesabı. Anahtar Meta'da denenir, yalnız sunucuda saklanır, geri gösterilmez. */
+export const updateMetaAdsSettings = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    await consumeSecurityLimit(`meta-ads-settings:${uid}`, 10, 60 * 60_000);
+    if (request.data?.disconnect === true) {
+      await db.doc(META_ADS_SETTINGS_PATH).set({ accessToken: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp(), updatedByUid: uid }, { merge: true });
+      await db.collection("platformAuditLogs").add({ action: "meta_ads.disconnected", actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+      return { success: true, connected: false };
+    }
+    const current = await loadMetaAdsSettings();
+    const adAccountId = normalizeAdAccountId(request.data?.adAccountId ?? current.adAccountId);
+    if (!adAccountId) throw new HttpsError("invalid-argument", "Geçerli bir reklam hesabı kimliği girin (yalnız rakamlar, ör. 881998108237172).");
+    const newToken = typeof request.data?.accessToken === "string" ? request.data.accessToken.trim() : "";
+    if (newToken && !/^[A-Za-z0-9_-]{40,600}$/.test(newToken)) throw new HttpsError("invalid-argument", "Erişim anahtarı biçimi geçersiz; Meta'dan kopyaladığınız metnin tamamını yapıştırın.");
+    const token = newToken || current.token;
+    if (!token) throw new HttpsError("invalid-argument", "Erişim anahtarını girin.");
+    const check = await metaGet<{ name?: string; currency?: string }>(`${META_GRAPH}/${adAccountId}?fields=name,currency`, token);
+    if (check.error) throw new HttpsError("failed-precondition", `Meta bağlantısı denenemedi: ${check.error}`);
+    await db.doc(META_ADS_SETTINGS_PATH).set({
+      ...(newToken ? { accessToken: newToken } : {}), adAccountId, updatedAt: FieldValue.serverTimestamp(), updatedByUid: uid,
+    }, { merge: true });
+    await db.collection("platformAuditLogs").add({ action: "meta_ads.connected", actorUid: uid, adAccountId, tokenChanged: Boolean(newToken), createdAt: FieldValue.serverTimestamp() });
+    return { success: true, connected: true, accountName: check.data?.name ?? "", currency: check.data?.currency ?? "" };
+  },
+);
+
+/** Kampanya / reklam seti / reklamı durdur-başlat ya da günlük bütçeyi değiştir. Nesne bağlı reklam hesabına ait olmalı. */
+export const updateMetaAdsEntity = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    await consumeSecurityLimit(`meta-ads-change:${uid}`, 40, 60 * 60_000);
+    const id = String(request.data?.id ?? "").trim();
+    const level = String(request.data?.level ?? "");
+    const action = String(request.data?.action ?? "");
+    if (!/^\d{6,30}$/.test(id) || !["campaign", "adset", "ad"].includes(level) || !["pause", "resume", "budget"].includes(action)) {
+      throw new HttpsError("invalid-argument", "Geçersiz istek.");
+    }
+    const settings = await loadMetaAdsSettings();
+    if (!settings.token || !settings.adAccountId) throw new HttpsError("failed-precondition", "Önce Meta bağlantısını kurun.");
+    const owner = await metaGet<{ account_id?: string; daily_budget?: string; name?: string }>(`${META_GRAPH}/${id}?fields=account_id,name${level === "ad" ? "" : ",daily_budget"}`, settings.token);
+    if (owner.error || `act_${owner.data?.account_id ?? ""}` !== settings.adAccountId) {
+      throw new HttpsError("permission-denied", owner.error ? `Meta: ${owner.error}` : "Bu nesne bağlı reklam hesabına ait değil.");
+    }
+    const fields: Record<string, string> = {};
+    if (action === "budget") {
+      if (level === "ad") throw new HttpsError("invalid-argument", "Bütçe reklam düzeyinde değiştirilemez.");
+      if (!owner.data?.daily_budget) throw new HttpsError("failed-precondition", "Bu nesnede günlük bütçe yok (bütçe kampanyada ya da reklam setinde olabilir, ya da toplam bütçe kullanılıyor).");
+      const minor = dailyBudgetMinorUnits(request.data?.dailyBudget);
+      if (minor === null) throw new HttpsError("invalid-argument", "Günlük bütçe 50 ₺ ile 20.000 ₺ arasında olmalı.");
+      fields.daily_budget = String(minor);
+    } else {
+      fields.status = action === "pause" ? "PAUSED" : "ACTIVE";
+    }
+    await metaPost(`${META_GRAPH}/${id}`, settings.token, fields);
+    await db.collection("platformAuditLogs").add({
+      action: `meta_ads.${action}`, actorUid: uid, level, objectId: id, objectName: shortText(owner.data?.name ?? "", 120),
+      ...(action === "budget" ? { previousDailyBudget: minorToTry(owner.data?.daily_budget), dailyBudget: Number(fields.daily_budget) / 100 } : {}),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true };
   },
 );
 

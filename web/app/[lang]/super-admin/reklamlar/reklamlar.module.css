@@ -1,0 +1,57 @@
+/* Süper admin › Reklamlar. Renkler _pages-ui (ui.module.css) değişkenlerinden. */
+.banner { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 14px; padding: 16px 18px; border: 1px solid transparent; border-radius: 20px; }
+.banner > svg { flex: none; margin-top: 2px; }
+.banner > div { flex: 1 1 260px; min-width: 0; }
+.banner b { display: block; font-size: 15px; }
+.banner p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; opacity: 0.9; overflow-wrap: anywhere; }
+.banner > button { align-self: center; }
+.bannerInfo { border-color: color-mix(in srgb, var(--green-2) 22%, transparent); background: var(--card); color: var(--ink); }
+.bannerInfo > svg { color: var(--green-2); }
+.bannerDanger { border-color: color-mix(in srgb, var(--red) 30%, transparent); background: var(--red-soft); color: var(--red); }
+
+.grid { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1200px) { .grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.6fr); } }
+.main, .side { display: grid; gap: 16px; min-width: 0; }
+.inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.muted { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.note { display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.note svg { flex: none; margin-top: 2px; }
+.warn { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--amber-soft); color: var(--amber); font-size: 12.5px; line-height: 1.45; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.form { display: grid; gap: 12px; }
+.bars { display: grid; gap: 10px; margin-bottom: 16px; }
+
+.campaigns { display: grid; gap: 14px; }
+.campaign { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+.adset { display: grid; gap: 8px; margin-left: 4px; padding: 10px 0 0 12px; border-top: 1px dashed var(--line); border-left: 2px solid var(--line); }
+.ad { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 14px; background: var(--card-2); }
+.adBody { display: grid; gap: 6px; flex: 1; min-width: 0; }
+.thumb { display: grid; place-items: center; flex: none; width: 44px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--line); color: var(--muted); }
+
+.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
+.headTitle { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
+.headTitle > b { font-size: 15px; overflow-wrap: anywhere; }
+.headSmall .headTitle > b { font-size: 13.5px; }
+.headActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.budget { color: var(--muted); font-size: 12px; font-weight: 650; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.stats > span { display: grid; gap: 1px; padding: 7px 9px; border-radius: 11px; background: var(--card-2); }
+.statsCompact > span { padding: 4px 0; background: transparent; }
+.stats small { color: var(--faint); font-size: 11px; font-weight: 600; }
+.stats b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+
+.chart { display: flex; align-items: flex-end; gap: 4px; height: 180px; padding-top: 8px; overflow-x: auto; }
+.bar { display: grid; grid-template-rows: 1fr auto auto; justify-items: center; gap: 3px; flex: 1 0 18px; height: 100%; min-width: 18px; }
+.bar i { align-self: end; width: 100%; max-width: 26px; border-radius: 6px 6px 3px 3px; background: var(--green-2); }
+.bar small { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.bar span { color: var(--faint); font-size: 10px; white-space: nowrap; }
+
+.linkBox { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+.linkBox code { flex: 1; min-width: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.howList { display: grid; gap: 8px; margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.howList code { font-size: 11.5px; }
+
+.rowCard { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; text-align: left; }
+.rowCard > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.rowCard small { color: var(--muted); font-size: 12px; }

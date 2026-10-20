@@ -49,6 +49,7 @@ export const GROUPS = {
     "adminApprovalBusinessStore", "adminApprovalProfileChange", "adminApprovalCategory", "adminPlatformAlertCreated",
     "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "issueWidgetToken", "revokeWidgetToken", "businessWidgetFeed", "serviceAutoTranslate", "serviceCategoryAutoTranslate", "backfillServiceTranslations",
   ],
+  reklam: ["getMetaAdsOverview", "updateMetaAdsSettings", "updateMetaAdsEntity"],
   canli: [
     "getLiveQueueWaitEstimate", "getLiveQueueWaitOptions", "getBusinessLiveWaitEstimates", "liveQueueWaitQueueChanged", "liveQueueNoticeQueueChanged",
     "liveQueueNoticeCreated", "retryLiveQueueNotices", "liveQueueWaitAppointmentChanged", "createAvailabilityAlert", "cancelAvailabilityAlert",
