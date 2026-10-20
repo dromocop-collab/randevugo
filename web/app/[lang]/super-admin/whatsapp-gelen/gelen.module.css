@@ -1,0 +1,134 @@
+/* Süper admin › WhatsApp gelen kutusu. Renkler _pages-ui (ui.module.css) değişkenlerinden. */
+.notice { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: 14px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
+
+.layout {
+  display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: var(--card);
+  height: calc(100dvh - 300px); min-height: 520px;
+}
+@media (min-width: 960px) { .layout { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); } }
+.listPane { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.threadPane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--card-2); }
+@media (max-width: 959px) {
+  .layout { height: calc(100dvh - 220px); }
+  .threadPane { display: none; }
+  .hasSelection .listPane { display: none; }
+  .hasSelection .threadPane { display: flex; }
+}
+@media (min-width: 960px) { .back { display: none !important; } }
+
+.listTools { display: grid; gap: 10px; padding: 12px; border-bottom: 1px solid var(--line); }
+.list { flex: 1; overflow-y: auto; margin: 0; padding: 6px; list-style: none; }
+.item {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 14px; background: transparent;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.item:hover { background: var(--card-2); }
+.item:focus-visible { outline: 2px solid var(--green-2); outline-offset: -2px; }
+.itemOn, .itemOn:hover { background: var(--green-soft); }
+.itemBody { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.itemTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.itemTop b { overflow: hidden; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.itemTop small { flex: none; color: var(--faint); font-size: 11.5px; }
+.itemUnread .itemTop b { font-weight: 800; }
+.itemUnread .itemTop small { color: var(--green-2); font-weight: 700; }
+.itemText { display: flex; align-items: center; gap: 4px; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.itemText svg { flex: none; color: var(--faint); }
+.itemUnread .itemText { color: var(--ink); }
+.itemMeta { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding: 1px 7px; overflow: hidden; border-radius: 999px; background: var(--card-2); color: var(--muted); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tagGreen { background: var(--green-soft); color: var(--green-2); }
+.badge { display: grid; place-items: center; flex: none; min-width: 22px; height: 22px; margin-top: 2px; padding: 0 6px; border-radius: 999px; background: var(--green-2); color: #fff; font-size: 11.5px; font-weight: 800; }
+
+.placeholder { display: grid; place-content: center; justify-items: center; gap: 8px; height: 100%; padding: 24px; color: var(--muted); text-align: center; }
+.placeholder svg { color: var(--faint); }
+.placeholder b { color: var(--ink); font-size: 15px; }
+.placeholder p { max-width: 380px; margin: 0; font-size: 13px; line-height: 1.5; }
+
+.thread { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.threadHead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--card); }
+.threadTitle { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.threadTitle b { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.threadTitle code { color: var(--muted); font-size: 12px; }
+.threadActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+
+.match { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--card); font-size: 13px; }
+.match > svg { flex: none; margin-top: 2px; color: var(--green-2); }
+.match > span:nth-child(2) { display: grid; gap: 2px; flex: 1 1 240px; min-width: 0; }
+.match small { color: var(--muted); font-size: 12px; }
+.matchLinks { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.messages { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; padding: 16px 14px; }
+.day { display: flex; justify-content: center; margin: 8px 0 4px; }
+.day span { padding: 3px 10px; border-radius: 999px; background: var(--card); color: var(--muted); font-size: 11.5px; font-weight: 650; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.row { display: flex; flex-direction: column; max-width: min(78%, 560px); }
+.rowIn { align-self: flex-start; align-items: flex-start; }
+.rowOut { align-self: flex-end; align-items: flex-end; }
+.bubble { position: relative; display: grid; gap: 4px; padding: 8px 10px 6px; border-radius: 16px; font-size: 14px; line-height: 1.45; box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); }
+.bubbleIn { border-top-left-radius: 6px; background: var(--card); color: var(--ink); }
+.bubbleOut { border-top-right-radius: 6px; background: color-mix(in srgb, var(--green-2) 16%, var(--card)); color: var(--ink); }
+.bubbleAuto { background: color-mix(in srgb, var(--green-2) 7%, var(--card)); border: 1px dashed color-mix(in srgb, var(--green-2) 35%, transparent); }
+.autoLabel { display: inline-flex; align-items: center; gap: 4px; color: var(--green-2); font-size: 11px; font-weight: 700; }
+.text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.muted { color: var(--muted); font-style: italic; }
+.meta { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--faint); font-size: 11px; }
+.tickRead { color: #34b7f1; }
+.tickFailed { color: var(--red); }
+.failed { margin-top: 2px; color: var(--red); font-size: 11.5px; }
+.reaction { position: absolute; right: 8px; bottom: -12px; padding: 0 5px; border-radius: 999px; background: var(--card); font-size: 14px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
+.image { display: block; max-width: min(100%, 320px); max-height: 360px; border-radius: 12px; object-fit: cover; }
+.sticker { max-width: 140px; background: transparent; }
+.audio { width: min(280px, 64vw); height: 40px; }
+.video { max-width: min(100%, 320px); max-height: 360px; border-radius: 12px; }
+.file { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--card-2); color: inherit; text-decoration: none; }
+.file span { display: grid; flex: 1; min-width: 0; }
+.file b { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.file small { color: var(--muted); font-size: 11.5px; }
+.location { display: grid; gap: 2px; color: var(--green-2); font-weight: 650; text-decoration: none; }
+.location small { color: var(--muted); font-weight: 500; }
+.mediaNote { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+
+.composer { display: grid; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--card); }
+.quick { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 2px; color: var(--amber); }
+.quick > svg { flex: none; }
+.quickBtn { flex: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card-2); color: var(--ink); font-size: 12px; font-weight: 650; cursor: pointer; }
+.quickBtn:hover { border-color: var(--green-2); }
+.inputRow { display: flex; align-items: flex-end; gap: 8px; }
+.input {
+  flex: 1; min-height: 42px; max-height: 180px; padding: 10px 12px; resize: none; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card-2); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.45;
+}
+.input:focus { outline: 2px solid color-mix(in srgb, var(--green-2) 45%, transparent); outline-offset: 0; border-color: transparent; }
+.windowNote { display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 11.5px; }
+.closedWindow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 14px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
+.closedWindow > span { display: grid; flex: 1 1 220px; color: var(--ink); }
+.closedWindow b { color: var(--amber); }
+
+.settings { display: grid; gap: 12px; }
+.switchRow { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; }
+.switchRow input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--green-2); }
+.switchRow span { display: grid; gap: 2px; }
+.switchRow small { color: var(--muted); font-size: 12px; }
+.previewBox { padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--green-2) 10%, var(--card)); }
+.previewBox small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.previewBox p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+.repliesHead { display: grid; gap: 2px; margin-top: 6px; }
+.repliesHead small { color: var(--muted); font-size: 12px; }
+.replyRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; }
+.replyRow textarea { grid-column: 1; }
+.replyRow > button { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+
+/* Mobil: konuşma açıkken üst kart gizlenir, düğmeler yalnız simge. */
+.hero { display: contents; }
+@media (max-width: 959px) {
+  .heroHidden { display: none; }
+  .hasSelection { height: calc(100dvh - 190px); min-height: 440px; }
+}
+@media (max-width: 640px) {
+  .btnLabel { display: none; }
+  .threadHead { gap: 8px; padding: 8px 10px; }
+  .threadTitle code { white-space: nowrap; }
+  .match { padding: 8px 12px; font-size: 12.5px; }
+  .match small { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .row { max-width: 88%; }
+}

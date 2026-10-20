@@ -55,6 +55,14 @@ service firebase.storage {
       allow write: if isBusinessMember(businessId) && imageUpload();
     }
 
+    // WhatsApp gelen kutusu medyası (sunucu yazar); yalnız süper admin okur.
+    match /private/whatsapp-inbox/{allPaths=**} {
+      allow read: if signedIn() &&
+        ((request.auth.token.email == "cihatwin@gmail.com" && request.auth.token.email_verified == true) ||
+         firestore.exists(/databases/(default)/documents/platformAdmins/$(request.auth.uid)));
+      allow write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -1,5 +1,5 @@
 import {
-  BarChart3, BellRing, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
+  BarChart3, BellRing, Inbox, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
   Megaphone, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
@@ -34,6 +34,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/super-admin/moderasyon", label: "Moderasyon", icon: ShieldCheck, keywords: "yorum gizleme kategori" },
       { href: "/super-admin/bildirimler", label: "Bildirim Merkezi", short: "Bildirim", icon: BellRing, keywords: "push duyuru" },
       { href: "/super-admin/sms", label: "SMS Merkezi", short: "SMS", icon: MessageSquareText, keywords: "mutlucell kredi" },
+      { href: "/super-admin/whatsapp-gelen", label: "WhatsApp Gelen Kutusu", short: "Gelen", icon: Inbox, keywords: "whatsapp mesaj cevap sohbet müşteri yazışma otomatik" },
       { href: "/super-admin/whatsapp", label: "WhatsApp Kanalı", short: "WhatsApp", icon: MessagesSquare, keywords: "meta şablon template cloud api bildirim" },
     ],
   },

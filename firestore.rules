@@ -120,6 +120,16 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // WhatsApp gelen kutusu: yalnız süper admin canlı okur; yazma yalnız sunucu (webhook / callable).
+    match /whatsappConversations/{conversationId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+      match /messages/{messageId} {
+        allow read: if isPlatformAdmin();
+        allow write: if false;
+      }
+    }
+
     // API anahtarları yalnızca callable Cloud Functions tarafından okunur/yazılır.
     match /platformPrivateSettings/{doc} {
       allow read, write: if false;

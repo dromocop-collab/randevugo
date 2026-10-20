@@ -33,6 +33,7 @@ import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, n
 import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
+import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
@@ -6184,6 +6185,11 @@ export const whatsappWebhook = onRequest(
         const row = snapshot.data()!;
         if (row.status === "failed") return null; // tekrar gelen bildirim
         tx.set(ref, { status: status.status, errorCode: status.errorCode, errorTitle: status.errorTitle, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        // Gelen kutusundan gönderilen cevabın durumu konuşmadaki mesaja da yansır.
+        if (typeof row.inboxConversationId === "string" && typeof row.inboxMessageId === "string") {
+          tx.set(inboxConversationRef(row.inboxConversationId).collection("messages").doc(row.inboxMessageId),
+            { status: status.status, errorCode: status.errorCode, errorTitle: status.errorTitle, statusAt: FieldValue.serverTimestamp() }, { merge: true });
+        }
         return status.status === "failed" ? row : null;
       });
       // Panelden gönderilen test mesajlarının randevusu yoktur; SMS'e düşürülmez.
@@ -6201,11 +6207,277 @@ export const whatsappWebhook = onRequest(
         scheduledAt: Timestamp.now(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
     }
+    for (const message of extractIncomingMessages(req.body)) {
+      await recordInboundWhatsApp(message).catch((error) => logger.warn("Gelen kutusuna yazılamadı", { error: String(error) }));
+    }
     for (const reply of extractIncomingReplies(req.body)) {
       await handleFollowUpReply(reply).catch((error) => logger.warn("Memnuniyet yanıtı işlenemedi", { error: String(error) }));
     }
     res.status(200).send("OK");
   }
+);
+
+/* ── WhatsApp gelen kutusu (süper admin) ─────────────────────────────────────────────────────────────────────── */
+
+const inboxConversationRef = (id: string) => db.doc(`whatsappConversations/${id}`);
+const tsMillis = (value: unknown) => value instanceof Timestamp ? value.toMillis() : null;
+
+type InboxSettings = { autoReplyEnabled: boolean; autoReplyText: string; quickReplies: Array<{ title: string; text: string }> };
+
+function inboxSettingsOf(raw: FirebaseFirestore.DocumentData | undefined): InboxSettings {
+  const inbox = (raw?.inbox ?? {}) as Record<string, unknown>;
+  return {
+    autoReplyEnabled: inbox.autoReplyEnabled !== false,
+    autoReplyText: typeof inbox.autoReplyText === "string" && inbox.autoReplyText.trim() ? inbox.autoReplyText : DEFAULT_AUTO_REPLY,
+    quickReplies: sanitizeQuickReplies(inbox.quickReplies),
+  };
+}
+
+/** Webhook: gelen mesajı konuşmaya yazar (aynı mesaj ikinci kez gelirse yok sayılır). Ağır işler tetikleyicide. */
+async function recordInboundWhatsApp(message: IncomingMessage) {
+  const id = conversationId(message.from);
+  const conversationRef = inboxConversationRef(id);
+  const messageRef = conversationRef.collection("messages").doc(messageDocId(message.messageId));
+  const preview = inboxPreview(message);
+  await db.runTransaction(async (tx) => {
+    const [existing, conversation] = await Promise.all([tx.get(messageRef), tx.get(conversationRef)]);
+    if (existing.exists) return;
+    const at = Timestamp.fromMillis(message.timestamp);
+    tx.set(messageRef, {
+      direction: "in", wamid: message.messageId, type: message.type, text: message.text,
+      media: message.media ? { ...message.media, status: "pending", storagePath: null, size: null } : null,
+      location: message.location, reaction: message.reaction, contextId: message.contextId,
+      createdAt: at, receivedAt: FieldValue.serverTimestamp(),
+    });
+    const current = conversation.data() ?? {};
+    // Tepkiler konuşmayı yukarı taşımaz ve okunmamış sayılmaz.
+    const counts = message.type !== "reaction";
+    tx.set(conversationRef, {
+      phone: message.from,
+      ...(message.profileName ? { profileName: message.profileName } : {}),
+      ...(counts ? {
+        lastMessageAt: at, lastMessageText: preview, lastDirection: "in", lastInboundAt: at, lastInboundWamid: message.messageId,
+        unreadCount: FieldValue.increment(1), status: "open",
+      } : {}),
+      createdAt: current.createdAt ?? FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+}
+
+/** Panelden ya da otomatik cevaptan serbest metin gönderir (yalnız 24 saatlik pencerede). */
+async function sendInboxText(conversationIdValue: string, phone: string, text: string, sender: { uid: string | null; name: string | null; auto: boolean }) {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const config = parseWhatsAppConfig({ ...raw, enabled: true });
+  if (!config) throw new HttpsError("failed-precondition", "WhatsApp ayarları eksik.");
+  const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(buildTextMessage(phone, text)),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = await response.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string; error_data?: { details?: string } } } | null;
+  const wamid = body?.messages?.[0]?.id;
+  if (!response.ok || !wamid) {
+    const detail = body?.error?.error_data?.details ?? body?.error?.message ?? `HTTP ${response.status}`;
+    throw new HttpsError("failed-precondition", `Meta reddetti${body?.error?.code ? ` (${body.error.code})` : ""}: ${shortText(detail, 240)}`);
+  }
+  const conversationRef = inboxConversationRef(conversationIdValue);
+  const messageRef = conversationRef.collection("messages").doc(messageDocId(wamid));
+  const batch = db.batch();
+  batch.set(messageRef, {
+    direction: "out", wamid, type: "text", text, auto: sender.auto, sentByUid: sender.uid, sentByName: sender.name,
+    status: "accepted", createdAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(conversationRef, {
+    lastMessageAt: FieldValue.serverTimestamp(), lastMessageText: shortText(text, 140), lastDirection: "out",
+    ...(sender.auto ? { lastAutoReplyAt: FieldValue.serverTimestamp() } : { lastManualReplyAt: FieldValue.serverTimestamp(), unreadCount: 0 }),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  // İletim durumları (iletildi/okundu/başarısız) webhook'tan bu kayıt üzerinden konuşmaya yansır.
+  batch.set(whatsappMessageRef(wamid), {
+    messageId: wamid, businessId: null, appointmentId: null, type: sender.auto ? "inbox_auto" : "inbox_reply",
+    inboxConversationId: conversationIdValue, inboxMessageId: messageRef.id,
+    phoneMasked: `******${phone.slice(-4)}`, status: "accepted", createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+  });
+  await batch.commit();
+  return wamid;
+}
+
+/** Numarayı platformdaki son randevuyla eşleştirir (hangi işletmenin müşterisi). İndeks yoksa sessizce atlar. */
+async function matchInboxCustomer(phone: string) {
+  if (!phone.startsWith("90")) return null;
+  const snapshot = await db.collectionGroup("appointments").where("customerPhone", "==", `+${phone}`).limit(20).get().catch((error) => {
+    logger.warn("Gelen kutusu eşleştirme sorgusu çalışmadı (indeks?)", { error: String(error) });
+    return null;
+  });
+  if (!snapshot || snapshot.empty) return null;
+  const rows = snapshot.docs.map((document) => ({ document, start: tsMillis(document.data().startAt) ?? 0 })).sort((a, b) => b.start - a.start);
+  const latest = rows[0]!.document;
+  const data = latest.data();
+  const businessId = latest.ref.parent.parent?.id ?? "";
+  const business = businessId ? (await db.doc(`businesses/${businessId}`).get()).data() ?? {} : {};
+  return {
+    businessId, businessName: shortText(business.name ?? "İşletme", 80), businessSlug: typeof business.slug === "string" ? business.slug : null,
+    businessPhone: typeof business.phone === "string" ? business.phone : null,
+    appointmentId: latest.id, appointmentStartAt: data.startAt ?? null, appointmentStatus: String(data.status ?? ""),
+    customerName: shortText(data.customerName ?? "", 80), serviceName: shortText(data.serviceName ?? "", 100),
+    appointmentCount: snapshot.size, businessCount: new Set(rows.map((row) => row.document.ref.parent.parent?.id)).size,
+    matchedAt: Timestamp.now(),
+  };
+}
+
+/** Meta medya kimliğinden dosyayı indirip Storage'a koyar (private/whatsapp-inbox; yalnız platform yöneticisi okur). */
+async function storeInboxMedia(conversationIdValue: string, messageId: string, media: { id: string; mimeType: string; fileName: string | null }) {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const config = parseWhatsAppConfig({ ...raw, enabled: true });
+  if (!config) throw new Error("WhatsApp ayarları eksik");
+  const info = await metaGet<{ url?: string; mime_type?: string; file_size?: number }>(`${config.apiBase}/${config.apiVersion}/${media.id}`, config.accessToken);
+  if (!info.data?.url) throw new Error(info.error ?? "Medya adresi alınamadı");
+  if (Number(info.data.file_size ?? 0) > INBOX_MEDIA_MAX_BYTES) return { status: "too_large" as const, size: Number(info.data.file_size) };
+  const download = await fetch(info.data.url, { headers: { Authorization: `Bearer ${config.accessToken}` }, signal: AbortSignal.timeout(30_000) });
+  if (!download.ok) throw new Error(`Medya indirilemedi (HTTP ${download.status})`);
+  const buffer = Buffer.from(await download.arrayBuffer());
+  if (buffer.length > INBOX_MEDIA_MAX_BYTES) return { status: "too_large" as const, size: buffer.length };
+  const mimeType = (info.data.mime_type ?? media.mimeType).split(";")[0]!.trim();
+  const path = `private/whatsapp-inbox/${conversationIdValue}/${messageId}.${mediaExtension(mimeType, media.fileName)}`;
+  await storage.bucket().file(path).save(buffer, { contentType: mimeType, resumable: false, metadata: { cacheControl: "private, max-age=86400" } });
+  return { status: "ready" as const, size: buffer.length, storagePath: path, mimeType };
+}
+
+/** Yeni gelen mesaj: medya indir, müşteri eşleştir, otomatik cevap, yöneticilere bildirim. */
+export const whatsappInboxMessageCreated = onDocumentCreated(
+  { document: "whatsappConversations/{conversationId}/messages/{messageId}", region: "europe-west1", memory: "512MiB", timeoutSeconds: 120 },
+  async (event) => {
+    const message = event.data?.data();
+    if (!message || message.direction !== "in") return;
+    const { conversationId: cid, messageId } = event.params;
+    const conversationRef = inboxConversationRef(cid);
+    const conversation = (await conversationRef.get()).data() ?? {};
+    const phone = String(conversation.phone ?? "");
+    if (!phone) return;
+    const tasks: Array<Promise<unknown>> = [];
+
+    if (message.media?.id) {
+      tasks.push(storeInboxMedia(cid, messageId, message.media)
+        .then((result) => event.data!.ref.update({ "media.status": result.status, "media.size": result.size ?? null, ...(result.status === "ready" ? { "media.storagePath": result.storagePath, "media.mimeType": result.mimeType } : {}) }))
+        .catch((error) => { logger.warn("Gelen kutusu medyası indirilemedi", { error: String(error) }); return event.data!.ref.update({ "media.status": "failed" }); }));
+    }
+
+    const matchedAt = tsMillis((conversation.match as Record<string, unknown> | undefined)?.matchedAt);
+    if (!matchedAt || Date.now() - matchedAt > 86_400_000) {
+      tasks.push(matchInboxCustomer(phone).then((match) => conversationRef.set({ match: match ?? { matchedAt: Timestamp.now(), businessId: null } }, { merge: true }))
+        .catch((error) => logger.warn("Gelen kutusu eşleştirme hatası", { error: String(error) })));
+    }
+
+    const settings = inboxSettingsOf((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data());
+    // Memnuniyet anketine düğmeyle verilen yanıtlar zaten teşekkür mesajı alıyor.
+    const isSurveyAnswer = message.contextId && (message.type === "button" || message.type === "interactive");
+    if (!isSurveyAnswer && shouldAutoReply({
+      enabled: settings.autoReplyEnabled, type: message.type,
+      lastAutoReplyAt: tsMillis(conversation.lastAutoReplyAt), lastManualReplyAt: tsMillis(conversation.lastManualReplyAt),
+    })) {
+      tasks.push(sendInboxText(cid, phone, renderAutoReply(settings.autoReplyText, String(conversation.profileName ?? "") || null), { uid: null, name: "Otomatik cevap", auto: true })
+        .catch((error) => logger.warn("Otomatik cevap gönderilemedi", { error: String(error) })));
+    }
+
+    if (!isSurveyAnswer && message.type !== "reaction") {
+      const who = shortText(conversation.profileName ?? formatInboxPhone(phone), 40);
+      const preview = inboxPreview({ type: message.type, text: message.text ?? null, media: message.media ?? null, reaction: message.reaction ?? null, location: message.location ?? null });
+      tasks.push(notifyPlatformAdmins(`💬 WhatsApp · ${who}`, shortText(preview, 160), { route: "admin_whatsapp", url: `/super-admin/whatsapp-gelen?c=${cid}` }, `wa-inbox-${cid}`)
+        .catch((error) => logger.warn("Gelen kutusu bildirimi gönderilemedi", { error: String(error) })));
+    }
+    await Promise.all(tasks);
+  },
+);
+
+async function requireInboxAdmin(request: { auth?: { uid: string; token: Record<string, unknown> } }) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  return uid;
+}
+
+function requireConversationId(value: unknown) {
+  const id = String(value ?? "");
+  if (!/^[a-f0-9]{24}$/.test(id)) throw new HttpsError("invalid-argument", "Geçersiz konuşma.");
+  return id;
+}
+
+/** Panelden cevap. Pencere kapalıysa (son müşteri mesajı 24 saatten eski) Meta serbest metni kabul etmez. */
+export const sendWhatsAppInboxReply = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    await consumeSecurityLimit(`wa-inbox-reply:${uid}`, 120, 60 * 60_000);
+    const cid = requireConversationId(request.data?.conversationId);
+    const text = String(request.data?.text ?? "").trim();
+    if (!text || text.length > 4000) throw new HttpsError("invalid-argument", "Mesaj 1–4000 karakter olmalı.");
+    const conversation = (await inboxConversationRef(cid).get()).data();
+    if (!conversation?.phone) throw new HttpsError("not-found", "Konuşma bulunamadı.");
+    if (!windowState(tsMillis(conversation.lastInboundAt)).open) {
+      throw new HttpsError("failed-precondition", "24 saatlik pencere kapandı. Müşteri yeniden yazana kadar serbest mesaj gönderilemez.");
+    }
+    const user = await auth.getUser(uid).catch(() => null);
+    const wamid = await sendInboxText(cid, String(conversation.phone), text, { uid, name: user?.displayName || user?.email || "Yönetici", auto: false });
+    return { success: true, wamid };
+  },
+);
+
+/** Okundu (müşteriye mavi tik gider) / kapat / yeniden aç. */
+export const updateWhatsAppConversation = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    const cid = requireConversationId(request.data?.conversationId);
+    const action = String(request.data?.action ?? "");
+    if (!["read", "close", "reopen"].includes(action)) throw new HttpsError("invalid-argument", "Geçersiz işlem.");
+    const ref = inboxConversationRef(cid);
+    const conversation = (await ref.get()).data();
+    if (!conversation) throw new HttpsError("not-found", "Konuşma bulunamadı.");
+    if (action === "read") {
+      await ref.set({ unreadCount: 0, readAt: FieldValue.serverTimestamp(), readByUid: uid }, { merge: true });
+      const wamid = typeof conversation.lastInboundWamid === "string" ? conversation.lastInboundWamid : "";
+      const config = parseWhatsAppConfig({ ...((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {}), enabled: true });
+      if (wamid && config && windowState(tsMillis(conversation.lastInboundAt)).open && conversation.readReceiptWamid !== wamid) {
+        await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: wamid }),
+          signal: AbortSignal.timeout(10_000),
+        }).then((response) => response.ok ? ref.set({ readReceiptWamid: wamid }, { merge: true }) : null).catch(() => null);
+      }
+    } else {
+      await ref.set({ status: action === "close" ? "closed" : "open", ...(action === "close" ? { unreadCount: 0, closedAt: FieldValue.serverTimestamp(), closedByUid: uid } : {}), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    return { success: true };
+  },
+);
+
+export const getWhatsAppInboxSettings = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    await requireInboxAdmin(request);
+    const settings = inboxSettingsOf((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data());
+    return { ...settings, defaultAutoReply: DEFAULT_AUTO_REPLY };
+  },
+);
+
+export const updateWhatsAppInboxSettings = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    const autoReplyText = String(request.data?.autoReplyText ?? "").trim();
+    if (autoReplyText.length > 1000) throw new HttpsError("invalid-argument", "Otomatik cevap en fazla 1000 karakter olabilir.");
+    const inbox = {
+      autoReplyEnabled: request.data?.autoReplyEnabled !== false,
+      autoReplyText: autoReplyText || DEFAULT_AUTO_REPLY,
+      quickReplies: sanitizeQuickReplies(request.data?.quickReplies),
+    };
+    await db.doc(WHATSAPP_SETTINGS_PATH).set({ inbox: { ...inbox, updatedAt: FieldValue.serverTimestamp(), updatedByUid: uid } }, { merge: true });
+    await db.collection("platformAuditLogs").add({ action: "whatsapp.inbox_settings_updated", actorUid: uid, autoReplyEnabled: inbox.autoReplyEnabled, createdAt: FieldValue.serverTimestamp() });
+    return { success: true, ...inbox, defaultAutoReply: DEFAULT_AUTO_REPLY };
+  },
 );
 
 /* ── İşlem sonrası memnuniyet anketi (WhatsApp) ──────────────────────────────────────────────────────────────── */

@@ -22,6 +22,8 @@ const FIREBASE_CONFIG = ${JSON.stringify(publicConfig)};
 const FCM_MSG_KEY = "FCM_MSG";
 
 function targetPath(data) {
+  // Süper admin bildirimleri kendi sayfasını taşır (ör. WhatsApp gelen kutusu); yalnız site içi yol kabul edilir.
+  if (data && data.audience === "admin" && typeof data.url === "string" && data.url.charAt(0) === "/" && data.url.charAt(1) !== "/") return data.url;
   if (data && data.audience === "business") return "/dashboard/randevular";
   return "/hesabim?tab=appointments";
 }

@@ -16,7 +16,7 @@ import {
 } from "../_pages-ui";
 import s from "./whatsapp.module.css";
 
-const TYPE_LABEL: Record<string, string> = { confirmation: "Onay", reminder: "Hatırlatma", reschedule: "Saat değişikliği", cancellation: "İptal" };
+const TYPE_LABEL: Record<string, string> = { confirmation: "Onay", reminder: "Hatırlatma", reschedule: "Saat değişikliği", cancellation: "İptal", followup: "Memnuniyet anketi", inbox_reply: "Gelen kutusu cevabı", inbox_auto: "Otomatik cevap" };
 const STATUS_LABEL: Record<string, { label: string; tone: Tone }> = {
   accepted: { label: "Meta kabul etti", tone: "neutral" },
   sent: { label: "Gönderildi", tone: "blue" },
