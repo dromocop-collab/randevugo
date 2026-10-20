@@ -232,3 +232,94 @@ export function summarizeWhatsAppMessages(rows: WhatsAppMessageRow[]) {
   const settled = reached + byStatus.failed;
   return { total, byStatus, byType, errors, deliveryRate: settled ? Math.round((reached / settled) * 1000) / 10 : null, readRate: reached ? Math.round((byStatus.read / reached) * 1000) / 10 : null };
 }
+
+/* ── İşlem sonrası memnuniyet (sr_islem_sonrasi: {{1}} işletme, {{2}} hizmet; 3 hızlı yanıt) ─────────────────── */
+
+export const FOLLOW_UP_TEMPLATE = "sr_islem_sonrasi";
+/** Randevu "tamamlandı" olduktan sonra bekleme. */
+export const FOLLOW_UP_DELAY_MS = 2 * 60 * 60_000;
+/** Tamamlanmadan bu kadar süre geçtiyse anket gönderilmez (eski kayıt toplu tamamlanmış olabilir). */
+export const FOLLOW_UP_MAX_AGE_MS = 24 * 60 * 60_000;
+
+/** Hızlı yanıt metni → puan. Meta düğme metnini aynen geri gönderir. */
+export function followUpRating(text: unknown): { rating: number; label: string } | null {
+  const value = String(text ?? "").trim().toLocaleLowerCase("tr-TR");
+  if (value === "harikaydı") return { rating: 5, label: "Harikaydı" };
+  if (value === "iyiydi") return { rating: 4, label: "İyiydi" };
+  if (value === "geliştirilebilir") return { rating: 2, label: "Geliştirilebilir" };
+  return null;
+}
+
+export function buildFollowUpTemplate(to: string, params: { businessName: string; serviceName: string }, language: string, name = FOLLOW_UP_TEMPLATE) {
+  const text = (value: string, fallback: string) => (value.replace(/[\n\t]+/g, " ").replace(/ {4,}/g, "   ").trim() || fallback).slice(0, 200);
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "template",
+    template: {
+      name,
+      language: { code: language },
+      components: [{ type: "body", parameters: [text(params.businessName, "İşletme"), text(params.serviceName, "Hizmet")].map((value) => ({ type: "text", text: value })) }],
+    },
+  };
+}
+
+export type IncomingReply = { messageId: string; from: string; contextId: string | null; text: string };
+
+/** Webhook gövdesinden müşterinin düğme yanıtları (şablon hızlı yanıtı "button", etkileşimli "button_reply"). */
+export function extractIncomingReplies(body: unknown): IncomingReply[] {
+  const out: IncomingReply[] = [];
+  const entries = (body as { entry?: unknown[] })?.entry;
+  if (!Array.isArray(entries)) return out;
+  for (const entry of entries) {
+    for (const change of ((entry as { changes?: unknown[] })?.changes ?? [])) {
+      const messages = (change as { value?: { messages?: unknown[] } })?.value?.messages;
+      if (!Array.isArray(messages)) continue;
+      for (const raw of messages) {
+        const row = raw as { id?: unknown; from?: unknown; type?: unknown; context?: { id?: unknown };
+          button?: { text?: unknown; payload?: unknown }; interactive?: { button_reply?: { title?: unknown } } };
+        if (typeof row.id !== "string" || typeof row.from !== "string") continue;
+        const text = row.type === "button" ? row.button?.text ?? row.button?.payload
+          : row.type === "interactive" ? row.interactive?.button_reply?.title : undefined;
+        if (typeof text !== "string" || !text.trim()) continue;
+        out.push({ messageId: row.id, from: row.from, contextId: typeof row.context?.id === "string" ? row.context.id : null, text: text.trim() });
+      }
+    }
+  }
+  return out;
+}
+
+/** İşletmenin Instagram değeri (kullanıcı adı, @ad ya da bağlantı) → profil adresi; geçersizse null. */
+export function instagramProfileUrl(value: unknown): string | null {
+  let handle = String(value ?? "").trim();
+  if (!handle) return null;
+  const match = /instagram\.com\/([^/?#\s]+)/i.exec(handle);
+  if (match) handle = match[1]!;
+  handle = handle.replace(/^@/, "").replace(/\/+$/, "");
+  return /^[A-Za-z0-9._]{1,30}$/.test(handle) ? `https://www.instagram.com/${handle}` : null;
+}
+
+/** Yanıta göre teşekkür metni (müşteri yazdıktan sonraki 24 saat içinde şablonsuz gönderilir). */
+export function followUpThanksText(rating: number, businessName: string, storeUrl: string | null): string {
+  if (rating >= 5) {
+    return `Çok teşekkür ederiz! 💚 Güzel görüşünüzü ${businessName} ile paylaştık.${storeUrl ? `\n\nDeneyiminizi başkalarıyla paylaşmak isterseniz buradan yorum bırakabilirsiniz:\n${storeUrl}` : ""}`;
+  }
+  if (rating >= 4) return `Teşekkür ederiz! 💚 Görüşünüz ${businessName} ile paylaşıldı. Sizi yeniden görmek isteriz.`;
+  return `Geri bildiriminiz için teşekkürler. 🙏 Görüşünüz ${businessName} ile paylaşıldı; bir dahaki ziyaretinizde daha iyi bir deneyim için çalışacağız.`;
+}
+
+export function buildTextMessage(to: string, body: string) {
+  return { messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { preview_url: true, body: body.slice(0, 4000) } };
+}
+
+/** Tek bağlantı düğmeli etkileşimli mesaj (yalnız müşterinin yazdığı 24 saatlik pencerede). */
+export function buildCtaUrlMessage(to: string, body: string, buttonText: string, url: string) {
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "interactive",
+    interactive: { type: "cta_url", body: { text: body.slice(0, 1024) }, action: { name: "cta_url", parameters: { display_text: buttonText.slice(0, 20), url } } },
+  };
+}

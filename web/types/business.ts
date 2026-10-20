@@ -40,6 +40,8 @@ export interface SmsPreferences {
   reschedule?: boolean;
   /** true: bildirimler önce WhatsApp'tan gider; ulaşmazsa otomatik SMS (platform WhatsApp kanalı açıksa). */
   whatsappFirst?: boolean;
+  /** false: işlem sonrası WhatsApp memnuniyet mesajı gönderilmez (varsayılan açık). */
+  followUp?: boolean;
 }
 
 export interface DaySchedule {

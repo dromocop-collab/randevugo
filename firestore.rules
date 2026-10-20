@@ -557,6 +557,12 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // WhatsApp işlem sonrası memnuniyet yanıtları: yalnız sunucu yazar (whatsappWebhook), işletme yönetimi okur.
+      match /feedback/{appointmentId} {
+        allow read: if canManage(businessId) || isPlatformAdmin();
+        allow write: if false;
+      }
+
       match /bookingDayLocks/{dateKey} {
         allow read, write: if false;
       }

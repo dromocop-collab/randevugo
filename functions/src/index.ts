@@ -27,7 +27,7 @@ import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { maskTaxId, normalizeBillingProfile, vatBreakdown } from "./billing-domain.js";
-import { DEFAULT_TEMPLATES, buildTemplateMessage, buttonTemplateReady, isButtonTemplate, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, toWhatsAppPhone, verifyWebhookSignature, whatsappReadiness, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
+import { DEFAULT_TEMPLATES, FOLLOW_UP_DELAY_MS, FOLLOW_UP_MAX_AGE_MS, buildCtaUrlMessage, buildFollowUpTemplate, buildTextMessage, extractIncomingReplies, followUpRating, followUpThanksText, instagramProfileUrl, buildTemplateMessage, buttonTemplateReady, isButtonTemplate, extractStatuses, parseWhatsAppConfig, parseWhatsAppWebhookSecrets, summarizeWhatsAppMessages, toWhatsAppPhone, verifyWebhookSignature, whatsappReadiness, type AppointmentMessageType, type WhatsAppConfig } from "./whatsapp-domain.js";
 import { SMS_PACKS, consumeSms, findSmsPack, normalizeSmsUsage, planSmsQuota, smsAllowance, smsPeriodKey, smsQuotaWarning } from "./sms-quota-domain.js";
 import { PAYTR_CHECKOUT_BASE, PAYTR_TOKEN_URL, buildUserBasket, isMerchantOid, newMerchantOid, paidPeriodWindow, parsePaytrConfig, paytrCustomerFields, paytrRequestToken, toKurus, verifyPaytrCallback, type BillingCycle, type PaytrConfig } from "./paytr-domain.js";
 import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, type BusinessGeo } from "./geo-domain.js";
@@ -5431,6 +5431,10 @@ export const appointmentAutomationUpdated = onDocumentUpdated(
     } else if (before.status === "pending" && after.status === "confirmed") {
       await sendAppointmentPush(event.params.businessId, event.params.appointmentId, after, "confirmed");
     }
+    if (before.status !== "completed" && after.status === "completed") {
+      await scheduleWhatsAppFollowUp(event.params.businessId, event.params.appointmentId, after)
+        .catch((error) => logger.warn("Memnuniyet mesajı planlanamadı", { error: String(error) }));
+    }
     if (before.status !== "cancelled" && after.status === "cancelled") {
       await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "cancellation");
     } else if (beforeStart !== afterStart && ["pending", "confirmed"].includes(String(after.status))) {
@@ -6189,9 +6193,107 @@ export const whatsappWebhook = onRequest(
         scheduledAt: Timestamp.now(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
     }
+    for (const reply of extractIncomingReplies(req.body)) {
+      await handleFollowUpReply(reply).catch((error) => logger.warn("Memnuniyet yanıtı işlenemedi", { error: String(error) }));
+    }
     res.status(200).send("OK");
   }
 );
+
+/* ── İşlem sonrası memnuniyet anketi (WhatsApp) ──────────────────────────────────────────────────────────────── */
+
+const whatsappMessageRef = (messageId: string) => db.doc(`whatsappMessages/${createHash("sha256").update(messageId).digest("hex").slice(0, 40)}`);
+
+/** Randevu tamamlanınca 2 saat sonrası için tek seferlik anket işi. İşletme kapatmışsa (smsPreferences.followUp === false) gönderilmez. */
+async function scheduleWhatsAppFollowUp(businessId: string, appointmentId: string, appointment: FirebaseFirestore.DocumentData) {
+  if (!appointment.customerPhone || appointment.followUp?.scheduledAt) return;
+  const business = (await db.doc(`businesses/${businessId}`).get()).data() ?? {};
+  if ((business.smsPreferences as Record<string, unknown> | undefined)?.followUp === false) return;
+  const due = Date.now() + FOLLOW_UP_DELAY_MS;
+  await db.doc(`whatsappFollowUps/${businessId}_${appointmentId}`).create({
+    businessId, appointmentId, scheduledAt: Timestamp.fromMillis(due), completedAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(due + FOLLOW_UP_MAX_AGE_MS),
+  }).catch(() => undefined); // zaten planlı → bir kez
+}
+
+async function processDueWhatsAppFollowUps() {
+  const due = await db.collection("whatsappFollowUps").where("scheduledAt", "<=", Timestamp.now()).limit(20).get();
+  if (due.empty) return;
+  const config = await loadWhatsAppConfig();
+  for (const job of due.docs) {
+    const { businessId, appointmentId, scheduledAt } = job.data() as { businessId: string; appointmentId: string; scheduledAt: Timestamp };
+    await job.ref.delete();
+    if (!config) continue; // kanal kapalı: anket yalnız WhatsApp'tan gider, SMS'e düşmez
+    if (Date.now() - scheduledAt.toMillis() > FOLLOW_UP_MAX_AGE_MS) continue;
+    const appointmentRef = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    const [appointmentSnap, businessSnap] = await Promise.all([appointmentRef.get(), db.doc(`businesses/${businessId}`).get()]);
+    const appointment = appointmentSnap.data(); const business = businessSnap.data();
+    if (!appointment || !business || appointment.status !== "completed" || appointment.followUp?.sentAt) continue;
+    if ((business.smsPreferences as Record<string, unknown> | undefined)?.followUp === false) continue;
+    const to = toWhatsAppPhone(appointment.customerPhone);
+    if (!to) continue;
+    const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildFollowUpTemplate(to, { businessName: String(business.name ?? ""), serviceName: String(appointment.serviceName ?? "") }, config.language)),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    const body = await response?.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string } } | null;
+    const messageId = body?.messages?.[0]?.id;
+    if (!response?.ok || !messageId) {
+      logger.warn("Memnuniyet şablonu reddedildi", { businessId, status: response?.status ?? 0, code: body?.error?.code, message: shortText(body?.error?.message, 200) });
+      continue;
+    }
+    const batch = db.batch();
+    batch.set(whatsappMessageRef(messageId), {
+      messageId, businessId, appointmentId, type: "followup", phoneMasked: `******${to.slice(-4)}`, status: "accepted",
+      createdAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+    });
+    batch.update(appointmentRef, { "followUp.sentAt": FieldValue.serverTimestamp(), "followUp.messageId": messageId });
+    batch.set(db.doc(`smsUsage/${businessId}`), { businessId, whatsappSent: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await batch.commit();
+  }
+}
+
+/** Müşterinin hızlı yanıtı: puanı işletmenin feedback kaydına yazar (bir kez) ve teşekkür mesajı gönderir. */
+async function handleFollowUpReply(reply: { messageId: string; from: string; contextId: string | null; text: string }) {
+  if (!reply.contextId) return;
+  const choice = followUpRating(reply.text);
+  if (!choice) return;
+  const original = (await whatsappMessageRef(reply.contextId).get()).data();
+  if (!original || original.type !== "followup" || !original.businessId || !original.appointmentId) return;
+  const businessId = String(original.businessId); const appointmentId = String(original.appointmentId);
+  const [appointmentSnap, businessSnap] = await Promise.all([
+    db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get(), db.doc(`businesses/${businessId}`).get(),
+  ]);
+  const appointment = appointmentSnap.data() ?? {}; const business = businessSnap.data() ?? {};
+  const created = await db.doc(`businesses/${businessId}/feedback/${appointmentId}`).create({
+    appointmentId, rating: choice.rating, label: choice.label, source: "whatsapp",
+    customerName: String(appointment.customerName ?? "").slice(0, 80),
+    serviceName: String(appointment.serviceName ?? "").slice(0, 120),
+    staffId: typeof appointment.staffId === "string" ? appointment.staffId : null,
+    staffName: String(appointment.staffName ?? "").slice(0, 80),
+    appointmentStartAt: appointment.startAt ?? null,
+    createdAt: FieldValue.serverTimestamp(),
+  }).then(() => true).catch(() => false);
+  if (!created) return; // aynı ankete ikinci yanıt: yeniden teşekkür etme
+  const config = await loadWhatsAppConfig();
+  const to = toWhatsAppPhone(reply.from);
+  if (!config || !to) return;
+  const businessName = String(business.name ?? "İşletme").slice(0, 70);
+  const storeUrl = typeof business.slug === "string" && business.slug ? `https://seninrandevun.com/isletme/${business.slug}` : null;
+  const instagram = instagramProfileUrl((business.socialMedia as Record<string, unknown> | undefined)?.instagram);
+  const text = followUpThanksText(choice.rating, businessName, storeUrl);
+  const payload = instagram
+    ? buildCtaUrlMessage(to, `${text}\n\n📸 Yeni çalışmalarımızı kaçırmamak için bizi Instagram'da takip edin.`, "📸 Instagram", instagram)
+    : buildTextMessage(to, text);
+  await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+}
 
 async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference) {
   let job: FirebaseFirestore.DocumentData | null = null;
@@ -6380,6 +6482,7 @@ export const sendAppointmentSmsJobs = onSchedule(
     for (const document of snapshot.docs) {
       await processAppointmentSmsJob(document.ref);
     }
+    await processDueWhatsAppFollowUps().catch((error) => logger.warn("Memnuniyet mesajları işlenemedi", { error: String(error) }));
   }
 );
 

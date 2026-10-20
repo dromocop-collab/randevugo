@@ -123,3 +123,32 @@ test("button templates: date/time split body, url buttons carry the token (cance
   assert.equal(classic.template.components.length, 1);
   assert.equal(classic.template.components[0].parameters.length, 4);
 });
+
+test("follow-up survey: ratings, template, incoming replies, instagram links, thanks", async () => {
+  const d = await import("../lib/whatsapp-domain.js");
+  assert.deepEqual(d.followUpRating(" Harikaydı "), { rating: 5, label: "Harikaydı" });
+  assert.equal(d.followUpRating("İYİYDİ")?.rating, 4);
+  assert.equal(d.followUpRating("Geliştirilebilir")?.rating, 2);
+  assert.equal(d.followUpRating("merhaba"), null);
+  const t = d.buildFollowUpTemplate("905301234567", { businessName: "Erdem Kuaför", serviceName: "" }, "tr");
+  assert.equal(t.template.name, "sr_islem_sonrasi");
+  assert.deepEqual(t.template.components[0].parameters.map((p) => p.text), ["Erdem Kuaför", "Hizmet"]);
+  const body = { entry: [{ changes: [{ value: { messages: [
+    { id: "m1", from: "905301234567", type: "button", context: { id: "wamid.X" }, button: { text: "Harikaydı", payload: "Harikaydı" } },
+    { id: "m2", from: "905301234567", type: "text", text: { body: "selam" } },
+    { id: "m3", from: "905301234567", type: "interactive", interactive: { button_reply: { title: "İyiydi" } } },
+  ] } }] }] };
+  assert.deepEqual(d.extractIncomingReplies(body), [
+    { messageId: "m1", from: "905301234567", contextId: "wamid.X", text: "Harikaydı" },
+    { messageId: "m3", from: "905301234567", contextId: null, text: "İyiydi" },
+  ]);
+  assert.equal(d.instagramProfileUrl("@erdem.kuafor"), "https://www.instagram.com/erdem.kuafor");
+  assert.equal(d.instagramProfileUrl("https://instagram.com/erdemkuafor/?hl=tr"), "https://www.instagram.com/erdemkuafor");
+  assert.equal(d.instagramProfileUrl("kötü ad!"), null);
+  assert.equal(d.instagramProfileUrl(""), null);
+  assert.match(d.followUpThanksText(5, "Erdem Kuaför", "https://seninrandevun.com/isletme/erdem"), /yorum bırakabilirsiniz:\nhttps/);
+  assert.doesNotMatch(d.followUpThanksText(5, "Erdem Kuaför", null), /http/);
+  assert.match(d.followUpThanksText(2, "Erdem Kuaför", null), /daha iyi/);
+  const cta = d.buildCtaUrlMessage("9053", "Takip edin", "Instagram'da Takip Et", "https://www.instagram.com/x");
+  assert.equal(cta.interactive.action.parameters.display_text.length <= 20, true);
+});

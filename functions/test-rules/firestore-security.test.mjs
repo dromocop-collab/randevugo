@@ -211,3 +211,13 @@ test("işletme sahibi konumu (geo) istemciden değiştiremez", async () => {
   await assertFails(updateDoc(doc(as("owner"), `businesses/${BIZ}`), { geo: { lat: 41, lng: 29, precision: "address", fingerprint: "x" } }));
   await assertFails(updateDoc(doc(as("manager"), `businesses/${BIZ}`), { geoAttemptFingerprint: "x" }));
 });
+
+test("WhatsApp memnuniyet yanıtları: yönetici okur, kimse yazamaz, personel ve yabancı okuyamaz", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), `businesses/${BIZ}/feedback/a1`), { rating: 5, label: "Harikaydı" }));
+  await assertSucceeds(getDoc(doc(as("owner"), `businesses/${BIZ}/feedback/a1`)));
+  await assertSucceeds(getDoc(doc(as("manager"), `businesses/${BIZ}/feedback/a1`)));
+  await assertFails(getDoc(doc(as("staff1"), `businesses/${BIZ}/feedback/a1`)));
+  await assertFails(getDoc(doc(as("attacker"), `businesses/${BIZ}/feedback/a1`)));
+  await assertFails(setDoc(doc(as("owner"), `businesses/${BIZ}/feedback/a2`), { rating: 5 }));
+  await assertFails(getDoc(doc(as("owner"), `whatsappFollowUps/${BIZ}_a1`)));
+});

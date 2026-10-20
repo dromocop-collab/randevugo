@@ -173,6 +173,7 @@ export default function SettingsPage() {
           cancellation: biz.smsPreferences?.cancellation !== false,
           reschedule: biz.smsPreferences?.reschedule !== false,
           whatsappFirst: biz.smsPreferences?.whatsappFirst !== false,
+          followUp: biz.smsPreferences?.followUp !== false,
         },
       };
       setRules(nextRules);
@@ -641,6 +642,10 @@ export default function SettingsPage() {
                     note={t("Açık bildirimler önce WhatsApp'tan gider ve SMS kotanızdan düşmez; WhatsApp'ı olmayan müşteriye otomatik SMS gönderilir.")}
                     checked={rules.smsPreferences.whatsappFirst !== false}
                     onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, whatsappFirst: checked })} />
+                  <ToggleRow icon={MessageSquareText} title={t("İşlem sonrası memnuniyet mesajı")}
+                    note={t("Randevu tamamlandıktan 2 saat sonra müşteriye WhatsApp'tan teşekkür ve tek soruluk memnuniyet mesajı gider. Yanıtlar Yorumlar sayfasında görünür; Instagram hesabınız varsa teşekkür mesajında takip düğmesi çıkar.")}
+                    checked={rules.smsPreferences.followUp !== false}
+                    onChange={(checked) => setRule("smsPreferences", { ...rules.smsPreferences, followUp: checked })} />
                 </div>
                 <p className={st.footnote}><ShieldCheck size={14} aria-hidden /> {t("Doğrulama kodu SMS’i güvenlik nedeniyle her zaman açıktır. WhatsApp kanalı platformda etkinleştirilene kadar tüm bildirimler SMS ile gider.")}</p>
 

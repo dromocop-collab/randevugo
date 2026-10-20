@@ -520,5 +520,18 @@
   "Seçili şubenin çalışma saatlerini kopyala": "Copy working hours from the selected branch",
   "Kurulumdan sonra yeni şubeye özel saatleri değiştirebilirsiniz.": "You can change the new branch's hours after setup.",
   "Onay süreci": "Approval process",
-  "Yeni şube taslak olarak oluşturulur. Süper Admin adres, kategori ve firma bağlantısını onayladıktan sonra müşterilere açılır.": "The new branch is created as a draft. It opens to customers once Super Admin approves its address, category and company link."
+  "Yeni şube taslak olarak oluşturulur. Süper Admin adres, kategori ve firma bağlantısını onayladıktan sonra müşterilere açılır.": "The new branch is created as a draft. It opens to customers once Super Admin approves its address, category and company link.",
+  "İşlem sonrası memnuniyet mesajı": "After-visit satisfaction message",
+  "Randevu tamamlandıktan 2 saat sonra müşteriye WhatsApp'tan teşekkür ve tek soruluk memnuniyet mesajı gider. Yanıtlar Yorumlar sayfasında görünür; Instagram hesabınız varsa teşekkür mesajında takip düğmesi çıkar.": "Two hours after an appointment is completed, the customer gets a thank-you and a one-question satisfaction message on WhatsApp. Answers appear on the Reviews page; if you've added Instagram, the thank-you message includes a follow button.",
+  "Harikaydı": "Great",
+  "İyiydi": "Good",
+  "Geliştirilebilir": "Could be better",
+  "WhatsApp memnuniyeti": "WhatsApp satisfaction",
+  "İşlem sonrası tek soruluk mesaja verilen yanıtlar · mağaza puanına eklenmez": "Answers to the one-question after-visit message · not added to your store rating",
+  "memnun müşteri": "satisfied customers",
+  "{count} yanıt": {
+    "one": "{count} answer",
+    "other": "{count} answers"
+  },
+  "Yanıt dağılımı": "Answer breakdown"
 }

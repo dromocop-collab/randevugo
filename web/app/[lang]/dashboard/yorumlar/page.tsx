@@ -40,6 +40,7 @@ import {
   type PillTone,
 } from "../_studio";
 import css from "./reviews.module.css";
+import { WhatsAppFeedbackPanel } from "@/features/feedback/whatsapp-feedback-panel";
 import { tk } from "@/i18n/config";
 import { useIntlLocale, useT } from "@/i18n/client";
 
@@ -224,6 +225,8 @@ export default function ReviewsManagementPage() {
         <HeroChip icon={Clock3} value={counts.pending} label={t("onay bekliyor")} />
         <HeroChip icon={MessageSquareReply} value={counts.unanswered} label={t("yanıtsız")} />
       </StudioHero>
+
+      {businessId ? <WhatsAppFeedbackPanel businessId={businessId} /> : null}
 
       {loading ? (
         <StudioSkeleton stats={0} rows={3} label={t("Yorumlar yükleniyor")} />
