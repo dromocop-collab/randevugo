@@ -13,7 +13,7 @@ import {
 import { HttpsError, onCall, onRequest, type CallableRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { X509Certificate, createHash, randomUUID, randomInt } from "crypto";
+import { X509Certificate, createHash, randomUUID, randomInt, randomBytes } from "crypto";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import { ACTIVE_QUEUE_STATUSES, canTransitionQueue, isActiveQueueStatus, isQueueStatus, isSameActiveJoin, liveOperationsGate, liveQueueGate, operatorQueueTransitions, queueIntakeOpen, validateQueueSelection, type QueueStatus } from "./live-queue-domain.js";
@@ -34,6 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
+import { DAILY_SHARDS, EVENT_TTL_MS, buildJourneys, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
@@ -9723,6 +9724,243 @@ export const sendWhatsAppTest = onCall(
       expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
     });
     return { success: true, messageId };
+  },
+);
+
+/* ── Ziyaretçi analitiği (sunucuda sayım) ──────────────────────────────────────────────────────────────────── */
+
+const ANALYTICS_SETTINGS_PATH = "platformPrivateSettings/analytics";
+let analyticsSecretCache: string | null = null;
+
+/** HMAC gizli anahtarı: ilk kullanımda üretilir, yalnız sunucuda durur (IP'den kimlik geri çıkarılamaz). */
+async function analyticsSecret(): Promise<string> {
+  if (analyticsSecretCache) return analyticsSecretCache;
+  const ref = db.doc(ANALYTICS_SETTINGS_PATH);
+  const secret = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const existing = String(snapshot.data()?.visitorSecret ?? "");
+    if (existing.length >= 32) return existing;
+    const created = randomBytes(32).toString("hex");
+    tx.set(ref, { visitorSecret: created, createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    return created;
+  });
+  analyticsSecretCache = secret;
+  return secret;
+}
+
+const analyticsAdminCache = new Map<string, { at: number; admin: boolean }>();
+async function isAnalyticsExcludedUser(uid: string | undefined, email: string | undefined) {
+  if (!uid) return false;
+  const cached = analyticsAdminCache.get(uid);
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.admin;
+  const admin = await isPlatformAdminAccount(uid, email).catch(() => false);
+  analyticsAdminCache.set(uid, { at: Date.now(), admin });
+  return admin;
+}
+
+/**
+ * Sitedeki her sayfa açılışı (type "view") ve görünür sekmede dakikada bir canlılık sinyali (type "ping").
+ * Aynı cihaz + IP = tek ziyaretçi; aynı sayfa 30 dk içinde tekrar sayılmaz; yöneticiler / botlar / otomasyon hariç.
+ */
+export const trackVisit = onCall(
+  { ...publicCallableOptions, memory: "256MiB", maxInstances: 20, concurrency: 80 },
+  async (request) => {
+    const raw = request.rawRequest;
+    const userAgent = String(raw.headers["user-agent"] ?? "").slice(0, 400);
+    const kind = request.data?.type === "ping" ? "ping" : "view";
+    const now = Date.now();
+    const parts = istanbulParts(now);
+    const shardRef = db.doc(`analyticsDaily/${parts.day}/shards/${Math.floor(Math.random() * DAILY_SHARDS)}`);
+    const excluded = request.data?.webdriver === true || isBotUserAgent(userAgent)
+      || await isAnalyticsExcludedUser(request.auth?.uid, request.auth?.token.email as string | undefined);
+    if (excluded) {
+      if (kind === "view") await shardRef.set({ excluded: FieldValue.increment(1), day: parts.day }, { merge: true }).catch(() => undefined);
+      return { ok: true, counted: false };
+    }
+    const target = normalizeTrackedPath(request.data?.path);
+    if (!target) return { ok: true, counted: false };
+
+    const ip = clientIpFrom(raw as unknown as { headers: Record<string, unknown>; ip?: string });
+    const visitorId = visitorIdFor(await analyticsSecret(), ip, userAgent, String(raw.headers["accept-language"] ?? ""));
+    const visitorRef = db.doc(`analyticsVisitors/${visitorId}`);
+    const dedupRef = db.doc(`analyticsDedup/${createHash("sha256").update(`${visitorId}|${target.path}`).digest("hex").slice(0, 32)}`);
+    const pageType = pageTypeOf(target.path);
+    const width = Number(request.data?.width);
+    const agent = parseUserAgent(userAgent, Number.isFinite(width) ? width : null);
+    const referrerHost = typeof request.data?.referrer === "string" ? request.data.referrer.trim().toLowerCase().slice(0, 120) || null : null;
+    const utm = (key: string) => typeof request.data?.[key] === "string" ? String(request.data[key]).trim().toLowerCase().slice(0, 60) || null : null;
+    const source = classifySource({ referrerHost, utmSource: utm("utmSource"), utmMedium: utm("utmMedium"), siteHost: "seninrandevun.com" });
+
+    const result = await db.runTransaction(async (tx) => {
+      const [visitorSnap, dedupSnap] = await Promise.all([tx.get(visitorRef), kind === "view" ? tx.get(dedupRef) : Promise.resolve(null)]);
+      const visitor = visitorSnap.data() ?? {};
+      const lastSeen = visitor.lastSeenAt instanceof Timestamp ? visitor.lastSeenAt.toMillis() : 0;
+      // Kötüye kullanım sınırı: ziyaretçi başına saatte en fazla 300 kayıt.
+      const windowStart = visitor.windowStartAt instanceof Timestamp ? visitor.windowStartAt.toMillis() : 0;
+      const windowFresh = now - windowStart < 3_600_000;
+      const windowCount = windowFresh ? Number(visitor.windowCount ?? 0) : 0;
+      if (windowCount >= 300) return { counted: false };
+      const live = { lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path, lastPageType: pageType,
+        windowStartAt: windowFresh ? visitor.windowStartAt : Timestamp.fromMillis(now), windowCount: windowCount + 1,
+        expiresAt: Timestamp.fromMillis(now + 400 * 86_400_000) };
+      if (kind === "ping") {
+        if (!visitorSnap.exists) return { counted: false };
+        tx.set(visitorRef, live, { merge: true });
+        return { counted: false };
+      }
+      const dedupAt = dedupSnap?.data()?.lastAt instanceof Timestamp ? (dedupSnap.data()!.lastAt as Timestamp).toMillis() : 0;
+      if (dedupAt && now - dedupAt < VIEW_DEDUP_MS) {
+        tx.set(visitorRef, live, { merge: true });
+        return { counted: false };
+      }
+      const isNew = !visitorSnap.exists;
+      const newSession = !lastSeen || now - lastSeen > SESSION_GAP_MS;
+      const firstToday = visitor.lastDay !== parts.day;
+      const typesToday: string[] = firstToday ? [] : Array.isArray(visitor.typesToday) ? visitor.typesToday.map(String) : [];
+      const firstOfType = !typesToday.includes(pageType);
+      // Oturumun kaynağı oturum başında belirlenir; site içi gezinti kaynağı değiştirmez.
+      const sessionSource = newSession || !visitor.sessionSourceKind
+        ? (source.kind === "internal" ? { kind: "direct", label: "Doğrudan" } : source)
+        : { kind: String(visitor.sessionSourceKind), label: String(visitor.sessionSourceLabel ?? "") };
+      const inc = (value: number) => FieldValue.increment(value);
+      const shard: Record<string, unknown> = {
+        day: parts.day, views: inc(1), byPath: { [mapKey(target.path)]: inc(1) }, byType: { [pageType]: inc(1) },
+        byHour: { [String(parts.hour)]: inc(1) },
+      };
+      if (firstToday) {
+        Object.assign(shard, {
+          visitors: inc(1), byDevice: { [agent.device]: inc(1) }, byBrowser: { [mapKey(agent.browser)]: inc(1) },
+          byOs: { [mapKey(agent.os)]: inc(1) }, byLang: { [target.lang]: inc(1) },
+        });
+      }
+      if (isNew) shard.newVisitors = inc(1);
+      if (newSession) {
+        Object.assign(shard, {
+          sessions: inc(1), bySource: { [mapKey(`${sessionSource.kind}|${sessionSource.label}`)]: inc(1) }, bySourceKind: { [sessionSource.kind]: inc(1) },
+          byEntry: { [mapKey(target.path)]: inc(1) },
+        });
+      }
+      if (firstOfType) {
+        shard.typeVisitors = { [pageType]: inc(1) };
+        if (sessionSource.kind === "ads") shard.adsTypeVisitors = { [pageType]: inc(1) };
+      }
+      tx.set(shardRef, shard, { merge: true });
+      tx.set(visitorRef, {
+        ...live, lastDay: parts.day, typesToday: firstOfType ? [...typesToday, pageType].slice(0, 20) : typesToday,
+        sessionSourceKind: sessionSource.kind, sessionSourceLabel: sessionSource.label,
+        ...(newSession ? { sessionStartAt: Timestamp.fromMillis(now) } : {}),
+        views: inc(1), sessions: inc(newSession ? 1 : 0), device: agent.device,
+        ...(isNew ? { firstSeenAt: Timestamp.fromMillis(now), firstSourceKind: sessionSource.kind, firstSourceLabel: sessionSource.label } : {}),
+      }, { merge: true });
+      tx.set(dedupRef, { lastAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + 86_400_000) });
+      tx.set(db.collection("analyticsEvents").doc(), {
+        at: Timestamp.fromMillis(now), path: target.path, lang: target.lang, pageType, device: agent.device, browser: agent.browser, os: agent.os,
+        sourceKind: sessionSource.kind, sourceLabel: sessionSource.label, newVisitor: isNew, newSession,
+        visitor: visitorId.slice(0, 6), returning: !isNew && newSession,
+        session: `${visitorId.slice(0, 10)}-${newSession ? now : (visitor.sessionStartAt instanceof Timestamp ? visitor.sessionStartAt.toMillis() : now)}`,
+        expiresAt: Timestamp.fromMillis(now + EVENT_TTL_MS),
+      });
+      return { counted: true };
+    });
+    return { ok: true, counted: result.counted };
+  },
+);
+
+/** Süper admin › Ziyaretçi analitiği: günlük toplamlar (parçalı), canlı ziyaretçiler, huniler, son ziyaretler. */
+export const getVisitorAnalytics = onCall(
+  { region: "europe-west1", timeoutSeconds: 60, memory: "512MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const span = [1, 7, 30, 90].includes(Number(request.data?.days)) ? Number(request.data?.days) : 30;
+    const now = Date.now();
+    const current = dayRange(now, span);
+    const previous = dayRange(now - span * 86_400_000, span);
+    const shardRefs = (days: string[]) => days.flatMap((day) => Array.from({ length: DAILY_SHARDS }, (_, index) => db.doc(`analyticsDaily/${day}/shards/${index}`)));
+    const [currentDocs, previousDocs] = await Promise.all([db.getAll(...shardRefs(current)), db.getAll(...shardRefs(previous))]);
+    const byDay = new Map<string, Array<Record<string, unknown>>>();
+    currentDocs.forEach((snapshot) => {
+      if (!snapshot.exists) return;
+      const day = snapshot.ref.parent.parent!.id;
+      byDay.set(day, [...(byDay.get(day) ?? []), snapshot.data()!]);
+    });
+    const totals = mergeAggregates(currentDocs.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.data()!));
+    const before = mergeAggregates(previousDocs.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.data()!));
+    const adsTypes = mergeAggregates(currentDocs.filter((snapshot) => snapshot.exists).map((snapshot) => ({ byType: snapshot.data()!.adsTypeVisitors })));
+
+    const series = current.map((day) => {
+      const merged = mergeAggregates(byDay.get(day) ?? []);
+      return { day, views: merged.views, visitors: merged.visitors, sessions: merged.sessions, newVisitors: merged.newVisitors };
+    });
+    // Haftanın günü × saat ısı haritası (görüntüleme).
+    const heatmap = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    current.forEach((day) => {
+      const merged = mergeAggregates(byDay.get(day) ?? []);
+      const weekday = istanbulParts(Date.parse(`${day}T12:00:00+03:00`)).weekday;
+      Object.entries(merged.byHour).forEach(([hour, value]) => { const h = Number(hour); if (h >= 0 && h < 24) heatmap[weekday]![h]! += value; });
+    });
+
+    const rangeStart = Timestamp.fromMillis(Date.parse(`${current[0]}T00:00:00+03:00`));
+    const liveSince = Timestamp.fromMillis(now - LIVE_WINDOW_MS);
+    const [uniqueVisitors, liveSnap, recentSnap, acquisitionSnap, appointmentCount] = await Promise.all([
+      db.collection("analyticsVisitors").where("lastSeenAt", ">=", rangeStart).count().get().then((result) => result.data().count).catch(() => null),
+      db.collection("analyticsVisitors").where("lastSeenAt", ">=", liveSince).orderBy("lastSeenAt", "desc").limit(200).get(),
+      db.collection("analyticsEvents").orderBy("at", "desc").limit(400).get(),
+      db.collection("businessAcquisitions").where("createdAt", ">=", rangeStart).limit(2000).get().catch(() => null),
+      db.collectionGroup("appointments").where("createdAt", ">=", rangeStart).count().get().then((result) => result.data().count).catch(() => null),
+    ]);
+    const livePages = new Map<string, number>();
+    liveSnap.docs.forEach((document) => { const path = String(document.data().lastPath ?? "/"); livePages.set(path, (livePages.get(path) ?? 0) + 1); });
+    const signups = acquisitionSnap?.size ?? null;
+    const adSignups = acquisitionSnap ? acquisitionSnap.docs.filter((document) => document.data().channel === "meta_ads").length : null;
+    const iso = (value: unknown) => value instanceof Timestamp ? value.toDate().toISOString() : null;
+    const top = (map: Record<string, number>, count = 10) => topEntries(map, count);
+
+    return {
+      range: { days: span, since: current[0], until: current[current.length - 1] },
+      totals: {
+        views: totals.views, visitors: totals.visitors, sessions: totals.sessions, newVisitors: totals.newVisitors, excluded: totals.excluded,
+        uniqueVisitors: uniqueVisitors ?? totals.visitors,
+        pagesPerSession: totals.sessions ? Math.round((totals.views / totals.sessions) * 10) / 10 : null,
+      },
+      change: {
+        views: percentChange(totals.views, before.views), visitors: percentChange(totals.visitors, before.visitors),
+        sessions: percentChange(totals.sessions, before.sessions), newVisitors: percentChange(totals.newVisitors, before.newVisitors),
+      },
+      series,
+      heatmap,
+      live: { count: liveSnap.size, pages: [...livePages.entries()].map(([path, count]) => ({ path, count })).sort((a, b) => b.count - a.count).slice(0, 8) },
+      pages: top(totals.byPath, 12), entries: top(totals.byEntry, 8), sources: top(totals.bySource, 10), sourceKinds: totals.bySourceKind,
+      devices: totals.byDevice, browsers: top(totals.byBrowser, 6), os: top(totals.byOs, 6), langs: totals.byLang, pageTypes: totals.byType,
+      funnels: {
+        business: [
+          { key: "visit", label: "Siteyi ziyaret etti", value: totals.visitors },
+          { key: "landing", label: "İşletmeler / fiyat sayfası", value: (totals.typeVisitors.business_landing ?? 0) + (totals.typeVisitors.pricing ?? 0) },
+          { key: "signup_page", label: "Kayıt sayfasını açtı", value: totals.typeVisitors.business_signup ?? 0 },
+          { key: "signup", label: "İşletme oluşturdu", value: signups },
+        ],
+        booking: [
+          { key: "storefront", label: "İşletme sayfası", value: totals.typeVisitors.storefront ?? 0 },
+          { key: "booking", label: "Randevu ekranı", value: totals.typeVisitors.booking ?? 0 },
+          { key: "appointment", label: "Randevu oluştu", value: appointmentCount },
+        ],
+        ads: [
+          { key: "ads_visit", label: "Reklamdan gelen oturum", value: totals.bySourceKind.ads ?? 0 },
+          { key: "ads_signup_page", label: "Kayıt sayfasını açtı", value: adsTypes.byType.business_signup ?? 0 },
+          { key: "ads_signup", label: "İşletme oluşturdu", value: adSignups },
+        ],
+      },
+      journeys: buildJourneys(recentSnap.docs.map((document) => document.data()), 30),
+      recent: recentSnap.docs.slice(0, 30).map((document) => {
+        const data = document.data();
+        return {
+          id: document.id, at: iso(data.at), path: String(data.path ?? ""), lang: String(data.lang ?? "tr"), pageType: String(data.pageType ?? "other"),
+          device: String(data.device ?? ""), browser: String(data.browser ?? ""), sourceKind: String(data.sourceKind ?? ""), sourceLabel: String(data.sourceLabel ?? ""),
+          newVisitor: data.newVisitor === true, visitor: String(data.visitor ?? ""),
+        };
+      }),
+    };
   },
 );
 
