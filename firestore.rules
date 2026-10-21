@@ -736,6 +736,12 @@ service cloud.firestore {
       allow read: if isAuthenticated() && resource.data.uid == uid();
     }
 
+    // Ziyaretçi analitiği › canlı ziyaretçiler (IP yok; belge kimliği geri çözülemeyen özet). Yalnız süper admin okur.
+    match /analyticsVisitors/{visitorId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
     // Platform özeti › müşteri memnuniyeti (işlem sonrası anket) — yalnız süper admin, salt okuma.
     match /{path=**}/feedback/{appointmentId} {
       allow read: if isPlatformAdmin();

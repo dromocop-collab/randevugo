@@ -15,6 +15,7 @@ import {
 } from "../_pages-ui";
 import { CountUp } from "../overview-widgets";
 import c from "./analytics.module.css";
+import { LiveVisitors } from "./live-visitors";
 
 type Range = "1" | "7" | "30" | "90";
 type JourneyFilter = "all" | "ads" | "social" | "search" | "direct" | "converted";
@@ -116,18 +117,7 @@ export default function VisitorAnalyticsPage() {
         <EmptyState icon={BarChart3} title="Analitik açılamadı" description={`${error} — sunucu fonksiyonları yayınlandı mı?`} />
       ) : data && totals ? (
         <>
-          <section className={c.live} aria-label="Canlı ziyaretçiler">
-            <div className={c.liveHead}>
-              <span className={c.livePulse} aria-hidden><i /></span>
-              <b><CountUp value={data.live.count} /> kişi şu an sitede</b>
-              <small>son 5 dakikada etkin</small>
-            </div>
-            {data.live.pages.length ? (
-              <div className={c.livePages}>
-                {data.live.pages.map((page) => <span key={page.path}><b>{page.count}</b>{labelPath(page.path)}</span>)}
-              </div>
-            ) : <small className={c.muted}>Şu an sitede kimse yok.</small>}
-          </section>
+          <LiveVisitors />
 
           <StatGrid cols={5}>
             <StatCard icon={UsersRound} label="Tekil ziyaretçi" tone="green" value={<CountUp value={totals.uniqueVisitors} />} hint={<><Trend value={data.change.visitors} /> cihaz + IP başına 1</>} />

@@ -34,7 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
-import { DAILY_SHARDS, EVENT_TTL_MS, buildJourneys, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
+import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
@@ -9791,7 +9791,9 @@ export const trackVisit = onCall(
   async (request) => {
     const raw = request.rawRequest;
     const userAgent = String(raw.headers["user-agent"] ?? "").slice(0, 400);
-    const kind = request.data?.type === "ping" ? "ping" : "view";
+    const kind = request.data?.type === "ping" ? "ping" : request.data?.type === "action" ? "action" : "view";
+    const action = kind === "action" ? parseTrackedAction(request.data?.action) : null;
+    if (kind === "action" && !action) return { ok: true, counted: false };
     const now = Date.now();
     const parts = istanbulParts(now);
     const shardRef = db.doc(`analyticsDaily/${parts.day}/shards/${Math.floor(Math.random() * DAILY_SHARDS)}`);
@@ -9836,6 +9838,18 @@ export const trackVisit = onCall(
       const live = { lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path, lastPageType: pageType,
         windowStartAt: windowFresh ? visitor.windowStartAt : Timestamp.fromMillis(now), windowCount: windowCount + 1,
         expiresAt: Timestamp.fromMillis(now + 400 * 86_400_000) };
+      if (kind === "action" && action) {
+        if (!visitorSnap.exists) return { counted: false };
+        const sessionActions: string[] = Array.isArray(visitor.sessionActions) ? visitor.sessionActions.map(String) : [];
+        tx.set(visitorRef, {
+          ...live, lastAction: action, lastActionAt: Timestamp.fromMillis(now),
+          sessionTrail: appendTrail(visitor.sessionTrail, { t: "action", a: action, at: now }, false),
+          sessionActions: sessionActions.includes(action) ? sessionActions : [...sessionActions, action].slice(-20),
+        }, { merge: true });
+        // Adım hunisi: oturum başına her adım bir kez.
+        if (!sessionActions.includes(action)) tx.set(shardRef, { day: parts.day, byAction: { [mapKey(action)]: FieldValue.increment(1) } }, { merge: true });
+        return { counted: false };
+      }
       if (kind === "ping") {
         if (!visitorSnap.exists) return { counted: false };
         tx.set(visitorRef, live, { merge: true });
@@ -9844,7 +9858,7 @@ export const trackVisit = onCall(
       }
       const dedupAt = dedupSnap?.data()?.lastAt instanceof Timestamp ? (dedupSnap.data()!.lastAt as Timestamp).toMillis() : 0;
       if (dedupAt && now - dedupAt < VIEW_DEDUP_MS) {
-        tx.set(visitorRef, live, { merge: true });
+        tx.set(visitorRef, { ...live, sessionTrail: appendTrail(visitor.sessionTrail, { t: "page", p: target.path, pt: pageType, at: now }, false) }, { merge: true });
         if (bizVisitorRef && bizSnap?.exists) tx.set(bizVisitorRef, { lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path }, { merge: true });
         return { counted: false };
       }
@@ -9883,7 +9897,9 @@ export const trackVisit = onCall(
       tx.set(visitorRef, {
         ...live, lastDay: parts.day, typesToday: firstOfType ? [...typesToday, pageType].slice(0, 20) : typesToday,
         sessionSourceKind: sessionSource.kind, sessionSourceLabel: sessionSource.label,
-        ...(newSession ? { sessionStartAt: Timestamp.fromMillis(now) } : {}),
+        ...(newSession ? { sessionStartAt: Timestamp.fromMillis(now), sessionActions: [], lastAction: null } : {}),
+        sessionTrail: appendTrail(visitor.sessionTrail, { t: "page", p: target.path, pt: pageType, at: now }, newSession),
+        sessionViews: newSession ? 1 : inc(1), browser: agent.browser, os: agent.os, lang: target.lang, newVisitorSession: isNew || (newSession ? false : visitor.newVisitorSession === true),
         views: inc(1), sessions: inc(newSession ? 1 : 0), device: agent.device,
         ...(isNew ? { firstSeenAt: Timestamp.fromMillis(now), firstSourceKind: sessionSource.kind, firstSourceLabel: sessionSource.label } : {}),
       }, { merge: true });
@@ -9986,6 +10002,7 @@ export const getVisitorAnalytics = onCall(
       series,
       heatmap,
       live: { count: liveSnap.size, pages: [...livePages.entries()].map(([path, count]) => ({ path, count })).sort((a, b) => b.count - a.count).slice(0, 8) },
+      actions: totals.byAction,
       pages: top(totals.byPath, 12), entries: top(totals.byEntry, 8), sources: top(totals.bySource, 10), sourceKinds: totals.bySourceKind,
       devices: totals.byDevice, browsers: top(totals.byBrowser, 6), os: top(totals.byOs, 6), langs: totals.byLang, pageTypes: totals.byType,
       funnels: {

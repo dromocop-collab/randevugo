@@ -1,5 +1,6 @@
 "use client";
 
+import { trackAction } from "@/features/analytics/track-action";
 import Image from "next/image";
 import Link from "@/i18n/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
@@ -108,6 +109,8 @@ export function BusinessSignupWizard() {
   const intlLocale = useIntlLocale();
   const [step, setStepState] = useState(0);
   const [furthest, setFurthest] = useState(0);
+  // Canlı izleme: işletme kaydındaki adım (süper admin canlı panelinde görünür).
+  useEffect(() => { trackAction(`signup:${step}`); }, [step]);
   const setStep = (index: number) => {
     setStepState(index);
     setFurthest((current) => Math.max(current, index));

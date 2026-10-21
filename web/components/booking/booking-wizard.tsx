@@ -1,5 +1,6 @@
 "use client";
 
+import { trackAction } from "@/features/analytics/track-action";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -482,6 +483,8 @@ export function BookingWizard(props: Props) {
 
   const activeSteps = useMemo(() => filteredStaff.length ? STEPS : STEPS.filter((item) => item !== "staff"), [filteredStaff.length]);
   const currentStepIndex = Math.max(0, activeSteps.indexOf(step));
+  // Canlı izleme: müşterinin randevu ekranındaki adımı (süper admin canlı panelinde görünür).
+  useEffect(() => { trackAction(`booking:${step}`); }, [step]);
   const progressPercent = Math.round(((currentStepIndex + 1) / activeSteps.length) * 100);
 
   function changeStep(next: WizardStep, dir: "forward" | "back") {

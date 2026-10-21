@@ -110,3 +110,18 @@ test("journeys group a session's pages in order with its entry source", async ()
   assert.equal(journeys[1].newVisitor, true);
   assert.equal(journeys[1].sourceLabel, "meta");
 });
+
+test("actions are whitelisted and session trail is bounded", async () => {
+  const { appendTrail, parseTrackedAction } = await import("../lib/analytics-domain.js");
+  assert.equal(parseTrackedAction("booking:datetime"), "booking:datetime");
+  assert.equal(parseTrackedAction("booking:<script>"), null);
+  let trail = appendTrail(null, { t: "page", p: "/", pt: "home", at: 1 }, false);
+  trail = appendTrail(trail, { t: "page", p: "/", pt: "home", at: 2 }, false);
+  assert.equal(trail.length, 1);
+  assert.equal(trail[0].at, 2);
+  trail = appendTrail(trail, { t: "action", a: "booking:service", at: 3 }, false);
+  assert.equal(trail.length, 2);
+  for (let i = 0; i < 20; i += 1) trail = appendTrail(trail, { t: "page", p: `/p${i}`, pt: "other", at: 10 + i }, false);
+  assert.equal(trail.length, 14);
+  assert.equal(appendTrail(trail, { t: "page", p: "/", pt: "home", at: 99 }, true).length, 1);
+});

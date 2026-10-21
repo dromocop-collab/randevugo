@@ -141,13 +141,13 @@ export type DailyAggregate = {
   views: number; visitors: number; sessions: number; newVisitors: number; excluded: number;
   byPath: Record<string, number>; byType: Record<string, number>; bySource: Record<string, number>; bySourceKind: Record<string, number>;
   byDevice: Record<string, number>; byBrowser: Record<string, number>; byOs: Record<string, number>; byLang: Record<string, number>;
-  byEntry: Record<string, number>; byHour: Record<string, number>; typeVisitors: Record<string, number>;
+  byEntry: Record<string, number>; byHour: Record<string, number>; typeVisitors: Record<string, number>; byAction: Record<string, number>;
 };
 
 export function emptyAggregate(): DailyAggregate {
   return {
     views: 0, visitors: 0, sessions: 0, newVisitors: 0, excluded: 0, byPath: {}, byType: {}, bySource: {}, bySourceKind: {},
-    byDevice: {}, byBrowser: {}, byOs: {}, byLang: {}, byEntry: {}, byHour: {}, typeVisitors: {},
+    byDevice: {}, byBrowser: {}, byOs: {}, byLang: {}, byEntry: {}, byHour: {}, typeVisitors: {}, byAction: {},
   };
 }
 
@@ -156,7 +156,7 @@ export function mergeAggregates(rows: Array<Partial<Record<keyof DailyAggregate,
   const out = emptyAggregate();
   for (const row of rows) {
     for (const key of ["views", "visitors", "sessions", "newVisitors", "excluded"] as const) out[key] += Number(row[key] ?? 0) || 0;
-    for (const key of ["byPath", "byType", "bySource", "bySourceKind", "byDevice", "byBrowser", "byOs", "byLang", "byEntry", "byHour", "typeVisitors"] as const) {
+    for (const key of ["byPath", "byType", "bySource", "bySourceKind", "byDevice", "byBrowser", "byOs", "byLang", "byEntry", "byHour", "typeVisitors", "byAction"] as const) {
       const map = row[key];
       if (!map || typeof map !== "object") continue;
       for (const [name, value] of Object.entries(map as Record<string, unknown>)) {
@@ -222,4 +222,26 @@ export function buildJourneys(events: RawEvent[], limit: number): Journey[] {
     .map((journey) => ({ ...journey, steps: journey.steps.sort((a, b) => a.at - b.at).slice(0, 30), durationMs: journey.lastAt - journey.startedAt }))
     .sort((a, b) => b.lastAt - a.lastAt)
     .slice(0, limit);
+}
+
+/** Canlı izlemede gösterilen adımlar (randevu ekranı ve işletme kaydı). Liste dışı değer kabul edilmez. */
+export const TRACKED_ACTIONS = [
+  "booking:service", "booking:staff", "booking:datetime", "booking:info", "booking:verify", "booking:summary", "booking:success",
+  "signup:0", "signup:1", "signup:2", "signup:3",
+] as const;
+export type TrackedAction = (typeof TRACKED_ACTIONS)[number];
+
+export function parseTrackedAction(value: unknown): TrackedAction | null {
+  return TRACKED_ACTIONS.includes(value as TrackedAction) ? value as TrackedAction : null;
+}
+
+export type TrailItem = { t: "page"; p: string; pt: string; at: number } | { t: "action"; a: string; at: number };
+
+/** Oturum izi: yeni oturumda sıfırlanır, art arda aynı öğe tekrarlanmaz, en fazla 14 öğe. */
+export function appendTrail(previous: unknown, item: TrailItem, reset: boolean): TrailItem[] {
+  const list = reset || !Array.isArray(previous) ? [] : (previous as TrailItem[]).filter((row) => row && typeof row === "object");
+  const last = list[list.length - 1];
+  const same = last && last.t === item.t && (item.t === "page" ? (last as { p?: string }).p === item.p : (last as { a?: string }).a === item.a);
+  const next = same ? [...list.slice(0, -1), item] : [...list, item];
+  return next.slice(-14);
 }
