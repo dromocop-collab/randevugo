@@ -49,7 +49,9 @@ export function CountUp({ value, format = fmt, duration = 900 }: { value: number
       else from.current = value;
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // Sekme arka plandayken requestAnimationFrame çalışmaz; süre dolunca son değer yine de gösterilir.
+    const fallback = window.setTimeout(() => { cancelAnimationFrame(frame); setShown(value); from.current = value; }, duration + 150);
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(fallback); };
   }, [value, duration, reduced]);
   return <span className={s.num}>{format(Number.isInteger(value) ? Math.round(shown) : Math.round(shown * 10) / 10)}</span>;
 }

@@ -38,7 +38,9 @@ function useCount(value: number) {
       if (p < 1) frame = requestAnimationFrame(tick); else from.current = value;
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // Sekme arka plandayken requestAnimationFrame çalışmaz; süre dolunca son değer yine de gösterilir.
+    const fallback = window.setTimeout(() => { cancelAnimationFrame(frame); setShown(value); from.current = value; }, 950);
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(fallback); };
   }, [value]);
   return shown;
 }
