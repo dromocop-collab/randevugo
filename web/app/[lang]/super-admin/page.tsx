@@ -6,7 +6,7 @@ import { collection, collectionGroup, doc, getCountFromServer, getDoc, getDocs, 
 import {
   AlertTriangle, ArrowRight, BellRing, Building2, CalendarDays, CheckCircle2, Clock3, CreditCard, Download,
   EyeOff, Headphones, MessageSquareWarning, PackagePlus, RefreshCw, ShieldAlert, Siren, Sparkles, TrendingUp,
-  UsersRound, WalletCards, WifiOff, type LucideIcon,
+  UsersRound, WalletCards, WifiOff, LayoutDashboard, ListChecks, type LucideIcon,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +16,8 @@ import {
   AdminButton, AdminPage, Badge, Callout, EmptyState, PageHeader, Panel, Skeleton, StatCard, StatGrid, toneClassName, type AdminTone,
 } from "@/components/super-admin/ui";
 import styles from "./dashboard.module.css";
+import overview from "./overview.module.css";
+import { ChannelsSection, CountUp } from "./overview-widgets";
 
 type SourceKey = "businesses" | "users" | "appointments" | "subscriptions" | "support" | "categories" | "reviews";
 type SourceHealth = Record<SourceKey, boolean>;
@@ -116,7 +118,9 @@ async function loadAppointmentCounts(db: Firestore, businessIds: string[], fourt
     const prev7 = await count(query(group, where("startAt", ">=", Timestamp.fromMillis(fourteenDaysAgo)), where("startAt", "<", Timestamp.fromMillis(sevenDaysAgo)))).catch(() => null);
     return { total, completed, cancelled, noShow, last30, last7, prev7 };
   } catch {
-    return countAppointmentDocs(await readBusinessChildren(db, businessIds, "appointments"), fourteenDaysAgo, sevenDaysAgo, thirtyDaysAgo);
+    // Eskiden her işletmenin tüm randevularını okuyan yedek yol vardı (binlerce okuma); artık sayım alınamazsa 0 gösterilir.
+    void businessIds; void countAppointmentDocs;
+    return { total: 0, completed: 0, cancelled: 0, noShow: 0, last30: 0, last7: 0, prev7: null };
   }
 }
 
@@ -131,6 +135,7 @@ export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [fatalError, setFatalError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true); setFatalError(null);
@@ -295,13 +300,13 @@ export default function SuperAdminDashboard() {
 
   const headerActions = <>
     <AdminButton variant="glass" icon={Download} onClick={exportSnapshot} disabled={!stats}>CSV</AdminButton>
-    <AdminButton variant="lime" icon={RefreshCw} loading={loading} onClick={() => void loadDashboard()}>Yenile</AdminButton>
+    <AdminButton variant="lime" icon={RefreshCw} loading={loading} onClick={() => { setRefreshKey((key) => key + 1); void loadDashboard(); }}>Yenile</AdminButton>
   </>;
   const header = (
     <PageHeader
       eyebrow="Platform özeti"
       title="Platform komuta merkezi"
-      description={stats ? `Son güncelleme ${stats.updatedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })} · Gerçek zamanlı sayımlar, sunucu tarafında hesaplanır.` : "Platform verileri hazırlanıyor…"}
+      description={stats ? `İşletmeler, randevular, gelir, mesajlar ve reklamlar tek ekranda · son güncelleme ${stats.updatedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}` : "Platform verileri hazırlanıyor…"}
       actions={headerActions}
     />
   );
@@ -344,18 +349,23 @@ export default function SuperAdminDashboard() {
         </Callout>
       )}
 
+      <h2 className={overview.pageSectionTitle}><LayoutDashboard size={16} aria-hidden /> Platformun durumu</h2>
       <StatGrid columns={4}>
-        <StatCard label="Aktif işletme" value={fmt(stats.activeBusinesses)} icon={Building2} tone="green" href="/super-admin/isletmeler"
+        <StatCard label="Yayındaki işletme" value={<CountUp value={stats.activeBusinesses} />} icon={Building2} tone="green" href="/super-admin/isletmeler"
           trend={businessTrend === null ? null : { value: businessTrend, label: "son 30 gün yeni işletme, önceki 30 güne göre" }}
-          hint={`${fmt(stats.newBusinesses30)} yeni · ${fmt(stats.totalBusinesses)} toplam`} />
-        <StatCard label="Randevu (7 gün)" value={fmt(stats.appointmentsLast7Days)} icon={CalendarDays} tone="violet"
+          hint={`son 30 günde ${fmt(stats.newBusinesses30)} yeni · ${fmt(stats.totalBusinesses)} kayıtlı`} />
+        <StatCard label="Randevu · 7 gün" value={<CountUp value={stats.appointmentsLast7Days} />} icon={CalendarDays} tone="violet"
           trend={appointmentTrend === null ? null : { value: appointmentTrend, label: "önceki 7 güne göre" }}
-          hint={`${fmt(stats.appointmentsLast30Days)} / 30 gün`} />
-        <StatCard label="Tahmini MRR" value={`${fmt(stats.estimatedMRR)} ₺`} icon={TrendingUp} tone="lime" href="/super-admin/abonelikler"
-          hint={`${fmt(stats.payingAccounts)} ödeyen hesap · ARR ${fmt(stats.estimatedARR)} ₺`} />
-        <StatCard label="Kullanıcı" value={fmt(stats.totalUsers)} icon={UsersRound} tone="blue" href="/super-admin/kullanicilar"
-          hint={`${fmt(stats.trialingBusinesses)} işletme denemede`} />
+          hint={`son 30 günde ${fmt(stats.appointmentsLast30Days)} · toplam ${fmt(stats.totalAppointments)}`} />
+        <StatCard label="Aylık gelir" value={<CountUp value={stats.estimatedMRR} format={(value) => `${fmt(value)} ₺`} />} icon={TrendingUp} tone="lime" href="/super-admin/abonelikler"
+          hint={`tahmini · ${fmt(stats.payingAccounts)} ödeyen hesap · yıllık ${fmt(stats.estimatedARR)} ₺`} />
+        <StatCard label="Kayıtlı kullanıcı" value={<CountUp value={stats.totalUsers} />} icon={UsersRound} tone="blue" href="/super-admin/kullanicilar"
+          hint={`${fmt(stats.trialingBusinesses)} işletme ücretsiz denemede`} />
       </StatGrid>
+
+      <ChannelsSection refreshKey={refreshKey} />
+
+      <h2 className={overview.pageSectionTitle}><ListChecks size={16} aria-hidden /> Operasyon</h2>
 
       <div className={styles.split}>
         <Panel

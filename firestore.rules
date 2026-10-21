@@ -736,6 +736,11 @@ service cloud.firestore {
       allow read: if isAuthenticated() && resource.data.uid == uid();
     }
 
+    // Platform özeti › müşteri memnuniyeti (işlem sonrası anket) — yalnız süper admin, salt okuma.
+    match /{path=**}/feedback/{appointmentId} {
+      allow read: if isPlatformAdmin();
+    }
+
     match /{path=**}/reviews/{reviewId} {
       // Müşteri kendi yorumlarını (onay bekleyenler dahil) görebilir.
       allow read: if isPlatformAdmin() ||
