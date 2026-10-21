@@ -1,0 +1,86 @@
+/* İşletme paneli › Analiz › Ziyaretçiler. Token'lar dashboard _studio (--k-*). */
+.stack { display: grid; gap: 16px; }
+.stats { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1000px) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.grid { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.muted { margin: 0; color: var(--k-muted); font-size: 13px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.live { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 14px; border: 1px solid var(--k-line); border-radius: 999px; background: var(--k-card); color: var(--k-ink); font-size: 13px; }
+.live small { color: var(--k-muted); }
+.pulse { position: relative; display: grid; place-items: center; width: 12px; height: 12px; }
+.pulse i, .pulse::after { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--k-ok, #22a06b); }
+.pulse::after { content: ""; animation: ping 1.6s ease-out infinite; }
+@keyframes ping { from { transform: scale(1); opacity: 0.7; } to { transform: scale(3); opacity: 0; } }
+.change { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+.up { background: var(--k-ok-bg); color: var(--k-ok); }
+.down { background: var(--k-bad-bg); color: var(--k-bad); }
+
+.chartWrap { position: relative; }
+.chart { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: pan-y; }
+.gridLine { stroke: var(--k-line); stroke-dasharray: 3 4; }
+.axis { fill: var(--k-faint); font-size: 10px; }
+.areaA { fill: color-mix(in srgb, var(--k-info, #5b8def) 12%, transparent); animation: fade 0.8s 0.3s ease-out both; }
+.areaB { fill: color-mix(in srgb, var(--k-core) 22%, transparent); animation: fade 0.8s 0.45s ease-out both; }
+.lineA, .lineB { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.2s ease-out forwards; }
+.lineA { stroke: var(--k-info, #5b8def); }
+.lineB { stroke: var(--k-core); animation-delay: 0.15s; }
+.cursor { stroke: var(--k-faint); stroke-dasharray: 3 3; }
+.tip { position: absolute; top: 6px; z-index: 2; display: grid; gap: 2px; padding: 7px 10px; border: 1px solid var(--k-line); border-radius: 12px; background: var(--k-card); color: var(--k-ink); box-shadow: var(--k-shadow-lift, 0 8px 24px rgb(0 0 0 / 0.14)); font-size: 12px; transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
+.tip span { color: var(--k-muted); }
+.legend { display: flex; gap: 14px; margin-top: 6px; color: var(--k-muted); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dotA, .dotB { width: 10px; height: 10px; border-radius: 3px; }
+.dotA { background: var(--k-info, #5b8def); }
+.dotB { background: var(--k-core); }
+
+.sources { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.sources li { display: flex; align-items: center; gap: 10px; animation: rise 0.45s ease-out both; }
+.sources li > b { color: var(--k-ink); font-variant-numeric: tabular-nums; }
+.sourceText { display: grid; flex: 1; gap: 5px; min-width: 0; }
+.sourceText b { overflow: hidden; color: var(--k-ink); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.sourceText small { color: var(--k-faint); font-weight: 600; }
+.sourceText > i { display: block; height: 6px; overflow: hidden; border-radius: 99px; background: var(--k-soft); }
+.sourceText > i > i { display: block; height: 100%; border-radius: 99px; background: var(--k-core); transform-origin: left; animation: grow 0.9s 0.2s ease-out both; }
+
+.funnel { display: grid; gap: 10px; }
+.funnelStep { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
+.funnelStep > span { display: flex; align-items: center; gap: 6px; overflow: hidden; color: var(--k-ink); white-space: nowrap; }
+.funnelStep em { padding: 0 6px; border-radius: 999px; background: var(--k-soft); color: var(--k-ink); font-size: 11px; font-style: normal; font-weight: 750; }
+.funnelStep > i { display: block; height: 12px; overflow: hidden; border-radius: 99px; background: var(--k-soft); }
+.funnelStep > i > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--k-core), var(--k-bright)); transform-origin: left; animation: grow 0.9s ease-out both; }
+.funnelStep > b { min-width: 28px; color: var(--k-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.devices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--k-line); }
+.devices span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; background: var(--k-soft); color: var(--k-ink); font-size: 12.5px; }
+.devices small { color: var(--k-muted); }
+
+.journeys { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.journey { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--k-line); border-radius: 16px; background: var(--k-card); animation: rise 0.45s ease-out both; }
+.journeyBody { display: grid; flex: 1; gap: 8px; min-width: 0; }
+.journeyHead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.journeyHead b { color: var(--k-ink); font-size: 14px; }
+.journeyHead small { display: inline-flex; align-items: center; gap: 4px; color: var(--k-muted); font-size: 12px; }
+.new, .back { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-style: normal; font-weight: 750; }
+.new { background: var(--k-ok-bg); color: var(--k-ok); }
+.back { background: var(--k-info-bg); color: var(--k-info); }
+.steps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.stepWrap { display: inline-flex; align-items: center; gap: 4px; }
+.arrow { color: var(--k-faint); }
+.step { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: var(--k-soft); color: var(--k-ink); font-size: 12px; }
+.goal { background: var(--k-ok-bg); color: var(--k-ok); font-weight: 700; }
+
+.heat { display: grid; grid-template-columns: 34px repeat(24, minmax(12px, 1fr)); gap: 4px; overflow-x: auto; }
+.heat > small { color: var(--k-faint); font-size: 10px; text-align: center; }
+.heat > .heatDay { align-self: center; color: var(--k-muted); font-size: 11px; text-align: left; }
+.heat > i { height: 20px; border-radius: 6px; background: var(--k-core); animation: fade 0.5s ease-out both; }
+.trust { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--k-muted); font-size: 12px; line-height: 1.5; }
+.trust svg { flex: none; margin-top: 2px; color: var(--k-ok); }
+
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .pulse::after, .areaA, .areaB, .lineA, .lineB, .sources li, .sourceText > i > i, .funnelStep > i > i, .journey, .heat > i { animation: none; }
+  .lineA, .lineB { stroke-dashoffset: 0; }
+}

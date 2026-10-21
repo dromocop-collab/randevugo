@@ -9758,6 +9758,30 @@ async function isAnalyticsExcludedUser(uid: string | undefined, email: string | 
   return admin;
 }
 
+const analyticsTeamCache = new Map<string, { at: number; member: boolean }>();
+async function isBusinessTeamMember(uid: string, businessId: string): Promise<boolean> {
+  const key = `${uid}|${businessId}`;
+  const cached = analyticsTeamCache.get(key);
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.member;
+  const [business, member] = await Promise.all([db.doc(`businesses/${businessId}`).get(), db.doc(`businesses/${businessId}/members/${uid}`).get()]).catch(() => [null, null]);
+  const result = Boolean(business?.data()?.ownerUid === uid || member?.exists);
+  if (analyticsTeamCache.size > 5000) analyticsTeamCache.clear();
+  analyticsTeamCache.set(key, { at: Date.now(), member: result });
+  return result;
+}
+
+const analyticsSlugCache = new Map<string, { at: number; businessId: string | null }>();
+/** Mağaza adresinden (slug) işletme kimliği; 10 dk önbellekli. */
+async function businessIdForSlug(slug: string): Promise<string | null> {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;
+  const cached = analyticsSlugCache.get(slug);
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.businessId;
+  const businessId = await db.doc(`businessSlugs/${slug}`).get().then((snapshot) => typeof snapshot.data()?.businessId === "string" ? String(snapshot.data()!.businessId) : null).catch(() => null);
+  if (analyticsSlugCache.size > 5000) analyticsSlugCache.clear();
+  analyticsSlugCache.set(slug, { at: Date.now(), businessId });
+  return businessId;
+}
+
 /**
  * Sitedeki her sayfa açılışı (type "view") ve görünür sekmede dakikada bir canlılık sinyali (type "ping").
  * Aynı cihaz + IP = tek ziyaretçi; aynı sayfa 30 dk içinde tekrar sayılmaz; yöneticiler / botlar / otomasyon hariç.
@@ -9791,8 +9815,17 @@ export const trackVisit = onCall(
     const utm = (key: string) => typeof request.data?.[key] === "string" ? String(request.data[key]).trim().toLowerCase().slice(0, 60) || null : null;
     const source = classifySource({ referrerHost, utmSource: utm("utmSource"), utmMedium: utm("utmMedium"), siteHost: "seninrandevun.com" });
 
+    // Mağaza ve randevu sayfaları ayrıca o işletmenin kendi analitiğine yazılır.
+    const slugMatch = (pageType === "storefront" || pageType === "booking") ? /^\/isletme\/([^/]+)/.exec(target.path) : null;
+    const resolvedBusinessId = slugMatch ? await businessIdForSlug(slugMatch[1]!) : null;
+    // İşletme ekibi kendi mağazasını açınca işletmenin analitiğine sayılmaz.
+    const businessId = resolvedBusinessId && request.auth?.uid && await isBusinessTeamMember(request.auth.uid, resolvedBusinessId) ? null : resolvedBusinessId;
+    const bizVisitorRef = businessId ? db.doc(`analyticsBizVisitors/${createHash("sha256").update(`${businessId}|${visitorId}`).digest("hex").slice(0, 32)}`) : null;
+
     const result = await db.runTransaction(async (tx) => {
-      const [visitorSnap, dedupSnap] = await Promise.all([tx.get(visitorRef), kind === "view" ? tx.get(dedupRef) : Promise.resolve(null)]);
+      const [visitorSnap, dedupSnap, bizSnap] = await Promise.all([
+        tx.get(visitorRef), kind === "view" ? tx.get(dedupRef) : Promise.resolve(null), bizVisitorRef ? tx.get(bizVisitorRef) : Promise.resolve(null),
+      ]);
       const visitor = visitorSnap.data() ?? {};
       const lastSeen = visitor.lastSeenAt instanceof Timestamp ? visitor.lastSeenAt.toMillis() : 0;
       // Kötüye kullanım sınırı: ziyaretçi başına saatte en fazla 300 kayıt.
@@ -9806,11 +9839,13 @@ export const trackVisit = onCall(
       if (kind === "ping") {
         if (!visitorSnap.exists) return { counted: false };
         tx.set(visitorRef, live, { merge: true });
+        if (bizVisitorRef && bizSnap?.exists) tx.set(bizVisitorRef, { lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path }, { merge: true });
         return { counted: false };
       }
       const dedupAt = dedupSnap?.data()?.lastAt instanceof Timestamp ? (dedupSnap.data()!.lastAt as Timestamp).toMillis() : 0;
       if (dedupAt && now - dedupAt < VIEW_DEDUP_MS) {
         tx.set(visitorRef, live, { merge: true });
+        if (bizVisitorRef && bizSnap?.exists) tx.set(bizVisitorRef, { lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path }, { merge: true });
         return { counted: false };
       }
       const isNew = !visitorSnap.exists;
@@ -9853,10 +9888,30 @@ export const trackVisit = onCall(
         ...(isNew ? { firstSeenAt: Timestamp.fromMillis(now), firstSourceKind: sessionSource.kind, firstSourceLabel: sessionSource.label } : {}),
       }, { merge: true });
       tx.set(dedupRef, { lastAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + 86_400_000) });
+      if (businessId && bizVisitorRef) {
+        const biz = bizSnap?.data() ?? {};
+        const bizLast = biz.lastSeenAt instanceof Timestamp ? biz.lastSeenAt.toMillis() : 0;
+        const bizNew = !bizSnap?.exists;
+        const bizSession = !bizLast || now - bizLast > SESSION_GAP_MS;
+        const bizFirstToday = biz.lastDay !== parts.day;
+        const bizTypes: string[] = bizFirstToday ? [] : Array.isArray(biz.typesToday) ? biz.typesToday.map(String) : [];
+        const bizFirstOfType = !bizTypes.includes(pageType);
+        const daily: Record<string, unknown> = { day: parts.day, views: inc(1), byType: { [pageType]: inc(1) }, byHour: { [String(parts.hour)]: inc(1) } };
+        if (bizFirstToday) Object.assign(daily, { visitors: inc(1), byDevice: { [agent.device]: inc(1) }, byLang: { [target.lang]: inc(1) } });
+        if (bizNew) daily.newVisitors = inc(1);
+        if (bizSession) Object.assign(daily, { sessions: inc(1), bySource: { [mapKey(`${sessionSource.kind}|${sessionSource.label}`)]: inc(1) }, bySourceKind: { [sessionSource.kind]: inc(1) } });
+        if (bizFirstOfType) daily.typeVisitors = { [pageType]: inc(1) };
+        tx.set(db.doc(`businessAnalytics/${businessId}/daily/${parts.day}`), daily, { merge: true });
+        tx.set(bizVisitorRef, {
+          businessId, lastSeenAt: Timestamp.fromMillis(now), lastPath: target.path, lastDay: parts.day,
+          typesToday: bizFirstOfType ? [...bizTypes, pageType] : bizTypes, views: inc(1),
+          ...(bizNew ? { firstSeenAt: Timestamp.fromMillis(now) } : {}), expiresAt: Timestamp.fromMillis(now + 400 * 86_400_000),
+        }, { merge: true });
+      }
       tx.set(db.collection("analyticsEvents").doc(), {
         at: Timestamp.fromMillis(now), path: target.path, lang: target.lang, pageType, device: agent.device, browser: agent.browser, os: agent.os,
         sourceKind: sessionSource.kind, sourceLabel: sessionSource.label, newVisitor: isNew, newSession,
-        visitor: visitorId.slice(0, 6), returning: !isNew && newSession,
+        visitor: visitorId.slice(0, 6), returning: !isNew && newSession, businessId: businessId ?? null,
         session: `${visitorId.slice(0, 10)}-${newSession ? now : (visitor.sessionStartAt instanceof Timestamp ? visitor.sessionStartAt.toMillis() : now)}`,
         expiresAt: Timestamp.fromMillis(now + EVENT_TTL_MS),
       });
@@ -9960,6 +10015,62 @@ export const getVisitorAnalytics = onCall(
           newVisitor: data.newVisitor === true, visitor: String(data.visitor ?? ""),
         };
       }),
+    };
+  },
+);
+
+
+/** İşletme paneli › Ziyaretçiler: mağaza ve randevu sayfalarının ziyaretçileri, kaynakları, randevu hunisi, yolculuklar. */
+export const getBusinessVisitorAnalytics = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    await requirePlanEntitlement(businessId, "analytics");
+    const span = [1, 7, 30, 90].includes(Number(request.data?.days)) ? Number(request.data?.days) : 30;
+    const now = Date.now();
+    const current = dayRange(now, span);
+    const previous = dayRange(now - span * 86_400_000, span);
+    const refs = (days: string[]) => days.map((day) => db.doc(`businessAnalytics/${businessId}/daily/${day}`));
+    const [currentDocs, previousDocs] = await Promise.all([db.getAll(...refs(current)), db.getAll(...refs(previous))]);
+    const rows = (docs: FirebaseFirestore.DocumentSnapshot[]) => docs.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.data()!);
+    const totals = mergeAggregates(rows(currentDocs));
+    const before = mergeAggregates(rows(previousDocs));
+    const series = currentDocs.map((snapshot, index) => {
+      const merged = mergeAggregates(snapshot.exists ? [snapshot.data()!] : []);
+      return { day: current[index]!, views: merged.views, visitors: merged.visitors, sessions: merged.sessions, newVisitors: merged.newVisitors };
+    });
+    const heatmap = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    currentDocs.forEach((snapshot, index) => {
+      if (!snapshot.exists) return;
+      const weekday = istanbulParts(Date.parse(`${current[index]}T12:00:00+03:00`)).weekday;
+      Object.entries(mergeAggregates([snapshot.data()!]).byHour).forEach(([hour, value]) => { const h = Number(hour); if (h >= 0 && h < 24) heatmap[weekday]![h]! += value; });
+    });
+    const rangeStart = Timestamp.fromMillis(Date.parse(`${current[0]}T00:00:00+03:00`));
+    const [liveSnap, eventsSnap, appointmentSnap] = await Promise.all([
+      db.collection("analyticsBizVisitors").where("businessId", "==", businessId).where("lastSeenAt", ">=", Timestamp.fromMillis(now - LIVE_WINDOW_MS)).limit(100).get().catch(() => null),
+      db.collection("analyticsEvents").where("businessId", "==", businessId).orderBy("at", "desc").limit(200).get().catch(() => null),
+      db.collection(`businesses/${businessId}/appointments`).where("createdAt", ">=", rangeStart).select("source").limit(3000).get().catch(() => null),
+    ]);
+    const online = appointmentSnap ? appointmentSnap.docs.filter((document) => document.data().source === "online").length : null;
+    return {
+      range: { days: span, since: current[0], until: current[current.length - 1] },
+      totals: {
+        views: totals.views, visitors: totals.visitors, sessions: totals.sessions, newVisitors: totals.newVisitors,
+        storefrontVisitors: totals.typeVisitors.storefront ?? 0, bookingVisitors: totals.typeVisitors.booking ?? 0, onlineAppointments: online,
+      },
+      change: { views: percentChange(totals.views, before.views), visitors: percentChange(totals.visitors, before.visitors), sessions: percentChange(totals.sessions, before.sessions) },
+      series, heatmap,
+      live: { count: liveSnap?.size ?? 0, booking: liveSnap ? liveSnap.docs.filter((document) => String(document.data().lastPath ?? "").includes("/randevu")).length : 0 },
+      sources: topEntries(totals.bySource, 10), sourceKinds: totals.bySourceKind, devices: totals.byDevice, langs: totals.byLang,
+      funnel: [
+        { key: "storefront", label: "Mağaza sayfasını gördü", value: totals.typeVisitors.storefront ?? 0 },
+        { key: "booking", label: "Randevu ekranını açtı", value: totals.typeVisitors.booking ?? 0 },
+        { key: "appointment", label: "Online randevu aldı", value: online },
+      ],
+      journeys: eventsSnap ? buildJourneys(eventsSnap.docs.map((document) => document.data()), 25) : [],
     };
   },
 );
