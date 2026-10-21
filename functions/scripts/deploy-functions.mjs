@@ -44,7 +44,7 @@ export const GROUPS = {
     "businessGeocode", "backfillBusinessGeo", "setBusinessLocation",
   ],
   bildirim: [
-    "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendBusinessPush",
+    "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendAdminTestPush", "sendBusinessPush",
     "createBusinessSupportTicket", "submitPublicSupportRequest", "adminSupportTicketCreated", "adminSupportMessageCreated", "adminBusinessCreated",
     "adminApprovalBusinessStore", "adminApprovalProfileChange", "adminApprovalCategory", "adminPlatformAlertCreated",
     "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "issueWidgetToken", "revokeWidgetToken", "businessWidgetFeed", "serviceAutoTranslate", "serviceCategoryAutoTranslate", "backfillServiceTranslations",

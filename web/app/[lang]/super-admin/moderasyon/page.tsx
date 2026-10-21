@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFirebaseApp } from "@/lib/firebase/client";
+import { getDb } from "@/lib/firebase/firestore";
 import Link from "@/i18n/link";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +27,7 @@ import {
   type BusinessProfileChangeRequest,
 } from "@/features/businesses/business-profile-review-repository";
 import {
-  ArrowRight, ArrowUpRight, Building2, CheckCircle2, EyeOff, FolderPlus, Images, MessageSquareWarning, ShieldAlert, ShieldCheck, Tags, UserPen, XCircle,
+  ArrowRight, ArrowUpRight, BellRing, BellOff, Building2, CheckCircle2, Clock3, EyeOff, FolderPlus, Images, MessageSquareWarning, RefreshCw, Send, ShieldAlert, ShieldCheck, Tags, UserPen, XCircle,
 } from "lucide-react";
 import {
   AdminPage, Avatar, Btn, Chips, ConfirmSheet, EmptyState, HeroStat, PageHeader, Pill, Segmented, SkeletonList, Stars, StatCard, StatGrid,
@@ -58,11 +62,26 @@ function profileValue(value: unknown) {
   return String(value);
 }
 
-function toMillis(value: string | undefined) {
+function toMillis(value: unknown) {
   if (!value) return null;
-  const parsed = new Date(value).getTime();
+  if (typeof value === "object" && typeof (value as { toMillis?: unknown }).toMillis === "function") return (value as { toMillis: () => number }).toMillis();
+  const parsed = new Date(value as string).getTime();
   return Number.isNaN(parsed) ? null : parsed;
 }
+
+const HOUR = 3_600_000;
+
+/** Bekleme süresi etiketi: 6 saate kadar sakin, 24 saate kadar amber, sonrası kırmızı. */
+function WaitPill({ since, now, autoPublishAt }: { since: number | null; now: number; autoPublishAt?: number | null }) {
+  if (!since) return null;
+  const hours = Math.max(0, (now - since) / HOUR);
+  const tone: Tone = hours >= 24 ? "red" : hours >= 6 ? "amber" : "neutral";
+  const label = hours < 1 ? `${Math.max(1, Math.round(hours * 60))} dk bekliyor` : hours < 48 ? `${Math.round(hours)} sa bekliyor` : `${Math.round(hours / 24)} gün bekliyor`;
+  const left = autoPublishAt ? Math.max(0, (autoPublishAt - now) / HOUR) : null;
+  return <><Pill tone={tone} dot><Clock3 size={11} /> {label}</Pill>{left !== null ? <Pill tone={left < 6 ? "amber" : "neutral"}>{left < 1 ? "birazdan otomatik yayında" : `${Math.round(left)} sa sonra otomatik yayın`}</Pill> : null}</>;
+}
+
+type TestPushResult = { admins: number; devices: number; platforms: Record<string, number>; delivered: number; failed: number };
 
 export default function SuperAdminModerationPage() {
   const { user } = useAuth();
@@ -86,6 +105,11 @@ export default function SuperAdminModerationPage() {
   const [tab, setTab] = useState<Tab | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [businessNames, setBusinessNames] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestPushResult | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -100,13 +124,44 @@ export default function SuperAdminModerationPage() {
     Promise.allSettled([listHideRequestedReviews(), listPendingReviewsAcrossPlatform()])
       .then(([hide, pending]) => {
         if (!active) return;
-        if (hide.status === "fulfilled") setHideRequests(hide.value);
-        if (pending.status === "fulfilled") setPendingReviews(pending.value);
+        // En uzun bekleyen önce.
+        const byAge = (rows: Review[]) => [...rows].sort((a, b) => (toMillis(a.hideRequest?.requestedAt) ?? toMillis(a.createdAt) ?? 0) - (toMillis(b.hideRequest?.requestedAt) ?? toMillis(b.createdAt) ?? 0));
+        if (hide.status === "fulfilled") setHideRequests(byAge(hide.value));
+        if (pending.status === "fulfilled") setPendingReviews(byAge(pending.value));
         if (hide.status === "rejected" || pending.status === "rejected") toast.error("Yorumların bir kısmı yüklenemedi.");
       })
-      .finally(() => { if (active) setReviewsLoading(false); });
+      .finally(() => { if (active) { setReviewsLoading(false); setRefreshing(false); } });
     return () => { active = false; };
-  }, []);
+  }, [refreshKey]);
+
+  // Yorum kartlarında işletme kimliği yerine adı.
+  useEffect(() => {
+    const ids = [...new Set([...hideRequests, ...pendingReviews].map((review) => review.businessId).filter((id) => id && !businessNames[id]))].slice(0, 60);
+    if (!ids.length) return;
+    let active = true;
+    Promise.all(ids.map((id) => getDoc(doc(getDb(), "businesses", id)).then((snap) => [id, String(snap.data()?.name ?? "Silinmiş işletme")] as const).catch(() => [id, id.slice(0, 10)] as const)))
+      .then((rows) => { if (active) setBusinessNames((current) => ({ ...current, ...Object.fromEntries(rows) })); });
+    return () => { active = false; };
+  }, [hideRequests, pendingReviews, businessNames]);
+
+  const refresh = useCallback(() => { setRefreshing(true); setRefreshKey((key) => key + 1); }, []);
+  // Sekmeye geri dönünce kuyruğu tazele.
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
+  }, [refresh]);
+
+  async function sendTestPush() {
+    setTesting(true);
+    try {
+      const result = (await httpsCallable<{ target: string }, TestPushResult>(getFunctions(getFirebaseApp(), "europe-west1"), "sendAdminTestPush")({ target: "/super-admin/moderasyon" })).data;
+      setTestResult(result);
+      if (!result.devices) toast.error("Kayıtlı yönetici cihazı yok.", { description: "Telefonda Senin Randevun uygulamasında bildirimlere izin verip yönetici hesabıyla giriş yapın." });
+      else toast.success(`${result.delivered} cihaza gönderildi.`, { description: result.failed ? `${result.failed} cihaza ulaşılamadı (eski kayıtlar temizlendi).` : "Telefonuna birkaç saniye içinde düşmeli." });
+    } catch (error) { toast.error((error as Error)?.message || "Test bildirimi gönderilemedi."); }
+    finally { setTesting(false); }
+  }
 
   const pendingCount = allRequests.filter((r) => r.status === "pending").length;
   const approvedCount = allRequests.filter((r) => r.status === "approved").length;
@@ -195,6 +250,13 @@ export default function SuperAdminModerationPage() {
   }
 
   const reviews = activeTab === "hide" ? hideRequests : pendingReviews;
+  const oldest = Math.min(
+    ...hideRequests.map((row) => toMillis(row.hideRequest?.requestedAt) ?? toMillis(row.createdAt) ?? Infinity),
+    ...pendingReviews.map((row) => toMillis(row.createdAt) ?? Infinity),
+    ...profileRequests.map((row) => toMillis(row.submittedAt) ?? Infinity),
+    ...allRequests.filter((row) => row.status === "pending").map((row) => toMillis(row.requestedAt) ?? Infinity),
+  );
+  const oldestLabel = loadingAny ? "…" : Number.isFinite(oldest) ? relativeTime(oldest, now) : "—";
 
   return (
     <AdminPage>
@@ -203,8 +265,14 @@ export default function SuperAdminModerationPage() {
         icon={ShieldCheck}
         title="İçerik ve profil denetimi"
         description="Yorum gizleme talepleri, onay bekleyen yorumlar, profil değişiklikleri ve yeni kategori talepleri tek kuyrukta. 48 saat içinde karar verilmeyen yorumlar otomatik yayınlanır."
-        meta={<><HeroStat label="bekleyen karar" value={loadingAny ? "…" : totalQueue} /></>}
-        actions={<Link href="/super-admin/isletmeler" className={`${ui.btn} ${ui.btnOnDark}`}><Building2 size={15} /> İşletme başvuruları <ArrowRight size={14} /></Link>}
+        meta={<>
+          <HeroStat label="bekleyen karar" value={loadingAny ? "…" : totalQueue} />
+          <HeroStat label="en eski" value={oldestLabel} />
+        </>}
+        actions={<>
+          <Btn variant="lime" icon={RefreshCw} loading={refreshing} onClick={refresh}>Yenile</Btn>
+          <Btn variant="onDark" icon={Send} loading={testing} onClick={() => void sendTestPush()}>Test bildirimi</Btn>
+        </>}
       />
 
       <StatGrid>
@@ -247,7 +315,8 @@ export default function SuperAdminModerationPage() {
                   <Pill tone={review.isVisible ? "green" : "neutral"} dot>{review.isVisible ? "Yayında" : "Yayında değil"}</Pill>
                 </header>
                 <div className={m.meta}>
-                  <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(review.businessId)}`} className={ui.link} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5 }}><Building2 size={13} /> <span className={ui.mono}>{review.businessId.slice(0, 12)}</span> <ArrowUpRight size={12} /></Link>
+                  <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(review.businessId)}`} className={ui.link} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5 }}><Building2 size={13} /> <span>{businessNames[review.businessId] ?? "…"}</span> <ArrowUpRight size={12} /></Link>
+                  <WaitPill since={fromHide ? toMillis(review.hideRequest?.requestedAt) ?? created : created} now={now} autoPublishAt={!fromHide && created ? created + 48 * HOUR : null} />
                   {review.serviceName && <Pill>{review.serviceName}</Pill>}
                   {review.staffName && <Pill>{review.staffName}</Pill>}
                   {review.imageUrls?.length ? <Pill tone="blue"><Images size={11} /> {review.imageUrls.length} fotoğraf</Pill> : null}
@@ -280,6 +349,7 @@ export default function SuperAdminModerationPage() {
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Pill tone={item.riskLevel === "review" ? "amber" : "green"}><ShieldAlert size={11} /> {item.riskLevel === "review" ? "Dikkatli incele" : "Düşük risk"}</Pill>
+                    <WaitPill since={submitted} now={now} />
                     <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(item.businessId)}`} className={ui.link} style={{ fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 3 }}>İşletme <ArrowUpRight size={12} /></Link>
                   </div>
                 </header>
@@ -315,7 +385,7 @@ export default function SuperAdminModerationPage() {
               <article key={req.id} className={m.category}>
                 <span className={m.categoryIcon} aria-hidden>{req.requestedCategory.slice(0, 1).toLocaleUpperCase("tr-TR")}</span>
                 <div className={m.categoryBody}>
-                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}><b>{req.requestedCategory}</b><Pill tone={meta.tone} dot>{meta.label}</Pill></div>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}><b>{req.requestedCategory}</b><Pill tone={meta.tone} dot>{meta.label}</Pill>{req.status === "pending" ? <WaitPill since={requested} now={now} /> : null}</div>
                   <small>
                     <Link href={`/super-admin/isletmeler?q=${encodeURIComponent(req.businessId)}`} className={ui.link}>{req.businessName}</Link>
                     {" · "}<span title={fullDate(requested)}>{requested ? relativeTime(requested, now) : "—"}</span>
@@ -333,6 +403,28 @@ export default function SuperAdminModerationPage() {
             );
           })}</div>
       )}
+
+      <section className={m.notify} aria-labelledby="notify-title">
+        <div className={m.notifyHead}>
+          <span className={ui.iconTile}><BellRing size={18} /></span>
+          <div><b id="notify-title">Telefon bildirimleri</b><p>Bu kuyruklara yeni bir iş düştüğünde süper admin cihazlarına anında bildirim gider; dokununca bu sayfa açılır.</p></div>
+          <Btn icon={Send} loading={testing} onClick={() => void sendTestPush()}>Test bildirimi gönder</Btn>
+        </div>
+        <ul className={m.notifyList}>
+          <li><BellRing size={14} /> <b>Gizleme talebi</b> <span>anında bildirim</span></li>
+          <li><BellRing size={14} /> <b>Profil değişikliği</b> <span>anında bildirim</span></li>
+          <li><BellRing size={14} /> <b>Kategori talebi</b> <span>anında bildirim</span></li>
+          <li><BellRing size={14} /> <b>İşletme başvurusu</b> <span>anında bildirim</span></li>
+          <li className={m.notifyOff}><BellOff size={14} /> <b>Onay bekleyen yorum</b> <span>bildirim yok · işletme karar verir, 48 sa sonra otomatik yayın</span></li>
+        </ul>
+        {testResult ? (
+          <p className={m.notifyResult}>
+            Son test: {testResult.admins} yönetici · {testResult.devices} kayıtlı cihaz
+            {Object.keys(testResult.platforms).length ? ` (${Object.entries(testResult.platforms).map(([platform, count]) => `${platform === "ios" ? "iPhone" : platform === "android" ? "Android" : "Web"} ${count}`).join(", ")})` : ""}
+            {" · "}<b>{testResult.delivered} teslim</b>{testResult.failed ? ` · ${testResult.failed} başarısız` : ""}
+          </p>
+        ) : null}
+      </section>
 
       <div className={m.banner}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

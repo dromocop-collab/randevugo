@@ -4922,10 +4922,43 @@ async function platformAdminUserIds(): Promise<string[]> {
   return [...ids];
 }
 
+// Bildirime dokununca açılacak süper admin sayfası (web servis çalışanı ve iOS uygulaması data.url'i kullanır).
+const ADMIN_ROUTE_URL: Record<string, string> = {
+  admin_support: "/super-admin/destek", admin_businesses: "/super-admin/isletmeler", admin_moderation: "/super-admin/moderasyon",
+  admin_alerts: "/super-admin/uyarilar", admin_booking_fields: "/super-admin/randevu-alanlari", admin_subscriptions: "/super-admin/abonelikler",
+  admin_whatsapp: "/super-admin/whatsapp-gelen", admin_approvals: "/super-admin/moderasyon",
+};
+
 async function notifyPlatformAdmins(title: string, body: string, data: Record<string, string>, collapseId: string, excludeUid?: string) {
   const recipients = (await platformAdminUserIds()).filter((uid) => uid !== excludeUid);
-  if (recipients.length) await pushToUsers(recipients, title, body, { audience: "admin", ...data }, collapseId);
+  const url = data.url ?? ADMIN_ROUTE_URL[data.route ?? ""] ?? "/super-admin";
+  if (recipients.length) await pushToUsers(recipients, title, body, { audience: "admin", ...data, url }, collapseId);
 }
+
+/** Süper admin › bildirim testi: tüm yönetici cihazlarına test push'u; cihaz ve teslim sayısını döndürür. */
+export const sendAdminTestPush = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    await consumeSecurityLimit(`admin-test-push:${uid}`, 10, 60 * 60_000);
+    const recipients = await platformAdminUserIds();
+    const devices = await Promise.all(recipients.map((id) => db.collection(`users/${id}/devices`).get()));
+    const platforms: Record<string, number> = {};
+    devices.forEach((snapshot) => snapshot.docs.forEach((document) => {
+      const platform = String(document.data().platform ?? "ios");
+      if (String(document.data().fcmToken ?? "").length > 20) platforms[platform] = (platforms[platform] ?? 0) + 1;
+    }));
+    const tokens = await tokensForUsers(recipients);
+    const target = String(request.data?.target ?? "/super-admin/moderasyon");
+    const result = tokens.length
+      ? await sendTokenBatches(tokens, "🔔 Test bildirimi", "Süper admin bildirimleri telefonuna ulaşıyor. Dokununca moderasyon açılır.",
+        { audience: "admin", route: "admin_moderation", url: target.startsWith("/super-admin") ? target : "/super-admin" }, `admin-test-${Date.now()}`)
+      : { successCount: 0, failureCount: 0 };
+    return { admins: recipients.length, devices: tokens.length, platforms, delivered: result.successCount, failed: result.failureCount };
+  },
+);
 
 function shortText(value: unknown, max: number) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -5009,7 +5042,7 @@ export const adminApprovalBusinessStore = onDocumentWritten(
     await notifyPlatformAdmins(
       "🏪 Yeni şube onay bekliyor",
       `${await businessNameOf(event.params.businessId, after?.businessName)}${position > 1 ? ` · ${position}. mağaza` : ""}`,
-      { route: "admin_approvals", kind: "store", businessId: event.params.businessId },
+      { route: "admin_approvals", url: "/super-admin/isletmeler?durum=pending", kind: "store", businessId: event.params.businessId },
       `approval-store-${event.params.businessId}`
     );
   }

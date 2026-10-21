@@ -99,3 +99,17 @@
 }
 .banner p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 @media (min-width: 768px) { .banner { flex-direction: row; align-items: center; justify-content: space-between; } }
+
+/* Telefon bildirimleri kartı */
+.notify { display: grid; gap: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); }
+.notifyHead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.notifyHead > div { flex: 1 1 260px; min-width: 0; }
+.notifyHead b { font-size: 14px; }
+.notifyHead p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.notifyList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+@media (min-width: 900px) { .notifyList { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.notifyList li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 12px; background: var(--green-soft); color: var(--green-2); font-size: 12.5px; }
+.notifyList li b { color: var(--ink); font-weight: 700; }
+.notifyList li span { color: var(--muted); }
+.notifyList .notifyOff { background: var(--card-2); color: var(--faint); }
+.notifyResult { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--card-2); color: var(--muted); font-size: 12.5px; }
