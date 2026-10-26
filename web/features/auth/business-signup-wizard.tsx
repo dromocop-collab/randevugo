@@ -57,6 +57,13 @@ const STEPS = [
   { title: tk("Çalışma şekli"), benefit: tk("Takvim ve yetkiler hazır kurulur") },
   { title: tk("Hesap"), benefit: tk("30 gün ücretsiz, kart gerekmez") },
 ] as const;
+/** Rovi'nin adım adım kısa cesaret mesajları. */
+const ROVI_TIPS = [
+  tk("Kategorini seç, gerisini ben hazırlarım."),
+  tk("Harika! Müşterilerin seni bu adresle bulacak."),
+  tk("Neredeyse bitti, iki kısa tercih kaldı."),
+  tk("Son adım! 30 gün ücretsiz, kart gerekmez."),
+] as const;
 /** Adım başına tahmini süre (sn) — "~1 dk kaldı" etiketi için. */
 const STEP_SECONDS = [15, 35, 10, 45] as const;
 const LAST_STEP = STEPS.length - 1;
@@ -111,7 +118,10 @@ export function BusinessSignupWizard() {
   const [furthest, setFurthest] = useState(0);
   // Canlı izleme: işletme kaydındaki adım (süper admin canlı panelinde görünür).
   useEffect(() => { trackAction(`signup:${step}`); }, [step]);
+  // Geçiş yönü: ileri adımlar sağdan, geri adımlar soldan kayar.
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
   const setStep = (index: number) => {
+    setDirection(index >= step ? "forward" : "back");
     setStepState(index);
     setFurthest((current) => Math.max(current, index));
   };
@@ -260,6 +270,7 @@ export function BusinessSignupWizard() {
 
   return (
     <main className={w.stage}>
+      <div className={w.blobs} aria-hidden="true"><i /><i /><i /></div>
       <header className={w.header}>
         <Link href="/" aria-label={t("SeninRandevun ana sayfa")} className={w.brand}><Image src="/logo.png" alt="" width={40} height={40} /><b>Senin<span>Randevun</span></b></Link>
         <div className={w.headerBadges}><small>{t("İLK AY ÜCRETSİZ")}</small><span><BadgeCheck size={15} aria-hidden="true" /> {t("Kredi kartı gerekmez")}</span></div>
@@ -268,9 +279,10 @@ export function BusinessSignupWizard() {
       <section className={w.shell}>
         <aside className={w.rail} aria-label={t("Kurulum adımları")}>
           <div className={w.rovi}>
-            <RoviMascot size={72} mood={step === LAST_STEP ? "happy" : "wave"} alt="" />
+            <span className={w.roviFloat}><RoviMascot size={72} mood={step === LAST_STEP ? "happy" : "wave"} alt="" /></span>
             <span><small>{t("ROVİ · KURULUM KOÇUN")}</small><b>{t("İşletmeni birlikte hazırlayalım.")}</b></span>
           </div>
+          <p key={`tip-${step}`} className={w.roviTip} aria-live="polite">{t(ROVI_TIPS[step]!)}</p>
           <ol className={w.steps}>
             {STEPS.map((item, index) => {
               const done = index !== step && index < LAST_STEP && index < Math.max(step, furthest) && stepValid(index, draft) && canEnter(index, draft);
@@ -300,6 +312,11 @@ export function BusinessSignupWizard() {
             <small><Clock3 size={13} aria-hidden="true" /> {remaining}</small>
           </div>
 
+          <div key={`mtip-${step}`} className={w.mobileTip} aria-hidden="true">
+            <span className={w.roviFloat}><RoviMascot size={38} mood={step === LAST_STEP ? "happy" : "wave"} alt="" /></span>
+            <p>{t(ROVI_TIPS[step]!)}</p>
+          </div>
+
           {step > 0 ? (
             <details className={w.previewMobile}>
               <summary><Store size={16} aria-hidden="true" /><span><b>{t("Mağaza önizlemesi")}</b><small>{storeDisplayUrl(finalSlug)}</small></span><ChevronDown size={18} aria-hidden="true" className={w.chevron} /></summary>
@@ -307,7 +324,7 @@ export function BusinessSignupWizard() {
             </details>
           ) : null}
 
-          <div key={step} className={w.step}>
+          <div key={step} className={w.step} data-dir={direction}>
             {step === 0 && <>
               <StepHeading refEl={headingRef} eyebrow={t("SENİ TANIYALIM")} title={t("İşletmen hangi kategoride?")} text={t("Doğru kategori; hizmet şablonlarını, çalışma saatlerini ve vitrinini sana göre hazırlar.")} />
               <label className={w.search}>
@@ -336,7 +353,7 @@ export function BusinessSignupWizard() {
                 {query ? <button type="button" onClick={() => setQuery("")} aria-label={t("Aramayı temizle")}><X size={16} /></button> : null}
               </label>
               <div className={w.categoryGrid}>
-                {filtered.map((item) => {
+                {filtered.map((item, index) => {
                   const selected = draft.category === item.value;
                   return (
                     <button
@@ -348,7 +365,7 @@ export function BusinessSignupWizard() {
                         if (item.value === "diger" && query.trim() && !draft.customCategory) update({ customCategory: query.trim() });
                         chooseCategory(item.value);
                       }}
-                      style={{ ["--accent" as string]: item.accent }}
+                      style={{ ["--accent" as string]: item.accent, ["--i" as string]: Math.min(index, 14) }}
                     >
                       <span className={w.categoryMedia} aria-hidden="true">
                         {item.image ? <Image src={item.image} alt="" fill sizes="(max-width: 820px) 46vw, 180px" /> : <em>{item.emoji}</em>}
@@ -383,7 +400,7 @@ export function BusinessSignupWizard() {
             {step === 1 && <form onSubmit={submitBusiness} noValidate>
               <StepHeading refEl={headingRef} eyebrow={t("MAĞAZANI OLUŞTURALIM")} title={t("Müşterilerin seni nerede bulsun?")} text={t("Yazdıkça sağdaki vitrinin güncellenir. Tüm bunları daha sonra panelden değiştirebilirsin.")} />
               <div className={w.form}>
-                <Field id={ids.name} icon={Store} label={t("İşletme adı")} error={nameError ? t("İşletme adını yaz (en az 2 karakter).") : undefined}>
+                <Field id={ids.name} icon={Store} label={t("İşletme adı")} valid={(draft.name?.trim().length ?? 0) >= 2} error={nameError ? t("İşletme adını yaz (en az 2 karakter).") : undefined}>
                   <input
                     id={ids.name}
                     aria-describedby={`${ids.name}-msg`}
@@ -399,7 +416,7 @@ export function BusinessSignupWizard() {
                     aria-invalid={nameError || undefined}
                   />
                 </Field>
-                <Field id={ids.slug} label={t("Online randevu adresin")} error={slugTaken ? t("Bu adres alınmış. Aşağıdaki önerilerden birini seçebilirsin.") : slugError ? t("En az 3 karakter; harf, rakam ve tire kullan.") : undefined}
+                <Field id={ids.slug} label={t("Online randevu adresin")} valid={slugState?.slug === finalSlug && slugState.available === true} error={slugTaken ? t("Bu adres alınmış. Aşağıdaki önerilerden birini seçebilirsin.") : slugError ? t("En az 3 karakter; harf, rakam ve tire kullan.") : undefined}
                   extra={slugTaken ? (
                     <div className={w.suggestions} aria-label={t("Önerilen adresler")}>
                       {suggestSlugAlternatives(finalSlug, draft.district, draft.city).map((option) => (
@@ -426,7 +443,7 @@ export function BusinessSignupWizard() {
                   </div>
                 </Field>
                 <div className={w.row}>
-                  <Field id={ids.city} icon={MapPin} label={t("Şehir")} error={cityError ? t("Şehir seç.") : undefined}>
+                  <Field id={ids.city} icon={MapPin} label={t("Şehir")} valid={(draft.city?.trim().length ?? 0) >= 2} error={cityError ? t("Şehir seç.") : undefined}>
                     <CitySelect
                       id={ids.city}
                       describedBy={`${ids.city}-msg`}
@@ -436,7 +453,7 @@ export function BusinessSignupWizard() {
                       invalid={cityError}
                     />
                   </Field>
-                  <Field id={ids.district} icon={Navigation} label={t("İlçe")} error={districtError ? t("İlçeni seç.") : undefined}>
+                  <Field id={ids.district} icon={Navigation} label={t("İlçe")} valid={(draft.district?.trim().length ?? 0) >= 2} error={districtError ? t("İlçeni seç.") : undefined}>
                     <DistrictSelect
                       id={ids.district}
                       city={draft.city ?? ""}
@@ -448,7 +465,7 @@ export function BusinessSignupWizard() {
                     />
                   </Field>
                 </div>
-                <Field id={ids.phone} label={t("İşletme cep telefonu")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined}>
+                <Field id={ids.phone} label={t("İşletme cep telefonu")} valid={isValidMobilePhone(draft.phone ?? "")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined}>
                   <div className={w.affix}>
                     <b>+90</b>
                     <input
@@ -516,7 +533,7 @@ export function BusinessSignupWizard() {
 
             {step === 3 && <>
               <StepHeading refEl={headingRef} eyebrow={t("SON ADIM")} title={t("Çalışma alanını güvene al.")} text={t("Hesabını oluştur; e-postanı doğruladıktan sonra hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.")} />
-              <div className={w.summary}>
+              <div className={`${w.summary} ${w.summaryReady}`}>
                 <span className={w.summaryIcon} aria-hidden="true">{selectedCategory?.emoji ?? "🏪"}</span>
                 <p><b>{draft.name}</b><small>{categoryLabel} · {[draft.district, draft.city].filter(Boolean).join(", ")}</small><small className={w.summaryUrl}>{storeDisplayUrl(finalSlug)}</small></p>
                 <button type="button" onClick={() => goTo(1)}>{t("Düzenle")}</button>
@@ -541,10 +558,10 @@ function StepHeading({ eyebrow, title, text, refEl }: { eyebrow: string; title: 
   return <div className={w.heading} ref={refEl} tabIndex={-1}><span>{eyebrow}</span><h1>{title}</h1><p>{text}</p></div>;
 }
 
-function Field({ id, label, error, hint, children, extra, icon: Icon }: { id: string; label: string; error?: string; hint?: ReactNode; children: ReactNode; extra?: ReactNode; icon?: LucideIcon }) {
+function Field({ id, label, error, hint, children, extra, icon: Icon, valid }: { id: string; label: string; error?: string; hint?: ReactNode; children: ReactNode; extra?: ReactNode; icon?: LucideIcon; valid?: boolean }) {
   return (
-    <div className={w.field}>
-      <label className={w.fieldLabel} htmlFor={id}>{label}</label>
+    <div className={`${w.field} ${valid && !error ? w.fieldValid : ""}`}>
+      <label className={w.fieldLabel} htmlFor={id}>{label}{valid && !error ? <span className={w.validTick} aria-hidden="true"><Check size={12} strokeWidth={3} /></span> : null}</label>
       {Icon ? <div className={w.control}><Icon className={w.controlIcon} size={18} aria-hidden="true" />{children}</div> : children}
       {error ? <small id={`${id}-msg`} className={w.fieldError} role="alert">{error}</small> : hint ? <small id={`${id}-msg`} className={w.fieldHint}>{hint}</small> : null}
       {extra}
@@ -557,7 +574,7 @@ function StepAction({ children, secondary, hint }: { children: ReactNode; second
     <div className={w.actions}>
       {hint ? <small className={w.enterHint}>{hint} <kbd>↵</kbd></small> : null}
       {secondary}
-      <button type="submit" className={w.primary}>{children}</button>
+      <button type="submit" className={`${w.primary} ${w.primaryShine}`}>{children}</button>
     </div>
   );
 }

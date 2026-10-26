@@ -438,3 +438,103 @@ details[open] > summary .chevron { transform: rotate(180deg); }
 .heading h1 { letter-spacing: -0.045em; }
 .heading h1 { background: linear-gradient(120deg, var(--wz-ink) 55%, var(--wz-green-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .heading p { font-size: 15.5px; }
+
+
+/* ═══ Canlı, modern katman (animasyonlar) — hareket azaltma tercihinde kapanır ═══ */
+.stage { position: relative; isolation: isolate; }
+.blobs { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.blobs i { position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%; filter: blur(70px); opacity: 0.32; animation: drift 26s ease-in-out infinite alternate; }
+.blobs i:nth-child(1) { top: -18vmax; right: -12vmax; background: radial-gradient(circle, #d7ff70, transparent 65%); }
+.blobs i:nth-child(2) { bottom: -22vmax; left: -14vmax; background: radial-gradient(circle, #6ee7a8, transparent 65%); animation-duration: 32s; animation-delay: -8s; }
+.blobs i:nth-child(3) { top: 30%; left: 40%; width: 30vmax; height: 30vmax; background: radial-gradient(circle, #9fd8ff, transparent 65%); opacity: 0.18; animation-duration: 38s; animation-delay: -14s; }
+:global(:root[data-theme="dark"]) .blobs i { opacity: 0.1; }
+@keyframes drift { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(-4vmax, 3vmax, 0) scale(1.08); } 100% { transform: translate3d(3vmax, -2vmax, 0) scale(0.95); } }
+
+/* Adım geçişi: yöne göre kayma + sıralı belirme */
+.step[data-dir="forward"] { animation: stepFromRight 0.5s cubic-bezier(0.2, 0.85, 0.25, 1) both; }
+.step[data-dir="back"] { animation: stepFromLeft 0.5s cubic-bezier(0.2, 0.85, 0.25, 1) both; }
+@keyframes stepFromRight { from { opacity: 0; transform: translateX(28px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes stepFromLeft { from { opacity: 0; transform: translateX(-28px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.step .heading > * { animation: riseIn 0.55s cubic-bezier(0.2, 0.85, 0.25, 1) both; }
+.step .heading > :nth-child(2) { animation-delay: 0.06s; }
+.step .heading > :nth-child(3) { animation-delay: 0.12s; }
+.step .form > *, .step .choiceGroup, .step .optional, .step .summary, .step .register { animation: riseIn 0.55s cubic-bezier(0.2, 0.85, 0.25, 1) both; }
+.step .form > :nth-child(1) { animation-delay: 0.1s; }
+.step .form > :nth-child(2) { animation-delay: 0.16s; }
+.step .form > :nth-child(3) { animation-delay: 0.22s; }
+.step .form > :nth-child(4) { animation-delay: 0.28s; }
+.step .choiceGroup { animation-delay: 0.12s; }
+.step .choiceGroup + .choiceGroup { animation-delay: 0.2s; }
+.step .optional { animation-delay: 0.28s; }
+.step .summary { animation-delay: 0.1s; }
+.step .register { animation-delay: 0.18s; }
+@keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* Kategori kartları: sıralı giriş, seçimde pop */
+.categoryCard { animation: cardIn 0.5s cubic-bezier(0.2, 0.85, 0.25, 1) both; animation-delay: calc(var(--i, 0) * 35ms + 0.12s); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+.categoryCard:active { transform: scale(0.97); }
+.categoryCard.selected { animation: cardPop 0.42s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+@keyframes cardPop { 0% { transform: scale(0.96); } 60% { transform: scale(1.03); } 100% { transform: scale(1); } }
+.tick { animation: tickIn 0.4s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+@keyframes tickIn { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(0); } }
+.categoryMedia::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgb(0 0 0 / 0.28)); opacity: 0.8; transition: opacity 0.3s; }
+.categoryCard:hover .categoryMedia::after { opacity: 0.4; }
+
+/* Seçim kartları */
+.choice { transition: border-color 0.2s, box-shadow 0.2s, background 0.2s, transform 0.2s; }
+.choice:hover { transform: translateY(-2px); box-shadow: var(--wz-shadow-lift); }
+.choice:active { transform: scale(0.98); }
+.choice.selected > i { animation: iconBounce 0.5s cubic-bezier(0.3, 1.6, 0.5, 1); background: var(--wz-green-2); color: #fff; }
+:global(:root[data-theme="dark"]) .choice.selected > i { color: #0b130f; }
+@keyframes iconBounce { 0% { transform: scale(0.8) rotate(-8deg); } 60% { transform: scale(1.12) rotate(4deg); } 100% { transform: scale(1) rotate(0); } }
+.chips button { transition: transform 0.15s, background 0.2s, color 0.2s, border-color 0.2s; }
+.chips button:active { transform: scale(0.95); }
+.chips button.chipOn { animation: cardPop 0.35s cubic-bezier(0.3, 1.5, 0.5, 1); }
+
+/* İlerleme çubuğu parıltısı */
+.progress > i { position: relative; overflow: hidden; }
+.progress > i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.65), transparent); transform: translateX(-100%); animation: shimmer 2.4s ease-in-out infinite; }
+@keyframes shimmer { 60%, 100% { transform: translateX(100%); } }
+
+/* Rovi: süzülme + adım mesajı balonu */
+.roviFloat { display: inline-flex; animation: float 3.6s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.roviTip { position: relative; margin: 16px 0 0; padding: 11px 13px; border-radius: 14px; background: rgb(255 255 255 / 0.1); color: #fff; font-size: 13px; font-weight: 650; line-height: 1.45; animation: bubbleIn 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.roviTip::before { content: ""; position: absolute; top: -6px; left: 26px; width: 12px; height: 12px; border-radius: 3px; background: inherit; transform: rotate(45deg); }
+@keyframes bubbleIn { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
+.mobileTip { display: flex; align-items: center; gap: 10px; margin-top: 14px; animation: bubbleIn 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.mobileTip p { position: relative; margin: 0; padding: 9px 12px; border-radius: 14px; background: var(--wz-card); box-shadow: var(--wz-shadow); color: var(--wz-ink); font-size: 13px; font-weight: 650; line-height: 1.4; }
+@media (min-width: 821px) { .mobileTip { display: none; } }
+
+/* Doğru doldurulan alanda onay işareti */
+.validTick { display: inline-grid; width: 18px; height: 18px; margin-left: 7px; place-items: center; border-radius: 50%; background: #22c55e; color: #fff; vertical-align: -3px; animation: tickIn 0.38s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+.fieldValid .affix, .fieldValid .form input, .fieldValid input { box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.45); }
+.fieldValid .controlIcon { color: #22a35a; }
+
+/* Ana düğme: parıltı + ok hareketi */
+.primaryShine { position: relative; overflow: hidden; }
+.primaryShine::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.35), transparent); transform: skewX(-20deg); transition: left 0.6s ease; }
+.primaryShine:hover:not(:disabled)::after { left: 130%; }
+.primary svg { transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.primary:hover:not(:disabled) svg { transform: translateX(4px); }
+.primary:active:not(:disabled) { transform: scale(0.98); }
+
+/* Son adım özeti: hazır parıltısı */
+.summaryReady { position: relative; overflow: hidden; border-color: color-mix(in srgb, #22c55e 40%, var(--wz-line)); }
+.summaryReady::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgb(215 255 112 / 0.35) 50%, transparent 70%); transform: translateX(-100%); animation: sweep 1.6s 0.4s ease-out both; pointer-events: none; }
+@keyframes sweep { to { transform: translateX(100%); } }
+
+/* Mobil: Devam düğmesi ekranın altında sabit */
+@media (max-width: 639px) {
+  .actions { position: sticky; bottom: 0; z-index: 5; margin: 24px -16px 0; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, transparent, color-mix(in srgb, #eff7ef 92%, transparent) 30%); }
+  :global(:root[data-theme="dark"]) .actions { background: linear-gradient(180deg, transparent, color-mix(in srgb, #0d1712 94%, transparent) 30%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blobs i, .step[data-dir], .step .heading > *, .step .form > *, .step .choiceGroup, .step .optional, .step .summary, .step .register,
+  .categoryCard, .categoryCard.selected, .tick, .choice.selected > i, .chips button.chipOn, .progress > i::after, .roviFloat, .roviTip,
+  .mobileTip, .validTick, .summaryReady::after { animation: none; }
+  .primaryShine::after, .primary svg, .choice, .chips button { transition: none; }
+  .choice:hover { transform: none; }
+}
