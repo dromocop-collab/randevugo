@@ -15,6 +15,7 @@ export type SignupChannel = "meta_ads" | "meta_organic" | "google" | "other" | "
 
 export type MetaAdsOverview = {
   range: { since: string; until: string };
+  conversions?: { pixelId: string | null; lastAt: string | null; lastEvent: string | null; lastOk: boolean; lastError: string | null; counts: Record<string, number> };
   connection: { connected: boolean; hasToken: boolean; adAccountId: string | null; updatedAt: string | null };
   signups: {
     total: number; paid: number; totalBusinesses: number | null; channels: Record<SignupChannel, number>;

@@ -19,7 +19,7 @@ import { tk } from "@/i18n/config";
 import { getDb } from "@/lib/firebase/firestore";
 import { mapDoc } from "@/lib/firebase/mapper";
 import type { Business, DaySchedule } from "@/types/business";
-import { readAttribution } from "@/features/attribution/attribution";
+import { readAttribution, readMetaCookies, trackPixel } from "@/features/attribution/attribution";
 
 export interface OnboardingInput {
   ownerUid: string;
@@ -144,9 +144,11 @@ export interface CreateBusinessResult {
 export async function createBusinessFromOnboarding(input: OnboardingInput): Promise<CreateBusinessResult> {
   const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "createBusiness");
   // Reklam takibi: sitede yakalanan utm_* bilgisi (yoksa null) — sunucu doğrular, işletme belgesine yazılmaz.
-  const result = await callable({ ...input, attribution: readAttribution() });
+  const result = await callable({ ...input, attribution: readAttribution(), ...readMetaCookies() });
   const data = result.data as Partial<CreateBusinessResult>;
   if (!data.businessId) throw new Error(tk("İşletme oluşturulamadı."));
+  // Sunucu aynı event_id (işletme kimliği) ile Conversions API'ye bildirir; Meta ikisini tek sayar.
+  if (!input.parentBusinessId) trackPixel("CompleteRegistration", data.businessId);
   return {
     businessId: data.businessId,
     organizationId: typeof data.organizationId === "string" ? data.organizationId : undefined,

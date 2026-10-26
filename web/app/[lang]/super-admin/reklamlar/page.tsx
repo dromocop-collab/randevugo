@@ -250,6 +250,15 @@ export default function AdsPage() {
                 <p className={s.note}><KeyRound size={13} aria-hidden /> Anahtar yalnız sunucuda (platformPrivateSettings/metaAds) saklanır; bu sayfa değerini hiçbir zaman göstermez.</p>
               </Card>
 
+              <Card title="Dönüşüm bildirimi" icon={UserPlus} description="Meta'ya “kayda başladı” ve “işletme oluşturdu” bilgisi (Conversions API)">
+                <DetailList rows={[
+                  { label: "Pixel", value: data.conversions?.pixelId ? <code>{data.conversions.pixelId}</code> : <Pill tone="amber" dot>Ayarlar › Facebook Pixel ID boş</Pill> },
+                  { label: "Son bildirim", value: data.conversions?.lastAt ? <span className={s.inline}>{data.conversions.lastEvent} · {relativeTime(Date.parse(data.conversions.lastAt), now)} {data.conversions.lastOk ? <Pill tone="green" dot>kabul edildi</Pill> : <Pill tone="red" dot>reddedildi</Pill>}</span> : "Henüz yok" },
+                  data.conversions?.lastError ? { label: "Son hata", value: data.conversions.lastError } : null,
+                  { label: "Toplam", value: `Lead ${data.conversions?.counts.Lead_ok ?? 0} · Kayıt ${data.conversions?.counts.CompleteRegistration_ok ?? 0}${(data.conversions?.counts.Lead_fail ?? 0) + (data.conversions?.counts.CompleteRegistration_fail ?? 0) ? ` · ${(data.conversions?.counts.Lead_fail ?? 0) + (data.conversions?.counts.CompleteRegistration_fail ?? 0)} başarısız` : ""}` },
+                ]} />
+              </Card>
+
               <LinkBuilder />
 
               <Card title="Nasıl ölçülüyor?" icon={CircleAlert}>

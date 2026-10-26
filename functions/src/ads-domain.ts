@@ -16,6 +16,7 @@ export type Attribution = {
   content: string | null;
   term: string | null;
   clickId: "fbclid" | "gclid" | null;
+  fbclid: string | null;
   landingPath: string | null;
   referrerHost: string | null;
   capturedAt: number;
@@ -45,6 +46,7 @@ export function sanitizeAttribution(input: unknown, now = Date.now()): Attributi
     content: clean(row.content, 120),
     term: clean(row.term),
     clickId,
+    fbclid: typeof row.fbclid === "string" && /^[A-Za-z0-9_-]{10,500}$/.test(row.fbclid.trim()) ? row.fbclid.trim() : null,
     landingPath: landing,
     referrerHost,
     capturedAt,

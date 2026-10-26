@@ -35,6 +35,7 @@ import { appointmentTransitionTriggers, automationRuleMatches, automationVariabl
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
+import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
@@ -1377,6 +1378,23 @@ export const createBusiness = onCall(
         createdAt: FieldValue.serverTimestamp(),
       });
     });
+    // Reklam optimizasyonu: ilk mağaza = "kayıt tamamlandı" (tarayıcı Pixel'i aynı event_id ile tekilleştirilir).
+    if (position === 1 && !parentBusinessId) {
+      const attribution = sanitizeAttribution(data.attribution);
+      const fbclid = sanitizeFbclid(attribution?.fbclid);
+      await sendMetaConversion({
+        eventName: "CompleteRegistration", eventId: businessRef.id, eventTimeMs: Date.now(),
+        sourceUrl: "https://seninrandevun.com/isletmeler/kayit",
+        user: {
+          email: data.email, phone: data.phone, externalId: uid,
+          ip: clientIpFrom(request.rawRequest as unknown as { headers: Record<string, unknown>; ip?: string }),
+          userAgent: String(request.rawRequest.headers["user-agent"] ?? ""),
+          fbc: sanitizeFbCookie(data.fbc) ?? buildFbc(fbclid, attribution?.capturedAt),
+          fbp: sanitizeFbCookie(data.fbp),
+        },
+        customData: { content_name: "business_signup", status: "trial" },
+      });
+    }
     return { businessId: businessRef.id, organizationId, status: "pending_review", requiresApproval: true, storePosition: position };
   }
 );
@@ -9760,6 +9778,42 @@ export const sendWhatsAppTest = onCall(
   },
 );
 
+/* ── Meta Conversions API (reklam optimizasyonu) ──────────────────────────────────────────────────────────── */
+
+const META_CAPI_STATUS_PATH = "platformPrivateSettings/metaCapiStatus";
+
+/**
+ * Tek bir dönüşüm olayını Meta'ya bildirir. Pixel ID (Ayarlar › Facebook Pixel ID) ve Meta erişim anahtarı (Reklamlar › bağlantı)
+ * yoksa sessizce atlar. Hata ana akışı asla bozmaz; son durum platformPrivateSettings/metaCapiStatus'a yazılır.
+ */
+async function sendMetaConversion(input: CapiEventInput) {
+  try {
+    const [publicSettings, adsSettings] = await Promise.all([db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(META_ADS_SETTINGS_PATH).get()]);
+    const pixelId = normalizePixelId((publicSettings.data()?.analytics as Record<string, unknown> | undefined)?.facebookPixelId);
+    const token = String(adsSettings.data()?.accessToken ?? "").trim();
+    if (!pixelId || !token) return;
+    const event = buildCapiEvent(input);
+    if (!event) return;
+    const testCode = String(adsSettings.data()?.capiTestEventCode ?? "").trim();
+    const response = await fetch(`https://graph.facebook.com/v21.0/${pixelId}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: [event], access_token: token, ...(/^TEST\w{2,20}$/.test(testCode) ? { test_event_code: testCode } : {}) }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    const body = await response.json().catch(() => null) as { events_received?: number; error?: { message?: string } } | null;
+    const ok = response.ok && Number(body?.events_received ?? 0) > 0;
+    await db.doc(META_CAPI_STATUS_PATH).set({
+      lastAt: FieldValue.serverTimestamp(), lastEvent: input.eventName, lastOk: ok,
+      lastError: ok ? null : shortText(body?.error?.message ?? `HTTP ${response.status}`, 200),
+      counts: { [`${input.eventName}_${ok ? "ok" : "fail"}`]: FieldValue.increment(1) },
+    }, { merge: true });
+    if (!ok) logger.warn("Meta Conversions API reddetti", { event: input.eventName, error: body?.error?.message ?? response.status });
+  } catch (error) {
+    logger.warn("Meta Conversions API gönderilemedi", { event: input.eventName, error: String(error) });
+  }
+}
+
 /* ── Ziyaretçi analitiği (sunucuda sayım) ──────────────────────────────────────────────────────────────────── */
 
 const ANALYTICS_SETTINGS_PATH = "platformPrivateSettings/analytics";
@@ -9881,7 +9935,7 @@ export const trackVisit = onCall(
         }, { merge: true });
         // Adım hunisi: oturum başına her adım bir kez.
         if (!sessionActions.includes(action)) tx.set(shardRef, { day: parts.day, byAction: { [mapKey(action)]: FieldValue.increment(1) } }, { merge: true });
-        return { counted: false };
+        return { counted: false, lead: action === "signup:1" && !sessionActions.includes(action) };
       }
       if (kind === "ping") {
         if (!visitorSnap.exists) return { counted: false };
@@ -9966,6 +10020,15 @@ export const trackVisit = onCall(
       });
       return { counted: true };
     });
+    // Reklam optimizasyonu: işletme kaydının 2. adımına geçen = "kayda başladı" (Lead).
+    if ((result as { lead?: boolean }).lead) {
+      const eventId = typeof request.data?.eventId === "string" && /^[A-Za-z0-9_-]{6,80}$/.test(request.data.eventId) ? request.data.eventId : `lead-${visitorId.slice(0, 16)}-${parts.day}`;
+      await sendMetaConversion({
+        eventName: "Lead", eventId, eventTimeMs: now, sourceUrl: `https://seninrandevun.com${target.lang === "en" ? "/en" : ""}${target.path}`,
+        user: { externalId: visitorId, ip, userAgent, fbc: sanitizeFbCookie(request.data?.fbc), fbp: sanitizeFbCookie(request.data?.fbp) },
+        customData: { content_name: "business_signup_started" },
+      });
+    }
     return { ok: true, counted: result.counted };
   },
 );
@@ -10203,8 +10266,16 @@ export const getMetaAdsOverview = onCall(
     const totalBusinesses = await db.collection("businesses").where("createdAt", ">=", Timestamp.fromMillis(range.sinceMs)).count().get()
       .then((result) => result.data().count).catch(() => null);
 
+    const [capiStatus, platformPublic] = await Promise.all([db.doc(META_CAPI_STATUS_PATH).get(), db.doc(PLATFORM_SETTINGS_PATH).get()]);
+    const capi = capiStatus.data() ?? {};
     const base = {
       range: { since: range.since, until: range.until },
+      conversions: {
+        pixelId: normalizePixelId((platformPublic.data()?.analytics as Record<string, unknown> | undefined)?.facebookPixelId),
+        lastAt: capi.lastAt instanceof Timestamp ? capi.lastAt.toDate().toISOString() : null,
+        lastEvent: typeof capi.lastEvent === "string" ? capi.lastEvent : null, lastOk: capi.lastOk === true,
+        lastError: typeof capi.lastError === "string" ? capi.lastError : null, counts: (capi.counts ?? {}) as Record<string, number>,
+      },
       connection: { connected: Boolean(settings.token && settings.adAccountId), hasToken: settings.token.length >= 20, adAccountId: settings.adAccountId, updatedAt: settings.updatedAt },
       signups: { ...signups, totalBusinesses, recent: recentSignups },
     };

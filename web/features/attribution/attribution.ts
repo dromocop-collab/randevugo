@@ -12,6 +12,8 @@ export type StoredAttribution = {
   content: string | null;
   term: string | null;
   clickId: "fbclid" | "gclid" | null;
+  /** Meta tıklama kimliğinin değeri: Meta'ya "bu kayıt şu reklam tıklamasından" bildirmek için (fbc). */
+  fbclid?: string | null;
   landingPath: string;
   referrerHost: string | null;
   capturedAt: number;
@@ -45,6 +47,7 @@ export function captureAttribution() {
       content: pick("utm_content"),
       term: pick("utm_term"),
       clickId,
+      fbclid: (params.get("fbclid") ?? "").trim().slice(0, 500) || null,
       landingPath: window.location.pathname.slice(0, 120),
       referrerHost: host,
       capturedAt: Date.now(),
@@ -61,4 +64,22 @@ export function readAttribution(): StoredAttribution | null {
     if (!value || typeof value.capturedAt !== "number" || Date.now() - value.capturedAt > MAX_AGE_MS) return null;
     return value;
   } catch { return null; }
+}
+
+/** Meta çerezleri (_fbp, _fbc) — yalnız pazarlama onayı verilip Pixel yüklendiyse vardır. */
+export function readMetaCookies(): { fbp: string | null; fbc: string | null } {
+  try {
+    const read = (name: string) => document.cookie.split("; ").find((row) => row.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
+    const stored = readAttribution();
+    const fbc = read("_fbc") ?? (stored?.fbclid ? `fb.1.${stored.capturedAt}.${stored.fbclid}` : null);
+    return { fbp: read("_fbp"), fbc };
+  } catch { return { fbp: null, fbc: null }; }
+}
+
+/** Tarayıcı Pixel'i yüklüyse (onay verilmişse) olay gönderir; event_id sunucu bildirimiyle aynıdır (tekilleştirme). */
+export function trackPixel(event: string, eventId: string) {
+  try {
+    const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
+    if (typeof fbq === "function") fbq("track", event, {}, { eventID: eventId });
+  } catch { /* Pixel yoksa sessiz */ }
 }
