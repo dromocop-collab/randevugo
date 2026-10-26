@@ -7,6 +7,7 @@ let lastSent = "";
 
 export function trackAction(action: string) {
   if (typeof window === "undefined" || navigator.webdriver) return;
+  if (String(getFirebaseApp().options.projectId ?? "").startsWith("demo-")) return;
   const key = `${window.location.pathname}|${action}`;
   if (key === lastSent) return;
   lastSent = key;

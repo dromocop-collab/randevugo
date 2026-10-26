@@ -43,6 +43,12 @@ function externalReferrerHost(): string | null {
 
 const track = () => httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "trackVisit");
 
+/** Otomasyon tarayıcıları (testler, botlar) ve demo/test Firebase projeleri hiç sayılmaz; istek de gönderilmez. */
+function trackingDisabled() {
+  if (navigator.webdriver) return true;
+  return String(getFirebaseApp().options.projectId ?? "").startsWith("demo-");
+}
+
 export function PageViewTracker() {
   const fullPath = useNextPathname() ?? "/";
   const firstView = useRef(true);
@@ -50,7 +56,7 @@ export function PageViewTracker() {
   useEffect(() => {
     const path = stripLocale(fullPath);
     if (PRIVATE_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
-    if (/bot|crawler|spider|crawling|headless/i.test(navigator.userAgent)) return;
+    if (/bot|crawler|spider|crawling|headless/i.test(navigator.userAgent) || trackingDisabled()) return;
     const params = new URLSearchParams(window.location.search);
     // Yönlendiren ve utm yalnız sayfanın ilk açılışında anlamlı; site içi geçişlerde gönderilmez.
     const isFirst = firstView.current;
@@ -73,7 +79,7 @@ export function PageViewTracker() {
   // Canlı ziyaretçi sinyali: yalnız sekme görünürken, dakikada bir.
   useEffect(() => {
     const path = stripLocale(fullPath);
-    if (PRIVATE_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
+    if (PRIVATE_PREFIXES.some((prefix) => path.startsWith(prefix)) || trackingDisabled()) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       track()({ type: "ping", path: fullPath }).catch(() => undefined);
