@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import Script from "next/script";
 import Link from "@/i18n/link";
 import { useT } from "@/i18n/client";
@@ -36,7 +37,14 @@ function readPreferences(): CookiePreferences | null {
   return null;
 }
 
+// Odaklı akışlarda (işletme kaydı) çerez bandı kendiliğinden açılmaz; seçim yapılmadıkça zorunlu olmayan betikler
+// zaten yüklenmez. Kişi başka sayfaya geçince band orada gösterilir. "Çerez tercihleri" bağlantısı her yerde açar.
+const QUIET_PATHS = ["/isletmeler/kayit"];
+
 export function AnalyticsScripts() {
+  const pathname = usePathname() ?? "/";
+  const barePath = pathname === "/en" ? "/" : pathname.startsWith("/en/") ? pathname.slice(3) : pathname;
+  const quiet = QUIET_PATHS.some((path) => barePath === path || barePath.startsWith(`${path}/`));
   const t = useT();
   const [analytics, setAnalytics] = useState<PlatformAnalyticsSettings | null>(null);
   const [preferences, setPreferences] = useState<CookiePreferences | null>(null);
@@ -93,7 +101,7 @@ export function AnalyticsScripts() {
             fbq('track', 'PageView');`}
         </Script>
       )}
-      {dialogOpen && <aside className={`cookie-consent ${editing ? "is-editing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="cookie-title">
+      {dialogOpen && (editing || !quiet) && <aside className={`cookie-consent ${editing ? "is-editing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="cookie-title">
         <div className="cookie-consent__copy"><strong id="cookie-title">{t("Çerez tercihleri senin kontrolünde.")}</strong><p>{t("Zorunlu çerezler hizmeti çalıştırır. Analitik ve pazarlama çerezleri yalnızca seçiminle etkinleşir.")}</p><Link href="/cerez-politikasi">{t("Çerez politikasını incele")}</Link></div>
         {editing && <div className="cookie-preferences">
           <label><span><b>{t("Zorunlu")}</b><small>{t("Güvenli giriş, tercih ve temel işlevler")}</small></span><input type="checkbox" checked disabled aria-label={t("Zorunlu çerezler her zaman etkin")} /></label>
