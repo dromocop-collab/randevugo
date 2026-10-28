@@ -92,9 +92,15 @@ export function sanitizeCustomFields(input: unknown): CustomBookingField[] {
   });
 }
 
-/** Alan bu hizmette gösterilir mi? (serviceIds boşsa tüm hizmetler) */
-export function fieldAppliesToService(field: CustomBookingField, serviceId: string): boolean {
-  return !field.serviceIds || field.serviceIds.length === 0 || field.serviceIds.includes(serviceId);
+/**
+ * Alan bu hizmette gösterilir mi? (serviceIds boşsa tüm hizmetler). Birden fazla hizmetli randevuda
+ * hizmetlerden herhangi birine bağlı alan sorulur.
+ */
+export function fieldAppliesToService(field: CustomBookingField, serviceId: string | readonly string[]): boolean {
+  const scoped = field.serviceIds;
+  if (!scoped || scoped.length === 0) return true;
+  const ids = typeof serviceId === "string" ? [serviceId] : serviceId;
+  return ids.some((id) => scoped.includes(id));
 }
 
 /**
@@ -103,7 +109,7 @@ export function fieldAppliesToService(field: CustomBookingField, serviceId: stri
  */
 export function validateCustomFieldValues(
   fields: CustomBookingField[],
-  serviceId: string,
+  serviceId: string | readonly string[],
   input: unknown,
   enforceRequired: boolean
 ): CustomFieldValue[] {

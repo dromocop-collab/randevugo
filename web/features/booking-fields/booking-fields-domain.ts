@@ -60,12 +60,18 @@ function cleanText(value: unknown, max: number): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
-/** Alan bu hizmette gösterilir mi? (serviceIds boşsa tüm hizmetler) */
-export function fieldAppliesToService(field: CustomBookingField, serviceId: string): boolean {
-  return !field.serviceIds || field.serviceIds.length === 0 || field.serviceIds.includes(serviceId);
+/**
+ * Alan bu hizmette gösterilir mi? (serviceIds boşsa tüm hizmetler). Birden fazla hizmetli randevuda
+ * hizmetlerden herhangi birine bağlı alan sorulur.
+ */
+export function fieldAppliesToService(field: CustomBookingField, serviceId: string | readonly string[]): boolean {
+  const scoped = field.serviceIds;
+  if (!scoped || scoped.length === 0) return true;
+  const ids = typeof serviceId === "string" ? [serviceId] : serviceId;
+  return ids.some((id) => scoped.includes(id));
 }
 
-export function fieldsForService(fields: CustomBookingField[], serviceId: string): CustomBookingField[] {
+export function fieldsForService(fields: CustomBookingField[], serviceId: string | readonly string[]): CustomBookingField[] {
   return fields.filter((field) => fieldAppliesToService(field, serviceId));
 }
 
@@ -220,7 +226,7 @@ export function validateFieldValue(field: CustomBookingField, raw: CustomFieldIn
 }
 
 /** Sunucuya gidecek değer nesnesi: yalnızca bu hizmete uygulanan, dolu alanlar. */
-export function buildCustomFieldPayload(fields: CustomBookingField[], serviceId: string, values: CustomFieldInputValues): CustomFieldInputValues {
+export function buildCustomFieldPayload(fields: CustomBookingField[], serviceId: string | readonly string[], values: CustomFieldInputValues): CustomFieldInputValues {
   const payload: CustomFieldInputValues = {};
   for (const field of fieldsForService(fields, serviceId)) {
     const raw = values[field.id];
@@ -233,7 +239,7 @@ export function buildCustomFieldPayload(fields: CustomBookingField[], serviceId:
 }
 
 /** Müşteri özetinde gösterilecek satırlar. */
-export function summarizeFieldValues(fields: CustomBookingField[], serviceId: string, values: CustomFieldInputValues, t: TFunction = interpolate, locale = "tr-TR"): Array<{ id: string; label: string; value: string }> {
+export function summarizeFieldValues(fields: CustomBookingField[], serviceId: string | readonly string[], values: CustomFieldInputValues, t: TFunction = interpolate, locale = "tr-TR"): Array<{ id: string; label: string; value: string }> {
   return fieldsForService(fields, serviceId).flatMap((field) => {
     const raw = values[field.id];
     if (raw === undefined || raw === "" || (field.type === "checkbox" && raw !== true)) return [];

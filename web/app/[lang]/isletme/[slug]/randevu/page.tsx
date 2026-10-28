@@ -183,6 +183,7 @@ export default function BookingPage() {
           preselectedDate={preselectedDate && /^\d{4}-\d{2}-\d{2}$/.test(preselectedDate) ? preselectedDate : null}
           preselectedStartAtMillis={preselectedStartAtMillis}
           businessAlertsEnabled={business.availabilityAlertsEnabled === true}
+          allowMultiServiceBooking={business.allowMultiServiceBooking !== false}
         />
       </main>
     </div>

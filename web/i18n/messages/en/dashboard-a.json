@@ -681,5 +681,7 @@
   "Buraya taşınamaz: {reason}": "Can't move here: {reason}",
   "Taşımak için sürükleyin": "Drag to move",
   "Randevu taşınsın mı?": "Move this appointment?",
-  "{customer}: {from} → {to}. Müşteriye bildirim gönderilir.": "{customer}: {from} → {to}. The customer will be notified."
+  "{customer}: {from} → {to}. Müşteriye bildirim gönderilir.": "{customer}: {from} → {to}. The customer will be notified.",
+  "Birden fazla hizmet seçimi": "Multiple services per booking",
+  "Açıkken müşteri tek randevuda ana hizmetin yanına ek hizmet seçebilir (ör. saç kesimi + sakal). Süre ve fiyat toplanır, hepsini aynı uzman art arda yapar.": "When on, customers can add extra services to a single booking (e.g. haircut + beard). Durations and prices are added up, and the same specialist does them back to back."
 }

@@ -25,6 +25,7 @@ import { BottomSheet } from "@/components/booking/booking-parts";
 import bookingStyles from "@/components/booking/booking.module.css";
 import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
+import { extraLinePriceLabel } from "@/features/services/multi-service";
 import { useDateFnsLocale } from "@/i18n/date";
 import { tk, type TFunction } from "@/i18n/config";
 import styles from "./ticket.module.css";
@@ -145,9 +146,11 @@ export default function AppointmentDetailPage() {
   // Başlangıç/aralık/görüşmede fiyatlı randevu: kesin tutar işletmede girilene kadar etiket gösterilir.
   const money=(value:number)=>formatPrice(value,intlLocale);
   const priceOpen=needsFinalPrice(appointment);
-  // servicePriceMax yalnız ana hizmetin üst sınırıdır; toplamda ek hizmetler eklenir.
-  const totalPriceLabel=priceOpen?appointmentPriceLabel({...appointment,servicePrice:totalPrice??0,servicePriceMax:appointment.servicePriceMax!=null?appointment.servicePriceMax+additionalPrice:undefined},t,money):totalPrice!=null?formatPrice(totalPrice,intlLocale):null;
-  const primaryPriceLabel=priceOpen?appointmentPriceLabel({...appointment,servicePrice:primaryPrice??0},t,money):primaryPrice!=null?formatPrice(primaryPrice,intlLocale):null;
+  // primaryServicePriceType varsa servicePriceType/Max zaten toplamın görüntüsüdür; eski randevularda
+  // servicePriceMax yalnız ana hizmetin üst sınırıdır, toplamda ek hizmetler eklenir.
+  const combinedPricing=appointment.primaryServicePriceType!=null;
+  const totalPriceLabel=priceOpen?appointmentPriceLabel(combinedPricing?{...appointment,servicePrice:totalPrice??0}:{...appointment,servicePrice:totalPrice??0,servicePriceMax:appointment.servicePriceMax!=null?appointment.servicePriceMax+additionalPrice:undefined},t,money):totalPrice!=null?formatPrice(totalPrice,intlLocale):null;
+  const primaryPriceLabel=priceOpen?appointmentPriceLabel(combinedPricing?{...appointment,servicePrice:primaryPrice??0,servicePriceType:appointment.primaryServicePriceType,servicePriceMax:appointment.primaryServicePriceMax}:{...appointment,servicePrice:primaryPrice??0},t,money):primaryPrice!=null?formatPrice(primaryPrice,intlLocale):null;
   const upcomingActive=["pending","confirmed"].includes(appointment.status)&&!Number.isNaN(start.getTime())&&start.getTime()>now;
   const calendarEvent:CalendarEventInput|null=upcomingActive?{
     uid:appointment.id||params.publicToken,
@@ -196,7 +199,7 @@ export default function AppointmentDetailPage() {
             <span className={styles.blockTitle}>{t("Hizmet dökümü")}</span>
             <ul className={styles.lines}>
               <ServiceLine name={primaryName||t("Ana hizmet")} duration={primaryDuration} price={primaryPriceLabel}/>
-              {additional.map((item,index)=><ServiceLine key={`${item.serviceId}-${index}`} name={`+ ${item.name}`} duration={Number(item.durationMinutes)||0} price={formatPrice(Number(item.price)||0,intlLocale)}/>)}
+              {additional.map((item,index)=><ServiceLine key={`${item.serviceId}-${index}`} name={`+ ${item.name}`} duration={Number(item.durationMinutes)||0} price={extraLinePriceLabel(item,t,(value)=>formatPrice(value,intlLocale))}/>)}
               <li className={styles.linesTotal}><span>{t("Toplam")}</span><span>{totalDuration?t("{count} dk",{count:totalDuration}):""}{totalDuration&&totalPriceLabel!=null?" · ":""}{totalPriceLabel??""}</span></li>
             </ul>
           </div>}
@@ -245,7 +248,7 @@ export default function AppointmentDetailPage() {
       </aside>
     </div>
   </main><MarketingFooter/>
-    {rescheduleOpen&&upcomingActive&&<RescheduleDialog businessId={appointment.businessId} serviceId={appointment.serviceId} variantId={appointment.serviceVariantId} staffId={appointment.staffId||undefined} currentStartAt={appointment.startAt} title={business.name||t("Randevunuz")} subtitle={t("{service} · Şu an: {date} {time}",{service:serviceSummary,date,time})} timeZone={policy?.timeZone} maximumBookingDaysAhead={policy?.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
+    {rescheduleOpen&&upcomingActive&&<RescheduleDialog businessId={appointment.businessId} serviceId={appointment.serviceId} variantId={appointment.serviceVariantId} staffId={appointment.staffId||undefined} currentStartAt={appointment.startAt} durationMinutes={totalDuration||undefined} title={business.name||t("Randevunuz")} subtitle={t("{service} · Şu an: {date} {time}",{service:serviceSummary,date,time})} timeZone={policy?.timeZone} maximumBookingDaysAhead={policy?.maximumBookingDaysAhead} onClose={closeReschedule} onConfirm={confirmReschedule}/>}
     {cancelOpen&&<BottomSheet
       eyebrow={t("RANDEVU İPTALİ")}
       title={t("Randevuyu iptal et")}

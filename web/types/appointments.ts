@@ -1,4 +1,5 @@
 import type { EntityBase } from "@/types/common";
+import type { ServicePriceType } from "@/types/service";
 
 export type AppointmentStatus =
   | "pending"
@@ -16,6 +17,10 @@ export interface AppointmentServiceLine {
   name: string;
   price: number;
   durationMinutes: number;
+  /** Müşterinin online seçtiği ek hizmette: sabit değilse fiyat tipi (yoksa sabit). */
+  priceType?: ServicePriceType;
+  priceMax?: number;
+  variantId?: string;
 }
 
 export interface Appointment extends EntityBase {
@@ -40,6 +45,9 @@ export interface Appointment extends EntityBase {
   /** Randevu anındaki fiyat tipi; "fixed" dışındakilerde kesin tutar iş bitince girilir. */
   servicePriceType?: "fixed" | "from" | "range" | "quote";
   servicePriceMax?: number;
+  /** Birden fazla hizmetli randevuda ana hizmetin fiyat tipi; varsa servicePriceType/Max toplamın tipidir. */
+  primaryServicePriceType?: ServicePriceType;
+  primaryServicePriceMax?: number;
   /** Kesin tutar girildi (tahsilat veya tamamlama sırasında). */
   servicePriceFinal?: boolean;
   staffName?: string;
@@ -83,6 +91,8 @@ export interface AppointmentCreateInput {
   variantId?: string;
   /** Ek alan değerleri (alan id → değer). Gönderildiğinde sunucu zorunlu alanları denetler. */
   customFields?: Record<string, string | number | boolean>;
+  /** Ana hizmetin yanına seçilen ek hizmetler (tek randevuda art arda yapılır). */
+  additionalServices?: Array<{ serviceId: string; variantId?: string }>;
 }
 
 export interface DashboardAppointmentCreateInput {

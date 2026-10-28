@@ -229,7 +229,6 @@
   "Geçerli bir Türkiye cep numarası girin (05XX…).": "Enter a valid Turkish mobile number (05XX…).",
   "Bilinmeyen şablon.": "Unknown template.",
   "WhatsApp ayarları eksik (numara kimliği, token, app secret, verify token).": "WhatsApp settings are incomplete (phone number ID, token, app secret, verify token).",
-
   "Alanlar geçersiz.": "The fields are invalid.",
   "Ek alanlar geçersiz.": "The custom fields are invalid.",
   "Alan listesi geçersiz.": "Invalid field list.",
@@ -267,11 +266,19 @@
   "Doğrulama kodu e-posta adresinize gönderildi.": "A verification code has been sent to your email address.",
   "Şifre sıfırlama kodu e-posta adresinize gönderildi.": "A password reset code has been sent to your email address.",
   "Şifreniz başarıyla güncellendi.": "Your password has been updated.",
-
   "Bu işletme şu anda yeni randevu kabul etmiyor. Lütfen daha sonra tekrar deneyin.": "This business isn't accepting new appointments right now. Please try again later.",
   "Bu alana erişim izniniz doğrulanamadı. Oturumunuzu yenileyip tekrar deneyin.": "We couldn't verify your access to this area. Please refresh your session and try again.",
   "Oturumunuzun süresi dolmuş olabilir. Yeniden giriş yapıp tekrar deneyin.": "Your session may have expired. Please sign in again and try again.",
   "Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.": "Couldn't connect. Check your internet connection and try again.",
   "Çok fazla istek gönderildi. Kısa bir süre sonra tekrar deneyin.": "Too many requests. Please try again in a moment.",
-  "İşlem beklenenden uzun sürdü. Lütfen tekrar deneyin.": "This took longer than expected. Please try again."
+  "İşlem beklenenden uzun sürdü. Lütfen tekrar deneyin.": "This took longer than expected. Please try again.",
+  "Seçilen uzman seçtiğiniz hizmetlerin hepsini vermiyor.": "The selected specialist doesn't offer all of the services you chose.",
+  "Seçtiğiniz ek hizmetlerden biri artık online randevuya açık değil.": "One of the extra services you chose is no longer available for online booking.",
+  "Seçilen ek hizmet seçeneği artık mevcut değil.": "The selected option for an extra service is no longer available.",
+  "Seçilen hizmetlerin toplam süresi 8 saati geçemez. Bazılarını ayrı randevu olarak alın.": "The total time of the selected services can't exceed 8 hours. Book some of them separately.",
+  "Bu işletme tek randevuda birden fazla hizmet kabul etmiyor.": "This business doesn't accept multiple services in one booking.",
+  "Ek hizmet listesi geçersiz.": "The extra service list is invalid.",
+  "Bir randevuda en fazla 5 hizmet seçilebilir.": "Up to 5 services can be chosen in one booking.",
+  "Seçilen hizmetlerin toplam süresi bu saate sığmıyor. Başka bir saat seçin.": "The selected services don't fit at this time. Please choose another time.",
+  "Seçilen uzman bu randevudaki hizmetlerin hepsini vermiyor.": "The selected specialist doesn't offer all services in this appointment."
 }

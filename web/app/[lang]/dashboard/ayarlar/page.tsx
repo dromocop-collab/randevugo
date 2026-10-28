@@ -73,10 +73,10 @@ const SMS_FIELDS = [
 type Tab = "bilgiler" | "gorseller" | "sosyal" | "randevu" | "gorunum";
 
 type InfoForm = { name: string; category: BusinessCategory; businessType: BusinessType | ""; description: string; phone: string; email: string; address: string; city: string; district: string; website: string };
-type RulesForm = { minNotice: number; maxDaysAhead: number; bufferBefore: number; bufferAfter: number; slotInterval: number; allowCancel: boolean; allowReschedule: boolean; allowOnlineBooking: boolean; cancelDeadline: number; smsPreferences: SmsPreferences };
+type RulesForm = { minNotice: number; maxDaysAhead: number; bufferBefore: number; bufferAfter: number; slotInterval: number; allowCancel: boolean; allowReschedule: boolean; allowOnlineBooking: boolean; allowMultiService: boolean; cancelDeadline: number; smsPreferences: SmsPreferences };
 
 const EMPTY_INFO: InfoForm = { name: "", category: "diger", businessType: "", description: "", phone: "", email: "", address: "", city: "", district: "", website: "" };
-const DEFAULT_RULES: RulesForm = { minNotice: 60, maxDaysAhead: 45, bufferBefore: 0, bufferAfter: 10, slotInterval: 15, allowCancel: true, allowReschedule: true, allowOnlineBooking: true, cancelDeadline: 60, smsPreferences: { confirmation: true, reminder: true, cancellation: true, reschedule: true } };
+const DEFAULT_RULES: RulesForm = { minNotice: 60, maxDaysAhead: 45, bufferBefore: 0, bufferAfter: 10, slotInterval: 15, allowCancel: true, allowReschedule: true, allowOnlineBooking: true, allowMultiService: true, cancelDeadline: 60, smsPreferences: { confirmation: true, reminder: true, cancellation: true, reschedule: true } };
 
 const TABS: { id: Tab; label: string; short: string; note: string; icon: LucideIcon }[] = [
   { id: "bilgiler", label: tk("İşletme Bilgileri"), short: tk("Profil"), note: tk("Profil, iletişim ve konum"), icon: Building2 },
@@ -166,6 +166,7 @@ export default function SettingsPage() {
         allowCancel: biz.allowCancellation ?? true,
         allowReschedule: biz.allowReschedule ?? true,
         allowOnlineBooking: biz.allowOnlineBooking !== false,
+        allowMultiService: biz.allowMultiServiceBooking !== false,
         cancelDeadline: biz.cancellationDeadlineMinutes ?? 60,
         smsPreferences: {
           confirmation: biz.smsPreferences?.confirmation !== false,
@@ -288,6 +289,7 @@ export default function SettingsPage() {
         allowCancellation: rules.allowCancel,
         allowReschedule: rules.allowReschedule,
         allowOnlineBooking: rules.allowOnlineBooking,
+        allowMultiServiceBooking: rules.allowMultiService,
         cancellationDeadlineMinutes: cancelDeadline,
         smsPreferences: rules.smsPreferences,
       });
@@ -598,6 +600,7 @@ export default function SettingsPage() {
                 <p className={k.sectionLabel}>{t("Online randevu")}</p>
                 <div className={k.group}>
                   <ToggleRow title={t("Müşteri online randevusu")} note={t("Açıkken müşteriler mağaza sayfandan kendi randevularını oluşturabilir.")} checked={rules.allowOnlineBooking} onChange={(v) => setRule("allowOnlineBooking", v)} />
+                  <ToggleRow title={t("Birden fazla hizmet seçimi")} note={t("Açıkken müşteri tek randevuda ana hizmetin yanına ek hizmet seçebilir (ör. saç kesimi + sakal). Süre ve fiyat toplanır, hepsini aynı uzman art arda yapar.")} checked={rules.allowMultiService} onChange={(v) => setRule("allowMultiService", v)} />
                 </div>
 
                 <p className={k.sectionLabel}>{t("Takvim penceresi")}</p>

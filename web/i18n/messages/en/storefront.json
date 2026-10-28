@@ -873,5 +873,14 @@
   "İşletmeyi ara": "Call business",
   "iptal-onay::Vazgeç": "Keep appointment",
   "puan::Orta": "Fair",
-  "alan::Zorunlu": "Required"
+  "alan::Zorunlu": "Required",
+  "Bir randevuda en fazla {count} hizmet seçebilirsiniz.": "You can choose up to {count} services in one appointment.",
+  "Eklediğiniz hizmet için bir seçenek seçin": "Choose an option for the service you added",
+  "Toplam süre 8 saati geçemez; bir hizmeti çıkarın": "Total time can't exceed 8 hours; remove a service",
+  "Yanına hizmet ekle": "Add another service",
+  "İsteğe bağlı · aynı randevuda art arda yapılır": "Optional · done back to back in the same appointment",
+  "+{count} hizmet": "+{count} services",
+  "Bu hizmetleri birlikte veren uzman yok": "No specialist offers these services together",
+  "Tüm hizmetleri göster ({count})": "Show all services ({count})",
+  "{count} hizmet · toplam": "{count} services · total"
 }

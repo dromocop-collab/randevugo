@@ -106,6 +106,8 @@ export interface Business extends EntityBase {
   lastMinuteSlotsEnabled?: boolean;
   /** Whether customers can create appointments from the public storefront. */
   allowOnlineBooking?: boolean;
+  /** Müşteri tek randevuda birden fazla hizmet seçebilir mi? (yoksa açık) */
+  allowMultiServiceBooking?: boolean;
   onboardingGoals?: string[];
   appointmentManagers?: "owner" | "team";
   dailyAppointmentVolume?: "0-5" | "6-10" | "11-20" | "21+";

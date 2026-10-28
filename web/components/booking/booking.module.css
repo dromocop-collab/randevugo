@@ -872,3 +872,36 @@ textarea.input { min-height: 96px; padding-top: 14px; padding-bottom: 14px; line
 /* Fiyat işletmede kesinleşecekse özet notu */
 .totalNote { margin: 0; padding: 0 16px 14px; background: var(--soft); color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { .variants { animation: none; } }
+
+/* ── Yanına hizmet ekle (tek randevuda birden fazla hizmet) ── */
+.extras { display: grid; gap: 12px; margin-top: 18px; padding: 14px; border: 1.5px dashed color-mix(in srgb, var(--green-2) 30%, var(--line)); border-radius: 20px; background: color-mix(in srgb, var(--soft) 55%, transparent); animation: rise 0.32s var(--ease) both; }
+.extrasHead { display: flex; align-items: center; gap: 10px; }
+.extrasIcon { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--card); color: var(--green-ink); box-shadow: 0 0 0 1px var(--line); }
+.extrasText { display: grid; min-width: 0; flex: 1; gap: 1px; }
+.extrasText b { color: var(--ink); font-size: 15px; font-weight: 760; }
+.extrasText small { color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.extraList { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.extraItem { display: grid; gap: 8px; min-width: 0; }
+.extraChip {
+  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 52px; padding: 9px 12px;
+  border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.extraChip:hover { border-color: color-mix(in srgb, var(--green-2) 35%, var(--line)); }
+.extraChip:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--green-2) 55%, transparent); outline-offset: 2px; }
+.extraChipOn { border-color: var(--green-2); background: var(--selected-bg); box-shadow: 0 0 0 1px var(--green-2); }
+.extraChipOff { cursor: not-allowed; opacity: 0.55; }
+.extraChipOff:hover { border-color: var(--line); }
+.extraBox { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--line-strong); border-radius: 7px; color: transparent; transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+.extraChipOn .extraBox { border-color: var(--green-2); background: var(--green-2); color: #fff; animation: pop 0.35s var(--ease); }
+.extraBody { display: grid; min-width: 0; gap: 2px; }
+.extraName { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 720; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.extraMeta { color: var(--muted); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.extraMeta b { color: var(--ink); font-weight: 800; }
+.extrasTotal { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px; border-radius: 14px; background: var(--card); box-shadow: 0 0 0 1px var(--line); font-size: 13px; }
+.extrasTotal span { color: var(--muted); font-weight: 650; }
+.extrasTotal b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.extrasTotalWarn { box-shadow: 0 0 0 1.5px #e11d48; }
+.extrasTotalWarn span { color: #be123c; }
+@media (max-width: 480px) { .extras { padding: 12px; } .extraList { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .extras, .extraChipOn .extraBox { animation: none; } }

@@ -21,6 +21,8 @@ type Props = {
   /** Mevcut çalışan; boşsa tüm uygun çalışanların saatleri listelenir. */
   staffId?: string;
   currentStartAt: string;
+  /** Randevunun kayıtlı toplam süresi (ek hizmetler dahil); saatler bu süreye göre listelenir. */
+  durationMinutes?: number;
   title: string;
   subtitle?: string;
   timeZone?: string;
@@ -34,7 +36,7 @@ function addDays(dateKey: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-export function RescheduleDialog({ businessId, serviceId, variantId, staffId, currentStartAt, title, subtitle, timeZone = DEFAULT_TIME_ZONE, maximumBookingDaysAhead, onClose, onConfirm }: Props) {
+export function RescheduleDialog({ businessId, serviceId, variantId, staffId, currentStartAt, durationMinutes, title, subtitle, timeZone = DEFAULT_TIME_ZONE, maximumBookingDaysAhead, onClose, onConfirm }: Props) {
   const t = useT();
   const intlLocale = useIntlLocale();
   const [today] = useState(() => millisToZonedDateTime(Date.now(), timeZone).date);
@@ -53,11 +55,12 @@ export function RescheduleDialog({ businessId, serviceId, variantId, staffId, cu
 
   useEffect(() => {
     let active = true;
-    listAvailableSlots({ businessId, serviceId, ...(variantId ? { variantId } : {}), ...(staffId ? { staffId } : {}), date })
+    const appointmentDurationMinutes = durationMinutes && durationMinutes >= 5 && durationMinutes <= 480 ? Math.round(durationMinutes) : undefined;
+    listAvailableSlots({ businessId, serviceId, ...(variantId ? { variantId } : {}), ...(staffId ? { staffId } : {}), date, ...(appointmentDurationMinutes ? { appointmentDurationMinutes } : {}) })
       .then((slots) => { if (active) setLoaded({ date, slots: slots.filter((slot) => slot.startAtMillis !== currentStartMillis), error: null }); })
       .catch((reason) => { if (active) setLoaded({ date, slots: [], error: appointmentChangeError(reason, tk("Müsait saatler yüklenemedi. Lütfen yeniden deneyin.")) }); });
     return () => { active = false; };
-  }, [businessId, serviceId, variantId, staffId, date, currentStartMillis]);
+  }, [businessId, serviceId, variantId, staffId, date, currentStartMillis, durationMinutes]);
 
   async function confirm() {
     if (!selected || busy) return;

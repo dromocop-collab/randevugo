@@ -201,6 +201,7 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     startAtMillis: input.startAtMillis,
     ...(input.variantId ? { variantId: input.variantId } : {}),
     ...(input.customFields ? { customFields: input.customFields } : {}),
+    ...(input.additionalServices?.length ? { additionalServices: input.additionalServices } : {}),
   });
 
   const data = result.data as { appointmentId?: unknown; publicToken?: unknown };
@@ -216,17 +217,34 @@ export interface AvailableAppointmentSlot {
   staffId?: string;
 }
 
-export async function listAvailableSlots(input: {
+/** Ana hizmetin yanına seçilen ek hizmet (seçenekli hizmette seçenek kimliğiyle). */
+export type ExtraServiceSelection = { serviceId: string; variantId?: string };
+
+type AvailableSlotsInput = {
   businessId: string;
   serviceId: string;
   variantId?: string;
   staffId?: string;
   date: string;
-}): Promise<AvailableAppointmentSlot[]> {
+  additionalServices?: ExtraServiceSelection[];
+  /** Saat değiştirmede randevunun kayıtlı toplam süresi (ek hizmetler dahil). */
+  appointmentDurationMinutes?: number;
+};
+
+export async function listAvailableSlots(input: AvailableSlotsInput): Promise<AvailableAppointmentSlot[]> {
+  return (await listAvailableSlotsWithMeta(input)).slots;
+}
+
+/** multiService: sunucu ek hizmet seçimini destekliyor ve işletmede açık. */
+export async function listAvailableSlotsWithMeta(input: AvailableSlotsInput): Promise<{ slots: AvailableAppointmentSlot[]; multiService: boolean }> {
   const functions = getFunctions(getFirebaseApp(), "europe-west1");
   const callable = call(functions, "getAvailableSlots");
   const result = await callable(input);
-  const slots = (result.data as { slots?: unknown }).slots;
+  const data = result.data as { slots?: unknown; multiService?: unknown };
+  return { slots: parseSlots(data.slots), multiService: data.multiService === true };
+}
+
+function parseSlots(slots: unknown): AvailableAppointmentSlot[] {
   if (!Array.isArray(slots)) return [];
   return slots.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
@@ -253,6 +271,7 @@ export async function listAvailableDates(input: {
   staffId?: string;
   startDate: string;
   endDate: string;
+  additionalServices?: ExtraServiceSelection[];
 }): Promise<AvailableAppointmentDate[]> {
   const functions = getFunctions(getFirebaseApp(), "europe-west1");
   const callable = call(functions, "getAvailableDates");

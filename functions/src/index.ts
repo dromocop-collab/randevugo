@@ -39,7 +39,8 @@ import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAct
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
-import { AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
+import { MAX_COMBINED_DURATION_MINUTES, appointmentServiceSummary, combinePriceParts, parseExtraServiceRequests, staffCanProvide } from "./multi-service-domain.js";
+import { type ServicePriceType, AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
 initializeApp();
 
 const db = getFirestore();
@@ -919,7 +920,7 @@ export const finalizeAppointmentCheckout = onCall(
       });
       if (paidAmount > 0) tx.create(financeRef, {
         type: "income", category: "Adisyon", amount: paidAmount, paymentMethod,
-        description: `${String(appointment.customerName ?? "Müşteri")} · ${String(appointment.serviceName ?? "Hizmet")}`,
+        description: `${String(appointment.customerName ?? "Müşteri")} · ${appointmentServiceSummary(appointment.serviceName, appointment.additionalServices, 120) || "Hizmet"}`,
         appointmentId, receiptId: receiptRef.id, occurredAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
@@ -3169,9 +3170,15 @@ async function loadBookingCandidates(
   businessId: string,
   serviceId: string,
   staffId: string | null,
-  context: BookingContext
+  context: BookingContext,
+  booking: BookingExtras = NO_EXTRAS
 ): Promise<BookingCandidate[]> {
-  if (staffId) return [{ staffId, context }];
+  if (staffId) {
+    if (booking.extras.some((extra) => !staffCanProvide(context.staff, extra.serviceId, extra.data.category))) {
+      throw new HttpsError("failed-precondition", "Seçilen uzman seçtiğiniz hizmetlerin hepsini vermiyor.");
+    }
+    return [{ staffId, context: withCombinedDuration(context, booking) }];
+  }
 
   const staffSnapshot = await db.collection(`businesses/${businessId}/staff`)
     .where("isActive", "==", true)
@@ -3184,18 +3191,114 @@ async function loadBookingCandidates(
       ? document.data().serviceIds.map(String)
       : [];
     const matchesBranch = specialtyCategoryIds.length === 0 || specialtyCategoryIds.includes(String(context.service.category ?? ""));
-    return matchesBranch && (serviceIds.length === 0 || serviceIds.includes(serviceId));
+    return matchesBranch && (serviceIds.length === 0 || serviceIds.includes(serviceId))
+      && booking.extras.every((extra) => staffCanProvide(document.data(), extra.serviceId, extra.data.category));
   });
-  if (eligibleStaff.length === 0) return [{ staffId: null, context }];
+  if (eligibleStaff.length === 0) {
+    // Ek hizmet seçildiyse ve ekipte hepsini veren kimse yoksa saat gösterilmez (personelsiz işletme hariç).
+    if (booking.extras.length > 0 && staffSnapshot.size > 0) return [];
+    return [{ staffId: null, context: withCombinedDuration(context, booking) }];
+  }
 
   return eligibleStaff.map((document) => ({
     staffId: document.id,
-    context: {
+    context: withCombinedDuration({
       ...context,
       staff: document.data(),
       service: applyServiceVariant(applyStaffServiceOverride(context.baseService, document.data(), serviceId), context.variant),
-    },
+    }, booking),
   }));
+}
+
+/* ── Tek randevuda birden fazla hizmet ── */
+type ExtraServiceDoc = { serviceId: string; data: FirebaseFirestore.DocumentData; variant: ReturnType<typeof resolveServiceVariant>["variant"] };
+/** extras: müşterinin seçtiği ek hizmetler; durationMinutes: saat değiştirmede randevunun kayıtlı toplam süresi. */
+type BookingExtras = { extras: ExtraServiceDoc[]; durationMinutes: number | null };
+const NO_EXTRAS: BookingExtras = { extras: [], durationMinutes: null };
+
+/** Ek hizmet belgeleri: aktif ve online randevuya açık olmalı; seçenekli hizmette seçenek geçerli olmalı. */
+async function loadExtraServices(businessId: string, business: FirebaseFirestore.DocumentData, value: unknown, primaryServiceId: string): Promise<ExtraServiceDoc[]> {
+  let requests: ReturnType<typeof parseExtraServiceRequests>;
+  try {
+    requests = parseExtraServiceRequests(value, primaryServiceId);
+  } catch (error) {
+    throw new HttpsError("invalid-argument", error instanceof Error ? error.message : "Ek hizmet listesi geçersiz.");
+  }
+  if (requests.length === 0) return [];
+  if (business.allowMultiServiceBooking === false) {
+    throw new HttpsError("failed-precondition", "Bu işletme tek randevuda birden fazla hizmet kabul etmiyor.");
+  }
+  const snapshots = await db.getAll(...requests.map((item) => db.doc(`businesses/${businessId}/services/${item.serviceId}`)));
+  return requests.map((item, index) => {
+    const data = snapshots[index]?.data();
+    if (!data || data.isActive !== true || data.isBookableOnline !== true) {
+      throw new HttpsError("failed-precondition", "Seçtiğiniz ek hizmetlerden biri artık online randevuya açık değil.");
+    }
+    const { variant, invalid } = resolveServiceVariant(data, item.variantId);
+    if (invalid) throw new HttpsError("failed-precondition", "Seçilen ek hizmet seçeneği artık mevcut değil.");
+    return { serviceId: item.serviceId, data, variant };
+  });
+}
+
+/** Personele göre ek hizmet satırları (personel özel süre/fiyatı, ardından seçenek) — randevuya bu görüntü yazılır. */
+function resolveExtraServices(extras: ExtraServiceDoc[], staff: FirebaseFirestore.DocumentData | null) {
+  return extras.map((extra) => {
+    const effective = applyServiceVariant(applyStaffServiceOverride(extra.data, staff, extra.serviceId), extra.variant);
+    const snapshot = appointmentPriceSnapshot(effective, extra.variant);
+    return {
+      serviceId: extra.serviceId,
+      name: serviceDisplayName(String(extra.data.name ?? "Hizmet"), extra.variant),
+      price: snapshot.servicePrice,
+      durationMinutes: normalizedBookingDuration(effective.durationMinutes),
+      ...(snapshot.servicePriceType !== "fixed" ? { priceType: snapshot.servicePriceType } : {}),
+      ...(typeof snapshot.servicePriceMax === "number" ? { priceMax: snapshot.servicePriceMax } : {}),
+      ...(extra.variant ? { variantId: extra.variant.id } : {}),
+    };
+  });
+}
+
+/** Saat motoru için toplam süre: ana hizmet + ek hizmetler (ya da saat değiştirmede kayıtlı süre). */
+function withCombinedDuration(context: BookingContext, booking: BookingExtras): BookingContext {
+  if (booking.durationMinutes !== null) return { ...context, service: { ...context.service, durationMinutes: booking.durationMinutes } };
+  if (booking.extras.length === 0) return context;
+  const total = normalizedBookingDuration(context.service.durationMinutes)
+    + resolveExtraServices(booking.extras, context.staff).reduce((sum, item) => sum + item.durationMinutes, 0);
+  if (total > MAX_COMBINED_DURATION_MINUTES) {
+    throw new HttpsError("failed-precondition", "Seçilen hizmetlerin toplam süresi 8 saati geçemez. Bazılarını ayrı randevu olarak alın.");
+  }
+  return { ...context, service: { ...context.service, durationMinutes: total } };
+}
+
+/**
+ * Randevunun fiyat alanları: servicePrice* ana + ek hizmetlerin BİRLEŞİK görüntüsü, primaryService* ana hizmetin payı.
+ * update=true: artık geçerli olmayan üst sınır alanları silinir. Ek hizmet satırında tip yoksa sabit sayılır.
+ */
+function appointmentPriceFields(primary: { price: number; type: ServicePriceType; max?: number | null }, extras: unknown[], update: boolean) {
+  const combined = combinePriceParts([
+    { price: primary.price, priceType: primary.type, priceMax: primary.max },
+    ...extras.map((item) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const priceType = (["from", "range", "quote"].includes(String(row.priceType)) ? row.priceType : "fixed") as ServicePriceType;
+      return { price: Math.max(0, numberOr(row.price, 0)), priceType, priceMax: typeof row.priceMax === "number" ? row.priceMax : null };
+    }),
+  ]);
+  const primaryMax = primary.type === "range" && typeof primary.max === "number" ? primary.max : null;
+  return {
+    servicePrice: combined.servicePrice,
+    servicePriceType: combined.servicePriceType,
+    ...(combined.servicePriceMax !== undefined ? { servicePriceMax: combined.servicePriceMax } : update ? { servicePriceMax: FieldValue.delete() } : {}),
+    primaryServicePrice: Math.max(0, primary.price),
+    primaryServicePriceType: primary.type,
+    ...(primaryMax !== null ? { primaryServicePriceMax: primaryMax } : update ? { primaryServicePriceMax: FieldValue.delete() } : {}),
+  };
+}
+
+/** getAvailableSlots/Dates: müşterinin seçtiği ek hizmetler ya da saat değiştirmede randevunun toplam süresi. */
+async function bookingExtrasFrom(businessId: string, context: BookingContext, serviceId: string, data: Record<string, unknown>): Promise<BookingExtras> {
+  const extras = await loadExtraServices(businessId, context.business, data.additionalServices, serviceId);
+  if (extras.length > 0) return { extras, durationMinutes: null };
+  const raw = Number(data.appointmentDurationMinutes);
+  return Number.isFinite(raw) && raw >= 5 && raw <= MAX_COMBINED_DURATION_MINUTES ? { extras: [], durationMinutes: Math.round(raw) } : NO_EXTRAS;
 }
 
 function effectiveSchedule(
@@ -3575,6 +3678,19 @@ async function rescheduleAppointmentCore(input: {
     await requirePlanEntitlement(businessId, "appointments");
   }
   const context = await loadBookingContext(businessId, serviceId, staffId, { managerAction: !customer, variantId: appointment.serviceVariantId, variantFallback: true });
+  // Başka uzmana taşınırken ek hizmetleri de verebilmeli (silinmiş hizmet denetlenmez).
+  const extraServiceIds = Array.isArray(appointment.additionalServices)
+    ? appointment.additionalServices.flatMap((item: unknown) => {
+        const id = item && typeof item === "object" ? String((item as Record<string, unknown>).serviceId ?? "").trim() : "";
+        return /^[A-Za-z0-9_-]{1,128}$/.test(id) ? [id] : [];
+      })
+    : [];
+  if (staffId && staffId !== currentStaffId && extraServiceIds.length > 0) {
+    const extraDocs = await db.getAll(...extraServiceIds.map((id: string) => db.doc(`businesses/${businessId}/services/${id}`)));
+    if (extraDocs.some((doc) => doc.exists && !staffCanProvide(context.staff, doc.id, doc.data()?.category))) {
+      throw new HttpsError("failed-precondition", "Seçilen uzman bu randevudaki hizmetlerin hepsini vermiyor.");
+    }
+  }
   if (customer) {
     const policy = customerChangePolicy(context.business, appointment);
     if (!policy.canReschedule) throw new HttpsError("failed-precondition", policy.rescheduleBlockedReason!);
@@ -4056,7 +4172,7 @@ export const getAvailableSlots = onCall(
     if (dayStart > Date.now() + maximumDays * 86_400_000 + 86_400_000) {
       throw new HttpsError("failed-precondition", "Bu tarih rezervasyon aralığının dışında.");
     }
-    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context);
+    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context, await bookingExtrasFrom(businessId, context, serviceId, data));
 
     const candidateSlots = await Promise.all(candidates.map(async (candidate) => {
       const blocked = await appointmentWindows(businessId, dayStart, dayEnd, candidate.staffId);
@@ -4076,6 +4192,8 @@ export const getAvailableSlots = onCall(
         label: new Intl.DateTimeFormat("tr-TR", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(slot.startAtMillis)),
       })),
       timeZone,
+      // İstemci "ek hizmet" seçimini yalnız bu sunucu sürümünü görünce açar (eski sürüm additionalServices'i yok sayardı).
+      multiService: context.business.allowMultiServiceBooking !== false,
     };
   }
 );
@@ -4105,7 +4223,7 @@ export const getAvailableDates = onCall(
     const latestAllowed = addDaysToDateKey(localParts(new Date(), timeZone).dateKey, maximumDays);
     if (startDate > latestAllowed) return { dates: [], timeZone };
     const effectiveEndDate = endDate > latestAllowed ? latestAllowed : endDate;
-    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context);
+    const candidates = await loadBookingCandidates(businessId, serviceId, staffId, context, await bookingExtrasFrom(businessId, context, serviceId, data));
     const rangeStart = zonedTimeToMillis(startDate, 0, timeZone);
     const rangeEnd = zonedTimeToMillis(addDaysToDateKey(effectiveEndDate, 1), 0, timeZone);
     const appointmentSnapshot = await db.collection(`businesses/${businessId}/appointments`)
@@ -4234,16 +4352,27 @@ export const createAppointment = onCall(
       }
     }
     // İşletmenin onaylı ek alanları; alanları bilmeyen eski istemcilerde (customFields yok) zorunluluk aranmaz.
+    // Ek hizmetler (tek randevuda birden fazla hizmet); eski istemciler göndermez → boş.
+    const extraServices = await loadExtraServices(businessId, context.business, data.additionalServices, serviceId);
+    if (staffId && extraServices.some((extra) => !staffCanProvide(context.staff, extra.serviceId, extra.data.category))) {
+      throw new HttpsError("failed-precondition", "Seçilen uzman seçtiğiniz hizmetlerin hepsini vermiyor.");
+    }
     let customFieldValues: ReturnType<typeof validateCustomFieldValues> = [];
     try {
       customFieldValues = validateCustomFieldValues(
-        approvedCustomFields(context.business, bookingFields), serviceId, data.customFields, data.customFields !== undefined
+        approvedCustomFields(context.business, bookingFields), [serviceId, ...extraServices.map((extra) => extra.serviceId)], data.customFields, data.customFields !== undefined
       );
     } catch (error) {
       throw new HttpsError("invalid-argument", error instanceof FieldValidationError ? error.message : "Ek alanlar geçersiz.");
     }
     const serviceData = context.service;
-    const durationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
+    const primaryDurationMinutes = normalizedBookingDuration(serviceData.durationMinutes);
+    const additionalServices = resolveExtraServices(extraServices, context.staff);
+    const slotContext = withCombinedDuration(context, { extras: extraServices, durationMinutes: null });
+    const durationMinutes = additionalServices.length
+      ? primaryDurationMinutes + additionalServices.reduce((sum, item) => sum + item.durationMinutes, 0)
+      : primaryDurationMinutes;
+    const primaryPrice = appointmentPriceSnapshot(serviceData, context.variant);
 
     const staffData = context.staff;
 
@@ -4262,9 +4391,11 @@ export const createAppointment = onCall(
     const selectedUTCDate = new Date(Date.UTC(selectedLocal.year, selectedLocal.month - 1, selectedLocal.day));
     selectedUTCDate.setUTCDate(selectedUTCDate.getUTCDate() + 1);
     const dayEndMs = zonedTimeToMillis(selectedUTCDate.toISOString().slice(0, 10), 0, timeZone);
-    const validSlots = buildSlots(context, selectedLocal.dateKey, staffId, []);
+    const validSlots = buildSlots(slotContext, selectedLocal.dateKey, staffId, []);
     if (!validSlots.includes(startAt.toMillis())) {
-      throw new HttpsError("failed-precondition", "Seçilen saat çalışma planına veya rezervasyon kurallarına uygun değil.");
+      throw new HttpsError("failed-precondition", additionalServices.length
+        ? "Seçilen hizmetlerin toplam süresi bu saate sığmıyor. Başka bir saat seçin."
+        : "Seçilen saat çalışma planına veya rezervasyon kurallarına uygun değil.");
     }
     const maximumDays = Math.max(1, numberOr(context.business.maximumBookingDaysAhead, 30));
     if (startAt.toMillis() > Date.now() + maximumDays * 86_400_000 + 86_400_000) {
@@ -4343,11 +4474,15 @@ export const createAppointment = onCall(
         publicToken,
         serviceName: serviceDisplayName(String(serviceData.name ?? ""), context.variant),
         staffName: staffData ? String(staffData.fullName ?? "") : String(context.business.name ?? "İşletme"),
-        ...appointmentPriceSnapshot(serviceData, context.variant),
+        // Ek hizmet varsa fiyat alanları birleşik görüntüdür (servicePrice = toplam, tip = karışımın tipi).
+        ...(additionalServices.length ? {
+          ...(context.variant ? { serviceVariantId: context.variant.id, serviceVariantName: context.variant.name } : {}),
+          ...appointmentPriceFields({ price: primaryPrice.servicePrice, type: primaryPrice.servicePriceType, max: primaryPrice.servicePriceMax }, additionalServices, false),
+        } : primaryPrice),
         ...serviceTranslationsField(context.baseService, context.variant),
-        primaryServicePrice: appointmentPriceSnapshot(serviceData, context.variant).servicePrice,
-        primaryServiceDurationMinutes: durationMinutes,
-        additionalServices: [],
+        primaryServicePrice: primaryPrice.servicePrice,
+        primaryServiceDurationMinutes: primaryDurationMinutes,
+        additionalServices,
         serviceDurationMinutes: durationMinutes,
         source: "online",
         createdAt: FieldValue.serverTimestamp(),
@@ -4527,6 +4662,17 @@ export const updateAppointmentServices = onCall(
       const startAt = appointment.startAt as Timestamp | undefined;
       if (!startAt) throw new HttpsError("failed-precondition", "Randevu başlangıç zamanı geçersiz.");
       const previous = Array.isArray(appointment.additionalServices) ? appointment.additionalServices as Array<Record<string, unknown>> : [];
+      // Müşterinin online seçtiği ek hizmetin fiyat tipi/seçeneği panelden kaydedilince kaybolmasın.
+      const nextServices = additionalServices.map((item) => {
+        const before = previous.find((row) => row && String(row.serviceId ?? "") === item.serviceId);
+        const priceType = ["from", "range", "quote"].includes(String(before?.priceType)) ? String(before?.priceType) : null;
+        return {
+          ...item,
+          ...(priceType ? { priceType } : {}),
+          ...(priceType === "range" && typeof before?.priceMax === "number" ? { priceMax: before.priceMax } : {}),
+          ...(typeof before?.variantId === "string" ? { variantId: before.variantId } : {}),
+        };
+      });
       const previousPrice = previous.reduce((sum, item) => sum + numberOr(item?.price, 0), 0);
       const previousDuration = previous.reduce((sum, item) => sum + Math.max(0, numberOr(item?.durationMinutes, 0)), 0);
       const primaryPrice = Math.max(0, numberOr(appointment.primaryServicePrice, numberOr(appointment.servicePrice, 0) - previousPrice));
@@ -4560,11 +4706,17 @@ export const updateAppointmentServices = onCall(
         updatedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
       }, { merge: true });
+      // Eski randevularda ana hizmetin tipi/üst sınırı servicePriceType/Max'te durur.
+      const primaryType = (["fixed", "from", "range", "quote"].includes(String(appointment.primaryServicePriceType))
+        ? appointment.primaryServicePriceType
+        : ["from", "range", "quote"].includes(String(appointment.servicePriceType)) ? appointment.servicePriceType : "fixed") as ServicePriceType;
+      const primaryMax = typeof appointment.primaryServicePriceType === "string"
+        ? (typeof appointment.primaryServicePriceMax === "number" ? appointment.primaryServicePriceMax : null)
+        : (typeof appointment.servicePriceMax === "number" ? appointment.servicePriceMax : null);
       tx.update(appointmentRef, {
-        additionalServices,
-        primaryServicePrice: primaryPrice,
+        additionalServices: nextServices,
+        ...appointmentPriceFields({ price: primaryPrice, type: primaryType, max: primaryMax }, nextServices, true),
         primaryServiceDurationMinutes: primaryDuration,
-        servicePrice: primaryPrice + additionalServices.reduce((sum, item) => sum + item.price, 0),
         serviceDurationMinutes: totalDuration,
         endAt,
         updatedByUid: uid,
@@ -4640,8 +4792,6 @@ export const updateDashboardAppointment = onCall(
         throw new HttpsError("permission-denied", "Bu randevu size atanmamış.");
       }
       const additionalServices = Array.isArray(currentData.additionalServices) ? currentData.additionalServices : [];
-      const additionalPrice = additionalServices.reduce((sum: number, item: unknown) =>
-        sum + numberOr((item as Record<string, unknown> | null)?.price, 0), 0);
       const additionalDuration = additionalServices.reduce((sum: number, item: unknown) =>
         sum + Math.max(0, numberOr((item as Record<string, unknown> | null)?.durationMinutes, 0)), 0);
       const totalDuration = durationMinutes + additionalDuration;
@@ -4665,14 +4815,12 @@ export const updateDashboardAppointment = onCall(
         customerName, serviceId, staffId, startAt, endAt,
         serviceName: service ? serviceDisplayName(String(service.name ?? ""), chosenVariant) : "",
         staffName: staff ? String(staff.fullName ?? "") : "",
-        servicePriceType: priceSnapshot.servicePriceType,
-        servicePriceMax: "servicePriceMax" in priceSnapshot ? priceSnapshot.servicePriceMax : FieldValue.delete(),
+        ...appointmentPriceFields({ price: priceSnapshot.servicePrice, type: priceSnapshot.servicePriceType,
+          max: "servicePriceMax" in priceSnapshot ? priceSnapshot.servicePriceMax : null }, additionalServices, true),
         serviceVariantId: chosenVariant ? chosenVariant.id : FieldValue.delete(),
         serviceVariantName: chosenVariant ? chosenVariant.name : FieldValue.delete(),
         serviceNameTranslations: service ? (serviceTranslationsField(service, chosenVariant).serviceNameTranslations ?? FieldValue.delete()) : FieldValue.delete(),
-        primaryServicePrice: priceSnapshot.servicePrice,
         primaryServiceDurationMinutes: durationMinutes,
-        servicePrice: priceSnapshot.servicePrice + additionalPrice,
         serviceDurationMinutes: totalDuration,
         updatedByUid: uid,
         updatedAt: FieldValue.serverTimestamp(),
@@ -4882,11 +5030,14 @@ export const getAppointmentByPublicToken = onCall(
           const serviceId = String(service.serviceId ?? "").trim();
           const name = String(service.name ?? "").trim();
           if (!serviceId || !name) return [];
+          const priceType = ["from", "range", "quote"].includes(String(service.priceType)) ? String(service.priceType) : null;
           return [{
             serviceId,
             name,
             price: Math.max(0, numberOr(service.price, 0)),
             durationMinutes: normalizedBookingDuration(service.durationMinutes),
+            ...(priceType ? { priceType } : {}),
+            ...(priceType === "range" && typeof service.priceMax === "number" ? { priceMax: service.priceMax } : {}),
           }];
         })
       : [];
@@ -4901,6 +5052,8 @@ export const getAppointmentByPublicToken = onCall(
         servicePrice: numberOr(appointment.servicePrice, 0),
         servicePriceType: typeof appointment.servicePriceType === "string" ? appointment.servicePriceType : "fixed",
         ...(typeof appointment.servicePriceMax === "number" ? { servicePriceMax: appointment.servicePriceMax } : {}),
+        ...(typeof appointment.primaryServicePriceType === "string" ? { primaryServicePriceType: appointment.primaryServicePriceType } : {}),
+        ...(typeof appointment.primaryServicePriceMax === "number" ? { primaryServicePriceMax: appointment.primaryServicePriceMax } : {}),
         servicePriceFinal: appointment.servicePriceFinal === true,
         ...(typeof appointment.serviceVariantId === "string" ? { serviceVariantId: appointment.serviceVariantId } : {}),
         ...(appointment.serviceNameTranslations && typeof appointment.serviceNameTranslations === "object" ? { serviceNameTranslations: appointment.serviceNameTranslations } : {}),
@@ -5222,10 +5375,10 @@ async function loadPassAppointment(token: unknown): Promise<PassAppointment> {
   const start = (appointment.startAt as Timestamp | undefined)?.toDate();
   if (!start) throw new HttpsError("failed-precondition", "Randevu saati bulunamadı.");
   const extras = Array.isArray(appointment.additionalServices) ? appointment.additionalServices as Record<string, unknown>[] : [];
-  const duration = normalizedBookingDuration(appointment.serviceDurationMinutes)
-    + extras.reduce((sum, item) => sum + (item && typeof item === "object" ? normalizedBookingDuration(item.durationMinutes) : 0), 0);
+  // servicePrice ve serviceDurationMinutes ek hizmetler DAHİL toplamdır (createAppointment/updateAppointmentServices).
+  const duration = normalizedBookingDuration(appointment.serviceDurationMinutes);
   const end = (appointment.endAt as Timestamp | undefined)?.toDate() ?? new Date(start.getTime() + duration * 60000);
-  const price = numberOr(appointment.servicePrice, 0) + extras.reduce((sum, item) => sum + (item && typeof item === "object" ? Math.max(0, numberOr(item.price, 0)) : 0), 0);
+  const price = Math.max(0, numberOr(appointment.servicePrice, 0));
   return {
     token: publicToken,
     appointmentId,
@@ -5322,7 +5475,7 @@ async function sendAppointmentPush(
   const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
   const dateText = startAt ? appointmentSmsDate(startAt, timeZone) : "";
   const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
-  const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
+  const serviceName = appointmentServiceSummary(appointment.serviceName, appointment.additionalServices) || "Randevu";
   const customerName = String(appointment.customerName ?? "Müşteri").trim().slice(0, 70);
   const staffId = typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null;
   const customerId = typeof appointment.customerId === "string" ? appointment.customerId : "";
@@ -6170,7 +6323,7 @@ async function trySendAppointmentWhatsApp(input: {
   const when = input.startAt.toDate();
   const params = {
     businessName: String(input.business.name ?? "İşletme").slice(0, 70),
-    serviceName: String(input.appointment.serviceName ?? "Randevu").slice(0, 70),
+    serviceName: appointmentServiceSummary(input.appointment.serviceName, input.appointment.additionalServices) || "Randevu",
     dateText: appointmentSmsDate(input.startAt, timeZone),
     detailsUrl: input.appointment.publicToken ? `https://seninrandevun.com/randevu/${String(input.appointment.publicToken)}` : "https://seninrandevun.com",
     dayText: new Intl.DateTimeFormat("tr-TR", { timeZone, day: "2-digit", month: "2-digit", year: "numeric" }).format(when),
@@ -6932,7 +7085,7 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       return;
     }
     const businessName = String(business.name ?? "İşletme").trim().slice(0, 70);
-    const serviceName = String(appointment.serviceName ?? "Randevu").trim().slice(0, 70);
+    const serviceName = appointmentServiceSummary(appointment.serviceName, appointment.additionalServices) || "Randevu";
     const staffName = String(appointment.staffName ?? "").trim().slice(0, 70);
     const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
     const dateText = appointmentSmsDate(startAt, timeZone);
