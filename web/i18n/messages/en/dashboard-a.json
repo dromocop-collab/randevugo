@@ -674,5 +674,12 @@
   "Karar verilene kadar yorum olduğu gibi kalır. 48 saat içinde işlem yapılmayan yorumlar otomatik yayınlanır.": "The review stays as is until a decision is made. Reviews not acted on within 48 hours are published automatically.",
   "Gerekçe": "Reason",
   "Gerekçe (ör. hakaret, sahte yorum, kişisel bilgi)": "Reason (e.g. insults, fake review, personal info)",
-  "En az 5 karakter": "At least 5 characters"
+  "En az 5 karakter": "At least 5 characters",
+  "Çalışana ata": "Assign to a staff member",
+  "Geçmiş saat": "Past time",
+  "Dolu": "Booked",
+  "Buraya taşınamaz: {reason}": "Can't move here: {reason}",
+  "Taşımak için sürükleyin": "Drag to move",
+  "Randevu taşınsın mı?": "Move this appointment?",
+  "{customer}: {from} → {to}. Müşteriye bildirim gönderilir.": "{customer}: {from} → {to}. The customer will be notified."
 }

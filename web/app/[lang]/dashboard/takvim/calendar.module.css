@@ -160,3 +160,20 @@
 
 /* Çekmecede tutar + "Fiyat bekliyor" rozeti */
 .priceValue { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* Sürükle-bırak ile taşıma */
+.eventMovable { cursor: grab; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.gridDragging, .gridDragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+.eventDragging { opacity: 0.35; transform: none !important; }
+.dropGhost {
+  position: absolute; left: 3px; right: 3px; z-index: 3;
+  display: flex; flex-direction: column; gap: 1px; padding: 4px 8px;
+  border: 2px dashed var(--dui-core); border-radius: 10px;
+  background: color-mix(in srgb, var(--dui-core) 14%, var(--dui-card));
+  color: var(--dui-ink); pointer-events: none;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.14);
+}
+.dropGhost b { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.dropGhost small { font-size: 11px; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropGhostInvalid { border-color: #e11d48; background: color-mix(in srgb, #e11d48 12%, var(--dui-card)); color: #e11d48; }
+@media (prefers-reduced-motion: reduce) { .dropGhost { box-shadow: none; } }

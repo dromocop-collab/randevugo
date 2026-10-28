@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { toast } from "sonner";
 import { addDays, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from "date-fns";
 import type { Locale as DateLocale } from "date-fns";
 import { BadgeCheck, Check, Clock3, CreditCard, ExternalLink, Pencil, Plus, UserRound } from "lucide-react";
@@ -8,6 +9,7 @@ import { AppointmentCustomFields } from "@/features/booking-fields/appointment-c
 import { Badge, Button, KeyValueList, Sheet, StatusPill, appointmentStatusMeta } from "@/components/dashboard/ui";
 import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
 import { cn } from "@/lib/utils/cn";
+import { tk } from "@/i18n/config";
 import { useIntlLocale, useLocale, useT } from "@/i18n/client";
 import { DATE_FNS_LOCALES, useDateFnsLocale } from "@/i18n/date";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
@@ -23,12 +25,27 @@ export const useDateLocale: () => DateLocale = useDateFnsLocale;
 /* ── Zaman ızgarası (gün: ekip sütunları, hafta: gün sütunları) ── */
 export type GridColumn = { key: string; label: string; day: Date; today: boolean; items: Appointment[]; staffId?: string };
 
-export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, staffColumns = false }: {
+/** Sürükle-bırak ile taşıma hedefi (sayfa onay sorar, sunucu çakışma/çalışma saatini yeniden denetler). */
+export type MoveTarget = { startAt: Date; endAt: Date; staffId?: string; staffLabel?: string };
+
+type DragState = {
+  item: Appointment; pointerId: number; touch: boolean; active: boolean;
+  startX: number; startY: number; grabOffset: number; durationMin: number;
+  col: number; minutes: number;
+};
+
+const MOVABLE: AppointmentStatus[] = ["pending", "confirmed"];
+const LONG_PRESS_MS = 380;
+
+export function TimeGrid({ columns, hours, now, onSelect, onCreate, onMove, snapMinutes = 15, showStaff, staffColumns = false }: {
   columns: GridColumn[];
   hours: { start: number; end: number };
   now: number;
   onSelect: (item: Appointment) => void;
   onCreate: (date: Date) => void;
+  /** Verilirse aktif randevular sürüklenerek taşınabilir. */
+  onMove?: (item: Appointment, target: MoveTarget) => void;
+  snapMinutes?: number;
   showStaff?: boolean;
   staffColumns?: boolean;
 }) {
@@ -39,9 +56,15 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
   const hourList = Array.from({ length: Math.max(1, endHour - startHour) }, (_, index) => startHour + index);
   const height = hourList.length * HOUR_H;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const colRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const dragRef = useRef<DragState | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const suppressClickRef = useRef(false);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const t = useT();
   const siteLocale = useLocale();
   const locale = useDateLocale();
+  const snap = Math.max(5, Math.min(60, Math.round(snapMinutes) || 15));
 
   // Bugün görünüyorsa "şimdi" çizgisine kaydır.
   useEffect(() => {
@@ -54,6 +77,9 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Sayfadan çıkılırsa açık dinleyiciler kalmasın.
+  useEffect(() => () => cleanupRef.current?.(), []);
+
   function slotFromClick(event: ReactMouseEvent<HTMLButtonElement>, day: Date) {
     const rect = event.currentTarget.getBoundingClientRect();
     const minutes = Math.floor(((event.clientY - rect.top) / HOUR_H) * 60 / 30) * 30;
@@ -63,12 +89,121 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
     return date;
   }
 
+  /** Sürüklenen randevunun hedefi: saat, çalışan ve neden bırakılamayacağı. */
+  function resolveTarget(state: DragState) {
+    const column = columns[state.col];
+    const startAt = new Date(column.day);
+    startAt.setHours(startHour, 0, 0, 0);
+    startAt.setMinutes(state.minutes);
+    const endAt = new Date(startAt.getTime() + state.durationMin * 60_000);
+    const item = state.item;
+    const staffId = staffColumns ? (column.staffId === UNASSIGNED ? undefined : column.staffId) : item.staffId;
+    const sameStaff = (other: Appointment) => !staffId || !other.staffId || other.staffId === staffId;
+    const unchanged = startAt.getTime() === new Date(item.startAt).getTime() && (staffId ?? "") === (item.staffId ?? "");
+    let reason: string | null = null;
+    if (staffColumns && column.staffId === UNASSIGNED && item.staffId) reason = tk("Çalışana ata");
+    else if (startAt.getTime() < now) reason = tk("Geçmiş saat");
+    else if (columns.flatMap((entry) => entry.items).some((other) => other.id !== item.id && MOVABLE.includes(other.status) && sameStaff(other)
+      && new Date(other.startAt).getTime() < endAt.getTime() && new Date(other.endAt || other.startAt).getTime() > startAt.getTime())) reason = tk("Dolu");
+    return { column, startAt, endAt, staffId, unchanged, reason };
+  }
+
+  function placeDrag(state: DragState, clientX: number, clientY: number) {
+    let col = state.col;
+    if (!staffColumns || columns.length > 1) {
+      colRefs.current.forEach((element, index) => {
+        const rect = element?.getBoundingClientRect();
+        if (rect && clientX >= rect.left && clientX < rect.right) col = index;
+      });
+    }
+    const rect = colRefs.current[col]?.getBoundingClientRect();
+    if (!rect) return state;
+    const raw = ((clientY - rect.top - state.grabOffset) / HOUR_H) * 60;
+    const maxMinutes = Math.max(0, hourList.length * 60 - Math.min(state.durationMin, 60));
+    const minutes = Math.min(maxMinutes, Math.max(0, Math.round(raw / snap) * snap));
+    return { ...state, col, minutes };
+  }
+
+  function endDrag(commit: boolean) {
+    const state = dragRef.current;
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    dragRef.current = null;
+    setDrag(null);
+    if (!state?.active) return;
+    // Bırakma sonrası gelen tıklama çekmeceyi açmasın.
+    suppressClickRef.current = true;
+    window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+    if (!commit || !onMove) return;
+    const target = resolveTarget(state);
+    if (target.unchanged) return;
+    if (target.reason) { toast.error(t("Buraya taşınamaz: {reason}", { reason: t(target.reason) })); return; }
+    onMove(state.item, { startAt: target.startAt, endAt: target.endAt, staffId: target.staffId, staffLabel: staffColumns ? target.column.label : undefined });
+  }
+
+  function startPointer(event: ReactPointerEvent<HTMLButtonElement>, item: Appointment, col: number, minutes: number, durationMin: number) {
+    if (!onMove || !MOVABLE.includes(item.status) || (event.pointerType === "mouse" && event.button !== 0)) return;
+    cleanupRef.current?.();
+    const touch = event.pointerType !== "mouse";
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = { item, pointerId: event.pointerId, touch, active: false, startX: event.clientX, startY: event.clientY,
+      grabOffset: event.clientY - rect.top, durationMin, col, minutes };
+    const activate = () => {
+      const state = dragRef.current;
+      if (!state || state.active) return;
+      dragRef.current = { ...state, active: true };
+      setDrag(dragRef.current);
+      if (state.touch) navigator.vibrate?.(12);
+    };
+    const timer = touch ? window.setTimeout(activate, LONG_PRESS_MS) : 0;
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const state = dragRef.current;
+      if (!state || moveEvent.pointerId !== state.pointerId) return;
+      const distance = Math.hypot(moveEvent.clientX - state.startX, moveEvent.clientY - state.startY);
+      if (!state.active) {
+        // Dokunmatikte uzun basmadan önce hareket = kaydırma; sürükleme iptal.
+        if (state.touch) { if (distance > 8) endDrag(false); return; }
+        if (distance < 5) return;
+        activate();
+      }
+      const next = placeDrag(dragRef.current!, moveEvent.clientX, moveEvent.clientY);
+      dragRef.current = next;
+      setDrag(next);
+      // Kenara yaklaşınca ızgarayı kaydır.
+      const scroller = scrollRef.current;
+      if (scroller) {
+        const box = scroller.getBoundingClientRect();
+        if (moveEvent.clientY < box.top + 40) scroller.scrollTop -= 16;
+        else if (moveEvent.clientY > box.bottom - 40) scroller.scrollTop += 16;
+      }
+    };
+    const onPointerUp = (upEvent: PointerEvent) => { if (upEvent.pointerId === dragRef.current?.pointerId) endDrag(true); };
+    const onPointerCancel = () => endDrag(false);
+    const onKeyDown = (keyEvent: KeyboardEvent) => { if (keyEvent.key === "Escape") endDrag(false); };
+    // Sürüklerken sayfanın kaymasını engelle (iOS yalnız pasif olmayan touchmove ile durur).
+    const onTouchMove = (touchEvent: TouchEvent) => { if (dragRef.current?.active) touchEvent.preventDefault(); };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    cleanupRef.current = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("touchmove", onTouchMove);
+    };
+  }
+
   const nowDate = new Date(now);
   const nowTop = ((nowDate.getHours() - startHour) + nowDate.getMinutes() / 60) * HOUR_H;
+  const target = drag?.active ? resolveTarget(drag) : null;
 
   return (
     <div className={styles.gridScroll} ref={scrollRef}>
-      <div className={styles.grid} style={{ "--cols": columns.length, "--hour-h": `${HOUR_H}px`, "--grid-h": `${height}px` } as CSSProperties} data-staff={staffColumns ? "" : undefined}>
+      <div className={cn(styles.grid, drag?.active && styles.gridDragging)} style={{ "--cols": columns.length, "--hour-h": `${HOUR_H}px`, "--grid-h": `${height}px` } as CSSProperties} data-staff={staffColumns ? "" : undefined}>
         <div className={styles.corner} />
         {columns.map((column) => (
           <div key={`h-${column.key}`} className={cn(styles.colHead, column.today && !staffColumns && styles.colHeadToday)}>
@@ -78,8 +213,8 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
         <div className={styles.hoursCol} aria-hidden>
           {hourList.map((hour) => <span key={hour} style={{ height: HOUR_H }}>{String(hour).padStart(2, "0")}:00</span>)}
         </div>
-        {columns.map((column) => (
-          <div key={column.key} className={cn(styles.col, column.today && styles.colToday)}>
+        {columns.map((column, colIndex) => (
+          <div key={column.key} ref={(element) => { colRefs.current[colIndex] = element; }} className={cn(styles.col, column.today && styles.colToday)}>
             <button
               type="button"
               className={styles.slotLayer}
@@ -93,15 +228,21 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
               const end = new Date(item.endAt || item.startAt);
               const top = ((start.getHours() - startHour) + start.getMinutes() / 60) * HOUR_H;
               const durationMin = Math.max(20, (end.getTime() - start.getTime()) / 60_000);
+              const realDuration = Math.max(5, Math.round((end.getTime() - start.getTime()) / 60_000) || Number(item.serviceDurationMinutes) || 30);
               const meta = appointmentStatusMeta[item.status];
+              const movable = Boolean(onMove) && MOVABLE.includes(item.status);
               return (
                 <button
                   key={item.id}
                   type="button"
-                  className={cn(styles.event, styles[`ev-${item.status}`])}
+                  className={cn(styles.event, styles[`ev-${item.status}`], movable && styles.eventMovable, drag?.active && drag.item.id === item.id && styles.eventDragging)}
                   style={{ top, height: Math.max(26, (durationMin / 60) * HOUR_H - 3), left: `calc(${(lane / lanes) * 100}% + 3px)`, width: `calc(${100 / lanes}% - 6px)` }}
-                  onClick={() => onSelect(item)}
+                  onPointerDown={(event) => startPointer(event, item, colIndex, (start.getHours() - startHour) * 60 + start.getMinutes(), realDuration)}
+                  onContextMenu={movable ? (event) => event.preventDefault() : undefined}
+                  onTouchEnd={(event) => { if (dragRef.current?.active || suppressClickRef.current) event.stopPropagation(); }}
+                  onClick={() => { if (!suppressClickRef.current) onSelect(item); }}
                   aria-label={`${format(start, "HH:mm")} ${item.customerName}, ${t(meta.label)}`}
+                  title={movable ? t("Taşımak için sürükleyin") : undefined}
                 >
                   <span className={styles.evTime}>{format(start, "HH:mm")}{durationMin >= 55 ? `–${format(end, "HH:mm")}` : ""}</span>
                   <b>{item.customerName}</b>
@@ -109,6 +250,16 @@ export function TimeGrid({ columns, hours, now, onSelect, onCreate, showStaff, s
                 </button>
               );
             })}
+            {target && drag && drag.col === colIndex && (
+              <div
+                className={cn(styles.dropGhost, target.reason && styles.dropGhostInvalid)}
+                style={{ top: (drag.minutes / 60) * HOUR_H, height: Math.max(26, (Math.max(20, drag.durationMin) / 60) * HOUR_H - 3) }}
+                aria-hidden
+              >
+                <b>{format(target.startAt, "HH:mm")}–{format(target.endAt, "HH:mm")}</b>
+                <small>{target.reason ? t(target.reason) : drag.item.customerName}</small>
+              </div>
+            )}
             {column.today && nowTop >= 0 && nowTop <= height && <span className={styles.nowLine} style={{ top: nowTop }} aria-hidden />}
           </div>
         ))}

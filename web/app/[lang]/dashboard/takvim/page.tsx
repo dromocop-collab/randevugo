@@ -3,33 +3,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { addDays, addMonths, addWeeks, endOfWeek, format, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek, subDays, subMonths, subWeeks } from "date-fns";
 import { toast } from "sonner";
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
-import { listAppointmentsByDateRange, updateAppointmentStatus } from "@/features/appointments/appointment-repository";
+import { listAppointmentsByDateRange, rescheduleAppointment, updateAppointmentStatus } from "@/features/appointments/appointment-repository";
 import { listStaff } from "@/features/staff/staff-repository";
 import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-modal";
 import { FinalPriceDialog } from "@/components/dashboard/final-price-dialog";
 import { needsFinalPrice } from "@/features/services/service-pricing";
 import { APPOINTMENTS_CHANGED_EVENT } from "@/components/dashboard/dashboard-events";
-import { Badge, Button, Callout, DashPage, NativeSelect, SegmentedControl, Skeleton, appointmentStatusMeta } from "@/components/dashboard/ui";
+import { Badge, Button, Callout, ConfirmSheet, DashPage, NativeSelect, SegmentedControl, Skeleton, appointmentStatusMeta } from "@/components/dashboard/ui";
+import { userFacingError } from "@/lib/errors/user-facing-error";
 import { cn } from "@/lib/utils/cn";
 import { tk } from "@/i18n/config";
 import { useIntlLocale, useT } from "@/i18n/client";
 import type { Appointment, AppointmentStatus } from "@/types/appointments";
 import type { Staff } from "@/types/staff";
-import { AppointmentDrawer, MonthView, TimeGrid, UNASSIGNED, WeekAgenda, eachDay, getRange, rangeTitle, useDateLocale, withHour, type ViewMode } from "./calendar-views";
+import { AppointmentDrawer, MonthView, TimeGrid, UNASSIGNED, WeekAgenda, eachDay, getRange, rangeTitle, useDateLocale, withHour, type MoveTarget, type ViewMode } from "./calendar-views";
 import styles from "./calendar.module.css";
 
 const VIEW_OPTIONS = [{ value: "gun", label: tk("Gün") }, { value: "hafta", label: tk("Hafta") }, { value: "ay", label: tk("Ay") }] as const;
 
 export default function CalendarPage() {
-  const { businessId, access } = useBusiness();
+  const { businessId, access, businesses } = useBusiness();
   const t = useT();
   const intlLocale = useIntlLocale();
   const dateLocale = useDateLocale();
   const viewOptions = useMemo(() => VIEW_OPTIONS.map((option) => ({ value: option.value, label: t(option.label) })), [t]);
   const canManageStatus = access?.role !== "staff" || Boolean(access?.permissions.manageAppointments);
+  // Taşıma sunucuda rescheduleAppointment (sahip/yönetici) ile yapılır; çalışan sürükleyemez.
+  const canMove = Boolean(access && access.role !== "staff");
+  const slotInterval = Number(businesses.find((item) => item.id === businessId)?.slotIntervalMinutes) || 15;
   const [view, setView] = useState<ViewMode>("gun");
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -46,6 +50,9 @@ export default function CalendarPage() {
   // Fiyatı iş bitince kesinleşen randevuyu tamamlarken kesin tutar sorulur.
   const [finalPriceFor, setFinalPriceFor] = useState<Appointment | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Sürükle-bırak sonrası onay bekleyen taşıma.
+  const [pendingMove, setPendingMove] = useState<{ item: Appointment; target: MoveTarget } | null>(null);
+  const [moving, setMoving] = useState(false);
   // Aynı hafta/ay içinde gün değişince yeniden yükleme yapılmaz.
   const rangeKey = view === "ay" ? startOfMonth(cursor).getTime() : startOfWeek(cursor, { weekStartsOn: 1 }).getTime();
   const range = useMemo(() => getRange(new Date(rangeKey), view), [rangeKey, view]);
@@ -142,6 +149,22 @@ export default function CalendarPage() {
     }
   }
 
+  async function confirmMove() {
+    if (!businessId || !pendingMove) return;
+    const { item, target } = pendingMove;
+    setMoving(true);
+    try {
+      await rescheduleAppointment(businessId, item.id, { startAt: target.startAt, endAt: target.endAt, staffId: target.staffId ?? item.staffId ?? "" });
+      toast.success(t("Randevu yeni saate taşındı; müşteriye bildirim gönderilir."));
+      setPendingMove(null);
+      await refreshAppointments();
+    } catch (reason) {
+      toast.error(t(userFacingError(reason, tk("Randevu taşınamadı. Saat dolu veya çalışma saatleri dışında olabilir."))));
+    } finally {
+      setMoving(false);
+    }
+  }
+
   // Mobilde gün görünümünde sağa/sola kaydırarak gün değiştirme.
   const touchRef = useRef<{ x: number; y: number } | null>(null);
   function onTouchStart(event: ReactTouchEvent) { const touch = event.touches[0]; touchRef.current = { x: touch.clientX, y: touch.clientY }; }
@@ -218,6 +241,7 @@ export default function CalendarPage() {
               <TimeGrid
                 columns={days.map((day) => ({ key: day.toISOString(), label: format(day, "EEE d", { locale: dateLocale }), day, today: isSameDay(day, new Date()), items: visible.filter((item) => isSameDay(new Date(item.startAt), day)) }))}
                 hours={hoursRange} now={now} onSelect={setSelected} onCreate={openCreate} showStaff
+                onMove={canMove ? (item, target) => setPendingMove({ item, target }) : undefined} snapMinutes={slotInterval}
               />
             </div>
             <div className={styles.mobileOnly}>
@@ -230,6 +254,7 @@ export default function CalendarPage() {
               ? columns.map((column) => ({ key: column.id, label: column.name, day: cursor, today: isSameDay(cursor, new Date()), staffId: column.id, items: dayItems.filter((item) => (item.staffId || UNASSIGNED) === column.id) }))
               : [{ key: "day", label: format(cursor, "EEEE", { locale: dateLocale }), day: cursor, today: isSameDay(cursor, new Date()), items: dayItems }]}
             hours={hoursRange} now={now} onSelect={setSelected} onCreate={openCreate} showStaff={!showStaffColumns} staffColumns={showStaffColumns}
+            onMove={canMove ? (item, target) => setPendingMove({ item, target }) : undefined} snapMinutes={slotInterval}
           />
         )}
       </section>
@@ -241,6 +266,21 @@ export default function CalendarPage() {
         onClose={() => setSelected(null)}
         onEdit={() => { setEditing(selected); setSelected(null); }}
         onStatus={(status) => { if (selected) void changeStatus(selected, status); }}
+      />
+      <ConfirmSheet
+        open={Boolean(pendingMove)}
+        tone="primary"
+        icon={CalendarClock}
+        busy={moving}
+        title={t("Randevu taşınsın mı?")}
+        confirmLabel={t("Taşı")}
+        onClose={() => { if (!moving) setPendingMove(null); }}
+        onConfirm={() => void confirmMove()}
+        description={pendingMove ? t("{customer}: {from} → {to}. Müşteriye bildirim gönderilir.", {
+          customer: pendingMove.item.customerName,
+          from: format(new Date(pendingMove.item.startAt), "d MMM HH:mm", { locale: dateLocale }),
+          to: `${format(pendingMove.target.startAt, "d MMM HH:mm", { locale: dateLocale })}${pendingMove.target.staffLabel && pendingMove.target.staffId !== pendingMove.item.staffId ? ` · ${pendingMove.target.staffLabel}` : ""}`,
+        }) : undefined}
       />
       <FinalPriceDialog
         appointment={finalPriceFor}
