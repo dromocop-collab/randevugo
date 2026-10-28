@@ -11,6 +11,7 @@ export type OnboardingStepStatus = "pending" | "sent" | "skipped" | "failed" | "
 export type OnboardingJob = {
   businessId: string; businessName: string; slug: string; phone: string; conversationId: string | null;
   status: string; source: string; createdAt: number | null; helpRequestedAt: number | null; helpRequest: string | null;
+  smsWelcome: { status: string; cause: string | null; at: number | null } | null;
   steps: Array<{ key: OnboardingStepKey; status: OnboardingStepStatus; dueAt: number | null; at: number | null; reason: string | null; reasonLabel: string | null; error: string | null }>;
 };
 

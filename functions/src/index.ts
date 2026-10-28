@@ -34,7 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
-import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
+import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
@@ -6256,6 +6256,12 @@ export const whatsappWebhook = onRequest(
         }
         return status.status === "failed" ? row : null;
       });
+      // Karşılama "hoş geldin" iletilemedi (ör. numarada WhatsApp yok) → bir kez karşılama SMS'i.
+      if (fallback?.type === "onboarding" && fallback.step === "welcome" && typeof fallback.businessId === "string") {
+        await sendOnboardingWelcomeSms(fallback.businessId, `WhatsApp iletilemedi${status.errorCode ? ` (${status.errorCode})` : ""}`)
+          .catch((error) => logger.warn("Karşılama SMS yedeği çalışmadı", { error: String(error) }));
+        continue;
+      }
       // Panelden gönderilen test mesajlarının randevusu yoktur; SMS'e düşürülmez.
       if (!fallback || !fallback.businessId || !fallback.appointmentId) continue;
       const type = String(fallback.type) as AppointmentSmsJobType;
@@ -6694,6 +6700,36 @@ async function sendOnboardingTemplate(config: WhatsAppConfig, job: { businessId:
   return { ok: true as const, wamid };
 }
 
+/**
+ * WhatsApp hoş geldin iletilemezse (Meta reddetti ya da numarada WhatsApp yok) tek seferlik karşılama SMS'i.
+ * İşletme başına en fazla bir kez (iş belgesindeki smsWelcome işareti); DUR diyen numaraya gitmez. Platform SMS'i:
+ * işletmenin SMS kotasından düşmez.
+ */
+async function sendOnboardingWelcomeSms(businessId: string, cause: string) {
+  const ref = onboardingJobRef(businessId);
+  const job = await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data();
+    if (!data || data.smsWelcome) return null;
+    tx.update(ref, { smsWelcome: { status: "sending", cause, at: Date.now() } });
+    return data;
+  });
+  if (!job) return;
+  const phone = String(job.phone ?? "");
+  if ((await whatsappOptOutRef(phone).get()).exists) {
+    await ref.update({ smsWelcome: { status: "skipped", reason: "opted_out", cause, at: Date.now() } });
+    return;
+  }
+  const text = welcomeSmsText({ name: greetingName(job.ownerName, String(job.businessName ?? "")), businessName: String(job.businessName ?? "") });
+  try {
+    await sendMutlucellSms(`+${phone}`, text);
+    await ref.update({ smsWelcome: { status: "sent", cause, at: Date.now() } });
+  } catch (error) {
+    logger.warn("Karşılama SMS'i gönderilemedi", { businessId, error: String(error) });
+    await ref.update({ smsWelcome: { status: "failed", cause, error: shortText(error instanceof Error ? error.message : String(error), 200), at: Date.now() } });
+  }
+}
+
 async function processDueOnboardingWhatsApp() {
   const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
   const settings = parseOnboardingSettings(raw.onboarding);
@@ -6727,6 +6763,8 @@ async function processDueOnboardingWhatsApp() {
         ? { ...current, status: "sent", at: now, wamid: result.wamid }
         : { ...current, status: "failed", at: now, error: result.error };
       if (!result.ok) logger.warn("Karşılama şablonu gönderilemedi", { businessId: job.businessId, step: step.key, error: result.error });
+      // Hoş geldin WhatsApp'tan gidemediyse yerine tek, ayrıntılı SMS.
+      if (!result.ok && step.key === "welcome") await sendOnboardingWelcomeSms(String(job.businessId), result.error);
     }
     const next = nextDueAt(steps);
     await doc.ref.update({
@@ -10719,6 +10757,7 @@ function jobRow(doc: FirebaseFirestore.QueryDocumentSnapshot) {
     phone: formatInboxPhone(String(data.phone ?? "")), conversationId: data.phone ? conversationId(String(data.phone)) : null,
     status: String(data.status ?? ""), source: String(data.source ?? ""),
     createdAt: tsMillis(data.createdAt), helpRequestedAt: tsMillis(data.helpRequestedAt), helpRequest: data.helpRequest ?? null,
+    smsWelcome: data.smsWelcome ? { status: String(data.smsWelcome.status ?? ""), cause: data.smsWelcome.cause ?? null, at: typeof data.smsWelcome.at === "number" ? data.smsWelcome.at : null } : null,
     steps: ONBOARDING_STEPS.map((step) => {
       const row = steps[step.key] ?? {};
       return {

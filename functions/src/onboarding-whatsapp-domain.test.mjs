@@ -93,3 +93,13 @@ test("isim, DUR/BAŞLAT ve sonraki zaman", () => {
   assert.equal(nextDueAt({ a: { status: "sent", dueAt: 1 }, b: { status: "pending", dueAt: 9 }, c: { status: "pending", dueAt: 5 } }), 5);
   assert.equal(nextDueAt({ a: { status: "sent", dueAt: 1 } }), null);
 });
+
+test("karşılama SMS'i: ad, işletme, panel linki ve iletişim numarası", async () => {
+  const { welcomeSmsText, PLATFORM_CONTACT_PHONE } = await import("../lib/onboarding-whatsapp-domain.js");
+  const text = welcomeSmsText({ name: "Ayşe", businessName: "Ayşe Güzellik" });
+  assert.match(text, /^Merhaba Ayşe, Senin Randevun'a hoş geldin!/);
+  assert.match(text, /Ayşe Güzellik hesabın oluşturuldu/);
+  assert.ok(text.includes("seninrandevun.com/dashboard"));
+  assert.ok(text.includes(PLATFORM_CONTACT_PHONE));
+  assert.ok(text.length < 460, `SMS çok uzun: ${text.length}`);
+});

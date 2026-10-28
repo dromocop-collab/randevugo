@@ -272,3 +272,21 @@ export function nextDueAt(steps: Record<string, { status?: unknown; dueAt?: unkn
     .map((step) => step.dueAt as number);
   return pending.length ? Math.min(...pending) : null;
 }
+
+/** Senin Randevun iletişim numarası (web/lib/legal/seller.ts ile aynı tutulmalı). */
+export const PLATFORM_CONTACT_PHONE = "0530 478 82 98";
+
+/**
+ * WhatsApp karşılama iletilemezse (numarada WhatsApp yok / Meta reddetti) bir kez gönderilen karşılama SMS'i.
+ * Türkçe karakterli SMS'te ~3 parça; bağlantı ve iletişim numarası ayrı satırda.
+ */
+export function welcomeSmsText(params: Pick<OnboardingParams, "name" | "businessName">): string {
+  const name = clean(params.name, "Merhaba");
+  const business = clean(params.businessName, "İşletmen").slice(0, 60);
+  return [
+    `Merhaba ${name}, Senin Randevun'a hoş geldin!`,
+    `${business} hesabın oluşturuldu. Mağazan kısa bir kontrolden sonra yayına açılacak; bu sırada hizmetlerini ve çalışma saatlerini ekleyerek kurulumu tamamlayabilirsin: seninrandevun.com/dashboard`,
+    `Takıldığın her an bize ulaş: ${PLATFORM_CONTACT_PHONE} (arama veya WhatsApp)`,
+    "Senin Randevun ekibi",
+  ].join("\n");
+}

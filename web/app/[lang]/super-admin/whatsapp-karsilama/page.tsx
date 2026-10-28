@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } f
 import { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import {
-  CheckCircle2, CircleAlert, Clock3, ExternalLink, FileUp, HandHelping, Inbox, LifeBuoy, MessageCircleHeart, Power, PowerOff,
+  CheckCircle2, CircleAlert, Clock3, ExternalLink, MessageSquareText, FileUp, HandHelping, Inbox, LifeBuoy, MessageCircleHeart, Power, PowerOff,
   RefreshCw, Reply, Send, SkipForward, TriangleAlert, UserX, Wrench,
 } from "lucide-react";
 import Link from "@/i18n/link";
@@ -228,6 +228,7 @@ export default function WhatsAppOnboardingPage() {
                   <li><b>Akıllı atlama:</b> kurulumu bitene hatırlatma, randevu alana ipucu, paket alana deneme mesajı gitmez.</li>
                   <li><b>DUR / BAŞLAT:</b> kişi DUR yazınca tüm akış durur, BAŞLAT ile geri açılır.</li>
                   <li><b>“Benim yerime kurun”:</b> düğmeye basan olursa telefonuna bildirim gelir; tek tıkla panelini destek modunda açıp kurarsın.</li>
+                  <li><b>SMS yedeği:</b> hoş geldin WhatsApp&apos;tan gidemezse (numarada WhatsApp yoksa) yerine tek, ayrıntılı bir karşılama SMS&apos;i gider: panel linki ve iletişim numaramızla. Diğer adımlar SMS&apos;e düşmez.</li>
                   <li><b>Gelen kutusu:</b> giden her mesajın kopyası ve gelen cevaplar WhatsApp Gelen Kutusu&apos;nda.</li>
                 </ul>
                 <p className={s.note}>Mesajlar Meta&apos;nın bilgilendirme (utility) kategorisinde; ücret Meta&apos;nın konuşma fiyatlandırmasına göre WhatsApp hesabından düşer.</p>
@@ -249,6 +250,7 @@ export default function WhatsAppOnboardingPage() {
                         <span className={s.jobTitle}>
                           <b>{job.businessName || "İşletme"}</b>
                           <Pill tone={jobStatus.tone} dot>{jobStatus.label}</Pill>
+                          {job.smsWelcome ? <Pill tone={job.smsWelcome.status === "sent" ? "violet" : job.smsWelcome.status === "failed" ? "red" : "neutral"} title={job.smsWelcome.cause ?? undefined}><MessageSquareText size={12} aria-hidden /> {job.smsWelcome.status === "sent" ? "Karşılama SMS'i gitti" : job.smsWelcome.status === "failed" ? "SMS gönderilemedi" : "SMS atlandı"}</Pill> : null}
                           {job.helpRequestedAt ? <Pill tone="amber"><HandHelping size={12} aria-hidden /> Yardım istedi · {relativeTime(job.helpRequestedAt, now)}</Pill> : null}
                         </span>
                         <small>{job.phone} · {relativeTime(job.createdAt, now)} {job.source === "admin" ? "· elle başlatıldı" : ""}</small>
