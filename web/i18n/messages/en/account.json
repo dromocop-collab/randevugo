@@ -609,5 +609,6 @@
   "Bildirimler kapalı": "Notifications off",
   "Bildirimler açık": "Notifications on",
   "Yeni bildirim": "New notification",
-  "Görüntüle": "View"
+  "Görüntüle": "View",
+  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp. Reply STOP anytime to opt out."
 }

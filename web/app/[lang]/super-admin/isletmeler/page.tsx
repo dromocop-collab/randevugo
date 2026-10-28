@@ -3,11 +3,15 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "@/i18n/link";
 import { useSearchParams } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
+import { logSupportSession, startSupportSession } from "@/features/businesses/support-mode";
+import { startWhatsAppOnboardingForBusiness } from "@/features/whatsapp/whatsapp-onboarding-repository";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { collection, doc, getDoc, getDocs, type DocumentSnapshot, type QueryDocumentSnapshot } from "firebase/firestore";
 import {
   ArrowRightLeft, Ban, Building2, CalendarDays, Check, ChevronRight, Copy, Crown, Download, ExternalLink, Eye, EyeOff,
-  Languages, MapPin, PackageCheck, RefreshCw, RotateCcw, Store, UserRound, WalletCards, X,
+  Languages, LifeBuoy, MapPin, MessageCircleHeart, PackageCheck, RefreshCw, RotateCcw, Store, UserRound, WalletCards, X,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import {
@@ -545,6 +549,25 @@ function BusinessDetailSheet({
   const sub = info?.subscription;
   const subBadge = sub ? (sub.isLifetime ? { label: "Süresiz", tone: "violet" as AdminTone } : SUBSCRIPTION_LABEL[sub.status] ?? { label: sub.status || "—", tone: "neutral" as AdminTone }) : null;
   const assignable = plans.filter((plan) => plan.isActive || plan.id === biz.plan);
+  const router = useRouter();
+  const { user } = useAuth();
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  async function startWelcome() {
+    setWelcomeBusy(true);
+    try {
+      await startWhatsAppOnboardingForBusiness(biz.id);
+      toast.success("WhatsApp karşılama akışı başlatıldı.", { description: "Hoş geldin mesajı 1 dakika içinde gider (akış açıksa)." });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message.replace(/^Firebase:\s*/i, "") : "Başlatılamadı.");
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }
+  function openSupport() {
+    if (user) logSupportSession(biz.id, user.uid);
+    startSupportSession(biz.id, biz.name);
+    router.push("/dashboard");
+  }
 
   return (
     <Sheet
@@ -564,6 +587,12 @@ function BusinessDetailSheet({
         )}
 
         <section className={styles.actions} aria-label="Hızlı işlemler">
+          <AdminButton variant="primary" icon={LifeBuoy} disabled={anyBusy} onClick={openSupport} title="İşletmenin panelini onun adına açar; üye eklenmez, sahiplik değişmez. Yalnız bu sekmede geçerli.">
+            Panelini aç (destek)
+          </AdminButton>
+          <AdminButton variant="secondary" icon={MessageCircleHeart} loading={welcomeBusy} disabled={anyBusy} onClick={() => void startWelcome()} title="Bu işletmenin sahibine WhatsApp karşılama/kurulum mesajlarını başlatır.">
+            WhatsApp karşılama
+          </AdminButton>
           <AdminButton variant="secondary" icon={biz.hiddenFromDiscovery ? Eye : EyeOff} loading={isBusy("hidden")} disabled={anyBusy} onClick={onToggleHidden}>
             {biz.hiddenFromDiscovery ? "Keşifte göster" : "Keşiften gizle"}
           </AdminButton>

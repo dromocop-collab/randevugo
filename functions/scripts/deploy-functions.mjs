@@ -25,7 +25,7 @@ export const GROUPS = {
     "ensureAdminOwnedBusinessesLifetime", "backfillLegacyBusinessSubscriptions", "expireBusinessSubscriptions", "syncBusinessPlanFromSubscription",
   ],
   sms: [
-    "whatsappWebhook", "whatsappInboxMessageCreated", "sendWhatsAppInboxReply", "updateWhatsAppConversation", "getWhatsAppInboxSettings", "updateWhatsAppInboxSettings", "getWhatsAppOperations", "updateWhatsAppChannel", "sendWhatsAppTest", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
+    "whatsappWebhook", "whatsappInboxMessageCreated", "sendWhatsAppInboxReply", "updateWhatsAppConversation", "getWhatsAppInboxSettings", "updateWhatsAppInboxSettings", "getWhatsAppOnboarding", "updateWhatsAppOnboarding", "submitWhatsAppOnboardingTemplates", "sendWhatsAppOnboardingTest", "startWhatsAppOnboardingForBusiness", "getWhatsAppOperations", "updateWhatsAppChannel", "sendWhatsAppTest", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
     "adjustBusinessSmsCredits", "getMutlucellSettings", "updateMutlucellSettings", "testMutlucellSettings",
   ],
   dogrulama: ["sendVerificationCode", "verifyPhoneCode", "sendEmailVerificationCode", "verifyEmailCode", "sendPasswordResetCode", "resetPasswordWithCode"],

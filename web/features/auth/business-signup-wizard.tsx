@@ -465,7 +465,7 @@ export function BusinessSignupWizard() {
                     />
                   </Field>
                 </div>
-                <Field id={ids.phone} label={t("İşletme cep telefonu")} valid={isValidMobilePhone(draft.phone ?? "")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined}>
+                <Field id={ids.phone} label={t("İşletme cep telefonu")} valid={isValidMobilePhone(draft.phone ?? "")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined} hint={t("Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.")}>
                   <div className={w.affix}>
                     <b>+90</b>
                     <input

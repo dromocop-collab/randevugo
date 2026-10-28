@@ -3,7 +3,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { getBusinessesForUser } from "@/features/businesses/business-repository";
+import { getBusinessById, getBusinessesForUser } from "@/features/businesses/business-repository";
+import { endSupportSession, readSupportSession, SUPPORT_MODE_EVENT, type SupportSession } from "@/features/businesses/support-mode";
 import type { Business } from "@/types/business";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { useT } from "@/i18n/client";
@@ -14,6 +15,8 @@ interface BusinessContextValue {
   setBusinessId: (id: string) => void;
   refreshBusinesses: () => void;
   loading: boolean;
+  /** Süper admin destek modunda açılan işletme (yalnız bu sekme). */
+  support: SupportSession | null;
   access: {
     role: "owner" | "admin" | "manager" | "staff";
     staffId?: string;
@@ -29,6 +32,7 @@ const BusinessContext = createContext<BusinessContextValue>({
   setBusinessId: () => undefined,
   refreshBusinesses: () => undefined,
   loading: true,
+  support: null,
   access: null,
 });
 
@@ -44,6 +48,42 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [businessId, setBusinessIdState] = useState<string | null>(getStoredBusinessId);
   const [loading, setLoading] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [support, setSupport] = useState<SupportSession | null>(null);
+  const [supportBusiness, setSupportBusiness] = useState<Business | null>(null);
+
+  useEffect(() => {
+    const sync = () => setSupport(readSupportSession());
+    sync();
+    window.addEventListener(SUPPORT_MODE_EVENT, sync);
+    return () => window.removeEventListener(SUPPORT_MODE_EVENT, sync);
+  }, []);
+
+  // Destek modu: işletme belgesi doğrudan okunur (kurallar süper admine izin verir); üyelik yazılmaz.
+  useEffect(() => {
+    if (status !== "authenticated" || !user || !support) {
+      queueMicrotask(() => setSupportBusiness(null));
+      return;
+    }
+    let alive = true;
+    getBusinessById(support.businessId)
+      .then((business) => {
+        if (!alive) return;
+        if (!business) {
+          endSupportSession();
+          toast.error("Destek modu açılamadı: işletme bulunamadı.");
+          return;
+        }
+        setSupportBusiness({ ...business, currentUserRole: "owner", currentStaffId: undefined, currentPermissions: undefined });
+      })
+      .catch(() => {
+        if (!alive) return;
+        endSupportSession();
+        toast.error("Destek modu yalnız süper admin hesabıyla açılabilir.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [status, user, support, refreshCounter]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
@@ -89,6 +129,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   }, [status, user, refreshCounter, t]);
 
   const setBusinessId = useCallback((id: string) => {
+    // Başka işletmeye geçmek destek modunu kapatır.
+    if (readSupportSession()?.businessId !== id) endSupportSession();
     window.localStorage.setItem(STORAGE_KEY, id);
     setBusinessIdState(id);
     // Trigger a refetch so businesses array is populated
@@ -102,15 +144,22 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     (): BusinessContextValue => {
       const isAuthenticated = status === "authenticated" && !!user;
+      const supportActive = isAuthenticated && support !== null;
+      const visible = supportActive && supportBusiness
+        ? [supportBusiness, ...businesses.filter((business) => business.id !== supportBusiness.id)]
+        : businesses;
+      const activeId = supportActive ? support.businessId : businessId;
 
       return {
-        businesses: isAuthenticated ? businesses : [],
-        businessId: isAuthenticated ? businessId : null,
+        businesses: isAuthenticated ? visible : [],
+        businessId: isAuthenticated ? activeId : null,
         setBusinessId,
         refreshBusinesses,
-        loading: status === "loading" || (isAuthenticated && loading),
+        // Destek işletmesi gelene kadar panel kendi işletmeni göstermesin.
+        loading: status === "loading" || (isAuthenticated && (loading || (supportActive && !supportBusiness))),
+        support: supportActive ? support : null,
         access: (() => {
-          const active = businesses.find((business) => business.id === businessId) ?? businesses[0];
+          const active = visible.find((business) => business.id === activeId) ?? visible[0];
           if (!isAuthenticated || !active) return null;
           return {
             role: active.currentUserRole ?? "owner",
@@ -128,7 +177,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         })(),
       };
     },
-    [businessId, businesses, loading, refreshBusinesses, setBusinessId, status, user]
+    [businessId, businesses, loading, refreshBusinesses, setBusinessId, status, support, supportBusiness, user]
   );
 
   return <BusinessContext.Provider value={value}>{children}</BusinessContext.Provider>;

@@ -34,6 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
+import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
@@ -365,6 +366,8 @@ async function requireBusinessManager(uid: string, businessId: string) {
   if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
   const role = String(member.data()?.role ?? "");
   if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role)) return business.data()!;
+  // Süper admin destek modu: işletme adına düzenleme (üyelik oluşturmadan).
+  if (await isPlatformAdminAccount(uid)) return business.data()!;
   throw new HttpsError("permission-denied", "Müşterilere bildirim gönderme yetkiniz yok.");
 }
 
@@ -377,6 +380,7 @@ async function requireBusinessOperation(uid: string, businessId: string, permiss
   const role = String(member.data()?.role ?? "");
   if (business.data()?.ownerUid === uid || ["owner", "admin", "manager"].includes(role) ||
       (role === "staff" && member.data()?.permissions?.[permission] === true)) return business.data()!;
+  if (await isPlatformAdminAccount(uid)) return business.data()!;
   throw new HttpsError("permission-denied", "Bu işletme işlemi için yetkiniz bulunmuyor.");
 }
 
@@ -1378,6 +1382,14 @@ export const createBusiness = onCall(
         createdAt: FieldValue.serverTimestamp(),
       });
     });
+    // Yeni işletme sahibine WhatsApp karşılama akışı (ilk mağaza; süper adminin kendi açtıkları hariç). Hata kaydı bozmaz.
+    if (position === 1 && !parentBusinessId && !creatorIsPlatformAdmin) {
+      await enrollWhatsAppOnboarding({
+        businessId: businessRef.id, businessName: name, slug, phone: data.phone,
+        ownerName: String(request.auth?.token.name ?? ""),
+        trialEndsAtMs: Date.now() + NEW_BUSINESS_TRIAL_DAYS * 86_400_000, source: "signup",
+      }).catch((error) => logger.warn("Karşılama akışı başlatılamadı", { businessId: businessRef.id, error: String(error) }));
+    }
     // Reklam optimizasyonu: ilk mağaza = "kayıt tamamlandı" (tarayıcı Pixel'i aynı event_id ile tekilleştirilir).
     if (position === 1 && !parentBusinessId) {
       const attribution = sanitizeAttribution(data.attribution);
@@ -6422,6 +6434,14 @@ export const whatsappInboxMessageCreated = onDocumentCreated(
         .catch((error) => logger.warn("Gelen kutusu eşleştirme hatası", { error: String(error) })));
     }
 
+    // DUR / BAŞLAT ve karşılama şablonundaki hızlı yanıtlar kendi cevabını alır; genel otomatik cevap ve bildirim atlanır.
+    const onboardingHandled = await handleOnboardingInbound(cid, phone, message, typeof conversation.profileName === "string" ? conversation.profileName : null)
+      .catch((error) => { logger.warn("Karşılama yanıtı işlenemedi", { error: String(error) }); return false; });
+    if (onboardingHandled) {
+      await Promise.all(tasks);
+      return;
+    }
+
     const settings = inboxSettingsOf((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data());
     // Memnuniyet anketine düğmeyle verilen yanıtlar zaten teşekkür mesajı alıyor.
     const isSurveyAnswer = message.contextId && (message.type === "button" || message.type === "interactive");
@@ -6585,6 +6605,169 @@ async function processDueWhatsAppFollowUps() {
     batch.set(db.doc(`smsUsage/${businessId}`), { businessId, whatsappSent: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     await batch.commit();
   }
+}
+
+// ── WhatsApp karşılama akışı (yeni işletme sahibi) ──
+// İş belgesi: whatsappOnboarding/{businessId}; çıkış listesi: whatsappOptOuts/{sha24(telefon)}. Saf mantık: onboarding-whatsapp-domain.ts
+const onboardingJobRef = (businessId: string) => db.doc(`whatsappOnboarding/${businessId}`);
+const whatsappOptOutRef = (phone: string) => db.doc(`whatsappOptOuts/${conversationId(phone)}`);
+
+/** Akışı başlatır (bir kez). Cep numarası geçersizse "invalid_phone". */
+async function enrollWhatsAppOnboarding(input: {
+  businessId: string; businessName: string; slug: string; phone: unknown; ownerName: string;
+  trialEndsAtMs: number | null; source: "signup" | "admin"; startNow?: boolean;
+}): Promise<"created" | "exists" | "invalid_phone"> {
+  const to = toWhatsAppPhone(input.phone);
+  if (!to) return "invalid_phone";
+  const now = Date.now();
+  const plan = planOnboarding(now, input.trialEndsAtMs);
+  if (input.startNow) plan.welcome = now;
+  const steps: Record<string, { status: string; dueAt: number }> = {};
+  for (const step of ONBOARDING_STEPS) steps[step.key] = { status: "pending", dueAt: plan[step.key] };
+  const next = nextDueAt(steps);
+  return onboardingJobRef(input.businessId).create({
+    businessId: input.businessId, businessName: shortText(input.businessName, 100), slug: input.slug, phone: to,
+    ownerName: shortText(input.ownerName, 80), source: input.source, status: "active", steps,
+    nextDueAt: next ? Timestamp.fromMillis(next) : null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  }).then(() => "created" as const).catch(() => "exists" as const);
+}
+
+async function loadOnboardingState(businessId: string): Promise<OnboardingState> {
+  const businessRef = db.doc(`businesses/${businessId}`);
+  const count = (path: string) => db.collection(`businesses/${businessId}/${path}`).count().get().then((snap) => snap.data().count).catch(() => 0);
+  const [business, subscription, serviceCount, staffCount, hourCount, appointmentCount] = await Promise.all([
+    businessRef.get(), db.doc(`subscriptions/${businessId}`).get(),
+    count("services"), count("staff"), count("workingHours"), count("appointments"),
+  ]);
+  const data = business.data() ?? {};
+  const sub = subscription.data() ?? {};
+  const trialEnd = tsMillis(sub.trialEndsAt) ?? (typeof sub.trialEndsAt === "string" ? Date.parse(sub.trialEndsAt) : NaN);
+  return {
+    exists: business.exists,
+    suspended: data.isSuspended === true || data.status === "suspended",
+    isPublished: data.isPublished === true,
+    approvalStatus: String(data.approvalStatus ?? ""),
+    serviceCount, staffCount, hasWorkingHours: hourCount > 0,
+    hasLogo: typeof data.logoUrl === "string" && data.logoUrl.length > 0,
+    appointmentCount,
+    subscriptionStatus: String(sub.status ?? ""),
+    isLifetime: sub.isLifetime === true || sub.accessMode === "lifetime",
+    trialEndsAtMs: Number.isFinite(trialEnd) ? trialEnd : null,
+  };
+}
+
+/** Şablonu gönderir; gelen kutusuna kopyasını ve iletim takibi kaydını yazar. */
+async function sendOnboardingTemplate(config: WhatsAppConfig, job: { businessId: string | null; phone: string; profileName?: string | null }, key: OnboardingStepKey, params: OnboardingParams) {
+  const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(buildOnboardingMessage(key, job.phone, params, config.language)),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  const body = await response?.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string; error_data?: { details?: string } } } | null;
+  const wamid = body?.messages?.[0]?.id;
+  if (!response?.ok || !wamid) {
+    const detail = body?.error?.error_data?.details ?? body?.error?.message ?? `HTTP ${response?.status ?? 0}`;
+    return { ok: false as const, error: shortText(`${body?.error?.code ? `(${body.error.code}) ` : ""}${detail}`, 240) };
+  }
+  const cid = conversationId(job.phone);
+  const conversationRef = inboxConversationRef(cid);
+  const messageRef = conversationRef.collection("messages").doc(messageDocId(wamid));
+  const text = renderOnboardingText(key, params);
+  const batch = db.batch();
+  batch.set(messageRef, {
+    direction: "out", wamid, type: "template", text, template: stepByKey(key)!.template, auto: true, sentByUid: null,
+    sentByName: "Karşılama akışı", status: "accepted", createdAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(conversationRef, {
+    phone: job.phone, lastMessageAt: FieldValue.serverTimestamp(), lastMessageText: shortText(text, 140), lastDirection: "out",
+    ...(job.businessId ? { owner: { businessId: job.businessId, businessName: params.businessName, slug: params.slug } } : {}),
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  batch.set(whatsappMessageRef(wamid), {
+    messageId: wamid, businessId: job.businessId, appointmentId: null, type: "onboarding", step: key,
+    inboxConversationId: cid, inboxMessageId: messageRef.id,
+    phoneMasked: `******${job.phone.slice(-4)}`, status: "accepted", createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+  });
+  await batch.commit();
+  return { ok: true as const, wamid };
+}
+
+async function processDueOnboardingWhatsApp() {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const settings = parseOnboardingSettings(raw.onboarding);
+  const config = parseWhatsAppConfig(raw);
+  // Akış ya da kanal kapalıyken işler beklemede kalır; açılınca gecikmiş adımlar "süresi geçti" sayılır (maxLateMs).
+  if (!settings.enabled || !config) return;
+  const due = await db.collection("whatsappOnboarding").where("nextDueAt", "<=", Timestamp.now()).limit(15).get();
+  for (const doc of due.docs) {
+    const job = doc.data();
+    const steps = { ...(job.steps ?? {}) } as Record<string, Record<string, unknown>>;
+    const now = Date.now();
+    const optedOut = (await whatsappOptOutRef(String(job.phone)).get()).exists;
+    let state: OnboardingState | null = null;
+    for (const step of ONBOARDING_STEPS) {
+      const current = steps[step.key];
+      if (!current || current.status !== "pending" || Number(current.dueAt) > now) continue;
+      const skip = (reason: string) => { steps[step.key] = { ...current, status: "skipped", reason, at: now }; };
+      if (optedOut) { skip("opted_out"); continue; }
+      if (!settings.steps[step.key]) { skip("step_disabled"); continue; }
+      state ??= await loadOnboardingState(String(job.businessId));
+      const decision = decideStep(step.key, state, now, Number(current.dueAt));
+      if (!decision.send) { skip(decision.reason); continue; }
+      const params: OnboardingParams = {
+        name: greetingName(job.ownerName, String(job.businessName ?? "")),
+        businessName: String(job.businessName ?? ""), slug: String(job.slug ?? ""),
+        missing: joinTurkish(missingSetupItems(state)),
+        daysLeft: state.trialEndsAtMs ? (state.trialEndsAtMs - now) / 86_400_000 : 5,
+      };
+      const result = await sendOnboardingTemplate(config, { businessId: String(job.businessId), phone: String(job.phone) }, step.key, params);
+      steps[step.key] = result.ok
+        ? { ...current, status: "sent", at: now, wamid: result.wamid }
+        : { ...current, status: "failed", at: now, error: result.error };
+      if (!result.ok) logger.warn("Karşılama şablonu gönderilemedi", { businessId: job.businessId, step: step.key, error: result.error });
+    }
+    const next = nextDueAt(steps);
+    await doc.ref.update({
+      steps, nextDueAt: next ? Timestamp.fromMillis(next) : null,
+      status: optedOut ? "opted_out" : next ? "active" : "done", updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+/** Gelen mesaj: DUR / BAŞLAT ya da karşılama şablonundaki hızlı yanıt. İşlendiyse true (genel otomatik cevap atlanır). */
+async function handleOnboardingInbound(cid: string, phone: string, message: FirebaseFirestore.DocumentData, profileName: string | null): Promise<boolean> {
+  const command = message.type === "text" || message.type === "button" ? optCommand(message.text) : null;
+  if (command === "out") {
+    await whatsappOptOutRef(phone).set({ phone, at: FieldValue.serverTimestamp() });
+    const jobs = await db.collection("whatsappOnboarding").where("phone", "==", phone).limit(10).get();
+    await Promise.all(jobs.docs.map((job) => job.ref.update({ status: "opted_out", nextDueAt: null, updatedAt: FieldValue.serverTimestamp() })));
+    await sendInboxText(cid, phone, "Tamam, artık bilgilendirme mesajı göndermeyeceğiz. 👍 Yeniden almak istersen BAŞLAT yazman yeterli.", { uid: null, name: "Karşılama akışı", auto: true });
+    return true;
+  }
+  if (command === "in") {
+    const existed = (await whatsappOptOutRef(phone).get()).exists;
+    if (!existed) return false;
+    await whatsappOptOutRef(phone).delete();
+    await sendInboxText(cid, phone, "Bilgilendirmeler yeniden açıldı. 💚 Bir sorun olursa buraya yazabilirsin.", { uid: null, name: "Karşılama akışı", auto: true });
+    return true;
+  }
+  if (!message.contextId || (message.type !== "button" && message.type !== "interactive")) return false;
+  const original = (await whatsappMessageRef(String(message.contextId)).get()).data();
+  if (!original || original.type !== "onboarding") return false;
+  const businessId = typeof original.businessId === "string" ? original.businessId : "";
+  const job = businessId ? (await onboardingJobRef(businessId).get()).data() : null;
+  const businessName = shortText(job?.businessName ?? profileName ?? formatInboxPhone(phone), 60);
+  if (businessId) await onboardingJobRef(businessId).update({ helpRequestedAt: FieldValue.serverTimestamp(), helpRequest: shortText(message.text, 80) }).catch(() => undefined);
+  await Promise.all([
+    sendInboxText(cid, phone, "Tamamdır! 🙌 Ekibimiz en kısa sürede bu numaradan sana ulaşacak. İstersen şimdiden neyde takıldığını yazabilirsin.", { uid: null, name: "Karşılama akışı", auto: true })
+      .catch((error) => logger.warn("Kurulum yardımı onayı gönderilemedi", { error: String(error) })),
+    notifyPlatformAdmins(`🛠️ Kurulum yardımı · ${businessName}`, `"${shortText(message.text, 60)}" dedi. Panelini destek modunda açıp kurabilirsin.`,
+      { route: "admin_whatsapp", url: businessId ? `/super-admin/isletmeler?q=${businessId}&ac=1` : `/super-admin/whatsapp-gelen?c=${cid}` }, `wa-onb-help-${cid}`)
+      .catch((error) => logger.warn("Kurulum yardımı bildirimi gönderilemedi", { error: String(error) })),
+  ]);
+  return true;
 }
 
 /** Müşterinin hızlı yanıtı: puanı işletmenin feedback kaydına yazar (bir kez) ve teşekkür mesajı gönderir. */
@@ -6815,6 +6998,7 @@ export const sendAppointmentSmsJobs = onSchedule(
       await processAppointmentSmsJob(document.ref);
     }
     await processDueWhatsAppFollowUps().catch((error) => logger.warn("Memnuniyet mesajları işlenemedi", { error: String(error) }));
+    await processDueOnboardingWhatsApp().catch((error) => logger.warn("Karşılama mesajları işlenemedi", { error: String(error) }));
   }
 );
 
@@ -10523,4 +10707,169 @@ export const businessWidgetFeed = onRequest(
       appointments: items,
     });
   }
+);
+
+/* ── Süper admin › WhatsApp › Karşılama akışı ── */
+
+function jobRow(doc: FirebaseFirestore.QueryDocumentSnapshot) {
+  const data = doc.data();
+  const steps = (data.steps ?? {}) as Record<string, Record<string, unknown>>;
+  return {
+    businessId: doc.id, businessName: String(data.businessName ?? ""), slug: String(data.slug ?? ""),
+    phone: formatInboxPhone(String(data.phone ?? "")), conversationId: data.phone ? conversationId(String(data.phone)) : null,
+    status: String(data.status ?? ""), source: String(data.source ?? ""),
+    createdAt: tsMillis(data.createdAt), helpRequestedAt: tsMillis(data.helpRequestedAt), helpRequest: data.helpRequest ?? null,
+    steps: ONBOARDING_STEPS.map((step) => {
+      const row = steps[step.key] ?? {};
+      return {
+        key: step.key, status: String(row.status ?? "none"), dueAt: typeof row.dueAt === "number" ? row.dueAt : null,
+        at: typeof row.at === "number" ? row.at : null, reason: typeof row.reason === "string" ? row.reason : null,
+        reasonLabel: typeof row.reason === "string" ? SKIP_REASON_LABEL[row.reason] ?? row.reason : null,
+        error: typeof row.error === "string" ? row.error : null,
+      };
+    }),
+  };
+}
+
+async function onboardingGraphConfig() {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const config = parseWhatsAppConfig({ ...raw, enabled: true });
+  const wabaId = String(raw.wabaId ?? "").trim();
+  return { raw, config, wabaId: /^\d{6,}$/.test(wabaId) ? wabaId : null };
+}
+
+export const getWhatsAppOnboarding = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    await requireInboxAdmin(request);
+    const { raw, config, wabaId } = await onboardingGraphConfig();
+    const settings = parseOnboardingSettings(raw.onboarding);
+    let templates: Array<{ name: string; status: string; category: string; rejectedReason: string | null }> = [];
+    let templateError: string | null = null;
+    if (config && wabaId) {
+      const names = ONBOARDING_TEMPLATE_DEFINITIONS.map((item) => item.name);
+      const response = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates?fields=name,status,category,rejected_reason,language&limit=250`, {
+        headers: { Authorization: `Bearer ${config.accessToken}` }, signal: AbortSignal.timeout(15_000),
+      }).catch(() => null);
+      const body = await response?.json().catch(() => null) as { data?: Array<Record<string, unknown>>; error?: { message?: string } } | null;
+      if (!response?.ok) templateError = shortText(body?.error?.message ?? `HTTP ${response?.status ?? 0}`, 200);
+      templates = (body?.data ?? [])
+        .filter((row) => names.includes(String(row.name)) && String(row.language ?? config.language) === config.language)
+        .map((row) => ({ name: String(row.name), status: String(row.status ?? ""), category: String(row.category ?? ""), rejectedReason: row.rejected_reason && row.rejected_reason !== "NONE" ? String(row.rejected_reason) : null }));
+    } else {
+      templateError = !wabaId ? "WhatsApp Business hesap kimliği (wabaId) ayarlı değil." : "WhatsApp ayarları eksik.";
+    }
+    const [jobs, optOuts] = await Promise.all([
+      db.collection("whatsappOnboarding").orderBy("createdAt", "desc").limit(60).get(),
+      db.collection("whatsappOptOuts").count().get().then((snap) => snap.data().count).catch(() => 0),
+    ]);
+    const rows = jobs.docs.map(jobRow);
+    const stats = ONBOARDING_STEPS.map((step) => {
+      const states = rows.map((row) => row.steps.find((item) => item.key === step.key)?.status ?? "none");
+      return { key: step.key, sent: states.filter((s) => s === "sent").length, skipped: states.filter((s) => s === "skipped").length, failed: states.filter((s) => s === "failed").length, pending: states.filter((s) => s === "pending").length };
+    });
+    return {
+      settings,
+      channelEnabled: raw.enabled === true,
+      steps: ONBOARDING_STEPS.map((step) => {
+        const definition = ONBOARDING_TEMPLATE_DEFINITIONS.find((item) => item.step === step.key)!;
+        return {
+          key: step.key, label: step.label, template: step.template, delayMs: step.delayMs,
+          body: definition.body, buttons: definition.buttons.map((button) => ({ type: button.type, text: button.text })),
+          preview: renderOnboardingText(step.key, { name: "Ayşe", businessName: "Ayşe Güzellik Salonu", slug: "ayse-guzellik", missing: "hizmetlerini eklemek ve çalışma saatlerini girmek", daysLeft: 5 }),
+          templateStatus: templates.find((item) => item.name === step.template) ?? null,
+        };
+      }),
+      templateError, stats, optOuts,
+      helpRequests: rows.filter((row) => row.helpRequestedAt).length,
+      jobs: rows,
+    };
+  },
+);
+
+export const updateWhatsAppOnboarding = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    const current = parseOnboardingSettings(((await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {}).onboarding);
+    const next = parseOnboardingSettings({
+      enabled: typeof request.data?.enabled === "boolean" ? request.data.enabled : current.enabled,
+      steps: { ...current.steps, ...(typeof request.data?.steps === "object" && request.data.steps ? request.data.steps : {}) },
+    });
+    await db.doc(WHATSAPP_SETTINGS_PATH).set({ onboarding: { ...next, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid } }, { merge: true });
+    return { success: true, settings: next };
+  },
+);
+
+/** Eksik karşılama şablonlarını Meta'ya onaya gönderir (var olanlara dokunmaz). */
+export const submitWhatsAppOnboardingTemplates = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    await consumeSecurityLimit(`wa-onb-templates:${uid}`, 6, 60 * 60_000);
+    const { config, wabaId } = await onboardingGraphConfig();
+    if (!config || !wabaId) throw new HttpsError("failed-precondition", "WhatsApp ayarları ya da wabaId eksik.");
+    const listResponse = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates?fields=name,language&limit=250`, {
+      headers: { Authorization: `Bearer ${config.accessToken}` }, signal: AbortSignal.timeout(15_000),
+    });
+    const listBody = await listResponse.json().catch(() => null) as { data?: Array<{ name?: string; language?: string }>; error?: { message?: string } } | null;
+    if (!listResponse.ok) throw new HttpsError("failed-precondition", `Şablon listesi alınamadı: ${shortText(listBody?.error?.message, 200)}`);
+    const existing = new Set((listBody?.data ?? []).filter((row) => (row.language ?? config.language) === config.language).map((row) => String(row.name)));
+    const results: Array<{ name: string; result: string }> = [];
+    for (const definition of ONBOARDING_TEMPLATE_DEFINITIONS) {
+      if (existing.has(definition.name)) { results.push({ name: definition.name, result: "zaten var" }); continue; }
+      const response = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(templateCreatePayload(definition, config.language)),
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => null);
+      const body = await response?.json().catch(() => null) as { status?: string; error?: { message?: string; error_user_msg?: string } } | null;
+      results.push({ name: definition.name, result: response?.ok ? `gönderildi (${body?.status ?? "PENDING"})` : `hata: ${shortText(body?.error?.error_user_msg ?? body?.error?.message ?? `HTTP ${response?.status ?? 0}`, 160)}` });
+    }
+    await db.collection("platformAuditLogs").add({ action: "whatsapp.onboarding_templates_submitted", actorUid: uid, results, createdAt: FieldValue.serverTimestamp() });
+    return { results };
+  },
+);
+
+/** Seçilen adımı örnek verilerle bir numaraya gönderir (şablon onaylıysa). */
+export const sendWhatsAppOnboardingTest = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    await consumeSecurityLimit(`wa-onb-test:${uid}`, 20, 60 * 60_000);
+    const step = stepByKey(String(request.data?.step ?? ""));
+    if (!step) throw new HttpsError("invalid-argument", "Geçersiz adım.");
+    const phone = toWhatsAppPhone(request.data?.phone);
+    if (!phone) throw new HttpsError("invalid-argument", "Geçerli bir Türkiye cep numarası girin.");
+    const { config } = await onboardingGraphConfig();
+    if (!config) throw new HttpsError("failed-precondition", "WhatsApp ayarları eksik.");
+    const result = await sendOnboardingTemplate(config, { businessId: null, phone }, step.key, {
+      name: "Test", businessName: "Örnek Güzellik Salonu", slug: "ornek-kuafor", missing: "hizmetlerini eklemek ve çalışma saatlerini girmek", daysLeft: 5,
+    });
+    if (!result.ok) throw new HttpsError("failed-precondition", `Meta reddetti: ${result.error}`);
+    return { success: true };
+  },
+);
+
+/** Mevcut bir işletme için akışı elle başlatır (hoş geldin hemen). Var olan akış yalnız restart ile sıfırlanır. */
+export const startWhatsAppOnboardingForBusiness = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const business = (await db.doc(`businesses/${businessId}`).get()).data();
+    if (!business) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    if (request.data?.restart === true) await onboardingJobRef(businessId).delete();
+    const owner = typeof business.ownerUid === "string" ? await auth.getUser(business.ownerUid).catch(() => null) : null;
+    const state = await loadOnboardingState(businessId);
+    const result = await enrollWhatsAppOnboarding({
+      businessId, businessName: String(business.name ?? ""), slug: String(business.slug ?? ""), phone: business.phone,
+      ownerName: owner?.displayName ?? "", trialEndsAtMs: state.trialEndsAtMs, source: "admin", startNow: true,
+    });
+    if (result === "invalid_phone") throw new HttpsError("failed-precondition", "İşletmenin cep numarası WhatsApp için uygun değil.");
+    if (result === "exists") throw new HttpsError("already-exists", "Bu işletmenin akışı zaten var. Sıfırlamak için yeniden başlat.");
+    await db.collection("platformAuditLogs").add({ action: "whatsapp.onboarding_started", businessId, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+    return { success: true };
+  },
 );

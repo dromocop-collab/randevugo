@@ -6,6 +6,7 @@ import { DashboardTopBar } from "@/components/dashboard/topbar";
 import { SubscriptionStatusBanner } from "@/components/dashboard/subscription-status-banner";
 import { SubscriptionFeatureGate } from "@/components/dashboard/subscription-feature-gate";
 import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-modal";
+import { SupportModeBanner } from "@/components/dashboard/support-mode-banner";
 import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-plan-context";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { dashTokensClassName } from "@/components/dashboard/ui";
@@ -48,6 +49,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <a href="#dashboard-main" className={styles.skipLink}>{t("İçeriğe geç")}</a>
         <DashboardSidebar collapsed={collapsed} onToggle={toggleCollapsed} />
         <div className={styles.main}>
+          <SupportModeBanner />
           <DashboardTopBar />
           <main id="dashboard-main" className={styles.content} tabIndex={-1}>
             <SubscriptionStatusBanner />

@@ -1,6 +1,6 @@
 import {
   BarChart3, BellRing, Inbox, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
-  Megaphone, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
+  Megaphone, MessageCircleHeart, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 export type AdminNavItem = { href: string; label: string; short?: string; icon: LucideIcon; keywords?: string };
@@ -36,6 +36,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/super-admin/sms", label: "SMS Merkezi", short: "SMS", icon: MessageSquareText, keywords: "mutlucell kredi" },
       { href: "/super-admin/whatsapp-gelen", label: "WhatsApp Gelen Kutusu", short: "Gelen", icon: Inbox, keywords: "whatsapp mesaj cevap sohbet müşteri yazışma otomatik" },
       { href: "/super-admin/whatsapp", label: "WhatsApp Kanalı", short: "WhatsApp", icon: MessagesSquare, keywords: "meta şablon template cloud api bildirim" },
+      { href: "/super-admin/whatsapp-karsilama", label: "WhatsApp Karşılama", short: "Karşılama", icon: MessageCircleHeart, keywords: "hoş geldin yeni işletme kayıt onboarding kurulum hatırlatma deneme otomatik mesaj" },
     ],
   },
   {

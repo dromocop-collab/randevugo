@@ -158,11 +158,13 @@ service cloud.firestore {
 
     match /platformAuditLogs/{docId} {
       allow read: if isPlatformAdmin();
-      // Platform asistanı izi: yalnızca platform yöneticisi, sabit alanlar, gerçek aktör.
+      // Platform asistanı ve destek modu izi: yalnızca platform yöneticisi, sabit alanlar, gerçek aktör.
       allow create: if isPlatformAdmin() &&
         request.resource.data.keys().hasOnly(["action", "businessId", "entityId", "actorSource", "actorUid", "createdAt"]) &&
-        request.resource.data.action is string && request.resource.data.action.matches("assistant[.][a-z_]+") &&
-        request.resource.data.actorSource == "platform_assistant" &&
+        request.resource.data.action is string &&
+        ((request.resource.data.action.matches("assistant[.][a-z_]+") && request.resource.data.actorSource == "platform_assistant") ||
+         (request.resource.data.action == "support.session_started" && request.resource.data.actorSource == "support_mode" &&
+          request.resource.data.businessId is string)) &&
         request.resource.data.actorUid == uid() &&
         request.resource.data.createdAt == request.time;
       allow update, delete: if false;
@@ -617,7 +619,7 @@ service cloud.firestore {
 
       // Notifications
       match /notifications/{notifId} {
-        allow read: if isMember(businessId);
+        allow read: if isMember(businessId) || isPlatformAdmin();
         allow write: if isMember(businessId) || isPlatformAdmin();
       }
 
