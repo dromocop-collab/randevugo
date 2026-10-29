@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/seo/site";
+import { BLOCKED_CRAWLERS } from "@/lib/security/bot-policy";
 
 /**
  * Özel alanlar (paneller, hesap, ödeme/randevu belirteçleri, API) taranmaz.
@@ -29,6 +30,8 @@ export default function robots(): MetadataRoute.Robots {
           "/api/",
         ],
       },
+      // Yapay zekâ / veri toplama / SEO tarayıcıları: sitenin hiçbir yeri (proxy.ts ayrıca 403 döner).
+      { userAgent: [...BLOCKED_CRAWLERS], disallow: ["/"] },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,

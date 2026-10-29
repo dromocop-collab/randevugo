@@ -77,12 +77,31 @@ const publicCallableOptions = {
   cors: [
     /^http:\/\/localhost(?::\d+)?$/,
     /^https:\/\/(?:www\.)?seninrandevun\.com$/,
-    /^https:\/\/.*\.web\.app$/,
-    /^https:\/\/.*\.firebaseapp\.com$/,
-    /^https:\/\/.*\.hosted\.app$/,
+    // Yalnız bu projenin Firebase adresleri (eskiden her *.web.app sitesi tarayıcıdan çağırabiliyordu).
+    /^https:\/\/randevugo-d1d2e(?:--[a-z0-9-]+)?\.(?:web\.app|firebaseapp\.com)$/,
+    /^https:\/\/[a-z0-9-]+--randevugo-d1d2e\.[a-z0-9-]+\.hosted\.app$/,
   ],
 };
 const protectedCallableOptions = { region: "europe-west1", enforceAppCheck };
+
+/**
+ * Örnek (instance) belleğinde kısa pencereli sınır: sık çağrılan, yazma yapmayan herkese açık uçlar için
+ * (müsait saat/gün, bilet sorgusu). Firestore yazmadan bot taramasını yavaşlatır; kesin sayım gerekmez.
+ */
+const burstBuckets = new Map<string, { count: number; resetAt: number }>();
+function burstLimit(key: string, limit: number, windowMs: number) {
+  const now = Date.now();
+  if (burstBuckets.size > 20_000) {
+    for (const [bucketKey, bucket] of burstBuckets) if (bucket.resetAt <= now) burstBuckets.delete(bucketKey);
+  }
+  const bucket = burstBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    burstBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return;
+  }
+  bucket.count += 1;
+  if (bucket.count > limit) throw new HttpsError("resource-exhausted", "Çok fazla istek gönderildi. Lütfen biraz sonra tekrar deneyin.");
+}
 
 async function consumeSecurityLimit(key: string, limit: number, windowMs: number) {
   const id = createHash("sha256").update(key).digest("hex");
@@ -4156,6 +4175,7 @@ export const linkStaffAccount = onCall(
 export const getAvailableSlots = onCall(
   publicCallableOptions,
   async (request) => {
+    burstLimit(`slots:${clientIpFrom(request.rawRequest)}`, 240, 10 * 60_000);
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
@@ -4207,6 +4227,7 @@ export const getAvailableSlots = onCall(
 export const getAvailableDates = onCall(
   publicCallableOptions,
   async (request) => {
+    burstLimit(`dates:${clientIpFrom(request.rawRequest)}`, 120, 10 * 60_000);
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
@@ -4272,6 +4293,8 @@ export const getAvailableDates = onCall(
 export const joinWaitlist = onCall(
   publicCallableOptions,
   async (request) => {
+    // Doğrulama istemeyen herkese açık yazma: IP başına sınır.
+    await consumeSecurityLimit(`waitlist:ip:${clientIpFrom(request.rawRequest)}`, 10, 60 * 60_000);
     const data = request.data ?? {};
     const businessId = requireString(data.businessId, "businessId");
     await requireBookingEntitlement(businessId);
@@ -4306,6 +4329,8 @@ export const joinWaitlist = onCall(
 export const createAppointment = onCall(
   publicCallableOptions,
   async (request) => {
+    // Telefon doğrulaması zaten şart; IP başına üst sınır toplu sahte randevu denemesini keser (operatör NAT'ı için geniş).
+    await consumeSecurityLimit(`appointment:create:ip:${clientIpFrom(request.rawRequest)}`, 30, 60 * 60_000);
     const data = request.data ?? {};
 
     const businessId = requireString(data.businessId, "businessId");
@@ -4326,6 +4351,7 @@ export const createAppointment = onCall(
     if (!customerPhone || !/^\+90\d{10}$/.test(customerPhone)) {
       throw new HttpsError("invalid-argument", "Geçerli bir Türkiye telefon numarası girin.");
     }
+    await consumeSecurityLimit(`appointment:create:phone:${customerPhone}`, 10, 24 * 60 * 60_000);
     let customerName = bookingFields.collectName
       ? suppliedCustomerName
       : `Telefon müşterisi • ${customerPhone.slice(-4)}`;
@@ -5016,6 +5042,7 @@ export const claimGuestAppointments = onCall(
 export const getAppointmentByPublicToken = onCall(
   publicCallableOptions,
   async (request) => {
+    burstLimit(`appointment-token:${clientIpFrom(request.rawRequest)}`, 120, 10 * 60_000);
     const { businessId, appointmentId } = await resolvePublicAppointmentToken(request.data?.publicToken);
     const [appointmentSnapshot, businessSnapshot] = await Promise.all([
       db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get(),
@@ -7851,6 +7878,8 @@ export const sendVerificationCode = onCall(
 export const verifyPhoneCode = onCall(
   { region: "europe-west1" },
   async (request) => {
+    // Kod başına deneme sınırına ek olarak IP başına (çok numarada kod tahmini).
+    burstLimit(`verify-code:${clientIpFrom(request.rawRequest)}`, 30, 10 * 60_000);
     const data = request.data ?? {};
 
     const rawPhone = requireString(data.phone, "phone");
