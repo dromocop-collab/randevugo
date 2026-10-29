@@ -120,6 +120,11 @@ service cloud.firestore {
       allow write: if isPlatformAdmin();
     }
 
+    // Süper admin › Panel Tasarımı kayıt geçmişi (geri alma için).
+    match /dashboardDesignHistory/{entryId} {
+      allow read, write: if isPlatformAdmin();
+    }
+
     // WhatsApp gelen kutusu: yalnız süper admin canlı okur; yazma yalnız sunucu (webhook / callable).
     match /whatsappConversations/{conversationId} {
       allow read: if isPlatformAdmin();

@@ -7,6 +7,9 @@ export type DashboardAppearanceRecord = {
   motion?: string;
   cursor?: string;
   modules?: Array<{ id: string; enabled: boolean }>;
+  /** Kullanıcı temayı/düzeni bilinçli seçti mi (yoksa süper adminin varsayılanı uygulanır). Android okumaz. */
+  skinPicked?: boolean;
+  modulesPicked?: boolean;
 };
 
 const APPEARANCE_DOC_ID = "dashboardAppearance";

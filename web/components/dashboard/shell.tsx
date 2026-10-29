@@ -7,6 +7,9 @@ import { SubscriptionStatusBanner } from "@/components/dashboard/subscription-st
 import { SubscriptionFeatureGate } from "@/components/dashboard/subscription-feature-gate";
 import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-modal";
 import { SupportModeBanner } from "@/components/dashboard/support-mode-banner";
+import { DesignAnnouncement } from "@/components/dashboard/design-announcement";
+import { DesignSectionGate } from "@/components/dashboard/design-section-gate";
+import { DashboardDesignProvider } from "@/features/dashboard-design/dashboard-design-context";
 import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-plan-context";
 import { useBusinessContext } from "@/features/businesses/business-context";
 import { dashTokensClassName } from "@/components/dashboard/ui";
@@ -40,6 +43,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   }
 
   return (
+    <DashboardDesignProvider>
     <SubscriptionPlanProvider>
       <div
         className={cn(dashTokensClassName, styles.shell, "dashboard-v2")}
@@ -53,13 +57,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <DashboardTopBar />
           <main id="dashboard-main" className={styles.content} tabIndex={-1}>
             <SubscriptionStatusBanner />
-            <SubscriptionFeatureGate>{children}</SubscriptionFeatureGate>
+            <DesignAnnouncement />
+            <DesignSectionGate>
+              <SubscriptionFeatureGate>{children}</SubscriptionFeatureGate>
+            </DesignSectionGate>
           </main>
         </div>
         <DashboardBottomNav />
         <GlobalQuickAppointment />
       </div>
     </SubscriptionPlanProvider>
+    </DashboardDesignProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 import {
   BarChart3, BellRing, Inbox, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
-  Megaphone, MessageCircleHeart, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
+  LayoutDashboard, Megaphone, MessageCircleHeart, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 export type AdminNavItem = { href: string; label: string; short?: string; icon: LucideIcon; keywords?: string };
@@ -42,6 +42,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     label: "Sistem",
     items: [
+      { href: "/super-admin/panel-tasarimi", label: "Panel Tasarımı", short: "Tasarım", icon: LayoutDashboard, keywords: "işletme paneli menü tema duyuru metin düzen kart görünüm özelleştir" },
       { href: "/super-admin/randevu-alanlari", label: "Randevu Alanları", icon: CalendarCog, keywords: "form alan" },
       { href: "/super-admin/ayarlar", label: "Ayarlar", icon: Settings2, keywords: "bakım seo duyuru özellik" },
       { href: "/super-admin/audit-logs", label: "Audit Kayıtları", short: "Audit", icon: ClipboardList, keywords: "log kayıt geçmiş" },

@@ -19,7 +19,7 @@ import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-opera
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { SetupAssistant, type SetupAssistantStep } from "@/components/dashboard/setup-assistant";
 import { APPOINTMENTS_CHANGED_EVENT, openQuickAppointment } from "@/components/dashboard/dashboard-events";
-import { dashboardModuleSize, normalizeDashboardModules, type DashboardModuleId, type DashboardModulePreference } from "@/components/dashboard/appearance-studio";
+import { EFFECTIVE_MODULES_KEY, dashboardModuleSize, normalizeDashboardModules, type DashboardModuleId, type DashboardModulePreference } from "@/components/dashboard/appearance-studio";
 import { buildDashboardRows } from "@/features/dashboard-layout/layout-domain";
 import { captureRects, playFlip, type RectMap } from "@/features/dashboard-layout/flip";
 import {
@@ -62,7 +62,8 @@ function timeOf(value: string, locale: string) { return new Date(value).toLocale
 function revenueOf(item: Appointment) { return Number(item.paidAmount ?? item.servicePrice ?? 0) || 0; }
 
 function readModules(): DashboardModulePreference[] {
-  try { return normalizeDashboardModules(JSON.parse(window.localStorage.getItem("sr-dashboard-modules") ?? "[]")); }
+  // Tasarım uygulanmış düzen (Görünüm stüdyosu yazar); yoksa kullanıcının kendi düzeni.
+  try { return normalizeDashboardModules(JSON.parse(window.localStorage.getItem(EFFECTIVE_MODULES_KEY) ?? window.localStorage.getItem("sr-dashboard-modules") ?? "[]")); }
   catch { return normalizeDashboardModules(null); }
 }
 

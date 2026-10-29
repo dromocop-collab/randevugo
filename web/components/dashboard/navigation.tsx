@@ -11,23 +11,25 @@ import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-opera
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 import { DASHBOARD_ROUTE_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 import {
-  Activity, BellRing, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, GitBranch, Headphones,
-  House, LayoutGrid, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, Star,
-  UsersRound, WandSparkles, type LucideIcon,
+  Activity, BellRing, BookOpen, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, ExternalLink, Gift, GitBranch, GraduationCap, Headphones,
+  Heart, House, LayoutGrid, Link2, ListChecks, Megaphone, MessageCircle, PanelLeftClose, PanelLeftOpen, Phone, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, ShoppingBag, Sparkles, Star,
+  UsersRound, Video, WandSparkles, type LucideIcon,
 } from "lucide-react";
+import { useDashboardDesign } from "@/features/dashboard-design/dashboard-design-context";
+import { applyNavDesign, type CustomLinkIcon, type DesignedNavItem, type NavGroup } from "@/features/dashboard-design/design-domain";
 import { Sheet } from "@/components/dashboard/ui";
 import { openQuickAppointment } from "@/components/dashboard/dashboard-events";
-import { useT } from "@/i18n/client";
+import { useLocale, useT } from "@/i18n/client";
 import { tk } from "@/i18n/config";
 import styles from "./shell.module.css";
 
 const ADMIN_EMAIL = "cihatwin@gmail.com";
 
-type NavGroup = "merkez" | "operasyon" | "buyume" | "yonetim" | "sistem";
 export interface NavItem { href: string; label: string; short?: string; icon: LucideIcon; group: NavGroup; entitlement?: SubscriptionEntitlement }
-const GROUP_LABELS: Record<NavGroup, string> = { merkez: tk("Çalışma alanı"), operasyon: tk("Günlük operasyon"), buyume: tk("Analiz ve otomasyon"), yonetim: tk("İşletme yönetimi"), sistem: tk("Hesap ve sistem") };
+export const GROUP_LABELS: Record<NavGroup, string> = { merkez: tk("Çalışma alanı"), operasyon: tk("Günlük operasyon"), buyume: tk("Analiz ve otomasyon"), yonetim: tk("İşletme yönetimi"), sistem: tk("Hesap ve sistem") };
 
-const navItems: NavItem[] = ([
+/** Panel menüsünün kod tanımı (süper admin › Panel Tasarımı bunun üzerine ad/sıra/gizleme uygular). */
+export const DASHBOARD_NAV_ITEMS: NavItem[] = ([
   { href: "/dashboard", label: tk("Bugün"), short: tk("Bugün"), icon: House, group: "merkez" },
   { href: "/dashboard/takvim", label: tk("Takvim"), icon: CalendarDays, group: "merkez" },
   { href: "/dashboard/randevular", label: tk("Randevular"), icon: ListChecks, group: "merkez" },
@@ -48,6 +50,35 @@ const navItems: NavItem[] = ([
   { href: "/dashboard/ayarlar", label: tk("Ayarlar"), icon: Settings2, group: "sistem" },
   { href: "/hesabim", label: tk("Müşteri Modu"), icon: CircleUserRound, group: "sistem" },
 ] satisfies Omit<NavItem, "entitlement">[]).map((item) => ({ ...item, entitlement: DASHBOARD_ROUTE_ENTITLEMENTS[item.href] }));
+const navItems = DASHBOARD_NAV_ITEMS;
+
+/** Özel bağlantı simgeleri (design-domain CUSTOM_LINK_ICONS ile aynı anahtarlar). */
+export const CUSTOM_LINK_ICON_COMPONENTS: Record<CustomLinkIcon, LucideIcon> = {
+  link: Link2, book: BookOpen, video: Video, gift: Gift, megaphone: Megaphone, star: Star, heart: Heart, sparkles: Sparkles,
+  graduation: GraduationCap, message: MessageCircle, phone: Phone, shop: ShoppingBag,
+};
+
+type MenuItem = DesignedNavItem<NavItem>;
+
+/** Menü öğesinin görünen adı: süper adminin verdiği ad (dil başına), yoksa çevrilmiş varsayılan. */
+function useMenuLabels() {
+  const t = useT();
+  const locale = useLocale();
+  const { design } = useDashboardDesign();
+  const label = (item: MenuItem, short = false) => locale === "tr"
+    ? item.customLabel ?? t(short ? item.short ?? item.label : item.label)
+    : item.customLabelEn ?? (item.customId ? item.customLabel ?? item.label : t(short ? item.short ?? item.label : item.label));
+  const group = (key: NavGroup) => (locale === "tr" ? design.nav.groupLabels[key] : undefined) ?? t(GROUP_LABELS[key]);
+  return { label, group };
+}
+
+/** Panel içi ya da dış (yeni sekme) bağlantı. */
+function MenuLink({ item, className, children, onClick, ...rest }: { item: MenuItem; className?: string; children: React.ReactNode; onClick?: () => void; title?: string; "aria-current"?: "page" | undefined; "data-dashboard-tour"?: string }) {
+  if (item.external) {
+    return <a href={item.href} className={className} onClick={onClick} target={item.newTab ? "_blank" : undefined} rel="noopener noreferrer" title={rest.title}>{children}</a>;
+  }
+  return <Link href={item.href} className={className} onClick={onClick} {...rest}>{children}</Link>;
+}
 
 type Access = ReturnType<typeof useBusinessContext>["access"];
 
@@ -70,7 +101,11 @@ function useDashboardNav() {
   const showLiveOperations = useLiveOperationsAvailable();
   const { can } = useSubscriptionPlan();
   const canOpenOperations = canOpenOperationsFor(access);
-  const items = visibleItems(showLiveOperations, canOpenOperations, access, can);
+  const { design } = useDashboardDesign();
+  const items: MenuItem[] = useMemo(
+    () => applyNavDesign(visibleItems(showLiveOperations, canOpenOperations, access, can), design, (link) => ({ href: link.href, label: link.label, icon: CUSTOM_LINK_ICON_COMPONENTS[link.icon], group: link.group })),
+    [access, can, canOpenOperations, design, showLiveOperations]
+  );
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
   const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname === href || pathname.startsWith(`${href}/`);
   return { items, isAdmin, isActive, access, pathname };
@@ -82,6 +117,7 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
   const t = useT();
   const { businesses, businessId } = useBusinessContext();
   const { items, isAdmin, isActive } = useDashboardNav();
+  const menu = useMenuLabels();
   const activeBusiness = businesses.find((b) => b.id === businessId) ?? businesses[0];
   const groups = (Object.keys(GROUP_LABELS) as NavGroup[])
     .map((group) => ({ group, items: items.filter((item) => item.group === group) }))
@@ -99,22 +135,23 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
       <nav className={styles.sideNav}>
         {groups.map(({ group, items: groupItems }) => (
           <section key={group} className={styles.sideGroup}>
-            <p className={styles.sideGroupLabel}>{t(GROUP_LABELS[group])}</p>
+            <p className={styles.sideGroupLabel}>{menu.group(group)}</p>
             {groupItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(item.href);
+              const active = !item.external && isActive(item.href);
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  data-dashboard-tour={tourId(item.href)}
+                <MenuLink
+                  key={item.customId ?? item.href}
+                  item={item}
+                  data-dashboard-tour={item.customId ? undefined : tourId(item.href)}
                   aria-current={active ? "page" : undefined}
-                  title={collapsed ? t(item.label) : undefined}
+                  title={collapsed ? menu.label(item) : undefined}
                   className={cn(styles.sideLink, active && styles.sideLinkActive)}
                 >
                   <span className={styles.sideIcon}><Icon size={18} strokeWidth={active ? 2.2 : 1.9} aria-hidden /></span>
-                  <span className={styles.sideLabel}>{t(item.label)}</span>
-                </Link>
+                  <span className={styles.sideLabel}>{menu.label(item)}</span>
+                  {item.external && <ExternalLink size={12} className={styles.sideLabel} aria-hidden />}
+                </MenuLink>
               );
             })}
           </section>
@@ -140,17 +177,18 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
 export function DashboardBottomNav() {
   const t = useT();
   const { items, isAdmin, isActive, access } = useDashboardNav();
+  const menu = useMenuLabels();
   const [moreOpen, setMoreOpen] = useState(false);
   const isStaff = access?.role === "staff";
   const primaryHrefs = useMemo(() => isStaff
     ? ["/dashboard/takvim", "/dashboard/randevular"]
     : ["/dashboard", "/dashboard/takvim", "/dashboard/randevular"], [isStaff]);
-  const primaryItems = primaryHrefs.map((href) => items.find((item) => item.href === href)).filter(Boolean) as NavItem[];
+  const primaryItems = primaryHrefs.map((href) => items.find((item) => item.href === href && !item.customId)).filter(Boolean) as MenuItem[];
   // Staff: 2 sekme + Yeni + müşteriler/destek + Daha fazla
   const fourth = isStaff ? (items.find((item) => item.href === "/dashboard/musteriler") ?? items.find((item) => item.href === "/dashboard/destek")) : items.find((item) => item.href === "/dashboard/musteriler");
   const slots = [...primaryItems.slice(0, 2), "new" as const, ...(isStaff ? [] : primaryItems.slice(2)), ...(isStaff && fourth ? [fourth] : [])].slice(0, 4);
-  const inBar = new Set(slots.filter((slot): slot is NavItem => slot !== "new").map((item) => item.href));
-  const moreItems = items.filter((item) => !inBar.has(item.href));
+  const inBar = new Set(slots.filter((slot): slot is MenuItem => slot !== "new").map((item) => item.href));
+  const moreItems = items.filter((item) => item.customId || !inBar.has(item.href));
   const moreActive = moreItems.some((item) => isActive(item.href));
 
   useEffect(() => {
@@ -192,7 +230,7 @@ export function DashboardBottomNav() {
                   className={cn(styles.bottomLink, active && styles.bottomLinkActive)}
                 >
                   <span className={styles.bottomIcon}><Icon size={21} strokeWidth={active ? 2.3 : 1.9} aria-hidden /></span>
-                  <span className={styles.bottomLabel}>{t(slot.short ?? slot.label)}</span>
+                  <span className={styles.bottomLabel}>{menu.label(slot, true)}</span>
                 </Link>
               </li>
             );
@@ -215,23 +253,23 @@ export function DashboardBottomNav() {
         <div className={styles.moreGroups}>
           {groups.map(({ group, items: groupItems }) => (
             <section key={group}>
-              <p className={styles.moreLabel}>{t(GROUP_LABELS[group])}</p>
+              <p className={styles.moreLabel}>{menu.group(group)}</p>
               <div className={styles.moreGrid}>
                 {groupItems.map((item) => {
                   const Icon = item.icon;
-                  const active = isActive(item.href);
+                  const active = !item.external && isActive(item.href);
                   return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      data-dashboard-tour={tourId(item.href)}
+                    <MenuLink
+                      key={item.customId ?? item.href}
+                      item={item}
+                      data-dashboard-tour={item.customId ? undefined : tourId(item.href)}
                       onClick={() => setMoreOpen(false)}
                       aria-current={active ? "page" : undefined}
                       className={cn(styles.moreTile, active && styles.moreTileActive)}
                     >
                       <span className={styles.moreTileIcon}><Icon size={20} aria-hidden /></span>
-                      <span>{t(item.label)}</span>
-                    </Link>
+                      <span>{menu.label(item)}</span>
+                    </MenuLink>
                   );
                 })}
               </div>

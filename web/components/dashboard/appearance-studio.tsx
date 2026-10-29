@@ -9,6 +9,8 @@ import { ModuleOrderEditor } from "@/components/dashboard/module-order-editor";
 import { playNotificationChime, setSoundPreference, unlockNotificationAudio } from "@/features/push/notification-sound";
 import { NotificationSoundGrid, SoundVolumeSlider, useSoundPreference } from "@/features/push/notification-sound-picker";
 import { getSoundPreset } from "@/features/push/notification-sound-presets";
+import { useDashboardDesign } from "@/features/dashboard-design/dashboard-design-context";
+import { resolveHomeModules, resolveSkin } from "@/features/dashboard-design/design-domain";
 import { cn } from "@/lib/utils/cn";
 import type { ModuleSize } from "@/features/dashboard-layout/layout-domain";
 import { useT } from "@/i18n/client";
@@ -65,6 +67,14 @@ export function dashboardModuleSize(id: string): ModuleSize {
 export type DashboardModuleId = (typeof defaultDashboardModules)[number]["id"];
 export type DashboardModulePreference = { id: DashboardModuleId; enabled: boolean };
 
+/** Kullanıcı varsayılan düzeni değiştirdi mi? (eski kayıtlarda "seçti" işareti yok; varsayılandan farkına bakılır.) */
+export function modulesCustomized(value: DashboardModulePreference[]): boolean {
+  return value.length !== defaultDashboardModules.length || value.some((item, index) => item.id !== defaultDashboardModules[index]?.id || !item.enabled);
+}
+
+/** Etkin (tasarım uygulanmış) ana panel düzeni — app/dashboard/page.tsx ilk boyamada bunu okur. */
+export const EFFECTIVE_MODULES_KEY = "sr-dashboard-modules-effective";
+
 export function normalizeDashboardModules(value: unknown): DashboardModulePreference[] {
   const fallback = defaultDashboardModules.map((item) => ({ id: item.id, enabled: true }));
   if (!Array.isArray(value)) return fallback;
@@ -80,7 +90,13 @@ export function normalizeDashboardModules(value: unknown): DashboardModulePrefer
 export function AppearanceStudio({ triggerClassName, showLabel = false }: { triggerClassName?: string; showLabel?: boolean }) {
   const t = useT();
   const { user } = useAuth();
+  const { design } = useDashboardDesign();
   const [open, setOpen] = useState(false);
+  // Kullanıcı bilinçli seçim yaptı mı? Yapmadıysa süper adminin varsayılanı uygulanır (Panel Tasarımı › Görünüm).
+  const [skinPicked, setSkinPicked] = useState(false);
+  const [modulesPicked, setModulesPicked] = useState(false);
+  // Cihazdaki tercih okunmadan tasarım uygulanmasın (ilk karede yanlış tema yanıp sönmesin).
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [appearanceSection, setAppearanceSection] = useState<AppearanceSection | null>("colors");
   const [skin, setSkin] = useState<DashboardSkin>("emerald");
   const [density, setDensity] = useState<DashboardDensity>("comfortable");
@@ -95,7 +111,10 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
 
   useEffect(() => {
     let storedSkin: string | null = null, storedDensity: string | null = null, storedMotion: string | null = null, storedCursor: string | null = null, storedModules: string | null = null;
+    let storedSkinPicked: string | null = null, storedModulesPicked: string | null = null;
     try {
+      storedSkinPicked = window.localStorage.getItem("sr-dashboard-skin-picked");
+      storedModulesPicked = window.localStorage.getItem("sr-dashboard-modules-picked");
       storedSkin = window.localStorage.getItem("sr-dashboard-skin");
       storedDensity = window.localStorage.getItem("sr-dashboard-density");
       storedMotion = window.localStorage.getItem("sr-dashboard-motion");
@@ -110,7 +129,6 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
     try {
       savedModules = normalizeDashboardModules(JSON.parse(storedModules ?? "[]"));
     } catch { /* Geçersiz eski tercih güvenli varsayılana döner. */ }
-    document.documentElement.dataset.dashboardSkin = savedSkin;
     document.documentElement.dataset.dashboardDensity = savedDensity;
     document.documentElement.dataset.dashboardMotion = savedMotion;
     document.documentElement.dataset.dashboardCursor = savedCursor;
@@ -121,6 +139,10 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
       setMotion(savedMotion);
       setCursor(savedCursor);
       setModulePreferences(savedModules);
+      // Eski kayıt: varsayılan dışı tema/düzen bilinçli seçimdir.
+      setSkinPicked(storedSkinPicked ? storedSkinPicked === "1" : Boolean(storedSkin && storedSkin !== "emerald"));
+      setModulesPicked(storedModulesPicked ? storedModulesPicked === "1" : Boolean(storedModules && modulesCustomized(savedModules)));
+      setPrefsLoaded(true);
     });
   }, []);
 
@@ -140,7 +162,10 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
         setDensity(remoteDensity);
         setMotion(remoteMotion);
         setCursor(remoteCursor);
-        setModulePreferences(normalizeDashboardModules(remote.modules));
+        const remoteModules = normalizeDashboardModules(remote.modules);
+        setModulePreferences(remoteModules);
+        setSkinPicked(typeof remote.skinPicked === "boolean" ? remote.skinPicked : Boolean(remote.skin && remote.skin !== "emerald"));
+        setModulesPicked(typeof remote.modulesPicked === "boolean" ? remote.modulesPicked : Boolean(remote.modules && modulesCustomized(remoteModules)));
       }
       accountReadyRef.current = true;
       setSyncState("saved");
@@ -156,9 +181,23 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
+  const effectiveSkin = resolveSkin(skinPicked ? skin : null, design, skin) as DashboardSkin;
+  const effectiveModules = resolveHomeModules(modulesPicked ? modulePreferences : null, design, normalizeDashboardModules);
+  const effectiveModulesKey = JSON.stringify(effectiveModules);
+
+  // Tasarım (tema/düzen) her değiştiğinde uygula; kullanıcının kendi tercihi ayrı saklanır.
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    document.documentElement.dataset.dashboardSkin = effectiveSkin;
+    try {
+      window.localStorage.setItem("sr-dashboard-skin-effective", effectiveSkin);
+      window.localStorage.setItem(EFFECTIVE_MODULES_KEY, effectiveModulesKey);
+    } catch { /* depolama kapalı olabilir */ }
+    window.dispatchEvent(new CustomEvent("sr-dashboard-layout-change", { detail: JSON.parse(effectiveModulesKey) }));
+  }, [effectiveSkin, effectiveModulesKey, prefsLoaded]);
+
   useEffect(() => {
     if (!skinReadyRef.current) return;
-    document.documentElement.dataset.dashboardSkin = skin;
     document.documentElement.dataset.dashboardDensity = density;
     document.documentElement.dataset.dashboardMotion = motion;
     document.documentElement.dataset.dashboardCursor = cursor;
@@ -168,19 +207,20 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
       window.localStorage.setItem("sr-dashboard-motion", motion);
       window.localStorage.setItem("sr-dashboard-cursor", cursor);
       window.localStorage.setItem("sr-dashboard-modules", JSON.stringify(modulePreferences));
+      window.localStorage.setItem("sr-dashboard-skin-picked", skinPicked ? "1" : "0");
+      window.localStorage.setItem("sr-dashboard-modules-picked", modulesPicked ? "1" : "0");
     } catch { /* depolama kapalı olabilir */ }
     window.dispatchEvent(new Event("sr-dashboard-cursor-change"));
-    window.dispatchEvent(new CustomEvent("sr-dashboard-layout-change", { detail: modulePreferences }));
     if (!accountReadyRef.current || !user?.uid) return;
     queueMicrotask(() => setSyncState("loading"));
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      void saveDashboardAppearancePreferences(user.uid, { skin, density, motion, cursor, modules: modulePreferences })
+      void saveDashboardAppearancePreferences(user.uid, { skin, density, motion, cursor, modules: modulePreferences, skinPicked, modulesPicked })
         .then(() => setSyncState("saved"))
         .catch(() => setSyncState("offline"));
     }, 450);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [skin, density, motion, cursor, modulePreferences, user?.uid]);
+  }, [skin, density, motion, cursor, modulePreferences, skinPicked, modulesPicked, user?.uid]);
 
   useEffect(() => {
     const openStudio = () => { setAppearanceSection("colors"); setOpen(true); };
@@ -199,9 +239,12 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
     setMotion("alive");
     setCursor("orbit");
     setModulePreferences(defaultDashboardModules.map((item) => ({ id: item.id, enabled: true })));
+    setSkinPicked(false);
+    setModulesPicked(false);
   }
 
-  const activeSkin = dashboardSkins.find((item) => item.id === skin);
+  const activeSkin = dashboardSkins.find((item) => item.id === effectiveSkin);
+  const skinChoices = design.appearance.allowedSkins ? dashboardSkins.filter((item) => design.appearance.allowedSkins?.includes(item.id)) : dashboardSkins;
   // Oturum yoksa tercih yalnızca bu cihazda tutulur.
   const shownSync: AppearanceSyncState = user?.uid ? syncState : "offline";
   const section = (id: AppearanceSection, icon: typeof Palette, title: string, note: string, body: React.ReactNode) => {
@@ -244,13 +287,15 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
           <em><i /><i /><i /></em>
         </div>
         <div className={styles.accordions}>
-          {section("colors", Palette, t("Renk atmosferi"), t("{count} paletten görünümünü seç", { count: dashboardSkins.length }), (
+          {section("colors", Palette, t("Renk atmosferi"), design.appearance.forceSkin ? t("Platform tarafından belirlendi") : t("{count} paletten görünümünü seç", { count: skinChoices.length }), design.appearance.forceSkin ? (
+            <p className={styles.soundNote}>{t("Panel teması tüm işletmeler için platform tarafından belirlendi; şu an değiştirilemez.")}</p>
+          ) : (
             <div className={styles.skinGrid}>
-              {dashboardSkins.map((item) => (
-                <button type="button" key={item.id} onClick={() => setSkin(item.id)} className={cn(styles.skinOption, skin === item.id && styles.skinOptionActive)} aria-pressed={skin === item.id}>
+              {skinChoices.map((item) => (
+                <button type="button" key={item.id} onClick={() => { setSkin(item.id); setSkinPicked(true); }} className={cn(styles.skinOption, effectiveSkin === item.id && styles.skinOptionActive)} aria-pressed={effectiveSkin === item.id}>
                   <i>{item.colors.map((color) => <b key={color} style={{ background: color }} />)}</i>
                   <span>{t(item.name)}<small>{t(item.note)}</small></span>
-                  {skin === item.id && <Check size={15} aria-hidden />}
+                  {effectiveSkin === item.id && <Check size={15} aria-hidden />}
                 </button>
               ))}
             </div>
@@ -283,8 +328,10 @@ export function AppearanceStudio({ triggerClassName, showLabel = false }: { trig
               <p className={styles.soundNote}>{t("Yeni randevu geldiğinde panelde çalar; seçim hesabına kaydedilir. Telefon uygulaması bildirimleri telefonun kendi sesini kullanır.")}</p>
             </div>
           ))}
-          {section("layout", LayoutPanelTop, t("Ana panel düzeni"), t("Bugün ekranındaki modülleri sırala veya gizle"), (
-            <ModuleOrderEditor modules={modulePreferences} meta={defaultDashboardModules} onChange={(next) => setModulePreferences(normalizeDashboardModules(next))} />
+          {section("layout", LayoutPanelTop, t("Ana panel düzeni"), design.home.locked ? t("Platform tarafından belirlendi") : t("Bugün ekranındaki modülleri sırala veya gizle"), design.home.locked ? (
+            <p className={styles.soundNote}>{t("Ana panel düzeni tüm işletmeler için platform tarafından belirlendi; şu an değiştirilemez.")}</p>
+          ) : (
+            <ModuleOrderEditor modules={effectiveModules} meta={defaultDashboardModules} onChange={(next) => { setModulePreferences(normalizeDashboardModules(next)); setModulesPicked(true); }} />
           ))}
         </div>
       </Sheet>

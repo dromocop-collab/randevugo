@@ -767,5 +767,13 @@
   "Mağaza sahibi araçları": "Store owner tools",
   "Bu senin mağazan": "This is your store",
   "Müşterilerin sayfanı böyle görüyor.": "This is how customers see your page.",
-  "İstatistik": "Stats"
+  "İstatistik": "Stats",
+  "Platform tarafından belirlendi": "Set by the platform",
+  "Panel teması tüm işletmeler için platform tarafından belirlendi; şu an değiştirilemez.": "The panel theme is set by the platform for all businesses and can't be changed right now.",
+  "Ana panel düzeni tüm işletmeler için platform tarafından belirlendi; şu an değiştirilemez.": "The home layout is set by the platform for all businesses and can't be changed right now.",
+  "Duyuruyu kapat": "Dismiss announcement",
+  "Bu bölüm işletmelere kapalı": "This section is closed to businesses",
+  "Panel Tasarımı'nda kapattığın için işletmeler bu sayfayı göremez; sen süper admin olarak görüyorsun.": "Businesses can't see this page because you closed it in Panel Design; you see it as super admin.",
+  "Bu bölüm şu an kullanılamıyor": "This section is currently unavailable",
+  "Bu sayfa platform tarafından geçici olarak kapatıldı. Sorunuz varsa destek ekibimize yazabilirsiniz.": "This page has been temporarily closed by the platform. If you have questions, contact our support team."
 }

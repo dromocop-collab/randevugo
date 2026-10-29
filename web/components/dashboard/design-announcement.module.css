@@ -1,0 +1,30 @@
+.bar {
+  --tone: var(--dui-core);
+  display: flex; align-items: flex-start; gap: 12px;
+  margin: 0 0 14px; padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--tone) 32%, var(--dui-line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tone) 9%, var(--dui-card));
+  color: var(--dui-ink);
+}
+.info { --tone: var(--dui-core); }
+.success { --tone: #16a34a; }
+.warning { --tone: #d97706; }
+.danger { --tone: #e11d48; }
+.icon { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: color-mix(in srgb, var(--tone) 16%, transparent); color: var(--tone); }
+.text { display: grid; flex: 1; gap: 2px; min-width: 0; padding-top: 2px; }
+.text b { font-size: 14px; font-weight: 780; line-height: 1.3; }
+.text p { margin: 0; color: var(--dui-muted); font-size: 13px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.link {
+  display: inline-flex; flex: none; align-items: center; gap: 5px; align-self: center;
+  min-height: 34px; padding: 0 12px; border-radius: 10px;
+  background: var(--tone); color: #fff; font-size: 13px; font-weight: 750; text-decoration: none; white-space: nowrap;
+}
+.link:focus-visible, .close:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+.close { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 10px; background: transparent; color: var(--dui-muted); cursor: pointer; }
+.close:hover { background: var(--dui-hover); color: var(--dui-ink); }
+@media (max-width: 560px) {
+  .bar { flex-wrap: wrap; }
+  .text { flex-basis: calc(100% - 90px); }
+  .link { order: 3; margin-left: 44px; }
+}
