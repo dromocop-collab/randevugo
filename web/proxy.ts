@@ -14,6 +14,8 @@ const WWW_HOST = `www.${CANONICAL_HOST}`;
 export function proxy(request: NextRequest) {
   // 0) Veri çekme botları ve betik istemcileri (python-requests, curl, GPTBot…) 403 alır; robots.txt okunabilir kalır.
   //    Yanıt önbelleğe alınmaz ki CDN 403'ü gerçek ziyaretçilere sunmasın.
+  //    DİKKAT: Firebase App Hosting önündeki CDN user-agent'ı "Google" yapıyor (2026-10-29 ölçüldü), canlıda bu
+  //    kontrol işlemez; asıl engel CDN/WAF katmanında (ör. Cloudflare Bot Fight Mode) olmalı. Başka barındırmada çalışır.
   if (request.nextUrl.pathname !== "/robots.txt" && isBlockedUserAgent(request.headers.get("user-agent"))) {
     return new NextResponse("Erişim engellendi.", {
       status: 403,
