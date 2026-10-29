@@ -54,6 +54,8 @@ export function cleanOverrides(overrides: Staff["serviceOverrides"] = {}) {
     const entry: StaffOverride = {};
     if (typeof value.durationMinutes === "number" && Number.isFinite(value.durationMinutes) && value.durationMinutes > 0) entry.durationMinutes = value.durationMinutes;
     if (typeof value.price === "number" && Number.isFinite(value.price) && value.price >= 0) entry.price = value.price;
+    if (value.priceType && ["fixed", "from", "range", "quote"].includes(value.priceType)) entry.priceType = value.priceType;
+    if (entry.priceType === "range" && typeof value.priceMax === "number" && Number.isFinite(value.priceMax) && value.priceMax >= 0) entry.priceMax = value.priceMax;
     if (Object.keys(entry).length) result[serviceId] = entry;
   });
   return result;

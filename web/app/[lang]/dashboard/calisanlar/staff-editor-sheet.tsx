@@ -22,6 +22,9 @@ import type { Staff } from "@/types/staff";
 import { Avatar, cx, useConfirm, ws } from "../_workspace/kit";
 import { DAY_NAMES, DayCard, ORDERED_DAYS, cleanSchedule, copySchedule, dayError } from "../_workspace/week-editor";
 import { cleanOverrides } from "../hizmetler/service-shared";
+import { PRICE_TYPE_OPTIONS, priceTypeOf, servicePriceLabel } from "@/features/services/service-pricing";
+import type { ServicePriceType } from "@/types/service";
+import type { StaffServiceOverride } from "@/types/staff";
 import { SpecialtyPicker } from "./specialty-picker";
 import styles from "./staff.module.css";
 import { tk } from "@/i18n/config";
@@ -118,10 +121,20 @@ export function StaffEditorSheet({
   /* ── Doğrulama ── */
   const scheduleErrors = staffHours.filter((day) => dayError(day));
   const commissionError = !Number.isFinite(commissionNumber) || commissionNumber < 0 || commissionNumber > 100 ? t("Komisyon 0 ile 100 arasında olmalı.") : null;
+  /** Bu uzmanda geçerli fiyat tipi ve aralık sınırları (özel değer yoksa hizmetinki). */
+  const effectivePricing = (svc: Service, value: StaffServiceOverride | undefined) => {
+    const type: ServicePriceType = value?.priceType ?? priceTypeOf(svc);
+    const min = value?.price ?? svc.price;
+    const max = value?.priceMax ?? (value?.priceType === "range" ? undefined : svc.priceMax);
+    return { type, min, max };
+  };
   const overrideErrors = selectedServiceIds.filter((id) => {
     const value = serviceOverrides[id];
     if (!value) return false;
-    return (value.durationMinutes !== undefined && (value.durationMinutes < 5 || value.durationMinutes > 480)) || (value.price !== undefined && value.price < 0);
+    const svc = services.find((row) => row.id === id);
+    const pricing = svc ? effectivePricing(svc, value) : null;
+    return (value.durationMinutes !== undefined && (value.durationMinutes < 5 || value.durationMinutes > 480)) || (value.price !== undefined && value.price < 0)
+      || (pricing?.type === "range" && value.priceType === "range" && (pricing.max === undefined || pricing.max < pricing.min));
   });
   const tabErrors: Record<Tab, number> = {
     profile: (commissionError ? 1 : 0),
@@ -152,8 +165,16 @@ export function StaffEditorSheet({
     });
   }
 
-  function setOverride(serviceId: string, key: "durationMinutes" | "price", raw: string) {
+  function setOverride(serviceId: string, key: "durationMinutes" | "price" | "priceMax", raw: string) {
     setServiceOverrides((current) => ({ ...current, [serviceId]: { ...current[serviceId], [key]: raw ? Number(raw) : undefined } }));
+  }
+
+  function setOverridePriceType(serviceId: string, raw: string) {
+    const priceType = PRICE_TYPE_OPTIONS.some((option) => option.value === raw) ? raw as ServicePriceType : undefined;
+    setServiceOverrides((current) => ({
+      ...current,
+      [serviceId]: { ...current[serviceId], priceType, ...(priceType === "range" ? {} : { priceMax: undefined }), ...(priceType === "quote" ? { price: undefined } : {}) },
+    }));
   }
 
   function addLeave() {
@@ -398,14 +419,32 @@ export function StaffEditorSheet({
                         <label className={styles.serviceHead}>
                           <input type="checkbox" checked={checked} onChange={() => toggleService(svc.id)} />
                           {category ? <ServiceCategoryIcon icon={category.icon} name={category.name} size={17} /> : null}
-                          <span className={ws.checkText}><b>{svc.name}</b><small>{t("{minutes} dk", { minutes: svc.durationMinutes })} · {money(svc.price)}{!svc.isActive ? ` · ${t("pasif")}` : ""}</small></span>
+                          <span className={ws.checkText}><b>{svc.name}</b><small>{t("{minutes} dk", { minutes: svc.durationMinutes })} · {servicePriceLabel(svc, t, money)}{!svc.isActive ? ` · ${t("pasif")}` : ""}</small></span>
                         </label>
-                        {checked ? (
-                          <div className={ws.grid2}>
-                            <span className={ws.affix}><Input type="number" inputMode="numeric" min="5" max="480" aria-label={t("{name} özel süre", { name: svc.name })} placeholder={`${svc.durationMinutes}`} value={override?.durationMinutes ?? ""} onChange={(event) => setOverride(svc.id, "durationMinutes", event.target.value)} className={cx(invalid && styles.invalid)} /><span>{t("dk")}</span></span>
-                            <span className={ws.affix}><Input type="number" inputMode="decimal" min="0" aria-label={t("{name} özel fiyat", { name: svc.name })} placeholder={`${svc.price}`} value={override?.price ?? ""} onChange={(event) => setOverride(svc.id, "price", event.target.value)} className={cx(invalid && styles.invalid)} /><span>₺</span></span>
-                          </div>
-                        ) : null}
+                        {checked ? (() => {
+                          const pricing = effectivePricing(svc, override);
+                          const rangeInvalid = invalid && pricing.type === "range" && override?.priceType === "range" && (pricing.max === undefined || pricing.max < pricing.min);
+                          return <>
+                            <div className={ws.grid2}>
+                              <span className={ws.affix}><Input type="number" inputMode="numeric" min="5" max="480" aria-label={t("{name} özel süre", { name: svc.name })} placeholder={`${svc.durationMinutes}`} value={override?.durationMinutes ?? ""} onChange={(event) => setOverride(svc.id, "durationMinutes", event.target.value)} className={cx(invalid && styles.invalid)} /><span>{t("dk")}</span></span>
+                              <NativeSelect aria-label={t("{name} fiyat tipi", { name: svc.name })} value={override?.priceType ?? ""} onChange={(event) => setOverridePriceType(svc.id, event.target.value)}>
+                                <option value="">{t("Hizmetteki gibi ({type})", { type: t(PRICE_TYPE_OPTIONS.find((option) => option.value === priceTypeOf(svc))?.label ?? "Sabit fiyat") })}</option>
+                                {PRICE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
+                              </NativeSelect>
+                            </div>
+                            {pricing.type === "quote" ? (
+                              <p className={styles.hint}><Info size={14} /> {t("Bu uzmanda fiyat gösterilmez; kesin tutarı iş bitince girersiniz.")}</p>
+                            ) : (
+                              <div className={ws.grid2}>
+                                <span className={ws.affix}><Input type="number" inputMode="decimal" min="0" aria-label={pricing.type === "range" ? t("{name} en düşük fiyat", { name: svc.name }) : t("{name} özel fiyat", { name: svc.name })} placeholder={`${svc.price}`} value={override?.price ?? ""} onChange={(event) => setOverride(svc.id, "price", event.target.value)} className={cx(invalid && styles.invalid)} /><span>₺</span></span>
+                                {override?.priceType === "range" ? (
+                                  <span className={ws.affix}><Input type="number" inputMode="decimal" min="0" aria-label={t("{name} en yüksek fiyat", { name: svc.name })} placeholder={svc.priceMax !== undefined ? `${svc.priceMax}` : t("En yüksek")} value={override?.priceMax ?? ""} onChange={(event) => setOverride(svc.id, "priceMax", event.target.value)} className={cx(rangeInvalid && styles.invalid)} /><span>₺</span></span>
+                                ) : <span />}
+                              </div>
+                            )}
+                            {rangeInvalid && <p className={styles.hint} role="alert"><Info size={14} /> {t("En yüksek fiyat, en düşük fiyattan az olamaz.")}</p>}
+                          </>;
+                        })() : null}
                       </li>
                     );
                   })}

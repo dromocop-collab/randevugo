@@ -4,6 +4,7 @@ import { tk, type Locale, type TFunction } from "@/i18n/config";
 import type { Appointment } from "@/types/appointments";
 import type { Service, ServicePriceType, ServiceVariant } from "@/types/service";
 import type { ServiceCategory } from "@/types/service-category";
+import type { Staff } from "@/types/staff";
 
 export const MAX_SERVICE_VARIANTS = 8;
 
@@ -53,6 +54,24 @@ export function servicePriceLabel(service: Pick<Service, "price" | "priceType" |
     return same && type === "fixed" ? money(min) : t("{price}'den başlayan", { price: money(min) });
   }
   return type === "from" ? t("{price}'den başlayan", { price: money(service.price) }) : money(service.price);
+}
+
+/**
+ * Uzmana özel süre/fiyat/fiyat tipi uygulanmış hizmet (sunucudaki applyStaffServiceOverride ile aynı kural).
+ * Seçenek seçilirse seçeneğin fiyat/süresi bunun da üzerine yazılır.
+ */
+export function serviceForStaff<T extends Pick<Service, "id" | "price" | "durationMinutes" | "priceType" | "priceMax">>(service: T, staff?: Pick<Staff, "serviceOverrides"> | null): T {
+  const override = staff?.serviceOverrides?.[service.id];
+  if (!override) return service;
+  const price = typeof override.price === "number" && Number.isFinite(override.price) ? override.price : service.price;
+  const priceType = override.priceType && ["fixed", "from", "range", "quote"].includes(override.priceType) ? override.priceType : undefined;
+  return {
+    ...service,
+    durationMinutes: typeof override.durationMinutes === "number" && override.durationMinutes > 0 ? override.durationMinutes : service.durationMinutes,
+    price,
+    ...(priceType ? { priceType } : {}),
+    ...(priceType === "range" ? { priceMax: Math.max(price, override.priceMax ?? service.priceMax ?? price) } : {}),
+  };
 }
 
 /** Seçenek fiyat etiketi (başlangıç fiyatlı hizmette "…'den"). */

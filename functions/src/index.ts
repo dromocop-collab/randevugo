@@ -2991,11 +2991,17 @@ function applyStaffServiceOverride(
   const override = staff && typeof staff.serviceOverrides === "object" && staff.serviceOverrides
     ? staff.serviceOverrides[serviceId]
     : null;
-  return override && typeof override === "object" ? {
+  if (!override || typeof override !== "object") return service;
+  const price = numberOr(override.price, numberOr(service.price, 0));
+  // Çalışana özel fiyat tipi (ör. bu uzmanda "görüşmede"); yoksa hizmetin tipi geçerli.
+  const priceType = ["fixed", "from", "range", "quote"].includes(String(override.priceType)) ? String(override.priceType) : null;
+  return {
     ...service,
     durationMinutes: numberOr(override.durationMinutes, numberOr(service.durationMinutes, 30)),
-    price: numberOr(override.price, numberOr(service.price, 0)),
-  } : service;
+    price,
+    ...(priceType ? { priceType } : {}),
+    ...(priceType === "range" ? { priceMax: Math.max(price, numberOr(override.priceMax, numberOr(service.priceMax, price))) } : {}),
+  };
 }
 
 /** Randevuya hizmet adının dil karşılıkları kopyalanır (müşteri İngilizce sayfada görür); yoksa alan yazılmaz. */
@@ -4545,7 +4551,8 @@ export const createDashboardAppointment = onCall(
     const staff = staffSnap?.data() ?? null;
     const chosen = rawService ? resolveServiceVariant(rawService, data.variantId) : { variant: null, invalid: false };
     if (chosen.invalid) throw new HttpsError("failed-precondition", "Seçilen hizmet seçeneği artık mevcut değil.");
-    const service = rawService ? applyServiceVariant(rawService, chosen.variant) : null;
+    // Çalışana özel süre/fiyat/fiyat tipi panelden açılan randevuda da geçerli.
+    const service = rawService ? applyServiceVariant(applyStaffServiceOverride(rawService, staff, serviceId), chosen.variant) : null;
     const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
     const startAt = Timestamp.fromMillis(data.startAtMillis);
     const endAt = Timestamp.fromMillis(data.startAtMillis + durationMinutes * 60_000);
@@ -4763,7 +4770,7 @@ export const updateDashboardAppointment = onCall(
     const requestedVariant = data.variantId ?? (previous.serviceId === serviceId ? previous.serviceVariantId : undefined);
     const resolvedVariant = rawService ? resolveServiceVariant(rawService, requestedVariant) : { variant: null, invalid: false };
     const chosenVariant = resolvedVariant.invalid && rawService ? resolveServiceVariant(rawService, undefined).variant : resolvedVariant.variant;
-    const service = rawService ? applyServiceVariant(rawService, chosenVariant) : null;
+    const service = rawService ? applyServiceVariant(applyStaffServiceOverride(rawService, staff, serviceId), chosenVariant) : null;
     const priceSnapshot = service ? appointmentPriceSnapshot(service, chosenVariant) : { servicePrice: 0, servicePriceType: "fixed" as const };
     const durationMinutes = normalizedBookingDuration(service?.durationMinutes ?? 30);
     const startAt = Timestamp.fromMillis(data.startAtMillis);

@@ -6,7 +6,7 @@ import { CalendarDays, Clock3, Layers, Plus, Save, Scissors, UserRound, UsersRou
 import { toast } from "sonner";
 import { createDashboardAppointment, updateDashboardAppointment } from "@/features/appointments/appointment-repository";
 import { listServices } from "@/features/services/service-repository";
-import { localizedServiceName, localizedVariantName, moneyFormatter, servicePriceLabel, variantPriceLabel, variantsOf } from "@/features/services/service-pricing";
+import { localizedServiceName, localizedVariantName, moneyFormatter, serviceForStaff, servicePriceLabel, variantPriceLabel, variantsOf } from "@/features/services/service-pricing";
 import { listStaff } from "@/features/staff/staff-repository";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import type { Service } from "@/types/service";
@@ -81,14 +81,16 @@ export function QuickAppointmentModal({ businessId, open, initialStartAt, appoin
       return { value: millisToZonedDateTime(day.getTime()).date, label: offset === 0 ? t("Bugün") : offset === 1 ? t("Yarın") : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(day) };
     });
   }, [locale, t]);
-  const selectedService = services.find((service) => service.id === serviceId);
-  const variants = variantsOf(selectedService);
+  const rawService = services.find((service) => service.id === serviceId);
+  // Seçili çalışanın bu hizmete özel süre/fiyat/fiyat tipi (sunucu randevuyu bununla yazar).
+  const selectedService = rawService ? serviceForStaff(rawService, staff.find((member) => member.id === staffId)) : undefined;
+  const variants = variantsOf(rawService);
   const selectedVariant = variants.find((variant) => variant.id === variantId) ?? (appointment ? undefined : variants[0]);
   // Düzenlemede mevcut seçenek yalnız gösterilir.
   const keptVariantName = appointment && appointment.serviceId === serviceId ? appointment.serviceVariantName : undefined;
   const serviceHint = selectedService
     ? selectedVariant && !appointment
-      ? t("{minutes} dk · {price}", { minutes: selectedVariant.durationMinutes, price: variantPriceLabel(selectedService, selectedVariant, t, money) })
+      ? t("{minutes} dk · {price}", { minutes: selectedVariant.durationMinutes, price: selectedService.priceType === "quote" ? t("Fiyat görüşmede") : variantPriceLabel(selectedService, selectedVariant, t, money) })
       : t("{minutes} dk · {price}", { minutes: selectedService.durationMinutes, price: servicePriceLabel(selectedService, t, money) })
     : undefined;
 

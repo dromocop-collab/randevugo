@@ -683,5 +683,8 @@
   "Randevu taşınsın mı?": "Move this appointment?",
   "{customer}: {from} → {to}. Müşteriye bildirim gönderilir.": "{customer}: {from} → {to}. The customer will be notified.",
   "Birden fazla hizmet seçimi": "Multiple services per booking",
-  "Açıkken müşteri tek randevuda ana hizmetin yanına ek hizmet seçebilir (ör. saç kesimi + sakal). Süre ve fiyat toplanır, hepsini aynı uzman art arda yapar.": "When on, customers can add extra services to a single booking (e.g. haircut + beard). Durations and prices are added up, and the same specialist does them back to back."
+  "Açıkken müşteri tek randevuda ana hizmetin yanına ek hizmet seçebilir (ör. saç kesimi + sakal). Süre ve fiyat toplanır, hepsini aynı uzman art arda yapar.": "When on, customers can add extra services to a single booking (e.g. haircut + beard). Durations and prices are added up, and the same specialist does them back to back.",
+  "Hizmetteki gibi ({type})": "Same as service ({type})",
+  "Bu uzmanda fiyat gösterilmez; kesin tutarı iş bitince girersiniz.": "No price is shown for this specialist; you enter the final amount when the job is done.",
+  "En yüksek fiyat, en düşük fiyattan az olamaz.": "The highest price can't be lower than the lowest price."
 }

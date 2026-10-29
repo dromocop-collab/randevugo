@@ -45,6 +45,7 @@ async function seed(manager) {
   const services = {
     kesim: { name: "Saç Kesimi", durationMinutes: 30, price: 300, category: "hair" },
     sakal: { name: "Sakal", durationMinutes: 20, price: 150, category: "hair" },
+    fon: { name: "Fön", durationMinutes: 15, price: 100, category: "hair" },
     boya: { name: "Saç Boyama", durationMinutes: 60, price: 800, category: "hair", priceType: "from",
       variants: [{ id: "kisa", name: "Kısa", price: 800, durationMinutes: 60 }, { id: "uzun", name: "Uzun", price: 1200, durationMinutes: 90 }] },
     tirnak: { name: "Manikür", durationMinutes: 45, price: 400, category: "nail" },
@@ -155,6 +156,29 @@ test("çoklu hizmet: müsaitlik toplam süreye göre, randevu toplam fiyat/süre
   const reschedule = (await customer.call("getAvailableSlots", { businessId, serviceId: "kesim", staffId: "ayse", date: dateKey,
     appointmentDurationMinutes: 120 })).data.slots;
   assert.equal(reschedule.at(-1).startAtMillis, at(16));
+
+  // Çalışana özel fiyat tipi: Zeynep'te Fön "görüşmede", Ayşe'de Sakal aralık fiyatlı.
+  await db.doc(`businesses/${businessId}/staff/zeynep`).update({ "serviceOverrides.fon": { priceType: "quote" } });
+  await db.doc(`businesses/${businessId}/staff/ayse`).update({ "serviceOverrides.sakal": { priceType: "range", price: 150, priceMax: 250, durationMinutes: 25 } });
+  await verifyPhone();
+  const quoteOnly = (await customer.call("createAppointment", { businessId, serviceId: "fon", staffId: "zeynep", customerName: "Görüşme",
+    customerPhone: phone, startAtMillis: at(9) })).data;
+  const quoteDoc = (await db.doc(`businesses/${businessId}/appointments/${quoteOnly.appointmentId}`).get()).data();
+  assert.equal(quoteDoc.servicePriceType, "quote");
+  assert.equal(quoteDoc.servicePrice, 0);
+  await verifyPhone();
+  const mixed = (await customer.call("createAppointment", { businessId, serviceId: "kesim", staffId: "ayse", customerName: "Karışık",
+    customerPhone: phone, startAtMillis: at(13), additionalServices: ["sakal"] })).data;
+  const mixedDoc = (await db.doc(`businesses/${businessId}/appointments/${mixed.appointmentId}`).get()).data();
+  assert.deepEqual(mixedDoc.additionalServices, [{ serviceId: "sakal", name: "Sakal", price: 150, durationMinutes: 25, priceType: "range", priceMax: 250 }]);
+  assert.equal(mixedDoc.servicePriceType, "range");
+  assert.equal(mixedDoc.servicePrice, 450);
+  assert.equal(mixedDoc.servicePriceMax, 550);
+  assert.equal(mixedDoc.serviceDurationMinutes, 55);
+  // Panelden açılan randevu da çalışanın özel fiyat tipini kullanır.
+  const dashboard = (await manager.call("createDashboardAppointment", { businessId, serviceId: "fon", staffId: "zeynep", customerName: "Panel", startAtMillis: at(9, 30) })).data;
+  const dashboardDoc = (await db.doc(`businesses/${businessId}/appointments/${dashboard.appointmentId}`).get()).data();
+  assert.equal(dashboardDoc.servicePriceType, "quote");
 
   // İşletme ek hizmeti kapatırsa çoklu seçim reddedilir, tek hizmet çalışmaya devam eder.
   await db.doc(`businesses/${businessId}`).update({ allowMultiServiceBooking: false });

@@ -52,6 +52,7 @@ import {
   localizedServiceName,
   localizedVariantName,
   priceTypeOf,
+  serviceForStaff,
   servicePriceLabel,
   variantPriceLabel,
   variantsOf,
@@ -364,8 +365,9 @@ export function BookingWizard(props: Props) {
     [extraRows]
   );
   const bookedServiceIds = useMemo(() => [serviceId, ...extraRows.map((row) => row.service.id)].filter(Boolean), [extraRows, serviceId]);
-  const selectedDuration = (selectedVariant?.durationMinutes ?? selectedService?.durationMinutes ?? 0) + extraRows.reduce((sum, row) => sum + row.duration, 0);
-  const durationTooLong = selectedDuration > MAX_COMBINED_DURATION_MINUTES;
+  // Uzman seçilmeden önceki (hizmet varsayılanı) toplam süre; 8 saat sınırı bununla denetlenir, sunucu ayrıca doğrular.
+  const baseDuration = (selectedVariant?.durationMinutes ?? selectedService?.durationMinutes ?? 0) + extraRows.reduce((sum, row) => sum + row.duration, 0);
+  const durationTooLong = baseDuration > MAX_COMBINED_DURATION_MINUTES;
   const serviceReady = Boolean(selectedService) && !variantPending && !extrasPending && !durationTooLong;
   const bookedVariantId = selectedVariant?.id;
 
@@ -450,13 +452,6 @@ export function BookingWizard(props: Props) {
     : "";
   /** Ana hizmet + ek hizmetler: "Saç Kesimi + Sakal". */
   const servicesTitle = [selectedTitle, ...extraRows.map((row) => `${serviceTitle(row.service)}${row.variant ? ` · ${localizedVariantName(row.service, row.variant, locale)}` : ""}`)].filter(Boolean).join(" + ");
-  const combinedPrice = selectedService && extraRows.length
-    ? combinePriceParts([servicePricePart(selectedService, selectedVariant), ...extraRows.map((row) => servicePricePart(row.service, row.variant))])
-    : null;
-  const selectedPriceLabel = !selectedService ? ""
-    : combinedPrice ? combinedPriceLabel(combinedPrice, t, money)
-    : selectedVariant ? variantPriceLabel(selectedService, selectedVariant, t, money) : servicePriceLabel(selectedService, t, money);
-  const selectedPriceType = combinedPrice?.servicePriceType ?? priceTypeOf(selectedService);
   const selectedStaff = useMemo(
     () => staffList.find((item) => item.id === staffId),
     [staffList, staffId]
@@ -466,6 +461,29 @@ export function BookingWizard(props: Props) {
     () => selectedStaff ?? (selectedSlotRow?.staffId ? staffList.find((item) => item.id === selectedSlotRow.staffId) : undefined),
     [selectedSlotRow, selectedStaff, staffList]
   );
+  // Süre/fiyat uzmana özel ayarla (özel süre, fiyat, fiyat tipi) gösterilir; sunucu da aynısını uygular.
+  const pricedPrimary = selectedService ? serviceForStaff(selectedService, assignedStaff) : undefined;
+  const pricedExtras = extraRows.map((row) => ({ ...row, service: serviceForStaff(row.service, assignedStaff) }));
+  const selectedDuration = (selectedVariant?.durationMinutes ?? pricedPrimary?.durationMinutes ?? 0)
+    + pricedExtras.reduce((sum, row) => sum + (row.variant?.durationMinutes ?? row.service.durationMinutes), 0);
+  const combinedPrice = pricedPrimary && pricedExtras.length
+    ? combinePriceParts([servicePricePart(pricedPrimary, selectedVariant), ...pricedExtras.map((row) => servicePricePart(row.service, row.variant))])
+    : null;
+  const selectedPriceLabel = !pricedPrimary ? ""
+    : combinedPrice ? combinedPriceLabel(combinedPrice, t, money)
+    : selectedVariant ? combinedPriceLabel(combinePriceParts([servicePricePart(pricedPrimary, selectedVariant)]), t, money) : servicePriceLabel(pricedPrimary, t, money);
+  const selectedPriceType = combinedPrice?.servicePriceType ?? priceTypeOf(pricedPrimary);
+  /** Uzman kartındaki fiyat/süre: o uzmanda seçilen hizmetlerin toplamı. */
+  const staffQuote = (member: Staff) => {
+    if (!selectedService) return null;
+    const primary = serviceForStaff(selectedService, member);
+    const extras = extraRows.map((row) => ({ ...row, service: serviceForStaff(row.service, member) }));
+    const minutes = (selectedVariant?.durationMinutes ?? primary.durationMinutes) + extras.reduce((sum, row) => sum + (row.variant?.durationMinutes ?? row.service.durationMinutes), 0);
+    const label = extras.length
+      ? combinedPriceLabel(combinePriceParts([servicePricePart(primary, selectedVariant), ...extras.map((row) => servicePricePart(row.service, row.variant))]), t, money)
+      : selectedVariant ? combinedPriceLabel(combinePriceParts([servicePricePart(primary, selectedVariant)]), t, money) : servicePriceLabel(primary, t, money);
+    return { minutes, label };
+  };
   const normalizedCustomerPhone = normalizeTurkishPhone(customerPhone);
   const phoneValid = isValidTurkishPhone(customerPhone);
   const emailValid = isValidOptionalEmail(customerEmail);
@@ -1099,6 +1117,14 @@ export function BookingWizard(props: Props) {
                     {member.position && <span className={s.staffRole}>{member.position}</span>}
                     {(member.position ?? "").trim().toLocaleLowerCase("tr-TR") !== level.toLocaleLowerCase("tr-TR") && <span className={s.staffLevel}>{t(level)}</span>}
                     {bio && <span className={s.choiceDesc}>{bio}</span>}
+                    {(() => {
+                      const quote = staffQuote(member);
+                      const base = staffQuote({ ...member, serviceOverrides: {} });
+                      // Yalnız bu uzmanda süre/fiyat farklıysa göster (herkes aynıysa kart sade kalır).
+                      return quote && base && (quote.minutes !== base.minutes || quote.label !== base.label)
+                        ? <span className={s.choiceMeta}><span className={s.metaChip}><Clock3 size={12} /> {formatServiceDuration(quote.minutes, t)}</span><span className={`${s.metaChip} ${s.metaChipLime}`}>{quote.label}</span></span>
+                        : null;
+                    })()}
                   </span>
                   <span className={s.check} aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
                 </label>;

@@ -223,9 +223,12 @@ export function ServiceEditorSheet({
       if (!draft) return [];
       const hadService = member.serviceIds.includes(serviceId);
       const previous = member.serviceOverrides?.[serviceId];
+      // Çalışan ekranında girilen özel fiyat tipi (ör. görüşmede) burada düzenlenmez; korunur.
       const nextOverride = draft.assigned ? {
         ...(draft.duration ? { durationMinutes: Number(draft.duration) } : {}),
         ...(draft.price ? { price: Number(draft.price) } : {}),
+        ...(previous?.priceType ? { priceType: previous.priceType } : {}),
+        ...(previous?.priceType === "range" && previous.priceMax !== undefined ? { priceMax: previous.priceMax } : {}),
       } : {};
       const overrideChanged = JSON.stringify(previous ?? {}) !== JSON.stringify(nextOverride);
       if (hadService === draft.assigned && !overrideChanged) return [];
@@ -537,6 +540,7 @@ export function ServiceEditorSheet({
                           <b>{member.fullName}</b>
                           <small>{member.position}{!member.isActive ? ` · ${t("pasif")}` : ""}{outsideBranch ? ` · ${t("branşı farklı")}` : ""}</small>
                         </span>
+                        {draft.assigned && service && member.serviceOverrides?.[service.id]?.priceType ? <Badge size="sm" tone="amber">{t(PRICE_TYPE_OPTIONS.find((option) => option.value === member.serviceOverrides?.[service.id]?.priceType)?.label ?? "")}</Badge> : null}
                         {draft.assigned ? <Badge size="sm" tone="green">{t("Veriyor")}</Badge> : null}
                       </label>
                       {draft.assigned ? (

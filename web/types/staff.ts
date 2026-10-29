@@ -1,5 +1,16 @@
 import type { DaySchedule } from "@/types/business";
 import type { EntityBase } from "@/types/common";
+import type { ServicePriceType } from "@/types/service";
+
+/** Bu uzmana özel süre/fiyat; boş alan hizmetin varsayılanını kullanır. */
+export interface StaffServiceOverride {
+  durationMinutes?: number;
+  price?: number;
+  /** Bu uzmanda fiyat tipi (ör. "quote" = görüşmede). Yoksa hizmetin tipi. */
+  priceType?: ServicePriceType;
+  /** Yalnız aralık fiyatında üst sınır. */
+  priceMax?: number;
+}
 
 export interface StaffBreakSchedule {
   day: number;
@@ -17,7 +28,7 @@ export interface Staff extends EntityBase {
   specialtyCategoryIds?: string[];
   expertiseLevel?: "junior" | "specialist" | "senior" | "trainer";
   commissionRate?: number;
-  serviceOverrides?: Record<string, { durationMinutes?: number; price?: number }>;
+  serviceOverrides?: Record<string, StaffServiceOverride>;
   commissionPayouts?: Array<{
     id: string;
     periodLabel: string;
