@@ -53,3 +53,31 @@ export async function backfillServiceTranslations() {
   const result = await callable<Record<string, never>, { updated: number; failed: number; remaining: number }>("backfillServiceTranslations")({});
   return result.data;
 }
+
+/* ── Otomatik onay (küfür denetimi) — functions: content-moderation-domain.ts ── */
+export type ApprovalSettings = { autoApproveStores: boolean; autoApproveProfileText: boolean; extraWords: string[]; allowedWords: string[] };
+export type ModerationMatch = { field: string; word: string; term: string };
+export type ApprovalRecent = { businessId: string; businessName: string; status: string; reviewedBy: string; createdAt: number | null; clean: boolean | null; matches: ModerationMatch[] };
+
+export async function getBusinessApprovalSettings() {
+  const result = await callable<Record<string, never>, { settings: ApprovalSettings; recent: ApprovalRecent[] }>("getBusinessApprovalSettings")({});
+  return result.data;
+}
+
+export async function updateBusinessApprovalSettings(patch: Partial<ApprovalSettings>) {
+  const result = await callable<Partial<ApprovalSettings>, { settings: ApprovalSettings }>("updateBusinessApprovalSettings")(patch);
+  return result.data.settings;
+}
+
+export async function checkModerationText(text: string) {
+  const result = await callable<{ text: string }, { clean: boolean; matches: ModerationMatch[] }>("checkModerationText")({ text });
+  return result.data;
+}
+
+/** Bekleyen mağazanın neden otomatik onaylanmadığı (businessApprovalRequests.moderation). */
+export async function getBusinessModeration(businessId: string): Promise<{ clean: boolean; matches: ModerationMatch[] } | null> {
+  const { getDoc } = await import("firebase/firestore");
+  const snapshot = await getDoc(doc(getDb(), "businessApprovalRequests", businessId));
+  const moderation = snapshot.data()?.moderation;
+  return moderation && typeof moderation === "object" ? { clean: moderation.clean === true, matches: Array.isArray(moderation.matches) ? moderation.matches : [] } : null;
+}

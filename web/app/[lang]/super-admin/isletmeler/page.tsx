@@ -18,8 +18,10 @@ import {
   DEFAULT_PLATFORM_PLAN_ID, isLegacyPlanId, listPlatformPlansWithSource, planDisplayLabel, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import {
-  assignBusinessPlan, backfillBusinessGeo, backfillServiceTranslations, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
+  assignBusinessPlan, backfillBusinessGeo, backfillServiceTranslations, getBusinessModeration, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
+  type ModerationMatch,
 } from "@/features/platform/admin-business-actions";
+import { AutoApprovalPanel, MatchList } from "./auto-approval-panel";
 import {
   AdminButton, AdminPage, Badge, Callout, ConfirmSheet, DataTable, EmptyState, KeyValueList, PageHeader, Panel,
   SearchField, SegmentedControl, SelectField, Sheet, Skeleton, StatCard, StatGrid, Toolbar, type AdminTone, type DataColumn,
@@ -349,6 +351,8 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
         <StatCard label="Keşifte gizli" value={hiddenCount} icon={EyeOff} tone="violet" loading={loading} hint="Doğrudan linki açık" />
       </StatGrid>
 
+      <AutoApprovalPanel />
+
       {plansFromFallback && !loading && (
         <Callout tone="blue" icon={WalletCards} title="Paket koleksiyonu boş — yerleşik SeninRandevun paketi kullanılıyor"
           action={<AdminButton size="sm" variant="primary" href="/super-admin/abonelikler">Varsayılan paketi oluştur</AdminButton>}>
@@ -517,6 +521,15 @@ function BusinessDetailSheet({
   const [planChoice, setPlanChoice] = useState<{ id: string; plan: string } | null>(null);
   const [periodChoice, setPeriodChoice] = useState<{ id: string; period: "none" | "monthly" | "yearly" } | null>(null);
   const chosenPeriod = periodChoice?.id === biz.id ? periodChoice.period : "none";
+  // Bekleyen mağaza: otomatik denetim neden takıldı?
+  const [moderation, setModeration] = useState<{ id: string; matches: ModerationMatch[] } | null>(null);
+  useEffect(() => {
+    if (biz.status !== "pending_review") return;
+    let alive = true;
+    getBusinessModeration(biz.id).then((result) => { if (alive && result && !result.clean) setModeration({ id: biz.id, matches: result.matches }); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [biz.id, biz.status]);
+  const flagged = moderation?.id === biz.id ? moderation.matches : null;
   const chosenPlan = planChoice?.id === biz.id ? planChoice.plan : isLegacyPlanId(biz.plan) ? DEFAULT_PLATFORM_PLAN_ID : biz.plan;
 
   useEffect(() => {
@@ -583,7 +596,10 @@ function BusinessDetailSheet({
           <Callout tone="amber" icon={PackageCheck} title="Bu mağaza onay bekliyor" action={<span className="flex gap-2">
             <AdminButton size="sm" variant="danger" icon={X} loading={isBusy("review")} disabled={anyBusy} onClick={() => onDecide("rejected")}>Reddet</AdminButton>
             <AdminButton size="sm" variant="primary" icon={Check} loading={isBusy("review")} disabled={anyBusy} onClick={() => onDecide("approved")}>Onayla</AdminButton>
-          </span>}>Onaylanınca yayına açılır ve randevu almaya başlar.</Callout>
+          </span>}>
+            Onaylanınca yayına açılır ve randevu almaya başlar.
+            {flagged && flagged.length > 0 && <><br /><b>Otomatik denetime takıldı:</b><MatchList matches={flagged} /></>}
+          </Callout>
         )}
 
         <section className={styles.actions} aria-label="Hızlı işlemler">

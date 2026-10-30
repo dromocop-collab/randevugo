@@ -37,7 +37,7 @@ export const GROUPS = {
     "reviewBookingFieldRequest", "updateBookingFieldSettings",
   ],
   isletme: [
-    "createBusiness", "reviewBusiness", "setBusinessDiscoveryVisibility", "setBusinessSuspension", "submitBusinessProfileChange",
+    "createBusiness", "reviewBusiness", "getBusinessApprovalSettings", "updateBusinessApprovalSettings", "checkModerationText", "setBusinessDiscoveryVisibility", "setBusinessSuspension", "submitBusinessProfileChange",
     "reviewBusinessProfileChange", "deleteBusinessPermanently", "createStaffMember", "archiveStaff", "linkStaffAccount", "upsertCustomer",
     "renameCustomer", "getRewardProgramSettings", "updateRewardProgramSettings", "finalizeAppointmentCheckout", "sellServicePackage",
     "redeemServicePackage", "getMyCustomerBenefits", "updateLiveFeatureFlags", "submitReview", "moderateReview", "autoPublishPendingReviews",

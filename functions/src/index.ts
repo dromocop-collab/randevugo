@@ -39,6 +39,7 @@ import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAct
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
+import { MODERATED_TEXT_FIELDS, moderateFields, parseApprovalSettings, type ApprovalSettings, type ModerationResult } from "./content-moderation-domain.js";
 import { MAX_COMBINED_DURATION_MINUTES, appointmentServiceSummary, combinePriceParts, parseExtraServiceRequests, staffCanProvide } from "./multi-service-domain.js";
 import { type ServicePriceType, AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
 initializeApp();
@@ -61,6 +62,16 @@ const MUTLUCELL_REPORT_URL =
   "https://smsgw.mutlucell.com/smsgw-ws/gtblkrprtex";
 const MUTLUCELL_SETTINGS_PATH = "platformPrivateSettings/mutlucell";
 const BOOKING_FIELD_SETTINGS_PATH = "platformPrivateSettings/bookingFields";
+const APPROVAL_SETTINGS_PATH = "platformPrivateSettings/businessApproval";
+
+async function loadApprovalSettings(): Promise<ApprovalSettings> {
+  return parseApprovalSettings((await db.doc(APPROVAL_SETTINGS_PATH).get()).data());
+}
+
+/** Denetim sonucunun Firestore'a yazılan özeti (süper admin onay ekranında "neden beklemede" gösterilir). */
+function moderationRecord(result: ModerationResult, autoApproved: boolean) {
+  return { clean: result.clean, matches: result.matches, autoApproved, checkedAt: FieldValue.serverTimestamp() };
+}
 const LIVE_FEATURE_KEYS = [
   "liveFeaturesMaster", "liveAvailability", "liveQueue", "lastMinuteSlots",
   "availabilityAlerts", "liveOperations",
@@ -1211,6 +1222,13 @@ export const createBusiness = onCall(
     const accountRef = db.doc(`businessAccounts/${uid}`);
     const workingHours = Array.isArray(data.workingHours) ? data.workingHours.slice(0, 7) : [];
     const parentBusinessId = typeof data.parentBusinessId === "string" ? data.parentBusinessId.trim() : "";
+    // Otomatik onay (süper admin ayarı): metin alanlarında küfür/uygunsuz ifade yoksa mağaza hemen yayına girer.
+    const approvalSettings = await loadApprovalSettings();
+    const moderation = moderateFields(
+      Object.fromEntries(MODERATED_TEXT_FIELDS.map((field) => [field, field === "name" ? name : data[field]])),
+      { extraWords: approvalSettings.extraWords, allowedWords: approvalSettings.allowedWords }
+    );
+    const autoApprove = approvalSettings.autoApproveStores && moderation.clean;
     let position = 0;
     let organizationId = "";
     await db.runTransaction(async (transaction) => {
@@ -1266,9 +1284,8 @@ export const createBusiness = onCall(
       if (sourceBusiness && reservedCount >= planBranchLimit) {
         throw new HttpsError("resource-exhausted", `Paketiniz en fazla ${planBranchLimit} şubeye izin veriyor.`);
       }
-      // Every storefront must pass platform review before becoming public.
-      // This includes the account's first store.
-      const needsApproval = true;
+      // Her mağaza (ilki dahil) yayından önce incelenir; otomatik onay açık ve içerik temizse sistem onaylar.
+      const needsApproval = !autoApprove;
       transaction.set(accountRef, {
         ownerUid: uid, organizationId, storeCount: position, updatedAt: FieldValue.serverTimestamp(),
         createdAt: account.data()?.createdAt ?? FieldValue.serverTimestamp(),
@@ -1330,6 +1347,7 @@ export const createBusiness = onCall(
         isPublished: !needsApproval,
         status: needsApproval ? "pending_review" : "active",
         approvalStatus: needsApproval ? "pending" : "approved",
+        ...(needsApproval ? {} : { autoApproved: true, reviewedBy: "auto", reviewedAt: FieldValue.serverTimestamp() }),
         storePosition: position,
         slotIntervalMinutes: 15,
         rating: 0,
@@ -1365,12 +1383,14 @@ export const createBusiness = onCall(
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
-      if (needsApproval) {
-        transaction.set(db.collection("businessApprovalRequests").doc(businessRef.id), {
-          businessId: businessRef.id, organizationId, ownerUid: uid, businessName: name, storePosition: position,
-          status: "pending", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
+      // Otomatik onaylananın da kaydı tutulur (süper admin geçmişte görür); bildirim yalnız "pending" için gider.
+      transaction.set(db.collection("businessApprovalRequests").doc(businessRef.id), {
+        businessId: businessRef.id, organizationId, ownerUid: uid, businessName: name, storePosition: position,
+        status: needsApproval ? "pending" : "approved",
+        ...(needsApproval ? {} : { reviewedBy: "auto", reviewedAt: FieldValue.serverTimestamp() }),
+        moderation: moderationRecord(moderation, !needsApproval),
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
       transaction.set(db.doc(`subscriptions/${businessRef.id}`), {
         businessId: businessRef.id, organizationId, billingBusinessId: headquartersBusinessId,
         userId: uid, plan: inheritedPlan,
@@ -1427,7 +1447,20 @@ export const createBusiness = onCall(
         customData: { content_name: "business_signup", status: "trial" },
       });
     }
-    return { businessId: businessRef.id, organizationId, status: "pending_review", requiresApproval: true, storePosition: position };
+    if (autoApprove) {
+      await db.collection("platformAuditLogs").add({
+        action: "business.auto_approved", businessId: businessRef.id, actorUid: "system", createdAt: FieldValue.serverTimestamp(),
+      }).catch(() => undefined);
+      await notifyPlatformAdmins(
+        "✅ Yeni mağaza otomatik onaylandı",
+        `${name}${position > 1 ? ` · ${position}. mağaza` : ""}`,
+        { route: "admin_businesses", url: `/super-admin/isletmeler?q=${businessRef.id}`, kind: "store", businessId: businessRef.id },
+        `approval-auto-${businessRef.id}`
+      ).catch((error) => logger.warn("Otomatik onay bildirimi gönderilemedi", { error: String(error) }));
+    }
+    return autoApprove
+      ? { businessId: businessRef.id, organizationId, status: "active", requiresApproval: false, storePosition: position }
+      : { businessId: businessRef.id, organizationId, status: "pending_review", requiresApproval: true, storePosition: position };
   }
 );
 
@@ -1703,10 +1736,43 @@ export const submitBusinessProfileChange = onCall(protectedCallableOptions, asyn
     effective[key] = value;
   }
   if (!Object.keys(effective).length) throw new HttpsError("failed-precondition", "Bu bilgiler zaten yayında.");
+  // Otomatik onay: yalnız metin değişikliği, risk sinyali yok, küfür yok → bekletmeden uygula. Görseller hep elle onaylanır.
+  const approvalSettings = await loadApprovalSettings();
+  const textFields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(effective)) {
+    if (typeof value === "string") textFields[key] = value;
+    else if (key === "socialMedia" && value && typeof value === "object") {
+      for (const [network, handle] of Object.entries(value as Record<string, unknown>)) textFields[`socialMedia.${network}`] = handle;
+    }
+  }
+  const textModeration = moderateFields(textFields, { extraWords: approvalSettings.extraWords, allowedWords: approvalSettings.allowedWords });
+  const touchesImages = Object.keys(effective).some((key) => ["logoUrl", "coverUrl", "galleryUrls"].includes(key));
+  const canAutoApply = approvalSettings.autoApproveProfileText && riskFlags.length === 0 && textModeration.clean && !touchesImages;
   const requestRef = db.doc(`businessProfileChangeRequests/${businessId}`);
+  let applied = false;
   await db.runTransaction(async (transaction) => {
     const existingSnapshot = await transaction.get(requestRef);
     const existing = existingSnapshot.data() ?? {};
+    // Bekleyen başka bir talep varsa (ör. logo) onunla birleşip elle onaya gider.
+    if (canAutoApply && existing.status !== "pending") {
+      applied = true;
+      transaction.update(db.doc(`businesses/${businessId}`), {
+        ...effective,
+        profileReviewStatus: "approved", profileReviewedBy: "auto", profileReviewedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(requestRef, {
+        businessId, businessName: String(current.name ?? "İşletme"), ownerUid: String(current.ownerUid ?? ""), submittedBy: uid,
+        status: "approved", reviewedBy: "auto", reviewedAt: FieldValue.serverTimestamp(),
+        previous, changes: effective, changedFields: Object.keys(effective), riskFlags: [], riskLevel: "low",
+        moderation: moderationRecord(textModeration, true),
+        submittedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(db.collection("platformAuditLogs").doc(), {
+        action: "business.profile_change_auto_approved", businessId, actorUid: uid, changedFields: Object.keys(effective), createdAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
     const existingChanges = existing.status === "pending" && existing.changes && typeof existing.changes === "object" ? existing.changes : {};
     const existingPrevious = existing.status === "pending" && existing.previous && typeof existing.previous === "object" ? existing.previous : {};
     const mergedChanges = { ...existingChanges, ...effective };
@@ -1722,7 +1788,8 @@ export const submitBusinessProfileChange = onCall(protectedCallableOptions, asyn
       changes: mergedChanges,
       changedFields: Object.keys(mergedChanges),
       riskFlags: mergedRiskFlags,
-      riskLevel: mergedRiskFlags.length ? "review" : "low",
+      riskLevel: mergedRiskFlags.length || !textModeration.clean ? "review" : "low",
+      moderation: moderationRecord(textModeration, false),
       submittedAt: existing.status === "pending" && existing.submittedAt ? existing.submittedAt : FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -1737,7 +1804,60 @@ export const submitBusinessProfileChange = onCall(protectedCallableOptions, asyn
       changedFields: Object.keys(effective), riskFlags, createdAt: FieldValue.serverTimestamp(),
     });
   });
-  return { success: true, requestId: businessId, riskLevel: riskFlags.length ? "review" : "low" };
+  return { success: true, requestId: businessId, riskLevel: riskFlags.length || !textModeration.clean ? "review" : "low", applied };
+});
+
+/** Süper admin › İşletmeler › Otomatik onay: ayarları oku/yaz ve bir metni denetle (önizleme). */
+export const getBusinessApprovalSettings = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const [settings, recent] = await Promise.all([
+    loadApprovalSettings(),
+    db.collection("businessApprovalRequests").orderBy("createdAt", "desc").limit(30).get(),
+  ]);
+  return {
+    settings,
+    recent: recent.docs.map((item) => {
+      const row = item.data();
+      const moderation = row.moderation && typeof row.moderation === "object" ? row.moderation : null;
+      return {
+        businessId: item.id, businessName: String(row.businessName ?? ""), status: String(row.status ?? ""),
+        reviewedBy: String(row.reviewedBy ?? ""), createdAt: row.createdAt?.toMillis?.() ?? null,
+        clean: moderation ? moderation.clean === true : null,
+        matches: Array.isArray(moderation?.matches) ? moderation.matches.slice(0, 5) : [],
+      };
+    }),
+  };
+});
+
+export const updateBusinessApprovalSettings = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const current = await loadApprovalSettings();
+  const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const next = parseApprovalSettings({
+    autoApproveStores: typeof input.autoApproveStores === "boolean" ? input.autoApproveStores : current.autoApproveStores,
+    autoApproveProfileText: typeof input.autoApproveProfileText === "boolean" ? input.autoApproveProfileText : current.autoApproveProfileText,
+    extraWords: Array.isArray(input.extraWords) ? input.extraWords : current.extraWords,
+    allowedWords: Array.isArray(input.allowedWords) ? input.allowedWords : current.allowedWords,
+  });
+  await db.doc(APPROVAL_SETTINGS_PATH).set({ ...next, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
+  await db.collection("platformAuditLogs").add({
+    action: "platform.approval_settings_updated", actorUid: uid,
+    autoApproveStores: next.autoApproveStores, autoApproveProfileText: next.autoApproveProfileText, createdAt: FieldValue.serverTimestamp(),
+  });
+  return { settings: next };
+});
+
+export const checkModerationText = onCall(protectedCallableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+  await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+  const text = typeof request.data?.text === "string" ? request.data.text.slice(0, 2000) : "";
+  const settings = await loadApprovalSettings();
+  return moderateFields({ metin: text }, { extraWords: settings.extraWords, allowedWords: settings.allowedWords });
 });
 
 export const reviewBusinessProfileChange = onCall(protectedCallableOptions, async (request) => {

@@ -30,10 +30,12 @@ function timestampToIso(value: unknown): string | undefined {
 export async function submitBusinessProfileChange(
   businessId: string,
   changes: Record<string, unknown>,
-): Promise<{ requestId: string; riskLevel: "low" | "review" }> {
+): Promise<{ requestId: string; riskLevel: "low" | "review"; applied: boolean }> {
   const callable = httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "submitBusinessProfileChange");
   const result = await callable({ businessId, changes });
-  return result.data as { requestId: string; riskLevel: "low" | "review" };
+  const data = result.data as { requestId: string; riskLevel: "low" | "review"; applied?: boolean };
+  // applied: süper adminin otomatik onayı açık ve metin temizse değişiklik hemen yayına alınır.
+  return { ...data, applied: data.applied === true };
 }
 
 export async function listBusinessProfileChangeRequests(): Promise<BusinessProfileChangeRequest[]> {

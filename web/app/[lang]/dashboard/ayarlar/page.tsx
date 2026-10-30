@@ -236,10 +236,10 @@ export default function SettingsPage() {
         website: info.website.trim(),
       };
 
-      await submitBusinessProfileChange(businessId, updateData);
-      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      const result = await submitBusinessProfileChange(businessId, updateData);
+      setBusiness((prev) => prev ? { ...prev, ...(result.applied ? updateData : {}), profileReviewStatus: result.applied ? "approved" : "pending" } : prev);
       setInfoBase(info);
-      toast.success(t("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır."));
+      toast.success(result.applied ? t("Değişiklikler kaydedildi ve mağazanızda yayında.") : t("Değişiklikler süper admin onayına gönderildi. Mevcut profiliniz onaya kadar yayında kalır."));
     } catch (err) {
       console.error("updateBusiness error:", err);
       const msg = (err as Error)?.message ?? "";
@@ -258,10 +258,10 @@ export default function SettingsPage() {
     if (!businessId) return;
     setSaving(true);
     try {
-      await submitBusinessProfileChange(businessId, { socialMedia: social });
-      setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
+      const result = await submitBusinessProfileChange(businessId, { socialMedia: social });
+      setBusiness((prev) => prev ? { ...prev, ...(result.applied ? { socialMedia: social } : {}), profileReviewStatus: result.applied ? "approved" : "pending" } : prev);
       setSocialBase(social);
-      toast.success(t("Dijital kanallar süper admin onayına gönderildi."));
+      toast.success(result.applied ? t("Dijital kanallar kaydedildi ve mağazanızda yayında.") : t("Dijital kanallar süper admin onayına gönderildi."));
     } catch {
       toast.error(t("Güncelleme başarısız."));
     } finally {
