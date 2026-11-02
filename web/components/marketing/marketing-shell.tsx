@@ -475,9 +475,9 @@ export function MarketingFooter() {
         <div className={styles.footerBottom}>
           <span>{t("© {year} SeninRandevun · Tüm hakları saklıdır.", { year: new Date().getFullYear() })}</span>
           <button type="button" className={styles.footerCookie} onClick={() => window.dispatchEvent(new Event("seninrandevun:cookie-preferences"))}>{t("Çerez ayarları")}</button>
-          <a className={styles.footerDromocob} href="https://dromocob.tr" target="_blank" rel="noopener noreferrer" aria-label={t("DROMOCOB web sitesini ziyaret et")}>
-            <i aria-hidden="true">D</i>
-            <span><small>{t("TASARIM & TEKNOLOJİ")}</small><strong>DROMOCOB</strong></span>
+          <a className={styles.footerDromocob} href="https://yankaremedya.com.tr" target="_blank" rel="noopener noreferrer" aria-label={t("Yankare Medya web sitesini ziyaret et")}>
+            <svg viewBox="0 0 100 100" width="34" height="34" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#10110f"/><g transform="translate(18.50 21.31) scale(0.03188)"><path fill="#d9ff43" d="M47 33H337V163H177V323H47Z M1929 33V323H1799V163H1639V33Z M47 1767V1477H177V1637H337V1767Z M1799 1477H1929V1767H1799Z"/><path fill="#f7f8ef" d="M207 321H517L876 724L706 888Z M1420 321H1729L932 1090V1740H689V1025Z M1485 811H1783L1308 1254L1785 1740H1471L1004 1255Z"/></g></svg>
+            <span><small>{t("TASARIM & TEKNOLOJİ")}</small><strong>YANKARE MEDYA</strong></span>
             <ArrowUpRight size={15} aria-hidden="true" />
           </a>
         </div>
