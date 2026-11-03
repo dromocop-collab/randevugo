@@ -12,8 +12,9 @@ export function trackAction(action: string) {
   const key = `${window.location.pathname}|${action}`;
   if (key === lastSent) return;
   lastSent = key;
-  // İşletme kaydının 2. adımı = "kayda başladı": Meta'ya hem tarayıcıdan (onay varsa) hem sunucudan, aynı kimlikle.
-  const lead = action === "signup:1";
+  // Kayıt formunun son adımı (Hesap) = Lead: Meta'ya hem tarayıcıdan (onay varsa) hem sunucudan, aynı kimlikle.
+  // Sunucu: functions/src/analytics-domain.ts LEAD_SIGNUP_ACTION.
+  const lead = action === "signup:3";
   const eventId = lead ? `lead-${crypto.randomUUID()}` : undefined;
   if (lead && eventId) trackPixel("Lead", eventId);
   void httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "trackVisit")({

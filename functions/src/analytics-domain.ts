@@ -231,6 +231,9 @@ export const TRACKED_ACTIONS = [
 ] as const;
 export type TrackedAction = (typeof TRACKED_ACTIONS)[number];
 
+/** Meta "Lead" olayı: işletme kayıt formunun son adımına (Hesap) geçiş. web/features/analytics/track-action.ts ile aynı. */
+export const LEAD_SIGNUP_ACTION: TrackedAction = "signup:3";
+
 export function parseTrackedAction(value: unknown): TrackedAction | null {
   return TRACKED_ACTIONS.includes(value as TrackedAction) ? value as TrackedAction : null;
 }

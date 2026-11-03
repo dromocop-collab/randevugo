@@ -35,7 +35,7 @@ import { appointmentTransitionTriggers, automationRuleMatches, automationVariabl
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
-import { DAILY_SHARDS, EVENT_TTL_MS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
+import { DAILY_SHARDS, EVENT_TTL_MS, LEAD_SIGNUP_ACTION, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
@@ -10719,7 +10719,7 @@ export const trackVisit = onCall(
         }, { merge: true });
         // Adım hunisi: oturum başına her adım bir kez.
         if (!sessionActions.includes(action)) tx.set(shardRef, { day: parts.day, byAction: { [mapKey(action)]: FieldValue.increment(1) } }, { merge: true });
-        return { counted: false, lead: action === "signup:1" && !sessionActions.includes(action) };
+        return { counted: false, lead: action === LEAD_SIGNUP_ACTION && !sessionActions.includes(action) };
       }
       if (kind === "ping") {
         if (!visitorSnap.exists) return { counted: false };
@@ -10804,7 +10804,8 @@ export const trackVisit = onCall(
       });
       return { counted: true };
     });
-    // Reklam optimizasyonu: işletme kaydının 2. adımına geçen = "kayda başladı" (Lead).
+    // Reklam optimizasyonu: kayıt formunun son adımına (Hesap) gelen = Lead. Eskiden 2. adımdı; kategoriye dokunup
+    // çıkanlar da Lead sayılıyordu (134 Lead / 1 kayıt) ve Meta yanlış kitleyi öğreniyordu.
     if ((result as { lead?: boolean }).lead) {
       const eventId = typeof request.data?.eventId === "string" && /^[A-Za-z0-9_-]{6,80}$/.test(request.data.eventId) ? request.data.eventId : `lead-${visitorId.slice(0, 16)}-${parts.day}`;
       await sendMetaConversion({
