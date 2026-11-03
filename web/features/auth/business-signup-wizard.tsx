@@ -6,7 +6,7 @@ import Link from "@/i18n/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowLeft, ArrowRight, BadgeCheck, BarChart3, CalendarCheck2, Check, ChevronDown, Clock3,
-  Loader2, MapPin, Navigation, Search, Sparkles, Store, UserRound, UsersRound, X, Zap, type LucideIcon,
+  Loader2, MapPin, MessageCircle, Navigation, Search, Sparkles, Store, UserRound, UsersRound, X, Zap, type LucideIcon,
 } from "lucide-react";
 import { RegisterForm } from "@/features/auth/auth-forms";
 import { listDynamicCategories } from "@/features/categories/category-request-repository";
@@ -18,6 +18,7 @@ import {
 import { CATEGORY_CATALOG, FALLBACK_CATEGORY_IMAGE, categoryImageFor } from "@/components/marketing/category-catalog";
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { StorePreview } from "@/features/businesses/store-preview";
+import { WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
 import { previewServices } from "@/features/businesses/service-templates";
 import { isBusinessSlugAvailable } from "@/features/businesses/starter-setup";
 import {
@@ -541,6 +542,13 @@ export function BusinessSignupWizard() {
               <div className={`${w.register} signup-register-embed`}><RegisterForm accountType="business" embedded /></div>
             </>}
           </div>
+          {step < LAST_STEP ? (
+            <WhatsAppSignupLink className={w.waAlt}>
+              <MessageCircle size={18} aria-hidden="true" />
+              <span><b>{t("Form doldurmak istemiyor musun?")}</b><small>{t("WhatsApp'tan devam et: soruları cevapla, hesabın açılsın.")}</small></span>
+              <ArrowRight size={16} aria-hidden="true" />
+            </WhatsAppSignupLink>
+          ) : null}
         </div>
 
         <aside className={w.previewPanel} aria-label={t("Canlı mağaza önizlemesi")}>

@@ -389,6 +389,15 @@ details[open] > summary .chevron { transform: rotate(180deg); }
 .railNote b { font-size: 13px; }
 .railNote span { margin-top: 3px; color: rgb(255 255 255 / 0.65); font-size: 12px; line-height: 1.5; }
 
+/* Formsuz yol: WhatsApp kayıt botu */
+.waAlt { display: flex; align-items: center; gap: 12px; margin-top: 22px; padding: 13px 16px; border: 1px dashed var(--wz-line-strong); border-radius: 17px; color: var(--wz-ink); text-decoration: none; transition: border-color 0.2s, background 0.2s; }
+.waAlt:hover { border-style: solid; background: rgb(37 211 102 / 0.06); }
+.waAlt:focus-visible { outline: 3px solid var(--wz-lime); outline-offset: 3px; }
+.waAlt > svg:first-child { flex: 0 0 auto; color: #1fa855; }
+.waAlt span { display: flex; flex: 1; flex-direction: column; }
+.waAlt b { font-size: 14px; }
+.waAlt small { margin-top: 2px; color: var(--wz-muted); font-size: 12.5px; line-height: 1.45; }
+
 /* ── Geniş ekran: sağda canlı önizleme ── */
 @media (min-width: 1180px) {
   .shell { grid-template-columns: 260px minmax(0, 1fr) 330px; max-width: 1320px; }

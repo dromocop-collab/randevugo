@@ -1,10 +1,11 @@
 import Link from "@/i18n/link";
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import { ArrowUpRight, BellRing, CalendarCheck2, Check, Clock3, Gift, Globe2, Link2, MessageSquareText, Moon, Phone, Smartphone, UserPlus, UsersRound } from "lucide-react";
+import { ArrowUpRight, BellRing, CalendarCheck2, Check, Clock3, Gift, Globe2, Link2, MessageCircle, MessageSquareText, Moon, Phone, Smartphone, UserPlus, UsersRound } from "lucide-react";
 import { currencySymbol, formatPrice, loadPublicPlans } from "@/components/home/public-plans";
 import { createPublicMetadata } from "@/lib/seo/metadata";
 import { SELLER } from "@/lib/legal/seller";
+import { WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
 import base from "@/components/home/business.module.css";
 import s from "./basla.module.css";
 import { tk } from "@/i18n/config";
@@ -74,7 +75,10 @@ export default async function AdLandingPage() {
               <span className={base.eyebrow}><Gift size={13} aria-hidden="true" /> {t("KUAFÖR · BERBER · GÜZELLİK SALONU")}</span>
               <h1 id="ad-title" className={base.title}>{t("Sen uyurken bile")}<br /><em>{t("randevu gelsin.")}</em></h1>
               <p className={base.lead}>{t("Telefon başında beklemene gerek yok. Müşterin 7/24 kendi randevusunu alır, hatırlatma mesajı kendiliğinden gider.")}</p>
-              <Link href={SIGNUP} className={`${base.btnLime} ${s.cta}`}>{t("Ücretsiz başla")} <ArrowUpRight size={18} aria-hidden="true" /></Link>
+              <div className={s.ctaRow}>
+                <Link href={SIGNUP} className={`${base.btnLime} ${s.cta}`}>{t("Ücretsiz başla")} <ArrowUpRight size={18} aria-hidden="true" /></Link>
+                <WhatsAppSignupLink className={`${base.btnGhost} ${s.cta}`}><MessageCircle size={18} aria-hidden="true" /> {t("WhatsApp'tan kaydol")}</WhatsAppSignupLink>
+              </div>
               <ul className={s.proof}>
                 <li><Check size={14} aria-hidden="true" /> {t("İlk ay ücretsiz")}</li>
                 <li><Check size={14} aria-hidden="true" /> {t("Kredi kartı gerekmez")}</li>
@@ -124,6 +128,7 @@ export default async function AdLandingPage() {
             <h2 id="ad-offer">{t("İlk ay tamamen ücretsiz")}</h2>
             <p>{priceText}</p>
             <Link href={SIGNUP} className={`${base.btnLime} ${s.cta}`}>{t("Ücretsiz başla")} <ArrowUpRight size={18} aria-hidden="true" /></Link>
+            <p className={s.waAlt}>{t("Form doldurmak istemiyor musun?")} <WhatsAppSignupLink>{t("WhatsApp'tan yaz, soruları cevapla, hesabın açılsın")}</WhatsAppSignupLink></p>
             <small><Smartphone size={13} aria-hidden="true" /> {t("Web, iPhone ve Android'de çalışır")}</small>
           </div>
         </section>
