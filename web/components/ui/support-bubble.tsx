@@ -47,7 +47,8 @@ export function SupportBubble() {
   const hasEmbeddedSupport = pathname === "/hesabim";
   const isBusinessPanel = pathname.startsWith("/dashboard") || pathname.startsWith("/isletme/") || pathname.startsWith("/super-admin");
   // Giriş/kayıt ve işletme kurulum ekranlarında Rovi zaten karşılıyor; ikinci (yüzen) maskot gereksiz.
-  const isAuthScreen = ["/giris", "/kayit", "/musteri/", "/sifremi-unuttum", "/isletmeler/giris", "/isletmeler/kayit", "/onboarding"].some((route) => pathname.startsWith(route));
+  // Reklam tanıtım sayfasında (/isletmeler/basla) alttaki sabit 'Ücretsiz başla' düğmesini kapatmasın.
+  const isAuthScreen = ["/giris", "/kayit", "/musteri/", "/sifremi-unuttum", "/isletmeler/giris", "/isletmeler/kayit", "/isletmeler/basla", "/onboarding"].some((route) => pathname.startsWith(route));
 
   const handleClose = useCallback(() => {
     setIsClosing(true);

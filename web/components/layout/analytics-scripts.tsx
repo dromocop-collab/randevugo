@@ -37,9 +37,9 @@ function readPreferences(): CookiePreferences | null {
   return null;
 }
 
-// Odaklı akışlarda (işletme kaydı) çerez bandı kendiliğinden açılmaz; seçim yapılmadıkça zorunlu olmayan betikler
+// Odaklı akışlarda (işletme kaydı, reklam tanıtım sayfası) çerez bandı kendiliğinden açılmaz; seçim yapılmadıkça zorunlu olmayan betikler
 // zaten yüklenmez. Kişi başka sayfaya geçince band orada gösterilir. "Çerez tercihleri" bağlantısı her yerde açar.
-const QUIET_PATHS = ["/isletmeler/kayit"];
+const QUIET_PATHS = ["/isletmeler/kayit", "/isletmeler/basla"];
 
 export function AnalyticsScripts() {
   const pathname = usePathname() ?? "/";
