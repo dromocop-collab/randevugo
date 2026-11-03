@@ -109,6 +109,7 @@ export function decideStep(key: OnboardingStepKey, state: OnboardingState, nowMs
 
 export const SKIP_REASON_LABEL: Record<string, string> = {
   unknown_step: "Bilinmeyen adım",
+  whatsapp_signup: "WhatsApp'tan kayıtta karşılandı",
   business_deleted: "İşletme silinmiş",
   suspended: "İşletme askıda",
   expired: "Süresi geçti",

@@ -364,19 +364,20 @@ function Media({ media }: { media: NonNullable<InboxMessage["media"]> }) {
 
 function SettingsSheet({ open, onClose, settings, onSaved }: { open: boolean; onClose: () => void; settings: InboxSettings | null; onSaved: (value: InboxSettings) => void }) {
   const [enabled, setEnabled] = useState(true);
+  const [signupEnabled, setSignupEnabled] = useState(true);
   const [text, setText] = useState("");
   const [replies, setReplies] = useState<Array<{ title: string; text: string }>>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open || !settings) return;
-    queueMicrotask(() => { setEnabled(settings.autoReplyEnabled); setText(settings.autoReplyText); setReplies(settings.quickReplies.length ? settings.quickReplies : []); });
+    queueMicrotask(() => { setEnabled(settings.autoReplyEnabled); setSignupEnabled(settings.signupEnabled !== false); setText(settings.autoReplyText); setReplies(settings.quickReplies.length ? settings.quickReplies : []); });
   }, [open, settings]);
   const preview = (text.trim() || settings?.defaultAutoReply || "").replace(/\{\{\s*ad\s*\}\}/gi, ", Ayşe");
 
   async function save() {
     setBusy(true);
     try {
-      const result = await saveInboxSettings({ autoReplyEnabled: enabled, autoReplyText: text, quickReplies: replies.filter((row) => row.title.trim() && row.text.trim()) });
+      const result = await saveInboxSettings({ autoReplyEnabled: enabled, signupEnabled, autoReplyText: text, quickReplies: replies.filter((row) => row.title.trim() && row.text.trim()) });
       onSaved(result);
       toast.success("Gelen kutusu ayarları kaydedildi.");
       onClose();
@@ -393,6 +394,10 @@ function SettingsSheet({ open, onClose, settings, onSaved }: { open: boolean; on
           <label className={s.switchRow}>
             <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
             <span><b>Otomatik cevap açık</b><small>Kapalıysa yazan kişiye hiçbir şey gönderilmez.</small></span>
+          </label>
+          <label className={s.switchRow}>
+            <input type="checkbox" checked={signupEnabled} onChange={(event) => setSignupEnabled(event.target.checked)} />
+            <span><b>WhatsApp&apos;tan işletme kaydı</b><small>&quot;Kaydol&quot;, &quot;işletmemi kaydetmek istiyorum&quot; yazan ya da tıkla-WhatsApp reklamından gelen kişiyle kayıt sohbeti başlar; bilgileri alıp hesabı ve mağazayı otomatik açar.</small></span>
           </label>
           <label className={ui.field}><span className={ui.fieldLabel}>Otomatik cevap metni · {"{{ad}}"} yerine kişinin adı gelir</span>
             <textarea className={ui.input} rows={5} maxLength={1000} value={text} onChange={(event) => setText(event.target.value)} disabled={!enabled} />

@@ -53,6 +53,10 @@ test("otomatik onay: temiz kayıt yayında, küfürlü kayıt beklemede, ayar ka
   assert.equal(request.status, "approved");
   assert.equal(request.reviewedBy, "auto");
   assert.equal(request.moderation.clean, true);
+  // Web kaydında WhatsApp karşılama akışı hoş geldin mesajıyla başlar (WhatsApp kaydında atlanır).
+  const onboarding = (await db.doc(`whatsappOnboarding/${ok.businessId}`).get()).data();
+  assert.equal(onboarding?.steps?.welcome?.status, "pending");
+  assert.equal(onboarding?.source, "signup");
 
   const dirty = await client("owner-dirty");
   const flagged = (await dirty.call("createBusiness", form("S1kt1r Kuaför", "kotu-kuafor"))).data;

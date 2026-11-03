@@ -25,6 +25,10 @@ export type IncomingMessage = {
   text: string | null;
   media: InboxMedia | null;
   contextId: string | null;
+  /** Etkileşimli liste/düğme yanıtının kimliği (button_reply.id / list_reply.id). */
+  replyId: string | null;
+  /** Tıkla-WhatsApp reklamından gelen ilk mesaj (Meta "referral"). */
+  fromAd: boolean;
   location: { latitude: number; longitude: number; name: string | null; address: string | null } | null;
   reaction: { emoji: string; messageId: string } | null;
 };
@@ -62,6 +66,7 @@ export function extractIncomingMessages(body: unknown, now = Date.now()): Incomi
         let media: InboxMedia | null = null;
         let location: IncomingMessage["location"] = null;
         let reaction: IncomingMessage["reaction"] = null;
+        let replyId: string | null = null;
         if (type === "text") text = str((part as { body?: unknown }).body, 4096);
         else if (MEDIA_TYPES.has(type) && typeof part.id === "string") {
           media = {
@@ -76,8 +81,9 @@ export function extractIncomingMessages(body: unknown, now = Date.now()): Incomi
           if (typeof part.message_id === "string") reaction = { emoji: str(part.emoji, 16) ?? "", messageId: part.message_id };
         } else if (type === "button") text = str((part as { text?: unknown }).text ?? (part as { payload?: unknown }).payload, 256);
         else if (type === "interactive") {
-          const reply = (part.button_reply ?? part.list_reply) as { title?: unknown } | undefined;
+          const reply = (part.button_reply ?? part.list_reply) as { id?: unknown; title?: unknown } | undefined;
           text = str(reply?.title, 256);
+          replyId = str(reply?.id, 200);
         } else if (type === "contacts") {
           const first = Array.isArray(row.contacts) ? row.contacts[0] as { name?: { formatted_name?: unknown }; phones?: Array<{ phone?: unknown }> } : undefined;
           text = [str(first?.name?.formatted_name, 80), str(first?.phones?.[0]?.phone, 30)].filter(Boolean).join(" · ") || null;
@@ -86,6 +92,7 @@ export function extractIncomingMessages(body: unknown, now = Date.now()): Incomi
           messageId: row.id, from, profileName: names.get(row.from) ?? null,
           timestamp: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : now,
           type, text, media, contextId: typeof row.context?.id === "string" ? row.context.id : null, location, reaction,
+          replyId, fromAd: Boolean(row.referral && typeof row.referral === "object"),
         });
       }
     }

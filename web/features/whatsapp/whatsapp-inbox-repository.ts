@@ -26,7 +26,7 @@ export type InboxMessage = {
   reaction: { emoji: string; messageId: string } | null;
 };
 
-export type InboxSettings = { autoReplyEnabled: boolean; autoReplyText: string; quickReplies: Array<{ title: string; text: string }>; defaultAutoReply: string };
+export type InboxSettings = { autoReplyEnabled: boolean; autoReplyText: string; quickReplies: Array<{ title: string; text: string }>; signupEnabled: boolean; defaultAutoReply: string };
 
 const ms = (value: unknown) => value && typeof (value as Timestamp).toMillis === "function" ? (value as Timestamp).toMillis() : null;
 
