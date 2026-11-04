@@ -20,6 +20,7 @@ import {
   type User,
 } from "firebase/auth";
 import { getFirebaseApp } from "@/lib/firebase/client";
+import { CUSTOM_AUTH_DOMAIN_ENABLED } from "@/lib/firebase/config";
 import { LOCALE_LABELS, tk } from "@/i18n/config";
 import { browserLocale } from "@/i18n/browser";
 
@@ -116,7 +117,7 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ isNe
   const authProvider = socialAuthProvider(provider);
   // iPhone'da ana ekrana eklenmiş uygulamada (PWA) açılır pencere oturumu geri getiremeyebilir; yönlendirme kullanılır.
   // Yönlendirme yalnız auth alan adı sitenin kendisiyken güvenilir (Safari üçüncü taraf depolamayı engeller).
-  if (isIosStandalone() && process.env.NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN === "1") {
+  if (isIosStandalone() && CUSTOM_AUTH_DOMAIN_ENABLED && window.location.hostname.endsWith("seninrandevun.com")) {
     await signInWithRedirect(auth, authProvider);
     return { isNewUser: false, redirected: true, linked: null, email: null };
   }

@@ -49,13 +49,15 @@ function resolveConfigFromWindow(): FirebaseOptions | null {
 /**
  * Google/Apple giriş penceresinde "randevugo-d1d2e.firebaseapp.com" yerine "seninrandevun.com" görünsün diye
  * canlı sitede authDomain sitenin kendisi olur; /__/auth ve /__/firebase istekleri next.config rewrites ile
- * Firebase'e aktarılır. ÖNCE Google OAuth istemcisine ve Apple Services ID'ye
- * https://seninrandevun.com/__/auth/handler yönlendirme adresi eklenmeli, sonra NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN=1.
+ * Firebase'e aktarılır. Google OAuth istemcisine ve Apple Services ID'ye (com.cihat.seninrandevun.web)
+ * https://seninrandevun.com/__/auth/handler eklendi (2026-11-05); varsayılan açık, NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN=0 kapatır.
+ * Firebase alan adında Safari üçüncü taraf depolamayı engellediği için giriş dönüşü kayboluyordu.
  */
+export const CUSTOM_AUTH_DOMAIN_ENABLED = process.env.NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN !== "0";
 const CUSTOM_AUTH_HOSTS = ["seninrandevun.com", "www.seninrandevun.com"];
 
 function withCustomAuthDomain(config: FirebaseOptions): FirebaseOptions {
-  if (process.env.NEXT_PUBLIC_CUSTOM_AUTH_DOMAIN !== "1" || typeof window === "undefined") return config;
+  if (!CUSTOM_AUTH_DOMAIN_ENABLED || typeof window === "undefined") return config;
   const host = window.location.hostname;
   return CUSTOM_AUTH_HOSTS.includes(host) ? { ...config, authDomain: host } : config;
 }
