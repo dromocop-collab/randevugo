@@ -20,7 +20,7 @@ export type VisitorAnalytics = {
   live: { count: number; pages: Array<{ path: string; count: number }> };
   pages: Entry[]; entries: Entry[]; sources: Entry[]; sourceKinds: Record<string, number>;
   devices: Record<string, number>; browsers: Entry[]; os: Entry[]; langs: Record<string, number>; pageTypes: Record<string, number>;
-  funnels: { business: FunnelStep[]; booking: FunnelStep[]; ads: FunnelStep[] };
+  funnels: { business: FunnelStep[]; booking: FunnelStep[]; ads: FunnelStep[]; signupSteps?: FunnelStep[] };
   journeys: Journey[];
   recent: Array<{ id: string; at: string | null; path: string; lang: string; pageType: string; device: string; browser: string; sourceKind: string; sourceLabel: string; newVisitor: boolean; visitor: string }>;
 };

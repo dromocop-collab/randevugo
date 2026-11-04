@@ -533,7 +533,7 @@ export function BusinessSignupWizard() {
             </form>}
 
             {step === 3 && <>
-              <StepHeading refEl={headingRef} eyebrow={t("SON ADIM")} title={t("Çalışma alanını güvene al.")} text={t("Hesabını oluştur; e-postanı doğruladıktan sonra hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.")} />
+              <StepHeading refEl={headingRef} eyebrow={t("SON ADIM")} title={t("Çalışma alanını güvene al.")} text={t("Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.")} />
               <div className={`${w.summary} ${w.summaryReady}`}>
                 <span className={w.summaryIcon} aria-hidden="true">{selectedCategory?.emoji ?? "🏪"}</span>
                 <p><b>{draft.name}</b><small>{categoryLabel} · {[draft.district, draft.city].filter(Boolean).join(", ")}</small><small className={w.summaryUrl}>{storeDisplayUrl(finalSlug)}</small></p>

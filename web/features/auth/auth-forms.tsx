@@ -11,6 +11,7 @@ import {
   useId,
   useRef,
   useState,
+  useSyncExternalStore,
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
@@ -29,6 +30,7 @@ import {
   type SocialProvider,
 } from "@/features/auth/auth-service";
 import { getPlatformSettings } from "@/features/platform/platform-settings-repository";
+import { trackAction } from "@/features/analytics/track-action";
 import { useAuth } from "@/hooks/use-auth";
 import { RoviMascot, type RoviMood } from "@/components/brand/rovi-mascot";
 import {
@@ -585,6 +587,13 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
   const emailMsg = emailError(email, t);
   const passwordMsg = password ? undefined : t("Şifreni yaz.");
 
+  // Kayıt formunda "bu e-posta zaten kayıtlı" çıktıysa adres buraya taşınır (tek seferlik).
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(LOGIN_EMAIL_KEY); sessionStorage.removeItem(LOGIN_EMAIL_KEY); } catch { /* yok say */ }
+    if (saved) queueMicrotask(() => setEmail((current) => current || saved));
+  }, []);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTouched({ email: true, password: true });
@@ -691,6 +700,16 @@ function getSafeNextPath(fallback: string): string {
 }
 
 /* ─────────────────── REGISTER ─────────────────── */
+// Instagram/Facebook uygulama içi tarayıcısında Google girişi "disallowed_useragent" ile reddedilir; düğme orada gizlenir.
+const IN_APP_BROWSER = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Line\/|TikTok|musical_ly|Snapchat/i;
+const noSubscribe = () => () => undefined;
+function useInAppBrowser() {
+  return useSyncExternalStore(noSubscribe, () => IN_APP_BROWSER.test(navigator.userAgent), () => true);
+}
+
+// "Bu e-posta zaten kayıtlı" → giriş ekranı e-postayı dolu açar (adres URL'ye yazılmaz).
+const LOGIN_EMAIL_KEY = "sr-login-email";
+
 export function RegisterForm({ accountType = "business", embedded = false }: { accountType?: "business" | "customer"; embedded?: boolean }) {
   const t = useT();
   const [name, setName] = useState("");
@@ -704,8 +723,10 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [touched, setTouched] = useState({ name: false, email: false, password: false, agreed: false });
   const [formError, setFormError] = useState<string | null>(null);
+  const [existingEmail, setExistingEmail] = useState<string | null>(null);
   const router = useRouter();
   const countdown = useCountdown(60);
+  const inAppBrowser = useInAppBrowser();
   const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
@@ -741,23 +762,41 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
       return;
     }
     setFormError(null);
+    setExistingEmail(null);
     setLoading(true);
 
     try {
       await registerWithEmailPassword(name, email, password);
+    } catch (error) {
+      const message = mapAuthError(error, t);
+      if ((error as FirebaseError | undefined)?.code === "auth/email-already-in-use") setExistingEmail(email.trim());
+      trackAction("signup:error");
+      setFormError(message);
+      toast.error(message);
+      setLoading(false);
+      return;
+    }
 
-      // Send verification code via email
+    // Hesap açıldı: buradan sonra hiçbir hata kullanıcıyı formda bırakmamalı (tekrar denerse "e-posta kullanılıyor" alırdı).
+    if (!customer) {
+      // İşletme: kod arka planda gider, doğrulama panelde (EmailVerifyBanner). Kod ekranı ve e-posta kutusuna gidip
+      // gelmek (Instagram tarayıcısında sayfayı kaybettirebilir) kurulumdan önceki en büyük engeldi.
+      trackAction("signup:account");
+      void httpsCallable(getCloudFunctions(), "sendEmailVerificationCode")({ email }).catch(() => undefined);
+      toast.success(t("Hesabın açıldı! Şimdi işletmeni kuralım."));
+      router.push("/onboarding");
+      return;
+    }
+
+    try {
       const fn = httpsCallable(getCloudFunctions(), "sendEmailVerificationCode");
       await fn({ email });
       countdown.start();
-
       toast.success(t("Kayıt başarılı! Doğrulama kodu e-postanıza gönderildi."));
-      setStep("verify");
-    } catch (error) {
-      const message = mapAuthError(error, t);
-      setFormError(message);
-      toast.error(message);
+    } catch {
+      toast.info(t("Hesabın açıldı ama kod gönderilemedi. Aşağıdan yeniden isteyebilirsin."));
     } finally {
+      setStep("verify");
       setLoading(false);
     }
   }
@@ -847,10 +886,19 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
             subtitle={customer ? t("Bir dakikadan kısa sürer, üyelik tamamen ücretsiz.") : t("Lansmana özel: tüm özellikler ilk ay ücretsiz.")}
           />}
 
-      {!embedded && <SocialSignIn accountType={accountType} mode="register" />}
+      {!embedded || (!customer && !inAppBrowser) ? <SocialSignIn accountType={accountType} mode="register" /> : null}
 
       <form className={s.form} onSubmit={onSubmit} noValidate>
         <FormAlert message={formError} />
+        {existingEmail ? (
+          <p className={s.switchLine}>
+            {t("Daha önce bu e-postayla başladıysan kaldığın yerden devam et:")}{" "}
+            <Link
+              href={customer ? "/musteri/giris" : "/isletmeler/giris"}
+              onClick={() => { try { sessionStorage.setItem(LOGIN_EMAIL_KEY, existingEmail); } catch { /* yok say */ } }}
+            >{t("Giriş yap")}</Link>
+          </p>
+        ) : null}
         <TextField
           id={nameId}
           label={t("Ad Soyad")}
@@ -1205,6 +1253,7 @@ function SocialSignIn({ accountType, mode }: { accountType: AccountType; mode: "
     try {
       const result = await signInWithSocial(provider);
       if (result.redirected) return;
+      if (result.isNewUser && !customer) trackAction("signup:account");
       toast.success(result.linked ? t("Giriş başarılı! {provider} girişin de bu hesaba bağlandı.", { provider: PROVIDER_LABEL[result.linked] }) : t("Giriş başarılı! Yönlendiriliyorsunuz..."));
       // Yeni işletme hesabı kurulum sihirbazına, diğerleri panele / hesaba gider.
       const fallback = result.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL ? "/admin" : customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";

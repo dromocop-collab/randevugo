@@ -309,7 +309,6 @@
   "Hesabımı oluşturmaya geç": "Continue to create my account",
   "SON ADIM": "LAST STEP",
   "Çalışma alanını güvene al.": "Secure your workspace.",
-  "Hesabını oluştur; e-postanı doğruladıktan sonra hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account. Once you verify your email, you'll finish your services and hours on one screen with ready-made templates.",
   "Canlı mağaza önizlemesi": "Live store preview",
   "Örnek hizmetler kategorine göre öneridir; bir sonraki ekranda fiyatlarını düzenleyip seçeceksin.": "Sample services are suggestions based on your category; you'll choose them and edit prices on the next screen.",
   "30 gün tüm özellikler açık": "All features free for 30 days",
@@ -610,5 +609,9 @@
   "Bildirimler açık": "Notifications on",
   "Yeni bildirim": "New notification",
   "Görüntüle": "View",
-  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp. Reply STOP anytime to opt out."
+  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp. Reply STOP anytime to opt out.",
+  "Hesabın açıldı! Şimdi işletmeni kuralım.": "Your account is ready! Now let's set up your business.",
+  "Hesabın açıldı ama kod gönderilemedi. Aşağıdan yeniden isteyebilirsin.": "Your account is ready, but we couldn't send the code. You can request it again below.",
+  "Daha önce bu e-postayla başladıysan kaldığın yerden devam et:": "Already started with this email? Pick up where you left off:",
+  "Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account, then finish your services and hours on one screen with ready-made templates."
 }

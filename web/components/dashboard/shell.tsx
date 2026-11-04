@@ -8,6 +8,7 @@ import { SubscriptionFeatureGate } from "@/components/dashboard/subscription-fea
 import { QuickAppointmentModal } from "@/components/dashboard/quick-appointment-modal";
 import { SupportModeBanner } from "@/components/dashboard/support-mode-banner";
 import { DesignAnnouncement } from "@/components/dashboard/design-announcement";
+import { EmailVerifyBanner } from "@/components/dashboard/email-verify-banner";
 import { DesignSectionGate } from "@/components/dashboard/design-section-gate";
 import { DashboardDesignProvider } from "@/features/dashboard-design/dashboard-design-context";
 import { SubscriptionPlanProvider } from "@/features/subscriptions/subscription-plan-context";
@@ -57,6 +58,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <DashboardTopBar />
           <main id="dashboard-main" className={styles.content} tabIndex={-1}>
             <SubscriptionStatusBanner />
+            <EmailVerifyBanner />
             <DesignAnnouncement />
             <DesignSectionGate>
               <SubscriptionFeatureGate>{children}</SubscriptionFeatureGate>

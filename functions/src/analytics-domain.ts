@@ -228,6 +228,9 @@ export function buildJourneys(events: RawEvent[], limit: number): Journey[] {
 export const TRACKED_ACTIONS = [
   "booking:service", "booking:staff", "booking:datetime", "booking:info", "booking:verify", "booking:summary", "booking:success",
   "signup:0", "signup:1", "signup:2", "signup:3",
+  // Hesap formu sonrası: hesap açıldı / form hatası / e-posta panelde doğrulandı; kurulum (/onboarding) adımları.
+  "signup:account", "signup:error", "signup:verified",
+  "onboarding:0", "onboarding:1", "onboarding:2", "onboarding:3",
 ] as const;
 export type TrackedAction = (typeof TRACKED_ACTIONS)[number];
 

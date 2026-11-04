@@ -9,6 +9,7 @@ import { createBusinessFromOnboarding, updateBusiness } from "@/features/busines
 import { uploadBusinessImage } from "@/lib/firebase/upload";
 import { useAuth } from "@/hooks/use-auth";
 import { useBusiness } from "@/hooks/use-business";
+import { trackAction } from "@/features/analytics/track-action";
 import { firstErrorMessage, onboardingSchema } from "@/lib/validation/schemas";
 import { createCategoryRequest, listDynamicCategories } from "@/features/categories/category-request-repository";
 import { clearBusinessOnboardingDraft, readBusinessOnboardingDraft } from "@/features/businesses/onboarding-draft";
@@ -183,6 +184,9 @@ export function OnboardingWizard() {
       if (draft.name && draft.category && draft.phone && draft.city && draft.slug) setStep(1);
     });
   }, [user?.email]);
+
+  // Kayıt hunisi: hesap açıldıktan sonra kurulumun hangi adımında kalındığı (süper admin › Analitik / Canlı).
+  useEffect(() => { if (!ready) trackAction(`onboarding:${step}`); }, [ready, step]);
 
   const computedSlug = useMemo(() => finalizeSlug(slugifyBusinessName(name)), [name]);
   const finalSlug = finalizeSlug(slug) || computedSlug;

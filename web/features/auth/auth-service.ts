@@ -75,7 +75,8 @@ export async function registerWithEmailPassword(
   const auth = getAuthInstance();
   await setPersistence(auth, browserLocalPersistence);
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(cred.user, { displayName: fullName });
+  // Hesap açıldıktan sonraki hata kaydı geri almaz; ad sonradan da yazılabilir, kullanıcıyı formda bırakmasın.
+  await updateProfile(cred.user, { displayName: fullName }).catch(() => undefined);
 }
 
 export type SocialProvider = "google" | "apple";

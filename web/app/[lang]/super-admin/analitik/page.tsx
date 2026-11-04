@@ -145,6 +145,7 @@ export default function VisitorAnalyticsPage() {
             <Card title="Dönüşüm hunileri" icon={Filter} description="Adım adım kaç kişi ilerledi">
               <Funnel title="İşletme kazanımı" steps={data.funnels.business} />
               <Funnel title="Meta reklamından" steps={data.funnels.ads} icon={Megaphone} />
+              {data.funnels.signupSteps ? <Funnel title="Kayıt adımları (nerede bırakılıyor)" steps={data.funnels.signupSteps} icon={UserPlus} /> : null}
               <Funnel title="Müşteri randevusu" steps={data.funnels.booking} />
             </Card>
           </div>

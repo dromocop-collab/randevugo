@@ -1,5 +1,5 @@
 /* Giriş / kayıt / şifre ekranları — mobil öncelikli, Keşfet tasarım dili (derin yeşil + lime). */
-/* .embedTokens: işletme sihirbazına gömülü form (sihirbaz şimdilik yalnız açık tema). */
+/* .embedTokens: işletme sihirbazına gömülü form; koyu temada sihirbazın koyu renklerini alır (aşağıda). */
 .screen,
 .tokens,
 .embedTokens {
@@ -22,6 +22,21 @@
   --shadow: 0 1px 2px rgb(9 45 29 / 0.05), 0 10px 30px rgb(9 45 29 / 0.07);
   --shadow-lift: 0 2px 4px rgb(9 45 29 / 0.06), 0 22px 48px rgb(9 45 29 / 0.14);
   color: var(--ink);
+}
+:global(:root[data-theme="dark"]) .embedTokens {
+  /* Sihirbaz (business-signup.module.css .stage) koyu temada; açık token'larla başlıklar koyu zeminde kayboluyordu. */
+  --ink: #eef6f0;
+  --muted: #a3b6aa;
+  --faint: #7d9186;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --card: #142019;
+  --soft: #0f1813;
+  --field: #18261e;
+  --green-2: #9fe3b9;
+  --danger: #ff8a7a;
+  --danger-soft: rgb(255 138 122 / 0.12);
+  --focus: 0 0 0 4px rgb(159 227 185 / 0.18);
 }
 .screen {
   position: relative;

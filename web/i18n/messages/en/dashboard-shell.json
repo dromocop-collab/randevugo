@@ -775,5 +775,10 @@
   "Bu bölüm işletmelere kapalı": "This section is closed to businesses",
   "Panel Tasarımı'nda kapattığın için işletmeler bu sayfayı göremez; sen süper admin olarak görüyorsun.": "Businesses can't see this page because you closed it in Panel Design; you see it as super admin.",
   "Bu bölüm şu an kullanılamıyor": "This section is currently unavailable",
-  "Bu sayfa platform tarafından geçici olarak kapatıldı. Sorunuz varsa destek ekibimize yazabilirsiniz.": "This page has been temporarily closed by the platform. If you have questions, contact our support team."
+  "Bu sayfa platform tarafından geçici olarak kapatıldı. Sorunuz varsa destek ekibimize yazabilirsiniz.": "This page has been temporarily closed by the platform. If you have questions, contact our support team.",
+  "Kod {email} adresine gönderildi.": "Code sent to {email}.",
+  "E-posta doğrulandı! ✅": "Email verified! ✅",
+  "E-posta adresini doğrula": "Verify your email address",
+  "Sonra": "Later",
+  "{email} adresine 6 haneli bir kod gönderdik. Şifreni unutursan hesabını bu adresle kurtarırsın.": "We sent a 6-digit code to {email}. If you forget your password, this is how you recover your account."
 }

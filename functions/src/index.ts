@@ -10893,6 +10893,17 @@ export const getVisitorAnalytics = onCall(
           { key: "signup_page", label: "Kayıt sayfasını açtı", value: totals.typeVisitors.business_signup ?? 0 },
           { key: "signup", label: "İşletme oluşturdu", value: signups },
         ],
+        // Kayıt formu ve kurulum, adım adım (oturum başına bir kez sayılır). Nerede bırakıldığını gösterir.
+        signupSteps: [
+          { key: "signup:0", label: "Kategori adımı", value: totals.byAction["signup:0"] ?? 0 },
+          { key: "signup:1", label: "İşletme bilgisi", value: totals.byAction["signup:1"] ?? 0 },
+          { key: "signup:2", label: "Çalışma şekli", value: totals.byAction["signup:2"] ?? 0 },
+          { key: "signup:3", label: "Hesap formu", value: totals.byAction["signup:3"] ?? 0 },
+          { key: "signup:account", label: "Hesap açtı", value: totals.byAction["signup:account"] ?? 0 },
+          { key: "onboarding:2", label: "Hizmet ve saatler", value: totals.byAction["onboarding:2"] ?? 0 },
+          { key: "onboarding:3", label: "Kurulumun son adımı", value: totals.byAction["onboarding:3"] ?? 0 },
+          { key: "signup", label: "İşletme oluşturdu", value: signups },
+        ],
         booking: [
           { key: "storefront", label: "İşletme sayfası", value: totals.typeVisitors.storefront ?? 0 },
           { key: "booking", label: "Randevu ekranı", value: totals.typeVisitors.booking ?? 0 },
