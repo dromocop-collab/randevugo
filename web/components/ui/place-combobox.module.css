@@ -39,5 +39,31 @@
 :global(:root[data-theme="dark"]) .active { background: rgb(215 255 112 / 0.1); }
 :global(:root[data-theme="dark"]) .option[aria-selected="true"] { color: #d7ff70; }
 
+/* Telefon: tam ekran seçici */
+.sheetBackdrop { position: fixed; inset: 0; z-index: 10060; background: rgb(6 20 13 / 0.45); }
+.sheet {
+  position: fixed; inset: 0 0 auto; display: flex; flex-direction: column; height: 100dvh;
+  box-sizing: border-box; padding: max(12px, env(safe-area-inset-top)) 14px 0;
+  background: #fff; color: #10281d; font-family: var(--font-jakarta), system-ui, sans-serif;
+  animation: sheetIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sheetHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.sheetHead b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.sheetHead button { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -8px; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.sheetSearch { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; padding: 0 14px; min-height: 50px; border: 1px solid rgb(16 40 29 / 0.14); border-radius: 15px; background: #f5f8f3; color: #6b7b72; }
+.sheetSearch:focus-within { border-color: #1f7a4a; box-shadow: 0 0 0 4px rgb(31 122 74 / 0.14); }
+/* 16px: iOS odakta sayfayı yakınlaştırmasın */
+.sheetSearch input { flex: 1; min-width: 0; height: 48px; border: 0; outline: 0; background: transparent; color: #10281d; font-size: 16px; }
+.sheetList { flex: 1; min-height: 0; margin: 0 -6px; padding: 2px 6px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; list-style: none; }
+.sheetList .option { min-height: 52px; font-size: 16px; border-bottom: 1px solid rgb(16 40 29 / 0.06); border-radius: 0; -webkit-tap-highlight-color: transparent; }
+.sheetList .option:active { background: rgb(31 122 74 / 0.1); }
+.sheetList .option:focus-visible { outline: 2px solid #1f7a4a; outline-offset: -2px; }
+:global(:root[data-theme="dark"]) .sheet { background: #0f1813; color: #eef6f0; }
+:global(:root[data-theme="dark"]) .sheetSearch { background: #18261e; border-color: rgb(255 255 255 / 0.12); color: #a3b6aa; }
+:global(:root[data-theme="dark"]) .sheetSearch input { color: #eef6f0; }
+:global(:root[data-theme="dark"]) .sheetList .option { border-bottom-color: rgb(255 255 255 / 0.06); }
+:global(:root[data-theme="dark"]) .sheetList .option:active { background: rgb(215 255 112 / 0.1); }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(18px); } }
+
 @keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
-@media (prefers-reduced-motion: reduce) { .list { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .list, .sheet { animation: none; } }

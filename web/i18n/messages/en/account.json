@@ -613,5 +613,7 @@
   "Hesabın açıldı! Şimdi işletmeni kuralım.": "Your account is ready! Now let's set up your business.",
   "Hesabın açıldı ama kod gönderilemedi. Aşağıdan yeniden isteyebilirsin.": "Your account is ready, but we couldn't send the code. You can request it again below.",
   "Daha önce bu e-postayla başladıysan kaldığın yerden devam et:": "Already started with this email? Pick up where you left off:",
-  "Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account, then finish your services and hours on one screen with ready-made templates."
+  "Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account, then finish your services and hours on one screen with ready-made templates.",
+  "Tarayıcın bu giriş yöntemini engelledi. E-posta ile devam et ya da sayfayı Safari / Chrome'da aç.": "Your browser blocked this sign-in method. Continue with email or open the page in Safari / Chrome.",
+  "Giriş penceresi engellendi. Tekrar dene ya da e-posta ile devam et.": "The sign-in window was blocked. Try again or continue with email."
 }

@@ -5,6 +5,7 @@ import {
   getAdditionalUserInfo,
   signInWithPopup,
   signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   getAuth,
   sendPasswordResetEmail,
@@ -139,6 +140,16 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ isNe
     }
     throw error;
   }
+}
+
+/**
+ * Açılır pencere engellenip yönlendirmeye düşüldüyse, sayfaya geri dönüşte sonucu alır (yoksa null).
+ * Eskiden hiç okunmuyordu: kişi Google'dan dönünce aynı formda kalıyor, hata da görünmüyordu.
+ */
+export async function completeSocialRedirect(): Promise<{ isNewUser: boolean; email: string | null } | null> {
+  const result = await getRedirectResult(getAuthInstance());
+  if (!result) return null;
+  return { isNewUser: getAdditionalUserInfo(result)?.isNewUser === true, email: result.user.email };
 }
 
 /** Oturum açıkken hesaba Google / Apple girişini bağlar (Apple "E-postamı gizle" seçilse bile çalışır). */

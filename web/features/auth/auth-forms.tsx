@@ -25,6 +25,7 @@ import {
   loginWithEmailPassword,
   registerWithEmailPassword,
   signInWithSocial,
+  completeSocialRedirect,
   AccountExistsError,
   PROVIDER_LABEL,
   type SocialProvider,
@@ -100,6 +101,8 @@ function mapAuthError(error: unknown, t: TFunction): string {
     "auth/invalid-oauth-client-id": tk("Apple ile giriş web için henüz yapılandırılmamış."),
     "auth/invalid-credential-or-provider-id": tk("Giriş sağlayıcısı yapılandırması hatalı."),
     "auth/user-disabled": tk("Bu hesap devre dışı bırakılmış."),
+    "auth/web-storage-unsupported": tk("Tarayıcın bu giriş yöntemini engelledi. E-posta ile devam et ya da sayfayı Safari / Chrome'da aç."),
+    "auth/popup-blocked": tk("Giriş penceresi engellendi. Tekrar dene ya da e-posta ile devam et."),
   };
 
   if (code && mapper[code]) return t(mapper[code]);
@@ -583,6 +586,7 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
   const emailId = useId();
   const passwordId = useId();
   const customer = accountType === "customer";
+  const inAppBrowser = useInAppBrowser();
 
   const emailMsg = emailError(email, t);
   const passwordMsg = password ? undefined : t("Şifreni yaz.");
@@ -628,7 +632,7 @@ export function LoginForm({ accountType = "business" }: { accountType?: "busines
         subtitle={customer ? (APPLE_WEB_SIGNIN_ENABLED ? t("Google, Apple veya e-postanla devam et.") : t("Google hesabın veya e-postanla devam et.")) : t("Bugünün akışına kaldığın yerden devam et.")}
       />
 
-      <SocialSignIn accountType={accountType} mode="login" />
+      {inAppBrowser ? null : <SocialSignIn accountType={accountType} mode="login" />}
 
       <form className={s.form} onSubmit={onSubmit} noValidate>
         <FormAlert message={formError} />
@@ -886,7 +890,7 @@ export function RegisterForm({ accountType = "business", embedded = false }: { a
             subtitle={customer ? t("Bir dakikadan kısa sürer, üyelik tamamen ücretsiz.") : t("Lansmana özel: tüm özellikler ilk ay ücretsiz.")}
           />}
 
-      {!embedded || (!customer && !inAppBrowser) ? <SocialSignIn accountType={accountType} mode="register" /> : null}
+      {!inAppBrowser && (!embedded || !customer) ? <SocialSignIn accountType={accountType} mode="register" /> : null}
 
       <form className={s.form} onSubmit={onSubmit} noValidate>
         <FormAlert message={formError} />
@@ -1247,30 +1251,49 @@ function SocialSignIn({ accountType, mode }: { accountType: AccountType; mode: "
   const [error, setError] = useState<string | null>(null);
   const customer = accountType === "customer";
 
+  function finish(result: { isNewUser: boolean; email: string | null; linked?: SocialProvider | null }) {
+    if (result.isNewUser && !customer) trackAction("signup:account");
+    toast.success(result.linked ? t("Giriş başarılı! {provider} girişin de bu hesaba bağlandı.", { provider: PROVIDER_LABEL[result.linked] }) : t("Giriş başarılı! Yönlendiriliyorsunuz..."));
+    // Yeni işletme hesabı kurulum sihirbazına, diğerleri panele / hesaba gider.
+    const fallback = result.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL ? "/admin" : customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";
+    router.push(getSafeNextPath(fallback));
+  }
+
+  function fail(err: unknown) {
+    const code = (err as FirebaseError | undefined)?.code;
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || code === "auth/redirect-cancelled-by-user") return;
+    if (err instanceof AccountExistsError) {
+      const other = err.provider === "apple" ? t("Google veya e-posta/şifre") : t("e-posta/şifre veya Apple");
+      const message = t("{email} zaten kayıtlı. Bu hesaba daha önce girdiğin yöntemle ({other}) giriş yap; {provider} girişin otomatik olarak aynı hesaba bağlanacak.", { email: err.email, other, provider: PROVIDER_LABEL[err.provider] });
+      setError(message);
+      toast.info(message, { duration: 9000 });
+      return;
+    }
+    const message = mapAuthError(err, t);
+    setError(message);
+    toast.error(message);
+  }
+
+  // Açılır pencere engellenip yönlendirmeye düşüldüyse dönüşte sonucu işle (kurulum / panel), hatayı göster.
+  useEffect(() => {
+    let active = true;
+    completeSocialRedirect()
+      .then((result) => { if (active && result) finish(result); })
+      .catch((err) => { if (active) fail(err); });
+    return () => { active = false; };
+    // Yalnız ilk açılışta; finish/fail her çizimde yeniden oluşur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function start(provider: SocialProvider) {
     setError(null);
     setBusy(provider);
     try {
       const result = await signInWithSocial(provider);
       if (result.redirected) return;
-      if (result.isNewUser && !customer) trackAction("signup:account");
-      toast.success(result.linked ? t("Giriş başarılı! {provider} girişin de bu hesaba bağlandı.", { provider: PROVIDER_LABEL[result.linked] }) : t("Giriş başarılı! Yönlendiriliyorsunuz..."));
-      // Yeni işletme hesabı kurulum sihirbazına, diğerleri panele / hesaba gider.
-      const fallback = result.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL ? "/admin" : customer ? "/hesabim" : result.isNewUser || mode === "register" ? "/onboarding" : "/dashboard";
-      router.push(getSafeNextPath(fallback));
+      finish(result);
     } catch (err) {
-      const code = (err as FirebaseError | undefined)?.code;
-      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
-      if (err instanceof AccountExistsError) {
-        const other = err.provider === "apple" ? t("Google veya e-posta/şifre") : t("e-posta/şifre veya Apple");
-        const message = t("{email} zaten kayıtlı. Bu hesaba daha önce girdiğin yöntemle ({other}) giriş yap; {provider} girişin otomatik olarak aynı hesaba bağlanacak.", { email: err.email, other, provider: PROVIDER_LABEL[err.provider] });
-        setError(message);
-        toast.info(message, { duration: 9000 });
-        return;
-      }
-      const message = mapAuthError(err, t);
-      setError(message);
-      toast.error(message);
+      fail(err);
     } finally {
       setBusy(null);
     }
