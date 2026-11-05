@@ -17,7 +17,11 @@ export function trackAction(action: string) {
   const lead = action === "signup:3";
   const eventId = lead ? `lead-${crypto.randomUUID()}` : undefined;
   if (lead && eventId) trackPixel("Lead", eventId);
-  void httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "trackVisit")({
-    type: "action", action, path: window.location.pathname, ...(lead ? { eventId, ...readMetaCookies() } : {}),
-  }).catch(() => undefined);
+  // Sayfa görüntülemesi 700 ms gecikmeyle gider (page-view-tracker); adım ondan sonra kaydedilsin ki canlı panelde
+  // yol "İşletme kaydı → Kategori seçiyor" sırasıyla görünsün. Yol şimdi alınır (yönlendirme sonrası değişmesin).
+  const path = window.location.pathname;
+  const payload = { type: "action", action, path, ...(lead ? { eventId, ...readMetaCookies() } : {}) };
+  window.setTimeout(() => {
+    void httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "trackVisit")(payload).catch(() => undefined);
+  }, 900);
 }

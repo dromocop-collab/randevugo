@@ -37,6 +37,15 @@ test("paths are normalized, language split, private paths dropped", () => {
   }
 });
 
+test("signup funnel steps and pings are accepted from onboarding/panel as fixed paths only", () => {
+  assert.deepEqual(normalizeTrackedPath("/onboarding", { funnel: true }), { path: "/onboarding", lang: "tr" });
+  assert.deepEqual(normalizeTrackedPath("/en/dashboard/randevular/abc?x=1", { funnel: true }), { path: "/dashboard", lang: "en" });
+  assert.equal(normalizeTrackedPath("/onboarding"), null);
+  for (const bad of ["/super-admin", "/hesabim", "/randevu/abc", "/onboardingx"]) assert.equal(normalizeTrackedPath(bad, { funnel: true }), null, bad);
+  assert.equal(pageTypeOf("/onboarding"), "business_onboarding");
+  assert.equal(pageTypeOf("/dashboard"), "business_panel");
+});
+
 test("page types drive funnels", () => {
   assert.equal(pageTypeOf("/"), "home");
   assert.equal(pageTypeOf("/isletme/erdem-kuafor"), "storefront");

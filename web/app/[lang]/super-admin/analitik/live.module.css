@@ -15,6 +15,42 @@
 .note { margin: 0; color: var(--muted); font-size: 12.5px; }
 .empty { display: flex; align-items: center; gap: 8px; padding: 14px; border: 1px dashed var(--line); border-radius: 16px; color: var(--muted); font-size: 13px; }
 
+/* Özet şeridi ve süzgeç */
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 640px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .stats { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.stat { --tone: var(--green-2); display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--card); }
+.tone_amber { --tone: #d97706; }
+.tone_violet { --tone: #7c3aed; }
+.tone_blue { --tone: #2563eb; }
+.tone_green { --tone: var(--green-2); }
+:global(:root[data-theme="dark"]) .tone_amber { --tone: #f6c86b; }
+:global(:root[data-theme="dark"]) .tone_violet { --tone: #b79cff; }
+:global(:root[data-theme="dark"]) .tone_blue { --tone: #8fb3ff; }
+.statIcon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px; background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); }
+.statText { display: grid; min-width: 0; }
+.statText small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.statText b { color: var(--ink); font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.statText em { overflow: hidden; color: var(--faint); font-size: 10.5px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); font-size: 12.5px; font-weight: 700; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+.filter b { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--card-2); color: var(--ink); font-size: 11px; }
+.filter:hover { border-color: color-mix(in srgb, var(--green-2) 40%, var(--line)); color: var(--ink); }
+.filter:focus-visible { outline: 2px solid var(--green-2); outline-offset: 2px; }
+.filterOn { border-color: var(--green-2); background: var(--green-2); color: #fff; }
+.filterOn b { background: rgb(255 255 255 / 0.22); color: #fff; }
+.reset { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--green-2); font-weight: 750; text-decoration: underline; cursor: pointer; }
+
+/* Kayıt ilerlemesi (kart içi) */
+.progress { display: grid; gap: 6px; }
+.progressHead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.progressHead small { color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.progressHead b { overflow: hidden; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.progressBar { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.progressBar i { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 13%, transparent); transition: background 0.4s; }
+.progressBar i.progressOn { background: var(--green-2); }
+.progressBar i.progressMark { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--green-2) 60%, transparent); }
+
 .cards { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 @media (min-width: 900px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1500px) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -41,12 +77,15 @@
 :global(:root[data-theme="dark"]) .action { color: #f6c86b; }
 .action i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1s ease-in-out infinite; }
 .actionGoal { background: var(--green-soft); color: var(--green-2); }
+.actionWarn { background: color-mix(in srgb, #dc2626 14%, transparent); color: #b42318; }
+:global(:root[data-theme="dark"]) .actionWarn { color: #ff9a8a; }
 
 .trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .arrow { color: var(--faint); }
 .chip { display: inline-flex; align-items: center; gap: 4px; max-width: 180px; padding: 3px 8px; overflow: hidden; border-radius: 999px; background: var(--card-2); color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; animation: slide 0.4s ease-out both; }
 .chipAction { background: color-mix(in srgb, #f5a524 12%, transparent); color: #b7791f; }
 :global(:root[data-theme="dark"]) .chipAction { color: #f6c86b; }
+.chipGoal { background: var(--green-soft); color: var(--green-2); }
 .chipLast { outline: 1.5px solid color-mix(in srgb, var(--green-2) 50%, transparent); color: var(--ink); }
 
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
@@ -65,4 +104,5 @@
 @keyframes bump { from { transform: scale(1.5); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .wrap, .beacon::before, .beacon::after, .bump, .section, .card, .stateOn i, .swap, .action, .action i, .chip { animation: none; }
+  .filter, .progressBar i { transition: none; }
 }

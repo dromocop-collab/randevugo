@@ -3,7 +3,9 @@ import { getDb } from "@/lib/firebase/firestore";
 
 // Süper admin › canlı ziyaretçiler: analyticsVisitors (yalnız platform yöneticisi okur). Pencere her dakika kayar.
 
-export type LiveTrailItem = { t: "page"; p: string; pt: string; at: number } | { t: "action"; a: string; at: number };
+import type { LiveTrailItem } from "@/features/analytics/live-visitors-logic";
+
+export type { LiveTrailItem };
 export type LiveVisitor = {
   id: string; lastSeenAt: number; sessionStartAt: number | null; lastPath: string; lastPageType: string; lastAction: string | null; lastActionAt: number | null;
   sourceKind: string; sourceLabel: string; device: string; browser: string; os: string; lang: string; newVisitor: boolean; views: number; trail: LiveTrailItem[];

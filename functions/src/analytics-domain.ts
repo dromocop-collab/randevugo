@@ -27,20 +27,30 @@ export function visitorIdFor(secret: string, ip: string, userAgent: string, acce
   return createHmac("sha256", secret).update(`${ip}\n${userAgent}\n${acceptLanguage.split(",")[0] ?? ""}`).digest("hex").slice(0, 32);
 }
 
-/** Yol: dil öneki ayrılır, sorgu/parça atılır, uzunluk sınırlanır. Özel yollar null. */
-export function normalizeTrackedPath(raw: unknown): { path: string; lang: "tr" | "en" } | null {
+/**
+ * Kayıt hunisi adımları (action) ve canlılık sinyali (ping) özel sayfalardan da gelir: kurulum (/onboarding) ve
+ * kurulum sonrası panel. Sayfa görüntülemesi sayılmaz; yol kimliksiz sabit değere indirgenir.
+ */
+const FUNNEL_PATHS: Array<[RegExp, string]> = [[/^\/onboarding(\/|$)/, "/onboarding"], [/^\/dashboard(\/|$)/, "/dashboard"]];
+
+/** Yol: dil öneki ayrılır, sorgu/parça atılır, uzunluk sınırlanır. Özel yollar null (funnel: kurulum/panel sabit yola iner). */
+export function normalizeTrackedPath(raw: unknown, options: { funnel?: boolean } = {}): { path: string; lang: "tr" | "en" } | null {
   let path = String(raw ?? "").trim();
   if (!path.startsWith("/") || path.startsWith("//")) return null;
   path = path.split(/[?#]/)[0]!.replace(/\/{2,}/g, "/");
   let lang: "tr" | "en" = "tr";
   if (path === "/en" || path.startsWith("/en/")) { lang = "en"; path = path.slice(3) || "/"; }
   if (path.length > 1) path = path.replace(/\/+$/, "");
+  if (options.funnel) {
+    const funnel = FUNNEL_PATHS.find(([pattern]) => pattern.test(path));
+    if (funnel) return { path: funnel[1], lang };
+  }
   if (PRIVATE_PREFIXES.some((prefix) => path === prefix.replace(/\/$/, "") || path.startsWith(prefix))) return null;
   if (!/^[\p{L}\p{N}/_.~%-]*$/u.test(path)) return null;
   return { path: path.slice(0, 120), lang };
 }
 
-export type PageType = "home" | "storefront" | "booking" | "business_signup" | "business_landing" | "pricing" | "explore" | "seo" | "legal" | "auth" | "app" | "help" | "other";
+export type PageType = "home" | "storefront" | "booking" | "business_signup" | "business_onboarding" | "business_panel" | "business_landing" | "pricing" | "explore" | "seo" | "legal" | "auth" | "app" | "help" | "other";
 
 /** Sayfa türü (huniler ve "en çok ilgi gören bölümler" için). */
 export function pageTypeOf(path: string): PageType {
@@ -48,6 +58,8 @@ export function pageTypeOf(path: string): PageType {
   if (/^\/isletme\/[^/]+\/randevu/.test(path)) return "booking";
   if (/^\/isletme\/[^/]+/.test(path)) return "storefront";
   if (path.startsWith("/isletmeler/kayit")) return "business_signup";
+  if (path === "/onboarding") return "business_onboarding";
+  if (path === "/dashboard") return "business_panel";
   if (path.startsWith("/isletmeler")) return "business_landing";
   if (path.startsWith("/fiyatlar")) return "pricing";
   if (path.startsWith("/kesfet") || path.startsWith("/simdi-musait") || path.startsWith("/kategoriler")) return "explore";

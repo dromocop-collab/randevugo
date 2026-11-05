@@ -15,7 +15,7 @@ import {
 } from "../_pages-ui";
 import { CountUp } from "../overview-widgets";
 import c from "./analytics.module.css";
-import { LiveVisitors } from "./live-visitors";
+import { LiveCount, LiveVisitors } from "./live-visitors";
 
 type Range = "1" | "7" | "30" | "90";
 type JourneyFilter = "all" | "ads" | "social" | "search" | "direct" | "converted";
@@ -100,7 +100,7 @@ export default function VisitorAnalyticsPage() {
       <PageHeader eyebrow="Sunucuda sayılır · çerezsiz" icon={BarChart3} title="Ziyaretçi analitiği"
         description="Kim nereden geldi, sitede ne yaptı, nerede bıraktı. Aynı cihaz ve IP tek ziyaretçi sayılır; botlar, otomatik testler ve yöneticiler sayıma girmez."
         meta={<>
-          <HeroStat label="şu an sitede" value={data ? <span className={c.heroLive}><i aria-hidden />{fmt(data.live.count)}</span> : "…"} />
+          <HeroStat label="şu an sitede" value={<LiveCount className={c.heroLive} />} />
           <HeroStat label="tekil ziyaretçi" value={totals ? fmt(totals.uniqueVisitors) : "…"} />
           <HeroStat label="görüntüleme" value={totals ? fmt(totals.views) : "…"} />
         </>}
@@ -113,12 +113,13 @@ export default function VisitorAnalyticsPage() {
         </>}
       />
 
+      {/* Canlı panel analitik fonksiyonundan bağımsız: o yüklenmese / hata verse de görünür. */}
+      <LiveVisitors />
+
       {loading && !data ? <SkeletonList rows={5} height={110} /> : error && !data ? (
         <EmptyState icon={BarChart3} title="Analitik açılamadı" description={`${error} — sunucu fonksiyonları yayınlandı mı?`} />
       ) : data && totals ? (
         <>
-          <LiveVisitors />
-
           <StatGrid cols={5}>
             <StatCard icon={UsersRound} label="Tekil ziyaretçi" tone="green" value={<CountUp value={totals.uniqueVisitors} />} hint={<><Trend value={data.change.visitors} /> cihaz + IP başına 1</>} />
             <StatCard icon={MousePointerClick} label="Görüntüleme" tone="blue" value={<CountUp value={totals.views} />} hint={<><Trend value={data.change.views} /> aynı sayfa 30 dk’da 1</>} />

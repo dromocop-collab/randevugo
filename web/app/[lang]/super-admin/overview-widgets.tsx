@@ -7,14 +7,15 @@ import Link from "@/i18n/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { collectionGroup, getDocs, limit, query, type Timestamp } from "firebase/firestore";
 import {
-  ArrowRight, Bot, CheckCheck, Inbox, Megaphone, MessageCircleHeart, MessagesSquare, MousePointerClick, PlugZap, Send, Smile,
-  Star, UserPlus, Wallet, type LucideIcon,
+  ArrowRight, Bot, CalendarCheck, CheckCheck, Inbox, Megaphone, MessageCircleHeart, MessagesSquare, MousePointerClick, PartyPopper, PlugZap, Send, Smile,
+  Smartphone, Star, UserPlus, Wallet, Zap, type LucideIcon,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { formatInboxPhone, inboxWindow, subscribeConversations, type InboxConversation } from "@/features/whatsapp/whatsapp-inbox-repository";
 import { getMetaAdsOverview, type MetaAdsOverview } from "@/features/ads/meta-ads-repository";
 import { getWhatsAppOperations, type WhatsAppOperations } from "@/features/whatsapp/whatsapp-admin-repository";
 import { Badge, Skeleton, toneClassName, type AdminTone } from "@/components/super-admin/ui";
+import { useLiveVisitors } from "@/features/analytics/use-live-visitors";
 import s from "./overview.module.css";
 
 const fmt = (value: number) => value.toLocaleString("tr-TR");
@@ -318,5 +319,36 @@ export function ChannelsSection({ refreshKey }: { refreshKey: number }) {
       </div>
       <p className={s.footnote}><Bot size={12} aria-hidden /> Gelen kutusu canlı güncellenir; diğer kartlar “Yenile” ile tazelenir.</p>
     </section>
+  );
+}
+
+/* ── Şu an sitede (canlı, analitikteki canlı panelle aynı veri) ───────────────────── */
+
+export function LiveNowStrip() {
+  // 15 sn'de bir tazelenir: pencereden düşen ziyaretçi sayıdan çıkar.
+  const { summary, loading, error } = useLiveVisitors(15_000);
+  if (error) return null;
+  const items: Array<{ icon: LucideIcon; label: string; value: number }> = [
+    { icon: Zap, label: "aktif", value: summary.active },
+    { icon: UserPlus, label: "kayıtta", value: summary.signingUp },
+    { icon: CalendarCheck, label: "randevuda", value: summary.booking },
+    { icon: Megaphone, label: "reklamdan", value: summary.ads },
+    { icon: Smartphone, label: "telefondan", value: summary.mobile },
+    { icon: PartyPopper, label: "hedefe ulaştı", value: summary.goals },
+  ];
+  return (
+    <Link href="/super-admin/analitik" className={s.liveStrip} aria-label={`Şu an sitede ${summary.total} kişi. Canlı ziyaretçileri aç`}>
+      <span className={s.liveBeacon} aria-hidden><i /></span>
+      <span className={s.liveMain}>
+        <small>Şu an sitede</small>
+        {loading ? <b className={s.liveCount}>…</b> : <b className={s.liveCount}><CountUp value={summary.total} /> <span>kişi</span></b>}
+      </span>
+      <span className={s.liveItems}>
+        {items.map(({ icon: Icon, label, value }) => (
+          <span key={label} className={value ? s.liveItemOn : undefined}><Icon size={13} aria-hidden /><b>{value}</b> {label}</span>
+        ))}
+      </span>
+      <span className={s.liveCta}>Canlı izle <ArrowRight size={14} aria-hidden /></span>
+    </Link>
   );
 }

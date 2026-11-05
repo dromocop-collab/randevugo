@@ -79,7 +79,9 @@ export function PageViewTracker() {
   // Canlı ziyaretçi sinyali: yalnız sekme görünürken, dakikada bir.
   useEffect(() => {
     const path = stripLocale(fullPath);
-    if (PRIVATE_PREFIXES.some((prefix) => path.startsWith(prefix)) || trackingDisabled()) return;
+    // Kurulum ekranı özel sayfa ama kayıt hunisinin parçası: canlı panelde "aktif" görünsün diye sinyal gider (görüntüleme sayılmaz).
+    const funnel = path === "/onboarding" || path.startsWith("/onboarding/");
+    if ((!funnel && PRIVATE_PREFIXES.some((prefix) => path.startsWith(prefix))) || trackingDisabled()) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       track()({ type: "ping", path: fullPath }).catch(() => undefined);

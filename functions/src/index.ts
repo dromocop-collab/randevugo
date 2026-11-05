@@ -10674,7 +10674,8 @@ export const trackVisit = onCall(
       if (kind === "view") await shardRef.set({ excluded: FieldValue.increment(1), day: parts.day }, { merge: true }).catch(() => undefined);
       return { ok: true, counted: false };
     }
-    const target = normalizeTrackedPath(request.data?.path);
+    // Kurulum / panel yalnız huni adımı ve canlılık için kabul edilir (sayfa görüntülemesi sayılmaz).
+    const target = normalizeTrackedPath(request.data?.path, { funnel: kind !== "view" });
     if (!target) return { ok: true, counted: false };
 
     const ip = clientIpFrom(raw as unknown as { headers: Record<string, unknown>; ip?: string });

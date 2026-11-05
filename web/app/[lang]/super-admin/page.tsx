@@ -17,7 +17,7 @@ import {
 } from "@/components/super-admin/ui";
 import styles from "./dashboard.module.css";
 import overview from "./overview.module.css";
-import { ChannelsSection, CountUp } from "./overview-widgets";
+import { ChannelsSection, CountUp, LiveNowStrip } from "./overview-widgets";
 
 type SourceKey = "businesses" | "users" | "appointments" | "subscriptions" | "support" | "categories" | "reviews";
 type SourceHealth = Record<SourceKey, boolean>;
@@ -348,6 +348,8 @@ export default function SuperAdminDashboard() {
           Gelir tahmini varsayılan SeninRandevun fiyatıyla (490 ₺/ay) hesaplanıyor. Abonelikler sayfasından varsayılan paketi kalıcı olarak oluşturun.
         </Callout>
       )}
+
+      <LiveNowStrip />
 
       <h2 className={overview.pageSectionTitle}><LayoutDashboard size={16} aria-hidden /> Platformun durumu</h2>
       <StatGrid columns={4}>
