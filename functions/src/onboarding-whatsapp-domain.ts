@@ -185,7 +185,8 @@ export function renderOnboardingText(key: OnboardingStepKey, params: OnboardingP
 }
 
 export type TemplateDefinition = {
-  step: OnboardingStepKey;
+  /** Karşılama adımı; başka akışların şablonlarında (ör. yarım kayıt hatırlatması) yok. */
+  step?: OnboardingStepKey;
   name: string;
   category: "UTILITY" | "MARKETING";
   body: string;

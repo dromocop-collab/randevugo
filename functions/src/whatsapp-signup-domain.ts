@@ -87,7 +87,7 @@ export function isSignupIntent(text: string | null, fromAd: boolean): boolean {
   if (fromAd) return true;
   if (!text) return false;
   const value = fold(text);
-  return /\b(kayit ol|kaydol|kaydolmak|kayit olmak|kaydet|kaydetmek|uye ol|ucretsiz basla|isletmemi|isletme ac|magaza ac|magazami|hesap ac|denemek istiyorum|deneme surumu)\b/.test(value);
+  return /\b(kayit ol|kaydol|kaydolmak|kayit olmak|kaydet|kaydetmek|uye ol|ucretsiz basla|isletmemi|isletme ac|magaza ac|magazami|hesap ac|denemek istiyorum|deneme surumu|whatsapp ?tan tamamla|kaydimi tamamla|kaydi tamamla)\b/.test(value);
 }
 
 export function cancelCommand(text: string | null): boolean {

@@ -25,7 +25,7 @@ export const GROUPS = {
     "ensureAdminOwnedBusinessesLifetime", "backfillLegacyBusinessSubscriptions", "expireBusinessSubscriptions", "syncBusinessPlanFromSubscription",
   ],
   sms: [
-    "whatsappWebhook", "whatsappInboxMessageCreated", "sendWhatsAppInboxReply", "updateWhatsAppConversation", "getWhatsAppInboxSettings", "updateWhatsAppInboxSettings", "getWhatsAppOnboarding", "updateWhatsAppOnboarding", "submitWhatsAppOnboardingTemplates", "sendWhatsAppOnboardingTest", "startWhatsAppOnboardingForBusiness", "getWhatsAppOperations", "updateWhatsAppChannel", "sendWhatsAppTest", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
+    "whatsappWebhook", "whatsappInboxMessageCreated", "sendWhatsAppInboxReply", "updateWhatsAppConversation", "getWhatsAppInboxSettings", "updateWhatsAppInboxSettings", "getWhatsAppOnboarding", "updateWhatsAppOnboarding", "submitWhatsAppOnboardingTemplates", "sendWhatsAppOnboardingTest", "getSignupLeadSettings", "updateSignupLeadSettings", "startWhatsAppOnboardingForBusiness", "getWhatsAppOperations", "updateWhatsAppChannel", "sendWhatsAppTest", "sendAppointmentSmsJobs", "checkSmsBalance", "checkMutlucellDeliveryReports", "getSmsOperations", "getSmsBusinessUsage",
     "adjustBusinessSmsCredits", "getMutlucellSettings", "updateMutlucellSettings", "testMutlucellSettings",
   ],
   dogrulama: ["sendVerificationCode", "verifyPhoneCode", "sendEmailVerificationCode", "verifyEmailCode", "sendPasswordResetCode", "resetPasswordWithCode"],
@@ -37,7 +37,7 @@ export const GROUPS = {
     "reviewBookingFieldRequest", "updateBookingFieldSettings",
   ],
   isletme: [
-    "createBusiness", "reviewBusiness", "getBusinessApprovalSettings", "updateBusinessApprovalSettings", "checkModerationText", "setBusinessDiscoveryVisibility", "setBusinessSuspension", "submitBusinessProfileChange",
+    "createBusiness", "saveSignupLead", "reviewBusiness", "getBusinessApprovalSettings", "updateBusinessApprovalSettings", "checkModerationText", "setBusinessDiscoveryVisibility", "setBusinessSuspension", "submitBusinessProfileChange",
     "reviewBusinessProfileChange", "deleteBusinessPermanently", "createStaffMember", "archiveStaff", "linkStaffAccount", "upsertCustomer",
     "renameCustomer", "getRewardProgramSettings", "updateRewardProgramSettings", "finalizeAppointmentCheckout", "sellServicePackage",
     "redeemServicePackage", "getMyCustomerBenefits", "updateLiveFeatureFlags", "submitReview", "moderateReview", "autoPublishPendingReviews",

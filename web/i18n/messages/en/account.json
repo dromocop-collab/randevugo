@@ -609,11 +609,11 @@
   "Bildirimler açık": "Notifications on",
   "Yeni bildirim": "New notification",
   "Görüntüle": "View",
-  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp. Reply STOP anytime to opt out.",
   "Hesabın açıldı! Şimdi işletmeni kuralım.": "Your account is ready! Now let's set up your business.",
   "Hesabın açıldı ama kod gönderilemedi. Aşağıdan yeniden isteyebilirsin.": "Your account is ready, but we couldn't send the code. You can request it again below.",
   "Daha önce bu e-postayla başladıysan kaldığın yerden devam et:": "Already started with this email? Pick up where you left off:",
   "Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account, then finish your services and hours on one screen with ready-made templates.",
   "Tarayıcın bu giriş yöntemini engelledi. E-posta ile devam et ya da sayfayı Safari / Chrome'da aç.": "Your browser blocked this sign-in method. Continue with email or open the page in Safari / Chrome.",
-  "Giriş penceresi engellendi. Tekrar dene ya da e-posta ile devam et.": "The sign-in window was blocked. Try again or continue with email."
+  "Giriş penceresi engellendi. Tekrar dene ya da e-posta ile devam et.": "The sign-in window was blocked. Try again or continue with email.",
+  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir; kaydın yarıda kalırsa tamamlaman için de buradan ulaşabiliriz. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp; if your sign-up is left unfinished we may also reach you here to help complete it. Reply STOP to opt out."
 }

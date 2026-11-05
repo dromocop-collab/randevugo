@@ -19,6 +19,7 @@ import { CATEGORY_CATALOG, FALLBACK_CATEGORY_IMAGE, categoryImageFor } from "@/c
 import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { StorePreview } from "@/features/businesses/store-preview";
 import { WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
+import { saveSignupLead } from "@/features/businesses/signup-lead";
 import { previewServices } from "@/features/businesses/service-templates";
 import { isBusinessSlugAvailable } from "@/features/businesses/starter-setup";
 import {
@@ -225,6 +226,7 @@ export function BusinessSignupWizard() {
     setTouched(true);
     if (!businessStepValid(draft) || slugTaken) return;
     update({ slug: finalSlug, city: canonicalCity(draft.city ?? "") });
+    saveSignupLead({ ...draft, city: canonicalCity(draft.city ?? "") });
     setTouched(false);
     setStep(2);
   }
@@ -466,7 +468,7 @@ export function BusinessSignupWizard() {
                     />
                   </Field>
                 </div>
-                <Field id={ids.phone} label={t("İşletme cep telefonu")} valid={isValidMobilePhone(draft.phone ?? "")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined} hint={t("Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir. İstemezsen DUR yazman yeterli.")}>
+                <Field id={ids.phone} label={t("İşletme cep telefonu")} valid={isValidMobilePhone(draft.phone ?? "")} error={phoneError ? t("5XX XXX XX XX biçiminde 10 haneli cep numarası gir.") : undefined} hint={t("Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir; kaydın yarıda kalırsa tamamlaman için de buradan ulaşabiliriz. İstemezsen DUR yazman yeterli.")}>
                   <div className={w.affix}>
                     <b>+90</b>
                     <input

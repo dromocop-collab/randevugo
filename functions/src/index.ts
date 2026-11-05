@@ -34,6 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
+import { LEAD_TEMPLATE_DEFINITION, decideLeadReminder, leadPhone, leadReminderMessage, parseLeadInput, parseLeadSettings, renderLeadReminderText, LEAD_REMINDER_DELAY_MS } from "./signup-lead-domain.js";
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, LEAD_SIGNUP_ACTION, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
@@ -1472,6 +1473,9 @@ async function createBusinessForOwner(input: {
         },
         customData: { content_name: "business_signup", status: "trial" },
       });
+      // Bu numarayla yarım kalmış kayıt varsa tamamlandı say (hatırlatma gitmesin). Hata kaydı bozmaz.
+      await markSignupLeadConverted(data.phone, businessRef.id)
+        .catch((error) => logger.warn("Yarım kayıt güncellenemedi", { businessId: businessRef.id, error: String(error) }));
     }
     if (autoApprove) {
       await db.collection("platformAuditLogs").add({
@@ -7334,6 +7338,161 @@ async function processDueOnboardingWhatsApp() {
   }
 }
 
+// ── Yarım kalan işletme kayıtları (signupLeads) ──
+// Kayıt formunun 2. adımında yazılır; kaydı bitirmeyene 30 dk sonra bir kez WhatsApp hatırlatması (ayarla, şablon onaylıysa).
+// Alan mantığı ve kurallar: signup-lead-domain.ts. Liste: süper admin › Yarım kayıtlar (Firestore, yalnız yönetici okur).
+
+const signupLeadRef = (phone: string) => db.doc(`signupLeads/${phone}`);
+
+async function markSignupLeadConverted(rawPhone: unknown, businessId: string) {
+  const phone = leadPhone(rawPhone);
+  if (!phone) return;
+  const ref = signupLeadRef(phone);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists || snapshot.data()?.status === "converted") return;
+    tx.update(ref, { status: "converted", businessId, convertedAt: FieldValue.serverTimestamp(), reminderDueAt: null, updatedAt: FieldValue.serverTimestamp() });
+  });
+}
+
+/** Kayıt formu 2. adım: işletme adı + cep (ve konum, kaynak). Kayıt bitmişse ya da yönetici kapattıysa durumu değişmez. */
+export const saveSignupLead = onCall(
+  { ...publicCallableOptions, memory: "256MiB", maxInstances: 10 },
+  async (request) => {
+    const lead = parseLeadInput(request.data);
+    if (!lead) throw new HttpsError("invalid-argument", "Geçerli işletme adı ve cep telefonu gerekli.");
+    const ip = clientIpFrom(request.rawRequest as unknown as { headers: Record<string, unknown>; ip?: string });
+    await consumeSecurityLimit(`signup-lead:ip:${ip}`, 20, 60 * 60_000);
+    await consumeSecurityLimit(`signup-lead:phone:${lead.phone}`, 10, 24 * 60 * 60_000);
+    const ref = signupLeadRef(lead.phone);
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(ref);
+      const current = snapshot.data();
+      const fields = {
+        phone: lead.phone, name: lead.name, category: lead.category, city: lead.city, district: lead.district,
+        ...(lead.source ? { source: lead.source } : {}), ...(lead.campaign ? { campaign: lead.campaign } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (!snapshot.exists) {
+        tx.set(ref, {
+          ...fields, status: "open", attempts: 1, createdAt: FieldValue.serverTimestamp(),
+          reminderDueAt: Timestamp.fromMillis(Date.now() + LEAD_REMINDER_DELAY_MS), reminderSentAt: null, reminderStatus: "pending",
+        });
+        return;
+      }
+      if (current?.status === "converted") return;
+      tx.update(ref, { ...fields, attempts: FieldValue.increment(1) });
+    });
+    return { ok: true };
+  },
+);
+
+async function sendLeadReminderTemplate(config: WhatsAppConfig, phone: string, businessName: string) {
+  const response = await fetch(`${config.apiBase}/${config.apiVersion}/${config.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(leadReminderMessage(phone, businessName, config.language)),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  const body = await response?.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string; error_data?: { details?: string } } } | null;
+  const wamid = body?.messages?.[0]?.id;
+  if (!response?.ok || !wamid) {
+    const detail = body?.error?.error_data?.details ?? body?.error?.message ?? `HTTP ${response?.status ?? 0}`;
+    return { ok: false as const, error: shortText(`${body?.error?.code ? `(${body.error.code}) ` : ""}${detail}`, 240) };
+  }
+  // Gelen kutusunda konuşmanın başında görünsün (kişi cevap verirse bağlam belli olur).
+  const cid = conversationId(phone);
+  const conversationRef = inboxConversationRef(cid);
+  const messageRef = conversationRef.collection("messages").doc(messageDocId(wamid));
+  const text = renderLeadReminderText(businessName);
+  const batch = db.batch();
+  batch.set(messageRef, {
+    direction: "out", wamid, type: "template", text, template: LEAD_TEMPLATE_DEFINITION.name, auto: true, sentByUid: null,
+    sentByName: "Yarım kayıt hatırlatması", status: "accepted", createdAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(conversationRef, {
+    phone, lastMessageAt: FieldValue.serverTimestamp(), lastMessageText: shortText(text, 140), lastDirection: "out",
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  batch.set(whatsappMessageRef(wamid), {
+    messageId: wamid, businessId: null, appointmentId: null, type: "signup_lead", inboxConversationId: cid, inboxMessageId: messageRef.id,
+    phoneMasked: `******${phone.slice(-4)}`, status: "accepted", createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000),
+  });
+  await batch.commit();
+  return { ok: true as const, wamid };
+}
+
+async function processDueSignupLeadReminders() {
+  const raw = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
+  const settings = parseLeadSettings(raw.leadReminder);
+  const config = parseWhatsAppConfig(raw);
+  // Kapalıyken kayıtlar bekler; açılınca 20 saatten eskiler "çok eski" diye atlanır.
+  if (!settings.reminderEnabled || !config) return;
+  const due = await db.collection("signupLeads").where("reminderDueAt", "<=", Timestamp.now()).limit(20).get();
+  for (const doc of due.docs) {
+    const lead = doc.data();
+    const optedOut = (await whatsappOptOutRef(String(lead.phone)).get()).exists;
+    const decision = decideLeadReminder({
+      status: String(lead.status ?? "open"), createdAtMs: tsMillis(lead.createdAt), reminderSentAtMs: tsMillis(lead.reminderSentAt), optedOut,
+    }, Date.now());
+    if (!decision.send) {
+      if (decision.reason !== "too_early") await doc.ref.update({ reminderDueAt: null, reminderStatus: "skipped", reminderReason: decision.reason });
+      continue;
+    }
+    // Aynı anda çalışan iki zamanlayıcı aynı kişiye iki mesaj atmasın: önce sahiplen.
+    const claimed = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(doc.ref);
+      if (!fresh.data()?.reminderDueAt || fresh.data()?.reminderSentAt) return false;
+      tx.update(doc.ref, { reminderDueAt: null, reminderStatus: "sending" });
+      return true;
+    });
+    if (!claimed) continue;
+    const result = await sendLeadReminderTemplate(config, String(lead.phone), String(lead.name ?? ""));
+    await doc.ref.update(result.ok
+      ? { reminderStatus: "sent", reminderSentAt: FieldValue.serverTimestamp(), reminderWamid: result.wamid }
+      : { reminderStatus: "failed", reminderError: result.error, reminderSentAt: FieldValue.serverTimestamp() });
+    if (!result.ok) logger.warn("Yarım kayıt hatırlatması gönderilemedi", { lead: doc.id.slice(-4), error: result.error });
+  }
+}
+
+/** Süper admin › Yarım kayıtlar: otomatik hatırlatma ayarı ve şablon durumu. */
+export const getSignupLeadSettings = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    await requireInboxAdmin(request);
+    const { raw, config, wabaId } = await onboardingGraphConfig();
+    let template: { name: string; status: string; category: string; rejectedReason: string | null } | null = null;
+    let templateError: string | null = null;
+    if (config && wabaId) {
+      const response = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates?name=${LEAD_TEMPLATE_DEFINITION.name}&fields=name,status,category,rejected_reason,language&limit=20`, {
+        headers: { Authorization: `Bearer ${config.accessToken}` }, signal: AbortSignal.timeout(15_000),
+      }).catch(() => null);
+      const body = await response?.json().catch(() => null) as { data?: Array<Record<string, unknown>>; error?: { message?: string } } | null;
+      if (!response?.ok) templateError = shortText(body?.error?.message ?? `HTTP ${response?.status ?? 0}`, 200);
+      const row = (body?.data ?? []).find((item) => String(item.name) === LEAD_TEMPLATE_DEFINITION.name && String(item.language ?? config.language) === config.language);
+      template = row ? { name: String(row.name), status: String(row.status ?? ""), category: String(row.category ?? ""), rejectedReason: row.rejected_reason && row.rejected_reason !== "NONE" ? String(row.rejected_reason) : null } : null;
+    } else {
+      templateError = !wabaId ? "WhatsApp Business hesap kimliği (wabaId) ayarlı değil." : "WhatsApp ayarları eksik.";
+    }
+    return {
+      settings: parseLeadSettings(raw.leadReminder), channelEnabled: raw.enabled === true, signupBotEnabled: raw.inbox?.signupEnabled === true,
+      template, templateError, templateName: LEAD_TEMPLATE_DEFINITION.name, preview: renderLeadReminderText("Ayşe Güzellik Salonu"),
+      buttons: LEAD_TEMPLATE_DEFINITION.buttons.map((button) => button.text),
+    };
+  },
+);
+
+export const updateSignupLeadSettings = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const uid = await requireInboxAdmin(request);
+    const next = parseLeadSettings({ reminderEnabled: request.data?.reminderEnabled === true });
+    await db.doc(WHATSAPP_SETTINGS_PATH).set({ leadReminder: { ...next, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid } }, { merge: true });
+    return { settings: next };
+  },
+);
+
 /** Gelen mesaj: DUR / BAŞLAT ya da karşılama şablonundaki hızlı yanıt. İşlendiyse true (genel otomatik cevap atlanır). */
 async function handleOnboardingInbound(cid: string, phone: string, message: FirebaseFirestore.DocumentData, profileName: string | null): Promise<boolean> {
   const command = message.type === "text" || message.type === "button" ? optCommand(message.text) : null;
@@ -7597,6 +7756,7 @@ export const sendAppointmentSmsJobs = onSchedule(
     }
     await processDueWhatsAppFollowUps().catch((error) => logger.warn("Memnuniyet mesajları işlenemedi", { error: String(error) }));
     await processDueOnboardingWhatsApp().catch((error) => logger.warn("Karşılama mesajları işlenemedi", { error: String(error) }));
+    await processDueSignupLeadReminders().catch((error) => logger.warn("Yarım kayıt hatırlatmaları işlenemedi", { error: String(error) }));
   }
 );
 
@@ -11430,7 +11590,8 @@ export const submitWhatsAppOnboardingTemplates = onCall(
     if (!listResponse.ok) throw new HttpsError("failed-precondition", `Şablon listesi alınamadı: ${shortText(listBody?.error?.message, 200)}`);
     const existing = new Set((listBody?.data ?? []).filter((row) => (row.language ?? config.language) === config.language).map((row) => String(row.name)));
     const results: Array<{ name: string; result: string }> = [];
-    for (const definition of ONBOARDING_TEMPLATE_DEFINITIONS) {
+    // Yarım kayıt hatırlatması da aynı düğmeyle gönderilir.
+    for (const definition of [...ONBOARDING_TEMPLATE_DEFINITIONS, LEAD_TEMPLATE_DEFINITION]) {
       if (existing.has(definition.name)) { results.push({ name: definition.name, result: "zaten var" }); continue; }
       const response = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates`, {
         method: "POST",

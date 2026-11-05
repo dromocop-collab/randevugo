@@ -1,6 +1,6 @@
 import {
   BarChart3, BellRing, Inbox, Bot, Building2, CalendarCog, CircleGauge, ClipboardList, Headphones,
-  LayoutDashboard, Megaphone, MessageCircleHeart, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
+  LayoutDashboard, Megaphone, UserPlus, MessageCircleHeart, MessageSquareText, MessagesSquare, PartyPopper, ReceiptText, Settings2, ShieldCheck, Siren, UsersRound, WalletCards, type LucideIcon,
 } from "lucide-react";
 
 export type AdminNavItem = { href: string; label: string; short?: string; icon: LucideIcon; keywords?: string };
@@ -14,6 +14,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/super-admin/asistan", label: "Akıllı Asistan", short: "Asistan", icon: Bot, keywords: "ai yapay zeka rovi" },
       { href: "/super-admin/analitik", label: "Ziyaretçi Analitiği", short: "Analitik", icon: BarChart3, keywords: "trafik ziyaret" },
       { href: "/super-admin/reklamlar", label: "Reklamlar", icon: Megaphone, keywords: "meta facebook instagram reklam kampanya utm bütçe harcama dönüşüm" },
+      { href: "/super-admin/yarim-kayitlar", label: "Yarım Kayıtlar", short: "Yarım kayıt", icon: UserPlus, keywords: "kayıt yarıda bırakan lead aday potansiyel müşteri whatsapp hatırlatma geri kazan" },
       { href: "/super-admin/anket", label: "Anket", icon: PartyPopper, keywords: "test karakter huni quiz dönüşüm" },
     ],
   },

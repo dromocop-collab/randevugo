@@ -744,6 +744,16 @@ service cloud.firestore {
     }
 
     // Ziyaretçi analitiği › canlı ziyaretçiler (IP yok; belge kimliği geri çözülemeyen özet). Yalnız süper admin okur.
+    // Yarım kalan işletme kayıtları (saveSignupLead yazar). Yönetici okur; yalnız takip alanlarını değiştirebilir.
+    match /signupLeads/{leadId} {
+      allow read: if isPlatformAdmin();
+      allow update: if isPlatformAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "note", "handledAt", "handledBy", "reminderDueAt", "updatedAt"])
+        && request.resource.data.status in ["open", "contacted", "closed"]
+        && resource.data.status != "converted";
+      allow create, delete: if false;
+    }
+
     match /analyticsVisitors/{visitorId} {
       allow read: if isPlatformAdmin();
       allow write: if false;
