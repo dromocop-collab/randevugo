@@ -91,8 +91,30 @@
 .navLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .collapsed .navLabel, .collapsed .brandText, .collapsed .sideSearch span, .collapsed .sideSearch .kbd, .collapsed .footLabel { display: none; }
 .collapsed .navLink, .collapsed .sideSearch, .collapsed .footBtn { justify-content: center; padding: 0; }
-.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #f43f5e; color: #fff; font-size: 10.5px; font-weight: 800; line-height: 20px; text-align: center; }
+.count { --badge: #f43f5e; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--badge); color: #fff; font-size: 10.5px; font-weight: 800; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 3px color-mix(in srgb, var(--badge) 22%, transparent); animation: badgePop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
 .collapsed .count { position: absolute; top: 3px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9px; line-height: 16px; }
+
+/* Rozet renkleri: kırmızı acil, turuncu bekleyen iş, mavi mesaj, mor moderasyon, yeşil canlı */
+.tone_red { --badge: #f43f5e; }
+.tone_amber { --badge: #f59e0b; }
+.tone_blue { --badge: #3b82f6; }
+.tone_violet { --badge: #8b5cf6; }
+.tone_green { --badge: #22c55e; }
+.tone_amber.count, .tone_amber.dockBadge { color: #2a1a00; }
+/* Bekleyen işi olan sayfa: simge ve satır rozet rengine boyanır */
+.navPending { color: #fff; background: linear-gradient(90deg, color-mix(in srgb, var(--badge) 16%, transparent), transparent 85%); }
+.navPending > svg { color: color-mix(in srgb, var(--badge) 70%, #fff); }
+.navPending.navActive > svg { color: var(--sa-lime); }
+.collapsed .navPending { background: color-mix(in srgb, var(--badge) 18%, transparent); }
+/* Canlı (analitik): nabız atan nokta + sayı */
+.countLive { background: color-mix(in srgb, var(--badge) 22%, transparent); color: #b9f5cf; box-shadow: none; }
+.countLive i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--badge); }
+.countLive i::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--badge); animation: livePing 1.6s ease-out infinite; }
+.groupTotal { display: inline-grid; place-items: center; min-width: 17px; height: 15px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: rgb(255 255 255 / 0.12); color: rgb(255 255 255 / 0.85); font-size: 9px; font-style: normal; letter-spacing: 0; vertical-align: 1px; }
+.collapsed .groupTotal { display: none; }
+@keyframes badgePop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes livePing { from { transform: scale(1); opacity: 0.7; } to { transform: scale(2.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .count, .dockBadge, .countLive i::after { animation: none; } }
 
 .sideFoot { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; margin-top: 8px; border-top: 1px solid rgb(255 255 255 / 0.08); }
 .footBtn {
@@ -211,7 +233,17 @@
 .dockLabel { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dockActive { color: var(--sa-ink); }
 .dockActive .dockIcon { background: var(--sa-brand); color: var(--sa-lime); }
-.dockBadge { position: absolute; top: -5px; right: 1px; min-width: 17px; height: 17px; padding: 0 4px; border: 2px solid var(--sa-card); border-radius: 999px; background: #f43f5e; color: #fff; font-size: 9px; font-weight: 800; line-height: 13px; text-align: center; }
+.dockBadge { --badge: #f43f5e; position: absolute; top: -5px; right: 1px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 17px; height: 17px; padding: 0 4px; border: 2px solid var(--sa-card); border-radius: 999px; background: var(--badge); color: #fff; font-size: 9px; font-weight: 800; line-height: 13px; text-align: center; animation: badgePop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.dockBadge.countLive { background: var(--badge); color: #fff; }
+.dockBadge.countLive i { width: 5px; height: 5px; background: #fff; }
+.dockBadge.countLive i::after { background: #fff; }
+.moreTile .dockBadge { top: 8px; right: 8px; }
+/* .dockBadge kendi varsayılan rengini sonra tanımladığı için tonlar burada yeniden (özgüllük) */
+.dockBadge.tone_red { --badge: #f43f5e; }
+.dockBadge.tone_amber { --badge: #f59e0b; }
+.dockBadge.tone_blue { --badge: #3b82f6; }
+.dockBadge.tone_violet { --badge: #8b5cf6; }
+.dockBadge.tone_green { --badge: #22c55e; }
 
 /* ── Daha fazla sayfası ── */
 .moreGroup + .moreGroup { margin-top: 16px; }
@@ -229,6 +261,7 @@
 }
 .moreTile svg { color: var(--sa-brand-ink); }
 .moreTileActive { border-color: var(--sa-brand-2); background: var(--sa-green-bg); }
+.moreTilePending { border-color: color-mix(in srgb, #f59e0b 45%, var(--sa-line)); }
 .moreTile:focus-visible { outline: none; box-shadow: var(--sa-focus); }
 .moreAccount { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--sa-line); }
 .moreEmail { font-size: 12px; color: var(--sa-muted); overflow-wrap: anywhere; }

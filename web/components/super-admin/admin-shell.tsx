@@ -8,7 +8,8 @@ import { BellRing, Moon, Search, ShieldCheck, Sun } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
-import { AdminMobileNav, AdminSidebar, useUnreadAlertCount } from "@/components/super-admin/admin-sidebar";
+import { AdminMobileNav, AdminSidebar } from "@/components/super-admin/admin-sidebar";
+import { actionableCount, useAdminNavBadges, useTitleCount } from "@/components/super-admin/admin-nav-badges";
 import { AdminCommandPalette } from "@/components/super-admin/admin-command-palette";
 import { ALERTS_HREF, currentNavItem, ADMIN_NAV_GROUPS } from "@/components/super-admin/admin-nav";
 import { adminTokensClassName, EmptyState } from "@/components/super-admin/ui";
@@ -67,7 +68,9 @@ export function AdminFrame({ children, email }: { children: ReactNode; email?: s
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const unreadAlerts = useUnreadAlertCount(pathname);
+  const badges = useAdminNavBadges(pathname);
+  const unreadAlerts = badges[ALERTS_HREF]?.count ?? 0;
+  useTitleCount(actionableCount(badges), pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -108,7 +111,7 @@ export function AdminFrame({ children, email }: { children: ReactNode; email?: s
   return (
     // "admin-v2": asistan sayfasının global tam ekran kuralları bu sınıfa bağlı.
     <div data-admin-root className={cn("admin-v2", adminTokensClassName, styles.root, collapsed && styles.collapsed, isAssistant && styles.assistantRoute)}>
-      <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} unreadAlerts={unreadAlerts} onOpenSearch={() => setPaletteOpen(true)} onLogout={() => void handleLogout()} />
+      <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} onOpenSearch={() => setPaletteOpen(true)} onLogout={() => void handleLogout()} />
       <div className={cn("min-w-0", styles.main)}>
         <header className={styles.topbar}>
           <Link href="/super-admin" className={styles.mobileBrand} aria-label="Platform özeti"><ShieldCheck size={19} /></Link>
@@ -133,7 +136,7 @@ export function AdminFrame({ children, email }: { children: ReactNode; email?: s
         </header>
         <div className={styles.content}>{children}</div>
       </div>
-      <AdminMobileNav unreadAlerts={unreadAlerts} email={email} theme={theme} onToggleTheme={toggleTheme} onLogout={() => void handleLogout()} onOpenSearch={() => setPaletteOpen(true)} />
+      <AdminMobileNav badges={badges} email={email} theme={theme} onToggleTheme={toggleTheme} onLogout={() => void handleLogout()} onOpenSearch={() => setPaletteOpen(true)} />
       <AdminCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );

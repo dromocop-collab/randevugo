@@ -2,47 +2,37 @@
 
 import Link from "@/i18n/link";
 import { usePathname } from "@/i18n/navigation";
-import { useEffect, useState } from "react";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
+import { useState } from "react";
 import { ArrowLeftToLine, Ellipsis, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Search, ShieldCheck, Sun } from "lucide-react";
-import { getDb } from "@/lib/firebase/firestore";
 import { cn } from "@/lib/utils/cn";
 import { AdminButton, Sheet } from "@/components/super-admin/ui";
-import { ADMIN_MOBILE_PRIMARY, ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS, ALERTS_HREF, isNavActive } from "./admin-nav";
+import { ADMIN_MOBILE_PRIMARY, ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS, isNavActive } from "./admin-nav";
+import { actionableCount, badgeText, useGroupTotals, type NavBadge, type NavBadges } from "./admin-nav-badges";
 import styles from "./admin-shell.module.css";
 
-/** Uyarı okundu işaretlendiğinde menü rozetinin yenilenmesi için yayınlanan olay. */
-export const PLATFORM_ALERTS_CHANGED_EVENT = "platform-alerts-changed";
+// Uyarılar sayfası bu olayı yayınlar; rozetler admin-nav-badges.ts'de.
+export { PLATFORM_ALERTS_CHANGED_EVENT } from "./admin-nav-badges";
 
-// Okunmamış uyarı sayısı: tek bir sayım sorgusu (belge indirmez); sayfa değişince ve uyarı okununca yenilenir.
-export function useUnreadAlertCount(pathname: string) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = () => {
-      getCountFromServer(query(collection(getDb(), "platformAlerts"), where("isRead", "==", false)))
-        .then((snapshot) => { if (!cancelled) setCount(snapshot.data().count); })
-        .catch(() => undefined);
-    };
-    refresh();
-    window.addEventListener(PLATFORM_ALERTS_CHANGED_EVENT, refresh);
-    return () => { cancelled = true; window.removeEventListener(PLATFORM_ALERTS_CHANGED_EVENT, refresh); };
-  }, [pathname]);
-  return count;
+/** Menü öğesindeki rozet: renk aciliyete göre, canlı olanlar (analitik) nabız atan noktayla. */
+function NavCount({ badge, compact }: { badge: NavBadge; compact?: boolean }) {
+  return (
+    <b key={badge.count} className={cn(compact ? styles.dockBadge : styles.count, styles[`tone_${badge.tone}`], badge.live && styles.countLive)} aria-label={badge.label} title={badge.label}>
+      {badge.live ? <i aria-hidden /> : null}{badgeText(badge.count)}
+    </b>
+  );
 }
 
-const badgeText = (count: number) => (count > 99 ? "99+" : String(count));
-
 export function AdminSidebar({
-  collapsed, onToggleCollapsed, unreadAlerts, onOpenSearch, onLogout,
+  collapsed, onToggleCollapsed, badges, onOpenSearch, onLogout,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  unreadAlerts: number;
+  badges: NavBadges;
   onOpenSearch: () => void;
   onLogout: () => void;
 }) {
   const pathname = usePathname();
+  const groupTotals = useGroupTotals(badges);
   return (
     <aside className={styles.sidebar} aria-label="Süper admin menüsü">
       <Link href="/super-admin" className={styles.brand} title="Platform Özeti">
@@ -55,16 +45,21 @@ export function AdminSidebar({
       <nav className={styles.navScroll} aria-label="Bölümler">
         {ADMIN_NAV_GROUPS.map((group) => (
           <div key={group.label} className={styles.group}>
-            <span className={styles.groupLabel}>{group.label}</span>
+            <span className={styles.groupLabel}>
+              {group.label}
+              {groupTotals[group.label] ? <em className={styles.groupTotal} title={`${groupTotals[group.label]} bekleyen iş`}>{badgeText(groupTotals[group.label]!)}</em> : null}
+            </span>
             {group.items.map((item) => {
               const active = isNavActive(item.href, pathname);
               const Icon = item.icon;
-              const showCount = item.href === ALERTS_HREF && unreadAlerts > 0;
+              const badge = badges[item.href];
               return (
-                <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} title={collapsed ? item.label : undefined} className={cn(styles.navLink, active && styles.navActive)}>
+                <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
+                  title={collapsed ? (badge ? `${item.label} · ${badge.label}` : item.label) : badge?.label}
+                  className={cn(styles.navLink, active && styles.navActive, badge && !badge.live && styles.navPending, badge && styles[`tone_${badge.tone}`])}>
                   <Icon size={18} strokeWidth={1.9} aria-hidden />
                   <span className={styles.navLabel}>{item.label}</span>
-                  {showCount && <b className={styles.count} aria-label={`${unreadAlerts} okunmamış uyarı`}>{badgeText(unreadAlerts)}</b>}
+                  {badge ? <NavCount badge={badge} /> : null}
                 </Link>
               );
             })}
@@ -84,9 +79,9 @@ export function AdminSidebar({
 }
 
 export function AdminMobileNav({
-  unreadAlerts, email, theme, onToggleTheme, onLogout, onOpenSearch,
+  badges, email, theme, onToggleTheme, onLogout, onOpenSearch,
 }: {
-  unreadAlerts: number;
+  badges: NavBadges;
   email?: string | null;
   theme: "light" | "dark";
   onToggleTheme: () => void;
@@ -97,6 +92,8 @@ export function AdminMobileNav({
   const [moreOpen, setMoreOpen] = useState(false);
   const primary = ADMIN_MOBILE_PRIMARY.map((href) => ADMIN_NAV_ITEMS.find((item) => item.href === href)!).filter(Boolean);
   const moreActive = !primary.some((item) => isNavActive(item.href, pathname));
+  // "Daha fazla" içindeki sayfaların bekleyen işi: düğmede toplam rozet.
+  const hiddenPending = actionableCount(badges, ADMIN_NAV_ITEMS.filter((item) => !ADMIN_MOBILE_PRIMARY.includes(item.href)).map((item) => item.href));
   // Sayfa değişince sheet kapanır (render sırasında senkron; efekt gerekmez).
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) { setLastPath(pathname); setMoreOpen(false); }
@@ -111,14 +108,17 @@ export function AdminMobileNav({
             <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(styles.dockItem, active && styles.dockActive)}>
               <span className={styles.dockIcon}>
                 <Icon size={19} strokeWidth={2} aria-hidden />
-                {item.href === ALERTS_HREF && unreadAlerts > 0 && <b className={styles.dockBadge} aria-label={`${unreadAlerts} okunmamış uyarı`}>{badgeText(unreadAlerts)}</b>}
+                {badges[item.href] ? <NavCount badge={badges[item.href]!} compact /> : null}
               </span>
               <span className={styles.dockLabel}>{item.short ?? item.label}</span>
             </Link>
           );
         })}
         <button type="button" className={cn(styles.dockItem, (moreActive || moreOpen) && styles.dockActive)} onClick={() => setMoreOpen(true)} aria-haspopup="dialog" aria-expanded={moreOpen}>
-          <span className={styles.dockIcon}><Ellipsis size={20} aria-hidden /></span>
+          <span className={styles.dockIcon}>
+            <Ellipsis size={20} aria-hidden />
+            {hiddenPending > 0 ? <b className={cn(styles.dockBadge, styles.tone_amber)} aria-label={`Diğer bölümlerde ${hiddenPending} bekleyen iş`}>{badgeText(hiddenPending)}</b> : null}
+          </span>
           <span className={styles.dockLabel}>Daha fazla</span>
         </button>
       </nav>
@@ -132,10 +132,10 @@ export function AdminMobileNav({
                 const Icon = item.icon;
                 const active = isNavActive(item.href, pathname);
                 return (
-                  <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(styles.moreTile, active && styles.moreTileActive)}>
+                  <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn(styles.moreTile, active && styles.moreTileActive, badges[item.href] && !badges[item.href]!.live && styles.moreTilePending)}>
                     <Icon size={19} aria-hidden />
                     <span>{item.label}</span>
-                    {item.href === ALERTS_HREF && unreadAlerts > 0 && <b className={styles.dockBadge}>{badgeText(unreadAlerts)}</b>}
+                    {badges[item.href] ? <NavCount badge={badges[item.href]!} compact /> : null}
                   </Link>
                 );
               })}
