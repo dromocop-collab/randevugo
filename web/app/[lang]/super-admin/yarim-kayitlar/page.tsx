@@ -64,8 +64,10 @@ export default function SignupLeadsPage() {
 
   useEffect(() => subscribeSignupLeads((value) => { setRows(value); setError(null); }, (err) => setError(errorMessage(err))), []);
 
+  // Yeni açılan fonksiyonun ilk çağrısı geçici hata verebiliyor ("internal"): bir kez kısa aralıkla yeniden dener.
   const loadSettings = useCallback(() => {
-    getSignupLeadSettings().then((value) => { setSettings(value); setSettingsError(null); }).catch((err) => setSettingsError(errorMessage(err)));
+    const load = () => getSignupLeadSettings().then((value) => { setSettings(value); setSettingsError(null); });
+    load().catch(() => new Promise((resolve) => window.setTimeout(resolve, 1500)).then(load)).catch((err) => setSettingsError(errorMessage(err)));
   }, []);
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
