@@ -221,7 +221,7 @@ export default function AdsPage() {
                     columns={[
                       { key: "time", header: "Zaman", width: 110, cell: (row) => <span className={s.muted}>{relativeTime(row.createdAt ? Date.parse(row.createdAt) : null, now)}</span> },
                       { key: "name", header: "İşletme", cell: (row) => <b>{row.businessName}</b> },
-                      { key: "source", header: "Kaynak", cell: (row) => <span className={s.inline}>{CHANNEL[row.channel] ?? row.channel}{row.campaign ? <code>{row.campaign}</code> : null}</span> },
+                      { key: "source", header: "Kaynak", cell: (row) => <span className={s.inline}>{CHANNEL[row.channel] ?? row.channel}{row.campaign ? <code>{row.campaign}</code> : null}{row.content ? <code title="Reklam (utm_content)">{row.content}</code> : null}</span> },
                       { key: "paid", header: "Durum", cell: (row) => row.paid ? <Pill tone="green" dot>Ödedi</Pill> : <Pill dot>Denemede</Pill> },
                     ]}
                     renderCard={(row) => (
@@ -332,26 +332,42 @@ function StatsLine({ stats, compact }: { stats: MetaStats; compact?: boolean }) 
   );
 }
 
+// Meta reklamında URL parametreleri ayrı kutuya yazılır; {{...}} kısımlarını Meta her tıklamada kampanya/reklam adıyla doldurur.
+const META_URL_PARAMS = "utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}";
+const LINK_PAGES = [
+  { path: "/isletmeler/basla", label: "Reklam tanıtım sayfası (önerilen)" },
+  { path: "/isletmeler/kayit", label: "Doğrudan kayıt formu" },
+  { path: "/isletmeler", label: "İşletmeler sayfası" },
+  { path: "/fiyatlar", label: "Fiyatlar" },
+  { path: "/", label: "Ana sayfa" },
+];
+
 function LinkBuilder() {
-  const [campaign, setCampaign] = useState("reels_2");
-  const [path, setPath] = useState("/isletmeler/kayit");
+  const [campaign, setCampaign] = useState("story_1");
+  const [path, setPath] = useState(LINK_PAGES[0]!.path);
   const slug = campaign.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_-]/g, "") || "kampanya";
-  const url = `${SITE}${path}?utm_source=meta&utm_medium=paid&utm_campaign=${slug}`;
+  const base = `${SITE}${path}`;
+  const manual = `${base}?utm_source=meta&utm_medium=paid&utm_campaign=${slug}`;
   return (
-    <Card title="Reklam linki oluştur" icon={Link2} description="Her yeni reklam için farklı kampanya adı verin; kayıtlar ayrı sayılır.">
+    <Card title="Reklam linki oluştur" icon={Link2} description="Hangi reklamın kayıt getirdiğini ayrı ayrı görmek için.">
       <div className={s.form}>
-        <label className={ui.field}><span className={ui.fieldLabel}>Kampanya adı</span>
-          <input className={ui.input} value={campaign} onChange={(event) => setCampaign(event.target.value)} placeholder="reels_2" />
-        </label>
         <label className={ui.field}><span className={ui.fieldLabel}>Sayfa</span>
           <select className={ui.select} value={path} onChange={(event) => setPath(event.target.value)}>
-            <option value="/isletmeler/kayit">İşletme kaydı (önerilen)</option>
-            <option value="/isletmeler">İşletmeler tanıtım sayfası</option>
-            <option value="/fiyatlar">Fiyatlar</option>
-            <option value="/">Ana sayfa</option>
+            {LINK_PAGES.map((page) => <option key={page.path} value={page.path}>{page.label}</option>)}
           </select>
         </label>
-        <div className={s.linkBox}><code>{url}</code><CopyButton value={url} compact /></div>
+
+        <span className={ui.fieldLabel}>Meta reklamı (Reklam Yöneticisi › reklam › Düzenle)</span>
+        <small className={s.muted}>1) “İnternet sitesi URL&apos;si” kutusuna:</small>
+        <div className={s.linkBox}><code>{base}</code><CopyButton value={base} compact /></div>
+        <small className={s.muted}>2) En alttaki “Takip › URL parametreleri” kutusuna (kampanya ve reklam adı otomatik dolar):</small>
+        <div className={s.linkBox}><code>{META_URL_PARAMS}</code><CopyButton value={META_URL_PARAMS} compact /></div>
+
+        <span className={ui.fieldLabel}>Story, biyografi, gönderi gibi elle paylaşılan link</span>
+        <label className={ui.field}><span className={ui.fieldLabel}>Kampanya adı</span>
+          <input className={ui.input} value={campaign} onChange={(event) => setCampaign(event.target.value)} placeholder="story_1" />
+        </label>
+        <div className={s.linkBox}><code>{manual}</code><CopyButton value={manual} compact /></div>
       </div>
     </Card>
   );
