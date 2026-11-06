@@ -37,6 +37,14 @@ test("paths are normalized, language split, private paths dropped", () => {
   }
 });
 
+test("only the last signup step and the WhatsApp signup click go to Meta", async () => {
+  const { META_ACTION_EVENTS, parseTrackedAction } = await import("../lib/analytics-domain.js");
+  assert.deepEqual(META_ACTION_EVENTS["signup:3"], { event: "Lead", content: "business_signup_started" });
+  assert.deepEqual(META_ACTION_EVENTS["signup:whatsapp"], { event: "Contact", content: "business_signup_whatsapp" });
+  assert.equal(META_ACTION_EVENTS["signup:1"], undefined);
+  assert.equal(parseTrackedAction("signup:whatsapp"), "signup:whatsapp");
+});
+
 test("signup funnel steps and pings are accepted from onboarding/panel as fixed paths only", () => {
   assert.deepEqual(normalizeTrackedPath("/onboarding", { funnel: true }), { path: "/onboarding", lang: "tr" });
   assert.deepEqual(normalizeTrackedPath("/en/dashboard/randevular/abc?x=1", { funnel: true }), { path: "/dashboard", lang: "en" });

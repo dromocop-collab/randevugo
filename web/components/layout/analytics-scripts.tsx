@@ -37,8 +37,8 @@ function readPreferences(): CookiePreferences | null {
   return null;
 }
 
-// Odaklı akışlarda (işletme kaydı, reklam tanıtım sayfası) çerez bandı kendiliğinden açılmaz; seçim yapılmadıkça zorunlu olmayan betikler
-// zaten yüklenmez. Kişi başka sayfaya geçince band orada gösterilir. "Çerez tercihleri" bağlantısı her yerde açar.
+// Odaklı akışlarda (işletme kaydı, reklam tanıtım sayfası, kurulum) büyük band yerine üstte ince bir şerit çıkar; seçim yapılmadıkça
+// zorunlu olmayan betikler yüklenmez. "Ayarlar" ya da "Çerez tercihleri" bağlantısı tam paneli açar.
 const QUIET_PATHS = ["/isletmeler/kayit", "/isletmeler/basla", "/onboarding"];
 
 export function AnalyticsScripts() {
@@ -101,6 +101,12 @@ export function AnalyticsScripts() {
             fbq('track', 'PageView');`}
         </Script>
       )}
+      {/* Reklam sayfalarında (kayıt / tanıtım) tam band kayıt düğmesini kapatıyordu, bu yüzden hiç gösterilmiyordu → reklamdan
+          gelen kimse onay veremiyor, Meta Pixel hiç yüklenmiyordu. Burada üstte tek satırlık ince şerit gösterilir. */}
+      {dialogOpen && !editing && quiet && <aside className="cookie-consent-slim" role="region" aria-label={t("Çerez tercihleri")}>
+        <p>{t("Deneyimi iyileştirmek ve reklam ölçümü için çerez kullanıyoruz.")} <button type="button" className="cookie-consent-slim__link" onClick={() => setEditing(true)}>{t("Ayarlar")}</button></p>
+        <div><button type="button" onClick={() => save({ analytics: false, marketing: false })}>{t("Reddet")}</button><button type="button" className="is-primary" onClick={() => save({ analytics: true, marketing: true })}>{t("Kabul et")}</button></div>
+      </aside>}
       {dialogOpen && (editing || !quiet) && <aside className={`cookie-consent ${editing ? "is-editing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="cookie-title">
         <div className="cookie-consent__copy"><strong id="cookie-title">{t("Çerez tercihleri senin kontrolünde.")}</strong><p>{t("Zorunlu çerezler hizmeti çalıştırır. Analitik ve pazarlama çerezleri yalnızca seçiminle etkinleşir.")}</p><Link href="/cerez-politikasi">{t("Çerez politikasını incele")}</Link></div>
         {editing && <div className="cookie-preferences">

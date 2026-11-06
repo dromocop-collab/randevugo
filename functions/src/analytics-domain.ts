@@ -242,12 +242,20 @@ export const TRACKED_ACTIONS = [
   "signup:0", "signup:1", "signup:2", "signup:3",
   // Hesap formu sonrası: hesap açıldı / form hatası / e-posta panelde doğrulandı; kurulum (/onboarding) adımları.
   "signup:account", "signup:error", "signup:verified",
+  // "WhatsApp'tan kaydol" tıklaması (Meta Contact olayı).
+  "signup:whatsapp",
   "onboarding:0", "onboarding:1", "onboarding:2", "onboarding:3",
 ] as const;
 export type TrackedAction = (typeof TRACKED_ACTIONS)[number];
 
 /** Meta "Lead" olayı: işletme kayıt formunun son adımına (Hesap) geçiş. web/features/analytics/track-action.ts ile aynı. */
 export const LEAD_SIGNUP_ACTION: TrackedAction = "signup:3";
+
+/** Meta'ya sunucudan (Conversions API) giden adımlar: kayıt formunun son adımı = Lead, WhatsApp'tan kayıt tıklaması = Contact. */
+export const META_ACTION_EVENTS: Partial<Record<TrackedAction, { event: "Lead" | "Contact"; content: string }>> = {
+  "signup:3": { event: "Lead", content: "business_signup_started" },
+  "signup:whatsapp": { event: "Contact", content: "business_signup_whatsapp" },
+};
 
 export function parseTrackedAction(value: unknown): TrackedAction | null {
   return TRACKED_ACTIONS.includes(value as TrackedAction) ? value as TrackedAction : null;

@@ -50,7 +50,7 @@ export type CapiUserInput = {
 };
 
 export type CapiEventInput = {
-  eventName: "Lead" | "CompleteRegistration" | "ViewContent" | "StartTrial";
+  eventName: "Lead" | "CompleteRegistration" | "ViewContent" | "StartTrial" | "Contact";
   eventId: string; eventTimeMs: number; sourceUrl: string; user: CapiUserInput; customData?: Record<string, string | number>;
 };
 

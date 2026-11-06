@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { trackPixel } from "@/features/attribution/attribution";
+import { trackAction } from "@/features/analytics/track-action";
 
 // WhatsApp'tan kayıt botu (functions/src/whatsapp-signup-domain.ts) bu numarada çalışır (Meta Cloud API, Senin Randevun).
 // Hazır mesaj isSignupIntent'e takılır ("işletmemi", "kaydetmek"); bot adım adım sorup hesabı açar.
@@ -17,7 +17,7 @@ export function WhatsAppSignupLink({ className, children }: { className?: string
       href={`https://wa.me/${SIGNUP_WHATSAPP_NUMBER}?text=${encodeURIComponent(SIGNUP_TEXT)}`}
       target="_blank"
       rel="noopener noreferrer"
-      onClick={() => trackPixel("Contact", `wa-signup-${crypto.randomUUID()}`)}
+      onClick={() => trackAction("signup:whatsapp")}
     >
       {children}
     </a>

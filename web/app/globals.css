@@ -30674,3 +30674,14 @@ body:has(.cookie-consent) .support-popup { bottom:215px; }
 }
 body:has(.cookie-consent) .rovi-support-hint { display: none; }
 @media (prefers-reduced-motion: reduce) { .rovi-support-online:after, .rovi-support-hint { animation: none !important; } }
+
+/* Reklam/kayıt sayfalarında ince çerez şeridi (components/layout/analytics-scripts.tsx): kayıt düğmesini kapatmaz */
+.cookie-consent-slim { position:fixed; z-index:260; top:max(8px,env(safe-area-inset-top)); left:0; right:0; margin:0 auto; display:flex; align-items:center; gap:10px 14px; width:min(720px,calc(100% - 16px)); padding:8px 8px 8px 14px; border:1px solid rgb(255 255 255/.14); border-radius:16px; background:rgb(8 35 24/.96); color:#fff; box-shadow:0 14px 40px rgb(0 0 0/.25); backdrop-filter:blur(16px); animation:customerReveal .35s ease both; }
+.cookie-consent-slim p { flex:1; min-width:0; margin:0; color:rgb(255 255 255/.8); font-size:12px; line-height:1.4; }
+.cookie-consent-slim__link { padding:0; border:0; background:none; color:#c9f45b; font:inherit; font-weight:800; text-decoration:underline; cursor:pointer; }
+.cookie-consent-slim > div { display:flex; flex:0 0 auto; gap:6px; }
+.cookie-consent-slim > div button { min-height:34px; padding:0 12px; border:1px solid rgb(255 255 255/.2); border-radius:11px; background:transparent; color:#fff; font-size:12px; font-weight:800; cursor:pointer; }
+.cookie-consent-slim > div button.is-primary { border-color:#c9f45b; background:#c9f45b; color:#10281d; }
+.cookie-consent-slim button:focus-visible { outline:2px solid #c9f45b; outline-offset:2px; }
+@media (max-width:520px) { .cookie-consent-slim p { font-size:11px; } .cookie-consent-slim > div button { padding:0 10px; } }
+@media (prefers-reduced-motion:reduce) { .cookie-consent-slim { animation:none; } }

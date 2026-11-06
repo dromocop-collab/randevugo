@@ -12,16 +12,19 @@ export function trackAction(action: string) {
   const key = `${window.location.pathname}|${action}`;
   if (key === lastSent) return;
   lastSent = key;
-  // Kayıt formunun son adımı (Hesap) = Lead: Meta'ya hem tarayıcıdan (onay varsa) hem sunucudan, aynı kimlikle.
+  // Kayıt formunun son adımı (Hesap) = Lead, WhatsApp kayıt tıklaması = Contact: Meta'ya hem tarayıcıdan (onay varsa) hem sunucudan, aynı kimlikle.
   // Sunucu: functions/src/analytics-domain.ts LEAD_SIGNUP_ACTION.
-  const lead = action === "signup:3";
-  const eventId = lead ? `lead-${crypto.randomUUID()}` : undefined;
-  if (lead && eventId) trackPixel("Lead", eventId);
+  // "WhatsApp'tan kaydol" tıklaması = Contact (sunucu: META_ACTION_EVENTS).
+  const metaEvent = action === "signup:3" ? "Lead" : action === "signup:whatsapp" ? "Contact" : null;
+  const lead = metaEvent !== null;
+  const eventId = metaEvent ? `${metaEvent.toLowerCase()}-${crypto.randomUUID()}` : undefined;
+  if (metaEvent && eventId) trackPixel(metaEvent, eventId);
   // Sayfa görüntülemesi 700 ms gecikmeyle gider (page-view-tracker); adım ondan sonra kaydedilsin ki canlı panelde
   // yol "İşletme kaydı → Kategori seçiyor" sırasıyla görünsün. Yol şimdi alınır (yönlendirme sonrası değişmesin).
   const path = window.location.pathname;
   const payload = { type: "action", action, path, ...(lead ? { eventId, ...readMetaCookies() } : {}) };
+  // Tıklama adımı (WhatsApp'a geçiş) beklemez: telefonda uygulama açılınca sayfa askıya alınabilir.
   window.setTimeout(() => {
     void httpsCallable(getFunctions(getFirebaseApp(), "europe-west1"), "trackVisit")(payload).catch(() => undefined);
-  }, 900);
+  }, action === "signup:whatsapp" ? 0 : 900);
 }

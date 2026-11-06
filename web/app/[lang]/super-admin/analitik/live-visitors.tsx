@@ -29,7 +29,7 @@ const ACTION: Record<string, { label: string; goal?: boolean; warn?: boolean }> 
   "booking:info": { label: "Bilgilerini giriyor" }, "booking:verify": { label: "Telefonunu doğruluyor" }, "booking:summary": { label: "Randevuyu onaylamak üzere" },
   "booking:success": { label: "Randevu aldı 🎉", goal: true },
   "signup:0": { label: "Kategori seçiyor" }, "signup:1": { label: "İşletme bilgilerini giriyor" }, "signup:2": { label: "Çalışma şeklini seçiyor" }, "signup:3": { label: "Hesabını oluşturuyor" },
-  "signup:account": { label: "Hesap açtı 🎉", goal: true }, "signup:error": { label: "Hesap formunda hata aldı", warn: true }, "signup:verified": { label: "E-postasını doğruladı", goal: true },
+  "signup:account": { label: "Hesap açtı 🎉", goal: true }, "signup:error": { label: "Hesap formunda hata aldı", warn: true }, "signup:verified": { label: "E-postasını doğruladı", goal: true }, "signup:whatsapp": { label: "WhatsApp'tan kayda geçti", goal: true },
   "onboarding:0": { label: "Kuruluma geçti" }, "onboarding:1": { label: "Kurulum: konum ve iletişim" }, "onboarding:2": { label: "Kurulum: hizmet ve saatler" },
   "onboarding:3": { label: "Kurulumun son adımında" },
 };
