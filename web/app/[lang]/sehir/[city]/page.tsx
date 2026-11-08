@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowRight, Compass, MapPin, ShieldCheck } from "lucide-react";
 import { MarketingPage } from "@/components/marketing/marketing-shell";
 import { AreaIntro } from "@/components/seo/area-intro";
+import { EmptyCity } from "@/components/seo/empty-city";
+import { TURKEY_CITIES } from "@/lib/geo/turkey-districts";
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { LinkCloud } from "@/components/seo/link-cloud";
@@ -14,11 +16,14 @@ import { createPublicMetadata } from "@/lib/seo/metadata";
 import { breadcrumbJsonLd, faqJsonLd, graph, itemListJsonLd, localePath, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
 import { categoryCounts, districtRanking, getCity, getSeoIndex, groupByCity, groupByDistrict, isLegacyFethiye, sortForListing, topRated } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
-import { buildAreaFaq, buildAreaIntro, composeDescription, joinList, placeVars, type AreaListingFacts } from "@/lib/seo/text";
+import { buildAreaFaq, buildAreaIntro, composeDescription, joinList, placeVars, seoSlug, type AreaListingFacts } from "@/lib/seo/text";
 import type { Locale, TFunction } from "@/i18n/config";
 import { getLocale, getT } from "@/i18n/server";
 
 type Props = { params: Promise<{ city: string }> };
+
+/** İşletmesi olmayan ama gerçek bir il: 404 yerine "yakında" sayfası gösterilir. */
+const knownCity = (slug: string) => TURKEY_CITIES.find((item) => seoSlug(item) === slug) ?? null;
 
 // Şehir sayfaları derleme sırasında üretilir, saatte bir yenilenir; yeni şehirler ilk istekte oluşur.
 export const revalidate = 3600;
@@ -55,7 +60,12 @@ function cityTitle(city: string, labels: string[], t: TFunction, locale: Locale)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { city: slug } = await params;
   const [t, locale, city] = await Promise.all([getT(), getLocale(), getCity(slug)]);
-  if (!city) return { title: t("Şehir bulunamadı"), robots: { index: false, follow: true } };
+  if (!city) {
+    const known = knownCity(slug);
+    return known
+      ? { title: t("{inPlace} yakında", placeVars(known, locale)), robots: { index: false, follow: true } }
+      : { title: t("Şehir bulunamadı"), robots: { index: false, follow: true } };
+  }
   const place = placeVars(city.city, locale);
   const lower = (value: string) => locale === "tr" ? value.toLocaleLowerCase("tr-TR") : value.toLowerCase();
   const categories = categoryCounts(city.businesses).slice(0, 3).map((item) => lower(t(item.label)));
@@ -77,7 +87,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CityPage({ params }: Props) {
   const { city: slug } = await params;
   const [city, index, t, locale] = await Promise.all([getCity(slug), getSeoIndex(), getT(), getLocale()]);
-  if (!city) notFound();
+  if (!city) {
+    const known = knownCity(slug);
+    if (known) return <EmptyCity city={known} />;
+    notFound();
+  }
   const place = placeVars(city.city, locale);
   const path = localePath(`/sehir/${city.slug}`, locale);
   const pageUrl = absoluteUrl(path);

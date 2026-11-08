@@ -26,6 +26,7 @@ const SOURCES: Source[] = [
   { href: "/super-admin/destek", tone: "red", label: (n) => `${n} destek talebi yanıt bekliyor`, queries: () => [query(collection(getDb(), "supportTickets"), where("status", "in", SUPPORT_NEEDS_ADMIN_STATUSES))] },
   { href: "/super-admin/isletmeler", tone: "amber", label: (n) => `${n} işletme onay bekliyor`, queries: () => [query(collection(getDb(), "businesses"), where("status", "==", "pending_review"))] },
   { href: "/super-admin/yarim-kayitlar", tone: "amber", label: (n) => `${n} yarım kayıt açık`, queries: () => [query(collection(getDb(), "signupLeads"), where("status", "==", "open"))] },
+  { href: "/super-admin/isletme-onerileri", tone: "blue", label: (n) => `${n} yeni işletme önerisi`, queries: () => [query(collection(getDb(), "businessSuggestions"), where("status", "==", "new"))] },
   {
     href: "/super-admin/moderasyon", tone: "violet", label: (n) => `${n} moderasyon bekliyor`,
     queries: () => [

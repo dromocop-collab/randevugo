@@ -1,0 +1,16 @@
+/* İşletme önerme formu: açık/koyu temada okunur, telefonda 16px (iOS yakınlaştırmasın). */
+.form { --ink: #10281d; --muted: #5d6f64; --line: rgb(16 40 29 / 0.16); --field: #fff; display: grid; gap: 12px; width: 100%; text-align: left; }
+:global(:root[data-theme="dark"]) .form { --ink: #eef6f0; --muted: #a3b6aa; --line: rgb(255 255 255 / 0.16); --field: #18261e; }
+.field { display: grid; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 750; }
+.field input, .field select, .input { box-sizing: border-box; width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--field); color: var(--ink); font: inherit; font-size: 16px; font-weight: 500; }
+.field input:focus-visible, .field select:focus-visible, .input:focus-visible { outline: 2px solid #1f7a4a; outline-offset: 1px; }
+.trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.error { margin: 0; color: #b42318; font-size: 13px; font-weight: 650; }
+:global(:root[data-theme="dark"]) .error { color: #ff9a8a; }
+.submit { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; border: 0; border-radius: 13px; background: #14532d; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+.submit:disabled { opacity: 0.6; cursor: wait; }
+.submit:focus-visible, .sent button:focus-visible { outline: 2px solid #1f7a4a; outline-offset: 2px; }
+.sent { display: grid; justify-items: center; gap: 8px; color: inherit; text-align: center; }
+.sent > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #dff5e7; color: #14532d; }
+.sent p { display: grid; gap: 3px; margin: 0; font-size: 14px; }
+.sent button { padding: 6px 10px; border: 0; background: none; color: inherit; font-size: 13px; font-weight: 750; text-decoration: underline; cursor: pointer; }

@@ -85,6 +85,29 @@ test("kurallar: yalnız platform yöneticisi okur ve takip durumunu değiştirir
   await assert.rejects(updateDoc(doc(admin.firestore, "signupLeads/905309998877"), { status: "converted" }), /permission/i);
 });
 
+test("işletme önerisi: aynı işletme tek kayıtta sayılır, yalnız yönetici okur", async () => {
+  const visitor = await client("suggest-visitor");
+  await visitor.call("submitBusinessSuggestion", { businessName: "Elif Kuaför", city: "Ankara", category: "kuafor" });
+  await visitor.call("submitBusinessSuggestion", { businessName: "ELİF  KUAFÖR", city: "ankara", phone: "0312 123 45 67" });
+  const rows = (await db.collection("businessSuggestions").get()).docs;
+  assert.equal(rows.length, 1);
+  const row = rows[0].data();
+  assert.equal(row.votes, 2);
+  assert.equal(row.status, "new");
+  assert.equal(row.phone, "903121234567", "ilk öneride olmayan numara sonradan tamamlanır");
+  await assert.rejects(visitor.call("submitBusinessSuggestion", { businessName: "Elif", city: "Atlantis" }), /invalid-argument|kontrol/);
+  await assert.rejects(visitor.call("submitBusinessSuggestion", { businessName: "Bot", city: "Ankara", website: "spam" }), /invalid-argument|kontrol/);
+
+  const path = `businessSuggestions/${rows[0].id}`;
+  await assert.rejects(getDoc(doc(visitor.firestore, path)), /permission/i);
+  await assert.rejects(updateDoc(doc(visitor.firestore, path), { status: "closed" }), /permission/i);
+  const admin = await client("suggest-admin");
+  await db.doc(`platformAdmins/${admin.uid}`).set({ enabled: true });
+  await updateDoc(doc(admin.firestore, path), { status: "contacted", handledBy: admin.uid });
+  assert.equal((await db.doc(path).get()).data().status, "contacted");
+  await assert.rejects(updateDoc(doc(admin.firestore, path), { businessName: "Başka" }), /permission/i);
+});
+
 test.after(async () => {
   await Promise.all(apps.map((app) => deleteApp(app)));
   await deleteAdminApp(adminApp);

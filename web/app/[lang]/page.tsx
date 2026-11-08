@@ -84,12 +84,15 @@ export default async function HomePage() {
   const initialData = await loadHomeInitialData();
   const t = await getT();
   const intlLocale = await getIntlLocale();
+  // Yayında az işletme varken işletme sahibine çağrı öne alınır (sayı çoğalınca sayfanın sonuna döner).
+  const fewBusinesses = Boolean(initialData?.stats && initialData.stats.totalBusinesses < 12);
   return <div className={`marketing-page ${styles.page}`}>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(homeJsonLd(t, intlLocale)) }}/>
     <MarketingHeader />
     <main className={styles.main}>
       <HomeInteractive initialData={initialData} intro={<HomeHeroIntro />} art={<HomeHeroArt />} />
 
+      {fewBusinesses ? <HomeBusinessBand /> : null}
       <HomeHowItWorks />
       <HomeLiveNow />
       <HomeTrust businesses={initialData?.businesses ?? []} />
@@ -107,7 +110,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <HomeBusinessBand />
+      {fewBusinesses ? null : <HomeBusinessBand />}
       <HomeFaq items={CUSTOMER_FAQ} />
     </main>
     <CustomerLiveHome />

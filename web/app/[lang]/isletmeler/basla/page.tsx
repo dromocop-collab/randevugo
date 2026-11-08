@@ -5,7 +5,7 @@ import { ArrowUpRight, BellRing, CalendarCheck2, Check, Clock3, Gift, Globe2, Li
 import { currencySymbol, formatPrice, loadPublicPlans } from "@/components/home/public-plans";
 import { createPublicMetadata } from "@/lib/seo/metadata";
 import { SELLER } from "@/lib/legal/seller";
-import { WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
+import { SETUP_HELP_TEXT, WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
 import base from "@/components/home/business.module.css";
 import s from "./basla.module.css";
 import { tk } from "@/i18n/config";
@@ -21,6 +21,7 @@ const SIGNUP = "/isletmeler/kayit";
 const BENEFITS = [
   { icon: Globe2, title: tk("7/24 online randevu"), text: tk("Sana özel randevu sayfası. Müşterin gece 23:00'te de, Pazar günü de telefonla aramadan uygun saati seçer.") },
   { icon: MessageSquareText, title: tk("Otomatik WhatsApp ve SMS hatırlatma"), text: tk("Onay ve hatırlatma mesajları kendiliğinden gider; unutan, gelmeyen müşteri azalır.") },
+  { icon: Link2, title: tk("Kendi linkin, kendi müşterilerin"), text: tk("Müşterilerin Instagram'daki ve WhatsApp'taki linkinden doğrudan sana gelir. Başka işletmelerle yan yana listelenmen ya da sitede çok işletme olması gerekmez.") },
   { icon: UsersRound, title: tk("Takvim, ekip ve müşteriler tek ekranda"), text: tk("Çalışanların, hizmetlerin ve müşteri geçmişin cebinde. Defter ve mesaj grupları tarih olur.") },
 ] as const;
 
@@ -34,6 +35,7 @@ const FAQ = [
   [tk("İlk ay gerçekten ücretsiz mi?"), tk("Evet. İlk ay tüm özellikler ücretsiz. Başlamak için kredi kartı gerekmez; süre bitince devam etmek istersen paket seçersin.")],
   [tk("Müşterilerim uygulama indirmek zorunda mı?"), tk("Hayır. Müşterilerin randevu sayfandan tarayıcıyla randevu alır; uygulama isteğe bağlı.")],
   [tk("Bilgisayarım yok, telefondan kullanabilir miyim?"), tk("Evet. Panel telefonda çalışır; iPhone ve Android uygulaması da var. Yeni randevu bildirimi anında cebine gelir.")],
+  [tk("Bölgemde sistemi kullanan başka işletme yok, yine de işe yarar mı?"), tk("Evet. Müşterilerin randevuyu senin linkinden alır; başka işletmelere ihtiyacın yok. Bölgende ilk başlayan olman da senin avantajın.")],
   [tk("Kurulumda yardım alabilir miyim?"), tk("Evet. Kayıttan sonra WhatsApp'tan kurulum ipuçları gelir; istersen hizmet ve saatlerini senin için biz gireriz.")],
 ] as const;
 
@@ -120,6 +122,13 @@ export default async function AdLandingPage() {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className={`${base.wrap} ${s.section}`} aria-labelledby="ad-setup">
+          <div className={s.setupHelp}>
+            <div><h2 id="ad-setup">{t("Uğraşmak istemiyor musun? Kurulumu biz yapalım.")}</h2><p>{t("Hizmetlerini ve çalışma saatlerini WhatsApp'tan yaz, mağazanı senin için hazırlayalım.")}</p></div>
+            <WhatsAppSignupLink className={`${base.btnLime} ${s.cta}`} text={SETUP_HELP_TEXT}><MessageCircle size={18} aria-hidden="true" /> {t("Kurulumu siz yapın")}</WhatsAppSignupLink>
+          </div>
         </section>
 
         <section className={`${base.wrap} ${s.section}`} aria-labelledby="ad-offer">

@@ -15,6 +15,7 @@ import { canonicalBusinessCategory } from "@/lib/business-categories";
 import { categoryImageFor } from "@/components/marketing/category-catalog";
 import { tk } from "@/i18n/config";
 import { useIntlLocale, useT } from "@/i18n/client";
+import { SuggestBusinessForm } from "@/features/discovery/suggest-business-form";
 import styles from "./discover.module.css";
 
 interface DiscoveryCategory {
@@ -477,6 +478,11 @@ export function DiscoverInteractive() {
           <div className={styles.emptyActions}>
             {anyFilter && <button type="button" className={cx(styles.pill, styles.pillPrimary)} onClick={clearFilters}>{t("Filtreleri temizle")}</button>}
             {POPULAR_SEARCHES.slice(0, 3).map((item) => <button key={item} type="button" className={styles.pill} onClick={() => applySearch(item)}>{t(item)}</button>)}
+          </div>
+          <div className={styles.suggest}>
+            <h4>{t("Aradığın işletme burada yok mu?")}</h4>
+            <p>{t("Adını yaz, onlara biz ulaşalım.")}</p>
+            <SuggestBusinessForm key={city} initialCity={city} />
           </div>
         </div>
       ) : (

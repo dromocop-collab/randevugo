@@ -425,6 +425,9 @@
 .empty { display: grid; justify-items: center; gap: 6px; padding: 30px 20px 34px; border: 1px dashed var(--line); border-radius: 28px; background: var(--card); text-align: center; }
 .empty h3 { margin: 6px 0 0; font-size: 20px; }
 .empty p { max-width: 380px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.suggest { width: min(420px, 100%); margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.suggest h4 { margin: 0; font-size: 16px; }
+.suggest p { margin: 2px auto 12px; }
 .emptyActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 .pill {
   display: inline-flex;

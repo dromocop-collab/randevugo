@@ -35,7 +35,7 @@
 .section { padding-top: 52px; }
 .h2 { margin: 8px 0 18px; font-size: clamp(26px, 7vw, 40px); font-weight: 790; line-height: 1.08; letter-spacing: -0.035em; text-wrap: balance; }
 .benefits, .steps { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-@media (min-width: 900px) { .benefits, .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } .benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .benefits li, .steps li { display: flex; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
 .benefits h3, .steps h3 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 16px; font-weight: 780; line-height: 1.3; }
 .benefits p, .steps p { margin: 5px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
@@ -43,6 +43,10 @@
 .stepNo { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--lime); color: #12341f; font-size: 16px; font-weight: 850; }
 :global(:root[data-theme="dark"]) .icon { color: var(--lime); }
 
+.setupHelp { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
+.setupHelp h2 { margin: 0; font-size: clamp(21px, 5vw, 28px); font-weight: 780; line-height: 1.15; letter-spacing: -0.03em; }
+.setupHelp p { margin: 6px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.setupHelp .cta { margin-top: 0; }
 .offer { display: grid; justify-items: center; gap: 8px; padding: 30px 20px; border-radius: 30px; background: linear-gradient(165deg, #133f28, #0b2619); color: #fff; text-align: center; }
 .offer h2 { margin: 6px 0 0; font-size: clamp(28px, 8vw, 44px); font-weight: 800; letter-spacing: -0.035em; }
 .offer p { max-width: 460px; margin: 0; color: rgb(255 255 255 / 0.82); font-size: 15px; line-height: 1.55; }

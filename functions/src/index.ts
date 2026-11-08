@@ -34,6 +34,7 @@ import { addressFingerprint, geocodeQueries, parseNominatim, validateOwnerPin, t
 import { appointmentTransitionTriggers, automationRuleMatches, automationVariables, parseAutomationRule, renderAutomationText, type BusinessAutomationTrigger } from "./automation-domain.js";
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
+import { parseBusinessSuggestion } from "./business-suggestion-domain.js";
 import { LEAD_TEMPLATE_DEFINITION, decideLeadReminder, leadPhone, leadReminderMessage, parseLeadInput, parseLeadSettings, renderLeadReminderText, LEAD_REMINDER_DELAY_MS } from "./signup-lead-domain.js";
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, META_ACTION_EVENTS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
@@ -7382,6 +7383,33 @@ export const saveSignupLead = onCall(
       }
       if (current?.status === "converted") return;
       tx.update(ref, { ...fields, attempts: FieldValue.increment(1) });
+    });
+    return { ok: true };
+  },
+);
+
+/** Boş şehir / sonuçsuz keşif formu: müşteri bölgesindeki işletmeyi önerir. Aynı işletme tek kayıtta sayılır (votes). */
+export const submitBusinessSuggestion = onCall(
+  { ...publicCallableOptions, memory: "256MiB", maxInstances: 10 },
+  async (request) => {
+    const suggestion = parseBusinessSuggestion(request.data);
+    if (!suggestion) throw new HttpsError("invalid-argument", "İşletme adını ve şehri kontrol edin.");
+    await consumeSecurityLimit(`business-suggestion:ip:${clientIpFrom(request.rawRequest as unknown as { headers: Record<string, unknown>; ip?: string })}`, 10, 60 * 60_000);
+    const ref = db.doc(`businessSuggestions/${suggestion.id}`);
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(ref);
+      const { id: _id, ...fields } = suggestion;
+      void _id;
+      if (!snapshot.exists) {
+        tx.set(ref, { ...fields, status: "new", votes: 1, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        return;
+      }
+      const current = snapshot.data()!;
+      tx.update(ref, {
+        votes: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
+        ...(!current.phone && suggestion.phone ? { phone: suggestion.phone } : {}),
+        ...(!current.district && suggestion.district ? { district: suggestion.district } : {}),
+      });
     });
     return { ok: true };
   },
