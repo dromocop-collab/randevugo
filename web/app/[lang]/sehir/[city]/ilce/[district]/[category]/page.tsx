@@ -22,6 +22,8 @@ type Props = { params: Promise<{ city: string; district: string; category: strin
 
 // Yalnızca en az bir yayında işletmesi olan ilçe × kategori çiftleri; saatte bir yenilenir.
 export const revalidate = 3600;
+// [lang] düzenindeki dynamicParams=false çocuklara geçer; yeni açılan bölge/kategori bir sonraki yayına kadar 404 oluyordu.
+export const dynamicParams = true;
 
 export async function generateStaticParams() {
   const index = await getSeoIndex();

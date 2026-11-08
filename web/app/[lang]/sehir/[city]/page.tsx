@@ -27,6 +27,8 @@ const knownCity = (slug: string) => TURKEY_CITIES.find((item) => seoSlug(item) =
 
 // Şehir sayfaları derleme sırasında üretilir, saatte bir yenilenir; yeni şehirler ilk istekte oluşur.
 export const revalidate = 3600;
+// [lang] düzenindeki dynamicParams=false çocuklara da geçer; kapalıyken derlemede olmayan il (yeni açılan ya da işletmesiz) koda girmeden 404 oluyordu.
+export const dynamicParams = true;
 
 export async function generateStaticParams() {
   const index = await getSeoIndex();
