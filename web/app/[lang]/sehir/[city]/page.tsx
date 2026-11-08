@@ -25,14 +25,13 @@ type Props = { params: Promise<{ city: string }> };
 /** İşletmesi olmayan ama gerçek bir il: 404 yerine "yakında" sayfası gösterilir. */
 const knownCity = (slug: string) => TURKEY_CITIES.find((item) => seoSlug(item) === slug) ?? null;
 
-// Şehir sayfaları derleme sırasında üretilir, saatte bir yenilenir; yeni şehirler ilk istekte oluşur.
+// Şehir sayfaları derleme sırasında üretilir, saatte bir yenilenir.
 export const revalidate = 3600;
-// [lang] düzenindeki dynamicParams=false çocuklara da geçer; kapalıyken derlemede olmayan il (yeni açılan ya da işletmesiz) koda girmeden 404 oluyordu.
-export const dynamicParams = true;
 
-export async function generateStaticParams() {
-  const index = await getSeoIndex();
-  return groupByCity(index).map((city) => ({ city: city.slug }));
+// [lang] düzenindeki dynamicParams=false alt sayfadan ezilemez: burada üretilmeyen il 404 olur. O yüzden 81 ilin hepsi üretilir;
+// işletmesi olmayan il "yakında" sayfası gösterir, işletme açılınca saatlik yenilemeyle normal sayfaya döner.
+export function generateStaticParams() {
+  return TURKEY_CITIES.map((city) => ({ city: seoSlug(city) }));
 }
 
 function cityFacts(city: NonNullable<Awaited<ReturnType<typeof getCity>>>, t: TFunction): AreaListingFacts {
