@@ -16,6 +16,7 @@ import {
   Sheet, SkeletonList, StatCard, StatGrid, cx, relativeTime, ui, useNow, type Tone,
 } from "../_pages-ui";
 import s from "./reklamlar.module.css";
+import { BreakdownCard, FunnelCard, GuardCard } from "./ads-insights";
 
 const DEFAULT_AD_ACCOUNT = "881998108237172";
 const SITE = "https://seninrandevun.com";
@@ -129,7 +130,7 @@ export default function AdsPage() {
             <StatGrid cols={5}>
               <StatCard icon={Wallet} label="Harcama" value={tl(totals.spend, 2)} hint={`${num(totals.impressions)} gösterim · ${num(totals.reach)} kişi`} />
               <StatCard icon={MousePointerClick} label="Bağlantı tıklaması" tone="blue" value={num(totals.linkClicks)} hint={`Tıklama başı ${tl(totals.cpc, 2)} · TO %${totals.ctr ?? "—"}`} />
-              <StatCard icon={Eye} label="Sayfa görüntüleme" value={num(totals.landingPageViews)} hint="Siteye gerçekten gelen" />
+              <StatCard icon={Eye} label="Sonuç" value={num(totals.results)} hint={`${num(totals.landingPageViews)} siteye geldi · ${num(totals.conversations)} WhatsApp’ta yazdı · sonuç başı ${tl(totals.costPerResult, 2)}`} />
               <StatCard icon={UserPlus} label="Reklamdan kayıt" tone="green" value={num(totals.metaSignups)} hint={totals.costPerSignup != null ? `Kayıt başı ${tl(totals.costPerSignup)} · dönüşüm %${totals.signupRate ?? "—"}` : "Henüz kayıt yok"} />
               <StatCard icon={BadgeTurkishLira} label="Ödeme yapan" tone="violet" value={num(totals.metaPaid)} hint={totals.costPerPaid != null ? `Müşteri başı ${tl(totals.costPerPaid)}` : "Henüz ödeme yok"} />
             </StatGrid>
@@ -137,6 +138,8 @@ export default function AdsPage() {
 
           <div className={s.grid}>
             <div className={s.main}>
+              {data.funnels ? <FunnelCard funnels={data.funnels} /> : null}
+
               {connected ? (
                 <Card title="Kampanyalar" icon={Megaphone} description={`${data.range.since} – ${data.range.until} · tutarlar ${data.account?.currency ?? "TRY"}`}>
                   {data.campaigns.length === 0 ? <EmptyState icon={Megaphone} title="Kampanya yok" description="Reklam Yöneticisi'nde oluşturduğunuz kampanyalar burada listelenir." /> : (
@@ -175,6 +178,8 @@ export default function AdsPage() {
                   )}
                 </Card>
               ) : null}
+
+              {connected ? <BreakdownCard days={Number(days)} campaigns={data.campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name }))} /> : null}
 
               {connected && data.daily.length ? (
                 <Card title="Günlük harcama" icon={TrendingUp} description="Çubuk: harcama · alt satır: bağlantı tıklaması">
@@ -232,6 +237,7 @@ export default function AdsPage() {
             </div>
 
             <div className={s.side}>
+              <GuardCard guard={data.guard} connected={connected} onChanged={() => void load(days)} />
               <Card title="Meta bağlantısı" icon={PlugZap}>
                 <DetailList rows={[
                   { label: "Durum", value: connected ? <Pill tone="green" dot>Bağlı</Pill> : <Pill tone="amber" dot>Bağlı değil</Pill> },
@@ -327,6 +333,7 @@ function StatsLine({ stats, compact }: { stats: MetaStats; compact?: boolean }) 
       <span><small>Tıklama</small><b>{num(stats.linkClicks)}</b></span>
       <span><small>Tık. başı</small><b>{tl(cpc, 2)}</b></span>
       <span><small>Sayfa gör.</small><b>{num(stats.landingPageViews)}</b></span>
+      {stats.conversations ? <span><small>WhatsApp</small><b>{num(stats.conversations)}</b></span> : null}
       {!compact ? <span><small>Video izl.</small><b>{num(stats.videoViews)}</b></span> : null}
     </div>
   );

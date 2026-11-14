@@ -55,3 +55,42 @@
 .rowCard { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; text-align: left; }
 .rowCard > span:first-child { display: grid; gap: 2px; min-width: 0; }
 .rowCard small { color: var(--muted); font-size: 12px; }
+
+/* Kırılım */
+.breakdownBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 14px; }
+.breakdownBar select { width: auto; min-width: 0; max-width: 100%; }
+.breakdownLabel { display: grid; gap: 5px; min-width: 140px; }
+.spendBar { display: block; height: 5px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+.spendBar > i { display: block; height: 100%; border-radius: inherit; background: var(--green-2); }
+.subtle { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tips { display: grid; gap: 6px; margin-bottom: 12px; }
+.tipGood, .tipBad { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
+.tipGood svg, .tipBad svg { flex: none; margin-top: 2px; }
+.tipGood { background: var(--green-soft); color: var(--green-2); }
+.tipBad { background: var(--amber-soft); color: var(--amber); }
+
+/* Koruma */
+.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.check input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--green-2); }
+.check > span { display: grid; gap: 2px; }
+.check b { font-size: 13.5px; }
+.check small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.check:has(input:disabled) { opacity: 0.55; cursor: default; }
+
+/* Huni */
+.funnel { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.funnelStep { display: grid; grid-template-columns: minmax(120px, 0.9fr) minmax(0, 1.4fr) auto; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 12px; }
+.funnelWorst { background: var(--amber-soft); }
+.funnelHead { display: grid; gap: 1px; min-width: 0; }
+.funnelHead b { font-size: 13px; }
+.funnelHead small { color: var(--faint); font-size: 11px; }
+.funnelTrack { display: block; height: 10px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+.funnelTrack > i { display: block; height: 100%; border-radius: inherit; background: var(--green-2); transition: width 0.4s ease; }
+.funnelNums { display: grid; justify-items: end; min-width: 76px; font-variant-numeric: tabular-nums; }
+.funnelNums b { font-size: 14px; }
+.funnelNums small { color: var(--muted); font-size: 11px; }
+@media (max-width: 560px) {
+  .funnelStep { grid-template-columns: minmax(0, 1fr) auto; }
+  .funnelTrack { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .funnelTrack > i { transition: none; } }

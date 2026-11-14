@@ -39,7 +39,7 @@ import { LEAD_TEMPLATE_DEFINITION, decideLeadReminder, leadPhone, leadReminderMe
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, META_ACTION_EVENTS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
-import { META_ADS_SETTINGS_PATH, attributionChannel, dailyBudgetMinorUnits, metaDateRange, normalizeAdAccountId, parseMetaInsight, ratio, sanitizeAttribution, summarizeSignups, type Attribution } from "./ads-domain.js";
+import { AD_GUARD_DEFAULTS, META_ADS_SETTINGS_PATH, META_BREAKDOWN_FIELDS, attributionChannel, buildFunnel, dailyBudgetMinorUnits, evaluateAdGuard, isBreakdownKind, isMetaAdSession, isMetaAttribution, metaDateRange, metaResults, normalizeAdAccountId, normalizeAdGuardSettings, parseMetaInsight, ratio, sanitizeAttribution, summarizeBreakdown, summarizeSignups, type AdGuardSettings, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { SIGNUP_IDLE_MS, advanceSignup, buildInteractivePayload, cancelCommand, defaultWorkingHours, isSignupIntent, outgoingPreview, slugFromName, startSignup, type Outgoing, type SignupData, type SignupStep, type Transition } from "./whatsapp-signup-domain.js";
 import { buildStarterServicePlan, defaultStarterSelections } from "./starter-services-domain.js";
@@ -11205,7 +11205,13 @@ export const trackVisit = onCall(
           sessionActions: sessionActions.includes(action) ? sessionActions : [...sessionActions, action].slice(-20),
         }, { merge: true });
         // Adım hunisi: oturum başına her adım bir kez.
-        if (!sessionActions.includes(action)) tx.set(shardRef, { day: parts.day, byAction: { [mapKey(action)]: FieldValue.increment(1) } }, { merge: true });
+        // Meta reklamıyla gelen oturumlar ayrıca sayılır (Süper admin › Reklamlar hunisi).
+        if (!sessionActions.includes(action)) {
+          tx.set(shardRef, {
+            day: parts.day, byAction: { [mapKey(action)]: FieldValue.increment(1) },
+            ...(isMetaAdSession(visitor.sessionSourceKind, visitor.sessionSourceLabel) ? { adsByAction: { [mapKey(action)]: FieldValue.increment(1) } } : {}),
+          }, { merge: true });
+        }
         // Meta olayı oturum başına bir kez (aynı kişi adımı tekrar açarsa ikinci Lead sayılmaz).
         return { counted: false, meta: !sessionActions.includes(action) ? META_ACTION_EVENTS[action] ?? null : null };
       }
@@ -11476,7 +11482,7 @@ export const getBusinessVisitorAnalytics = onCall(
 /* ── Reklamlar: Meta Marketing API + kayıt kaynağı (süper admin) ───────────────────────────────────────────── */
 
 const META_GRAPH = "https://graph.facebook.com/v21.0";
-type MetaAdsSettings = { token: string; adAccountId: string | null; updatedAt: string | null };
+type MetaAdsSettings = { token: string; adAccountId: string | null; updatedAt: string | null; guard: AdGuardSettings };
 type MetaPaged<T> = { data?: T[] };
 type MetaCampaign = { id: string; name?: string; status?: string; effective_status?: string; objective?: string; daily_budget?: string; lifetime_budget?: string; start_time?: string };
 type MetaAdSet = { id: string; name?: string; campaign_id?: string; status?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string };
@@ -11489,6 +11495,46 @@ async function loadMetaAdsSettings(): Promise<MetaAdsSettings> {
     token: String(raw.accessToken ?? "").trim(),
     adAccountId: normalizeAdAccountId(raw.adAccountId),
     updatedAt: raw.updatedAt instanceof Timestamp ? raw.updatedAt.toDate().toISOString() : null,
+    guard: raw.guard ? normalizeAdGuardSettings(raw.guard) : { ...AD_GUARD_DEFAULTS },
+  };
+}
+
+const META_GUARD_STATUS_PATH = "platformPrivateSettings/metaAdsGuardStatus";
+
+/** Reklam hunisi: Meta (gösterim → tıklama → siteye geldi) + bizim adımlar (reklam oturumu) + kayıt/ödeme. */
+async function buildMetaAdsFunnels(range: { since: string; until: string; sinceMs: number }, meta: { impressions: number; linkClicks: number; landingPageViews: number; conversations: number } | null, signups: { meta: number; metaPaid: number; whatsappAd: number; whatsappAdPaid: number }) {
+  const days = dayRange(Date.parse(`${range.until}T12:00:00+03:00`), Math.round((Date.parse(`${range.until}T12:00:00Z`) - Date.parse(`${range.since}T12:00:00Z`)) / 86_400_000) + 1);
+  const shardRefs = days.flatMap((day) => Array.from({ length: DAILY_SHARDS }, (_, index) => db.doc(`analyticsDaily/${day}/shards/${index}`)));
+  const shardDocs: FirebaseFirestore.DocumentSnapshot[] = [];
+  for (let index = 0; index < shardRefs.length; index += 300) shardDocs.push(...await db.getAll(...shardRefs.slice(index, index + 300)));
+  const existing = shardDocs.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.data()!);
+  const actions = mergeAggregates(existing.map((row) => ({ byAction: row.adsByAction }))).byAction;
+  const adsPages = mergeAggregates(existing.map((row) => ({ typeVisitors: row.adsTypeVisitors }))).typeVisitors;
+  const tracked = existing.some((row) => row.adsByAction && typeof row.adsByAction === "object");
+  const value = (key: string) => (tracked ? actions[key] ?? 0 : null);
+  const waSessions = await db.collection("whatsappSignups").where("startedAt", ">=", Timestamp.fromMillis(range.sinceMs)).select("fromAd", "status").limit(2000).get().catch(() => null);
+  const waFromAd = waSessions ? waSessions.docs.filter((document) => document.data().fromAd === true) : null;
+  const sitePages = Object.values(adsPages).reduce((sum, count) => sum + count, 0);
+  return {
+    tracked,
+    site: buildFunnel([
+      { key: "impressions", label: "Reklamı gördü", value: meta?.impressions ?? null },
+      { key: "clicks", label: "Bağlantıya tıkladı", value: meta?.linkClicks ?? null },
+      { key: "landing", label: "Siteye geldi", value: meta?.landingPageViews ?? (sitePages || null), hint: "Meta sayfa görüntüleme" },
+      { key: "signup:0", label: "Kayda başladı", value: value("signup:0"), hint: "Kategori adımı" },
+      { key: "signup:1", label: "İşletme bilgisini girdi", value: value("signup:1") },
+      { key: "signup:3", label: "Hesap formuna geldi", value: value("signup:3") },
+      { key: "signup:account", label: "Hesap açtı", value: value("signup:account") },
+      { key: "business", label: "İşletme oluştu", value: signups.meta, hint: "Reklam kaynaklı ilk mağaza" },
+      { key: "paid", label: "Ödeme yaptı", value: signups.metaPaid },
+    ]),
+    whatsapp: buildFunnel([
+      { key: "conversations", label: "WhatsApp'ta yazdı", value: meta?.conversations ?? null, hint: "Meta: başlatılan konuşma" },
+      { key: "bot", label: "Kayıt asistanı başladı", value: waFromAd?.length ?? null, hint: "Reklamdan gelen mesajla" },
+      { key: "done", label: "İşletme oluştu", value: signups.whatsappAd },
+      { key: "paid", label: "Ödeme yaptı", value: signups.whatsappAdPaid },
+    ]),
+    abandoned: waFromAd ? waFromAd.filter((document) => document.data().status !== "done").length : null,
   };
 }
 
@@ -11551,7 +11597,15 @@ export const getMetaAdsOverview = onCall(
     const totalBusinesses = await db.collection("businesses").where("createdAt", ">=", Timestamp.fromMillis(range.sinceMs)).count().get()
       .then((result) => result.data().count).catch(() => null);
 
-    const [capiStatus, platformPublic] = await Promise.all([db.doc(META_CAPI_STATUS_PATH).get(), db.doc(PLATFORM_SETTINGS_PATH).get()]);
+    const [capiStatus, platformPublic, guardSnap] = await Promise.all([db.doc(META_CAPI_STATUS_PATH).get(), db.doc(PLATFORM_SETTINGS_PATH).get(), db.doc(META_GUARD_STATUS_PATH).get()]);
+    const guardRaw = guardSnap.data() ?? {};
+    const guardStatus = {
+      lastRunAt: guardRaw.lastRunAt instanceof Timestamp ? guardRaw.lastRunAt.toDate().toISOString() : null,
+      lastError: typeof guardRaw.lastError === "string" ? guardRaw.lastError : null,
+      flagged: Array.isArray(guardRaw.flagged) ? (guardRaw.flagged as Array<Record<string, unknown>>).slice(0, 20).map((row) => ({
+        adsetId: String(row.adsetId ?? ""), name: String(row.name ?? ""), reason: String(row.reason ?? ""), message: String(row.message ?? ""), paused: row.paused === true,
+      })) : [],
+    };
     const capi = capiStatus.data() ?? {};
     const base = {
       range: { since: range.since, until: range.until },
@@ -11563,8 +11617,17 @@ export const getMetaAdsOverview = onCall(
       },
       connection: { connected: Boolean(settings.token && settings.adAccountId), hasToken: settings.token.length >= 20, adAccountId: settings.adAccountId, updatedAt: settings.updatedAt },
       signups: { ...signups, totalBusinesses, recent: recentSignups },
+      guard: { ...settings.guard, status: guardStatus },
     };
-    if (!settings.token || !settings.adAccountId) return { ...base, account: null, campaigns: [], daily: [], totals: null, metaErrors: [] as string[] };
+    const funnelSignups = {
+      meta: signups.channels.meta_ads ?? 0,
+      metaPaid: signupRows.filter((row) => row.paid && attributionChannel(row.attribution) === "meta_ads").length,
+      whatsappAd: signupRows.filter((row) => row.attribution?.campaign === "click_to_whatsapp" && isMetaAttribution(row.attribution)).length,
+      whatsappAdPaid: signupRows.filter((row) => row.paid && row.attribution?.campaign === "click_to_whatsapp" && isMetaAttribution(row.attribution)).length,
+    };
+    if (!settings.token || !settings.adAccountId) {
+      return { ...base, account: null, campaigns: [], daily: [], totals: null, metaErrors: [] as string[], funnels: await buildMetaAdsFunnels(range, null, funnelSignups).catch(() => null) };
+    }
 
     const act = settings.adAccountId;
     const timeRange = encodeURIComponent(JSON.stringify({ since: range.since, until: range.until }));
@@ -11579,7 +11642,7 @@ export const getMetaAdsOverview = onCall(
     ]);
     const metaErrors = [account, campaigns, adsets, ads, insights, daily].map((result) => result.error).filter((error): error is string => Boolean(error));
     const byAd = new Map((insights.data?.data ?? []).map((row) => [String(row.ad_id ?? ""), parseMetaInsight(row)]));
-    const empty = () => ({ spend: 0, impressions: 0, reach: 0, linkClicks: 0, landingPageViews: 0, videoViews: 0 });
+    const empty = () => ({ spend: 0, impressions: 0, reach: 0, linkClicks: 0, landingPageViews: 0, videoViews: 0, conversations: 0 });
     const add = (target: ReturnType<typeof empty>, row: ReturnType<typeof empty>) => {
       (Object.keys(target) as Array<keyof typeof target>).forEach((key) => { target[key] += row[key]; });
     };
@@ -11609,9 +11672,10 @@ export const getMetaAdsOverview = onCall(
     const totals = empty();
     byAd.forEach((row) => add(totals, row));
     const metaSignups = signups.channels.meta_ads ?? 0;
-    const metaPaid = signupRows.filter((row) => row.paid && attributionChannel(row.attribution) === "meta_ads").length;
+    const metaPaid = funnelSignups.metaPaid;
+    const funnels = await buildMetaAdsFunnels(range, totals, funnelSignups).catch((error) => { logger.warn("Reklam hunisi hesaplanamadı", error); return null; });
     return {
-      ...base,
+      ...base, funnels,
       account: account.data ? {
         name: account.data.name ?? "", currency: account.data.currency ?? "TRY", status: Number(account.data.account_status ?? 0),
         amountSpent: minorToTry(account.data.amount_spent) ?? 0, balance: minorToTry(account.data.balance) ?? 0, disableReason: Number(account.data.disable_reason ?? 0),
@@ -11620,6 +11684,7 @@ export const getMetaAdsOverview = onCall(
       daily: (daily.data?.data ?? []).map((row) => ({ date: String(row.date_start ?? ""), ...parseMetaInsight(row) })),
       totals: {
         ...totals, metaSignups, metaPaid,
+        results: metaResults(totals), costPerResult: ratio(totals.spend, metaResults(totals)),
         cpc: ratio(totals.spend, totals.linkClicks), ctr: totals.impressions ? Math.round((totals.linkClicks / totals.impressions) * 10_000) / 100 : null,
         costPerSignup: ratio(totals.spend, metaSignups), costPerPaid: ratio(totals.spend, metaPaid),
         signupRate: totals.landingPageViews || totals.linkClicks ? Math.round((metaSignups / (totals.landingPageViews || totals.linkClicks)) * 10_000) / 100 : null,
@@ -11696,6 +11761,118 @@ export const updateMetaAdsEntity = onCall(
       createdAt: FieldValue.serverTimestamp(),
     });
     return { success: true };
+  },
+);
+
+/** Süper admin › Reklamlar › Kırılım: yerleşim, yaş, cinsiyet, bölge ya da haftanın gününe göre harcama ve sonuç. */
+export const getMetaAdsBreakdown = onCall(
+  { region: "europe-west1", timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const kind = request.data?.kind;
+    if (!isBreakdownKind(kind)) throw new HttpsError("invalid-argument", "Geçersiz kırılım.");
+    const campaignId = request.data?.campaignId == null || request.data.campaignId === "" ? null : String(request.data.campaignId);
+    if (campaignId !== null && !/^\d{6,30}$/.test(campaignId)) throw new HttpsError("invalid-argument", "Geçersiz kampanya.");
+    const settings = await loadMetaAdsSettings();
+    if (!settings.token || !settings.adAccountId) throw new HttpsError("failed-precondition", "Önce Meta bağlantısını kurun.");
+    if (campaignId) {
+      const owner = await metaGet<{ account_id?: string }>(`${META_GRAPH}/${campaignId}?fields=account_id`, settings.token);
+      if (owner.error || `act_${owner.data?.account_id ?? ""}` !== settings.adAccountId) throw new HttpsError("permission-denied", "Bu kampanya bağlı reklam hesabına ait değil.");
+    }
+    const range = metaDateRange(Number(request.data?.days ?? 30));
+    const timeRange = encodeURIComponent(JSON.stringify({ since: range.since, until: range.until }));
+    const split = kind === "weekday" ? "time_increment=1" : `breakdowns=${META_BREAKDOWN_FIELDS[kind]}`;
+    const result = await metaGet<MetaPaged<MetaInsight>>(
+      `${META_GRAPH}/${campaignId ?? settings.adAccountId}/insights?fields=spend,impressions,reach,inline_link_clicks,actions&${split}&time_range=${timeRange}&limit=500`,
+      settings.token,
+    );
+    if (result.error) throw new HttpsError("unavailable", `Meta: ${result.error}`);
+    return { kind, range: { since: range.since, until: range.until }, ...summarizeBreakdown(kind, result.data?.data ?? []) };
+  },
+);
+
+type GuardFlag = { adsetId: string; name: string; campaignId: string; reason: string; message: string; spend: number; paused: boolean };
+
+/**
+ * Otomatik koruma: yayındaki reklam setlerinin son 7 gününe bakar; ayardaki harcamayı geçip sonuç getirmeyeni
+ * (ya da sonuç başı sınırı aşanı) süper admin uyarısına yazar, "otomatik durdur" açıksa durdurur.
+ * Aynı reklam seti için günde bir kez uyarı/durdurma (uyarı belge kimliği gün + set).
+ */
+async function runMetaAdsGuard(trigger: "schedule" | "manual"): Promise<{ checked: number; flagged: GuardFlag[]; skipped?: string }> {
+  const settings = await loadMetaAdsSettings();
+  const statusRef = db.doc(META_GUARD_STATUS_PATH);
+  if (!settings.guard.enabled || !settings.token || !settings.adAccountId) {
+    const skipped = !settings.guard.enabled ? "Koruma kapalı" : "Meta bağlı değil";
+    await statusRef.set({ lastRunAt: FieldValue.serverTimestamp(), lastError: null, skipped, trigger }, { merge: true });
+    return { checked: 0, flagged: [], skipped };
+  }
+  const range = metaDateRange(7);
+  const timeRange = encodeURIComponent(JSON.stringify({ since: range.since, until: range.until }));
+  const filter = encodeURIComponent(JSON.stringify(["ACTIVE"]));
+  const [adsets, insights] = await Promise.all([
+    metaGet<MetaPaged<MetaAdSet>>(`${META_GRAPH}/${settings.adAccountId}/adsets?fields=id,name,campaign_id,effective_status&effective_status=${filter}&limit=200`, settings.token),
+    metaGet<MetaPaged<MetaInsight>>(`${META_GRAPH}/${settings.adAccountId}/insights?level=adset&fields=adset_id,spend,impressions,reach,inline_link_clicks,actions&time_range=${timeRange}&limit=500`, settings.token),
+  ]);
+  const error = adsets.error ?? insights.error;
+  if (error) {
+    await statusRef.set({ lastRunAt: FieldValue.serverTimestamp(), lastError: shortText(error, 200), trigger }, { merge: true });
+    return { checked: 0, flagged: [], skipped: error };
+  }
+  const stats = new Map((insights.data?.data ?? []).map((row) => [String(row.adset_id ?? ""), parseMetaInsight(row)]));
+  const today = istanbulParts(Date.now()).day;
+  const flagged: GuardFlag[] = [];
+  const active = adsets.data?.data ?? [];
+  for (const set of active) {
+    const row = stats.get(set.id);
+    if (!row) continue;
+    const verdict = evaluateAdGuard(row, settings.guard);
+    if (!verdict.trigger) continue;
+    const name = shortText(set.name ?? "Reklam seti", 120);
+    const alertRef = db.doc(`platformAlerts/meta-guard-${set.id}-${today}`);
+    const fresh = await alertRef.create({
+      severity: "warning", category: "meta_ads", title: settings.guard.autoPause ? "Reklam seti durduruldu" : "Reklam boşa harcıyor olabilir",
+      message: shortText(`${name}: ${verdict.message}${settings.guard.autoPause ? " Otomatik koruma durdurdu." : " Süper admin › Reklamlar'dan bakın."}`, 300),
+      adsetId: set.id, isRead: false, createdAt: FieldValue.serverTimestamp(),
+    }).then(() => true).catch(() => false);
+    let paused = false;
+    if (fresh && settings.guard.autoPause) {
+      try {
+        await metaPost(`${META_GRAPH}/${set.id}`, settings.token, { status: "PAUSED" });
+        paused = true;
+        await db.collection("platformAuditLogs").add({
+          action: "meta_ads.guard_pause", actorUid: null, level: "adset", objectId: set.id, objectName: name, reason: verdict.reason,
+          spend: row.spend, createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (pauseError) {
+        logger.warn("Reklam koruması durduramadı", { adsetId: set.id, error: pauseError instanceof Error ? pauseError.message : String(pauseError) });
+      }
+    }
+    flagged.push({ adsetId: set.id, name, campaignId: String(set.campaign_id ?? ""), reason: verdict.reason, message: verdict.message, spend: row.spend, paused });
+  }
+  await statusRef.set({ lastRunAt: FieldValue.serverTimestamp(), lastError: null, skipped: null, trigger, checked: active.length, flagged }, { merge: true });
+  return { checked: active.length, flagged };
+}
+
+export const checkMetaAdsGuard = onSchedule(
+  { region: "europe-west1", schedule: "every 60 minutes", timeZone: "Europe/Istanbul", maxInstances: 1, timeoutSeconds: 120 },
+  async () => { await runMetaAdsGuard("schedule"); },
+);
+
+/** Koruma ayarı (aç/kapat, harcama eşiği, sonuç başı sınır, otomatik durdur) ve "şimdi kontrol et". */
+export const updateMetaAdsGuard = onCall(
+  { region: "europe-west1", timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    await consumeSecurityLimit(`meta-ads-guard:${uid}`, 30, 60 * 60_000);
+    if (request.data?.runNow === true) return { success: true, guard: (await loadMetaAdsSettings()).guard, run: await runMetaAdsGuard("manual") };
+    const guard = normalizeAdGuardSettings(request.data?.guard);
+    await db.doc(META_ADS_SETTINGS_PATH).set({ guard, updatedByUid: uid }, { merge: true });
+    await db.collection("platformAuditLogs").add({ action: "meta_ads.guard_updated", actorUid: uid, guard, createdAt: FieldValue.serverTimestamp() });
+    return { success: true, guard };
   },
 );
 

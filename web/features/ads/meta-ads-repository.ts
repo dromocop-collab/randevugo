@@ -4,7 +4,7 @@ import { getFirebaseApp } from "@/lib/firebase/client";
 // Süper admin › Reklamlar. Sunucu: functions getMetaAdsOverview / updateMetaAdsSettings / updateMetaAdsEntity.
 // Meta erişim anahtarı hiçbir zaman istemciye gelmez; yalnız var/yok bilgisi.
 
-export type MetaStats = { spend: number; impressions: number; reach: number; linkClicks: number; landingPageViews: number; videoViews: number };
+export type MetaStats = { spend: number; impressions: number; reach: number; linkClicks: number; landingPageViews: number; videoViews: number; conversations: number };
 export type MetaAdRow = { id: string; name: string; status: string; effectiveStatus: string; thumbnailUrl: string | null; stats: MetaStats };
 export type MetaAdSetRow = { id: string; name: string; status: string; effectiveStatus: string; dailyBudget: number | null; lifetimeBudget: number | null; stats: MetaStats; ads: MetaAdRow[] };
 export type MetaCampaignRow = {
@@ -12,6 +12,11 @@ export type MetaCampaignRow = {
   startTime: string | null; stats: MetaStats; adsets: MetaAdSetRow[];
 };
 export type SignupChannel = "meta_ads" | "meta_organic" | "google" | "other" | "direct";
+
+export type FunnelRow = { key: string; label: string; value: number | null; hint?: string; fromPrevious: number | null; fromFirst: number | null };
+export type AdGuardSettings = { enabled: boolean; minSpend: number; maxCostPerResult: number | null; autoPause: boolean };
+export type AdGuardFlag = { adsetId: string; name: string; reason: string; message: string; paused: boolean };
+export type AdGuard = AdGuardSettings & { status: { lastRunAt: string | null; lastError: string | null; flagged: AdGuardFlag[] } };
 
 export type MetaAdsOverview = {
   range: { since: string; until: string };
@@ -26,10 +31,18 @@ export type MetaAdsOverview = {
   campaigns: MetaCampaignRow[];
   daily: Array<MetaStats & { date: string }>;
   totals: (MetaStats & {
-    metaSignups: number; metaPaid: number; cpc: number | null; ctr: number | null; costPerSignup: number | null; costPerPaid: number | null; signupRate: number | null;
+    metaSignups: number; metaPaid: number; results: number; costPerResult: number | null; cpc: number | null; ctr: number | null; costPerSignup: number | null; costPerPaid: number | null; signupRate: number | null;
   }) | null;
   metaErrors: string[];
+  guard?: AdGuard;
+  funnels?: { tracked: boolean; site: FunnelRow[]; whatsapp: FunnelRow[]; abandoned: number | null } | null;
 };
+
+export type BreakdownKind = "placement" | "age" | "gender" | "region" | "weekday";
+export type BreakdownRow = MetaStats & {
+  key: string; label: string; results: number; spendShare: number; cpc: number | null; costPerResult: number | null; ctr: number | null; flag: "best" | "waste" | null;
+};
+export type MetaAdsBreakdown = { kind: BreakdownKind; range: { since: string; until: string }; rows: BreakdownRow[]; average: number | null };
 
 export type MetaLevel = "campaign" | "adset" | "ad";
 
@@ -49,4 +62,16 @@ export async function disconnectMetaAds() {
 
 export async function updateMetaAdsEntity(input: { id: string; level: MetaLevel; action: "pause" | "resume" | "budget"; dailyBudget?: number }) {
   await fn<typeof input, { success: boolean }>("updateMetaAdsEntity")(input);
+}
+
+export async function getMetaAdsBreakdown(input: { days: number; kind: BreakdownKind; campaignId?: string | null }) {
+  return (await fn<typeof input, MetaAdsBreakdown>("getMetaAdsBreakdown")(input)).data;
+}
+
+export async function saveMetaAdsGuard(guard: AdGuardSettings) {
+  return (await fn<{ guard: AdGuardSettings }, { guard: AdGuardSettings }>("updateMetaAdsGuard")({ guard })).data.guard;
+}
+
+export async function runMetaAdsGuardNow() {
+  return (await fn<{ runNow: true }, { run: { checked: number; flagged: AdGuardFlag[]; skipped?: string } }>("updateMetaAdsGuard")({ runNow: true })).data.run;
 }

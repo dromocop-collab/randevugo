@@ -109,7 +109,10 @@ export function metaActionCount(actions: unknown, type: string): number {
   return Number.isFinite(value) ? value : 0;
 }
 
-export type MetaInsightRow = { spend: number; impressions: number; reach: number; linkClicks: number; landingPageViews: number; videoViews: number };
+export type MetaInsightRow = { spend: number; impressions: number; reach: number; linkClicks: number; landingPageViews: number; videoViews: number; conversations: number };
+
+/** Tıklayıp WhatsApp'ta konuşma başlatan kişi sayısı (Meta 7 günlük atıf). */
+export const META_CONVERSATION_ACTION = "onsite_conversion.messaging_conversation_started_7d";
 
 export function parseMetaInsight(row: Record<string, unknown> | null | undefined): MetaInsightRow {
   const num = (value: unknown) => { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; };
@@ -120,6 +123,7 @@ export function parseMetaInsight(row: Record<string, unknown> | null | undefined
     linkClicks: num(row?.inline_link_clicks) || metaActionCount(row?.actions, "link_click"),
     landingPageViews: metaActionCount(row?.actions, "landing_page_view"),
     videoViews: metaActionCount(row?.actions, "video_view"),
+    conversations: metaActionCount(row?.actions, META_CONVERSATION_ACTION),
   };
 }
 
@@ -149,4 +153,161 @@ export function metaDateRange(days: number, now = Date.now()): { since: string; 
   const sinceMs = now - (span - 1) * 86_400_000;
   const since = day(sinceMs);
   return { since, until: day(now), sinceMs: Date.parse(`${since}T00:00:00+03:00`) };
+}
+
+/* ── Kırılımlar: yerleşim / yaş / cinsiyet / bölge / haftanın günü ─────────────────────────────────────────── */
+
+export type MetaBreakdownKind = "placement" | "age" | "gender" | "region" | "weekday";
+/** Meta insights "breakdowns" parametresi (haftanın günü günlük satırlardan bizde hesaplanır). */
+export const META_BREAKDOWN_FIELDS: Record<Exclude<MetaBreakdownKind, "weekday">, string> = {
+  placement: "publisher_platform,platform_position", age: "age", gender: "gender", region: "region",
+};
+export function isBreakdownKind(value: unknown): value is MetaBreakdownKind {
+  return value === "placement" || value === "age" || value === "gender" || value === "region" || value === "weekday";
+}
+
+const PLATFORM_LABEL: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", messenger: "Messenger", audience_network: "Audience Network", threads: "Threads", whatsapp: "WhatsApp" };
+const POSITION_LABEL: Record<string, string> = {
+  feed: "Akış", facebook_reels: "Reels", instagram_reels: "Reels", story: "Hikâye", facebook_stories: "Hikâye", instagram_stories: "Hikâye",
+  explore: "Keşfet", explore_home: "Keşfet ana sayfa", instagram_explore_grid_home: "Keşfet ana sayfa", marketplace: "Marketplace", video_feeds: "Video akışı",
+  instream_video: "Video içi", facebook_reels_overlay: "Reels üstü reklam", right_hand_column: "Sağ sütun", search: "Arama sonuçları",
+  profile_feed: "Profil akışı", instagram_profile_feed: "Profil akışı", messenger_inbox: "Gelen kutusu", messenger_stories: "Hikâye",
+  an_classic: "Uygulama ağı", rewarded_video: "Ödüllü video", threads_feed: "Akış", ig_search: "Arama sonuçları", notification: "Bildirimler",
+  biz_disco_feed: "İşletme keşfi", facebook_profile_feed: "Profil akışı", unknown: "Diğer",
+};
+const GENDER_LABEL: Record<string, string> = { male: "Erkek", female: "Kadın", unknown: "Belirtilmemiş" };
+const WEEKDAY_LABEL = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+
+function titleCase(value: string) { return value.replace(/_/g, " ").replace(/\b\p{L}/gu, (char) => char.toLocaleUpperCase("tr-TR")); }
+
+/** Bir kırılım satırının anahtarı ve Türkçe etiketi. */
+export function breakdownKey(kind: MetaBreakdownKind, row: Record<string, unknown>): { key: string; label: string } {
+  const text = (value: unknown) => String(value ?? "").trim();
+  if (kind === "placement") {
+    const platform = text(row.publisher_platform) || "unknown";
+    const position = text(row.platform_position) || "unknown";
+    return { key: `${platform}|${position}`, label: `${PLATFORM_LABEL[platform] ?? titleCase(platform)} · ${POSITION_LABEL[position] ?? titleCase(position)}` };
+  }
+  if (kind === "age") { const age = text(row.age) || "unknown"; return { key: age, label: age === "unknown" ? "Bilinmiyor" : `${age} yaş` }; }
+  if (kind === "gender") { const gender = text(row.gender) || "unknown"; return { key: gender, label: GENDER_LABEL[gender] ?? gender }; }
+  if (kind === "region") { const region = text(row.region) || "Bilinmiyor"; return { key: region, label: region.replace(/ (Province|İli)$/i, "") }; }
+  const date = text(row.date_start);
+  const weekday = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00Z`).getUTCDay() : -1;
+  // Pazartesi önce sıralansın diye anahtar 1..7 (Pazar 7).
+  return weekday < 0 ? { key: "0", label: "Bilinmiyor" } : { key: String(weekday === 0 ? 7 : weekday), label: WEEKDAY_LABEL[weekday]! };
+}
+
+/** Sonuç: siteye gelen (sayfa görüntüleme) + WhatsApp'ta konuşma başlatan. */
+export const metaResults = (row: Pick<MetaInsightRow, "landingPageViews" | "conversations">) => row.landingPageViews + row.conversations;
+
+export type BreakdownRow = MetaInsightRow & {
+  key: string; label: string; results: number; spendShare: number; cpc: number | null; costPerResult: number | null; ctr: number | null;
+  flag: "best" | "waste" | null;
+};
+
+/**
+ * Meta kırılım satırlarını gruplar, sonuç başı maliyeti hesaplar ve işaretler:
+ * "waste" = harcamanın en az %10'u (ve ≥ 20 ₺) gitmiş ama hiç sonuç yok ya da sonuç başı maliyet ortalamanın 2 katından fazla;
+ * "best"  = en az 3 sonuçlu satırlar içinde sonuç başı en ucuz olan.
+ */
+export function summarizeBreakdown(kind: MetaBreakdownKind, rows: Array<Record<string, unknown>>): { rows: BreakdownRow[]; average: number | null } {
+  const groups = new Map<string, { key: string; label: string; stats: MetaInsightRow }>();
+  for (const raw of rows) {
+    const { key, label } = breakdownKey(kind, raw);
+    const stats = parseMetaInsight(raw);
+    const group = groups.get(key) ?? { key, label, stats: { spend: 0, impressions: 0, reach: 0, linkClicks: 0, landingPageViews: 0, videoViews: 0, conversations: 0 } };
+    (Object.keys(stats) as Array<keyof MetaInsightRow>).forEach((field) => { group.stats[field] += stats[field]; });
+    groups.set(key, group);
+  }
+  const all = [...groups.values()];
+  const totalSpend = all.reduce((sum, group) => sum + group.stats.spend, 0);
+  const totalResults = all.reduce((sum, group) => sum + metaResults(group.stats), 0);
+  const average = ratio(totalSpend, totalResults);
+  const result: BreakdownRow[] = all.map(({ key, label, stats }) => {
+    const results = metaResults(stats);
+    const costPerResult = ratio(stats.spend, results);
+    const share = totalSpend ? stats.spend / totalSpend : 0;
+    const heavy = share >= 0.1 && stats.spend >= 20;
+    const waste = heavy && (results === 0 || (average != null && costPerResult != null && costPerResult > average * 2));
+    return {
+      ...stats, spend: Math.round(stats.spend * 100) / 100, key, label, results, spendShare: Math.round(share * 1000) / 10,
+      cpc: ratio(stats.spend, stats.linkClicks), costPerResult,
+      ctr: stats.impressions ? Math.round((stats.linkClicks / stats.impressions) * 10_000) / 100 : null,
+      flag: waste ? "waste" : null,
+    };
+  });
+  const candidates = result.filter((row) => row.results >= 3 && row.costPerResult != null);
+  if (candidates.length >= 2) {
+    const best = candidates.reduce((min, row) => (row.costPerResult! < min.costPerResult! ? row : min));
+    best.flag = "best";
+  }
+  if (kind === "weekday" || kind === "age") result.sort((a, b) => a.key.localeCompare(b.key, "tr"));
+  else result.sort((a, b) => b.spend - a.spend);
+  return { rows: result, average };
+}
+
+/* ── Otomatik koruma: sonuç getirmeden para yakan reklam setini yakala ──────────────────────────────────────── */
+
+export type AdGuardSettings = { enabled: boolean; minSpend: number; maxCostPerResult: number | null; autoPause: boolean };
+export const AD_GUARD_DEFAULTS: AdGuardSettings = { enabled: false, minSpend: 150, maxCostPerResult: null, autoPause: false };
+
+/** İstemciden/veritabanından gelen koruma ayarını doğrular (sınır dışı değerler kırpılır). */
+export function normalizeAdGuardSettings(input: unknown): AdGuardSettings {
+  const row = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const minSpend = Number(row.minSpend);
+  const maxCost = Number(row.maxCostPerResult);
+  return {
+    enabled: row.enabled === true,
+    minSpend: Number.isFinite(minSpend) && minSpend > 0 ? Math.min(5_000, Math.max(30, Math.round(minSpend))) : AD_GUARD_DEFAULTS.minSpend,
+    maxCostPerResult: Number.isFinite(maxCost) && maxCost > 0 ? Math.min(5_000, Math.max(1, Math.round(maxCost * 100) / 100)) : null,
+    autoPause: row.autoPause === true,
+  };
+}
+
+export type AdGuardVerdict = { trigger: false } | { trigger: true; reason: "no_results" | "expensive"; message: string };
+
+/**
+ * Son 7 günün reklam seti istatistiğine bakar.
+ * - Harcama ≥ minSpend ve hiç sonuç yok (sayfa görüntüleme + WhatsApp konuşması 0) → "no_results"
+ * - maxCostPerResult tanımlıysa, harcama ≥ minSpend ve sonuç başı maliyet bunu aşıyorsa → "expensive"
+ */
+export function evaluateAdGuard(stats: Pick<MetaInsightRow, "spend" | "landingPageViews" | "conversations" | "linkClicks">, settings: AdGuardSettings): AdGuardVerdict {
+  if (!settings.enabled || stats.spend < settings.minSpend) return { trigger: false };
+  const results = metaResults(stats);
+  const spend = Math.round(stats.spend);
+  if (results === 0) {
+    return { trigger: true, reason: "no_results", message: `Son 7 günde ${spend} ₺ harcandı; ${stats.linkClicks} tıklama var ama siteye gelen ya da WhatsApp'ta yazan yok.` };
+  }
+  const cost = stats.spend / results;
+  if (settings.maxCostPerResult != null && cost > settings.maxCostPerResult) {
+    return { trigger: true, reason: "expensive", message: `Son 7 günde ${spend} ₺ harcandı, ${results} sonuç: sonuç başı ${Math.round(cost)} ₺ (sınır ${settings.maxCostPerResult} ₺).` };
+  }
+  return { trigger: false };
+}
+
+/* ── Huni ───────────────────────────────────────────────────────────────────────────────────────────────── */
+
+export type FunnelStep = { key: string; label: string; value: number | null; hint?: string };
+export type FunnelRow = FunnelStep & { fromPrevious: number | null; fromFirst: number | null };
+
+/** Her adım için bir önceki ve ilk adıma göre yüzde (adım verisi yoksa null; aradaki boş adım atlanır). */
+export function buildFunnel(steps: FunnelStep[]): FunnelRow[] {
+  const pct = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 10 : null);
+  const firstIndex = steps.findIndex((step) => step.value != null);
+  let previous: number | null = null;
+  return steps.map((step, index) => {
+    const value = step.value;
+    const row: FunnelRow = {
+      ...step,
+      fromPrevious: value != null && previous != null ? pct(value, previous) : null,
+      fromFirst: value != null && index > firstIndex && firstIndex >= 0 ? pct(value, steps[firstIndex]!.value!) : null,
+    };
+    if (value != null) previous = value;
+    return row;
+  });
+}
+
+/** Ziyaret oturumunun kaynağı Meta reklamı mı (trackVisit sessionSourceLabel = utm_source)? */
+export function isMetaAdSession(kind: unknown, label: unknown): boolean {
+  return kind === "ads" && META_SOURCES.has(String(label ?? "").trim().toLowerCase());
 }

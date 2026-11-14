@@ -50,7 +50,7 @@ export const GROUPS = {
     "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "issueWidgetToken", "revokeWidgetToken", "businessWidgetFeed", "serviceAutoTranslate", "serviceCategoryAutoTranslate", "backfillServiceTranslations",
   ],
   kampanya: ["getCampaignWheelSettings", "saveCampaignWheelSettings", "listCampaignWheelSpins", "spinCampaignWheel"],
-  reklam: ["getMetaAdsOverview", "updateMetaAdsSettings", "updateMetaAdsEntity", "trackVisit", "getVisitorAnalytics", "getBusinessVisitorAnalytics"],
+  reklam: ["getMetaAdsOverview", "updateMetaAdsSettings", "updateMetaAdsEntity", "getMetaAdsBreakdown", "updateMetaAdsGuard", "checkMetaAdsGuard", "trackVisit", "getVisitorAnalytics", "getBusinessVisitorAnalytics"],
   canli: [
     "getLiveQueueWaitEstimate", "getLiveQueueWaitOptions", "getBusinessLiveWaitEstimates", "liveQueueWaitQueueChanged", "liveQueueNoticeQueueChanged",
     "liveQueueNoticeCreated", "retryLiveQueueNotices", "liveQueueWaitAppointmentChanged", "createAvailabilityAlert", "cancelAvailabilityAlert",
