@@ -184,6 +184,8 @@ export async function rescheduleAppointment(
 export interface CreatedAppointment {
   appointmentId: string;
   publicToken: string;
+  /** Kampanya çarkı ödülü bu randevuya otomatik bağlandıysa. */
+  campaignPrize: { text: string; code: string | null; estimatedDiscount: number } | null;
 }
 
 export async function createAppointment(input: AppointmentCreateInput): Promise<CreatedAppointment> {
@@ -204,10 +206,16 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
     ...(input.additionalServices?.length ? { additionalServices: input.additionalServices } : {}),
   });
 
-  const data = result.data as { appointmentId?: unknown; publicToken?: unknown };
+  const data = result.data as { appointmentId?: unknown; publicToken?: unknown; campaignPrize?: { text?: unknown; code?: unknown; estimatedDiscount?: unknown } | null };
+  const prize = data.campaignPrize && typeof data.campaignPrize.text === "string" ? data.campaignPrize : null;
   return {
     appointmentId: String(data.appointmentId ?? ""),
     publicToken: String(data.publicToken ?? ""),
+    campaignPrize: prize ? {
+      text: String(prize.text),
+      code: typeof prize.code === "string" ? prize.code : null,
+      estimatedDiscount: Number(prize.estimatedDiscount ?? 0) || 0,
+    } : null,
   };
 }
 

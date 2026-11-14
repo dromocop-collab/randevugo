@@ -269,6 +269,49 @@
 .live p { margin: 6px 0 0; color: rgb(255 255 255 / 0.8); font-size: 13.5px; line-height: 1.5; }
 .liveBtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 16px; background: var(--lime); color: var(--green); font-size: 15px; font-weight: 850; text-decoration: none; }
 
+/* Kampanya çarkı daveti */
+.wheelBanner {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px 16px;
+  margin: 14px 0 0;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(80% 120% at 0% 50%, rgb(215 255 112 / 0.22), transparent 60%),
+    linear-gradient(150deg, #123a28, #0a1f15);
+  color: #fff;
+  box-shadow: 0 14px 32px rgb(10 31 21 / 0.32);
+  animation: rise 0.5s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.wheelBanner .liveBtn { grid-column: 1 / -1; border: 0; font: inherit; font-weight: 850; cursor: pointer; }
+.wheelBanner .liveBtn:focus-visible, .wheelMini:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+.wheelCopy { min-width: 0; }
+.wheelCopy h2 { margin: 6px 0 0; font-size: 19px; font-weight: 800; line-height: 1.2; text-wrap: balance; }
+.wheelCopy p { margin: 6px 0 0; color: rgb(255 255 255 / 0.8); font-size: 13.5px; line-height: 1.5; }
+.wheelCopy .wheelPrizes { color: var(--lime); font-size: 12.5px; font-weight: 800; overflow-wrap: anywhere; }
+.wheelMini { position: relative; display: grid; place-items: center; width: 92px; height: 92px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.wheelMiniDisc {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 4px solid #e6c35c;
+  box-shadow: 0 0 0 2px #6b4e12, 0 8px 18px rgb(0 0 0 / 0.4), inset 0 0 0 2px rgb(255 255 255 / 0.25);
+  animation: wheelIdle 9s linear infinite;
+}
+.wheelMini:hover .wheelMiniDisc { animation-duration: 2.4s; }
+.wheelMiniHub { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #efffc4, #c9f45b 60%, #7fae1f); color: #10281d; box-shadow: 0 0 0 3px #e6c35c, 0 3px 8px rgb(0 0 0 / 0.35); }
+.wheelMiniPin { position: absolute; top: -2px; left: 50%; width: 14px; height: 18px; transform: translateX(-50%); background: linear-gradient(135deg, #fff6c8, #e6c35c 50%, #9b7424); clip-path: polygon(50% 100%, 0 0, 100% 0); filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.4)); }
+@keyframes wheelIdle { to { transform: rotate(360deg); } }
+@media (min-width: 720px) {
+  .wheelBanner { grid-template-columns: auto minmax(0, 1fr) auto; padding: 18px 22px; }
+  .wheelBanner .liveBtn { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .wheelMiniDisc { animation: none; } }
+
 /* ── Yapışkan sekmeler ── */
 .tabsBar {
   position: sticky;

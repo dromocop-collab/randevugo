@@ -1,0 +1,69 @@
+/* Kampanya çarkı görseli. Dönme JS döngüsünde; burada yalnız duruşa bağlı süsler. */
+.frame {
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.frame::before {
+  /* Çarkın arkasındaki ışık halesi */
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(215, 255, 112, 0.35), transparent 72%);
+  filter: blur(18px);
+  transform: scale(1.08);
+  transition: opacity 0.4s ease, transform 0.6s ease;
+  z-index: 0;
+}
+.frame[data-outcome="win"]::before { transform: scale(1.22); animation: halo 1.2s ease-in-out infinite; }
+.frame[data-outcome="miss"]::before { opacity: 0.35; }
+.frame[data-outcome="miss"] .svg { animation: nudge 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1; }
+.compact { width: min(100%, 300px); }
+.svg { position: relative; z-index: 1; display: block; width: 100%; height: 100%; overflow: visible; }
+
+.label {
+  font-family: var(--font-display, "Space Grotesk"), var(--font-sans, system-ui), sans-serif;
+  letter-spacing: 0.01em;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.08);
+  stroke-width: 0.6px;
+  pointer-events: none;
+}
+
+.highlight { opacity: 0; mix-blend-mode: soft-light; pointer-events: none; }
+.highlight[data-on="true"] { animation: slicePulse 0.9s ease-in-out infinite; }
+
+.hub { cursor: pointer; outline: none; transform-origin: 200px 200px; transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.hub:hover:not([data-disabled="true"]) { transform: scale(1.04); }
+.hub:active:not([data-disabled="true"]) { transform: scale(0.95); }
+.hub:focus-visible .hubFace { stroke: #10281d; stroke-width: 4px; }
+.hub[data-disabled="true"] { cursor: default; }
+.hub[data-disabled="false"] .hubFace { animation: hubBreath 2.4s ease-in-out infinite; transform-origin: 200px 200px; }
+.hubText {
+  font-family: var(--font-display, "Space Grotesk"), var(--font-sans, system-ui), sans-serif;
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  fill: #10281d;
+  pointer-events: none;
+}
+
+@keyframes slicePulse { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.7; } }
+@keyframes hubBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+@keyframes halo { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; transform: scale(1.3); } }
+@keyframes nudge {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame::before, .highlight[data-on="true"], .hub[data-disabled="false"] .hubFace, .frame[data-outcome="miss"] .svg { animation: none; }
+  .highlight[data-on="true"] { opacity: 0.4; }
+}

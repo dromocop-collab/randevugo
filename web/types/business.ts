@@ -98,6 +98,8 @@ export interface Business extends EntityBase {
   profileReviewNote?: string;
   storePosition?: number;
   isSuspended?: boolean;
+  /** Kampanya çarkının vitrin özeti (sunucu yazar; olasılık içermez). Yoksa çark kapalı. */
+  spinWheelPublic?: import("@/features/campaign-wheel/wheel-domain").PublicWheel | null;
   /** Opt-in for Live Queue. Missing means disabled. */
   liveQueueEnabled?: boolean;
   /** Temporary intake pause. Existing queue entries stay active. */

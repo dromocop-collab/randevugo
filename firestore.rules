@@ -87,7 +87,9 @@ service cloud.firestore {
           // Keşiften gizleme yalnızca süper admin kararıdır.
           "hiddenFromDiscovery",
           // Ek randevu alanları yalnızca süper admin onayıyla (sunucu) yazılır.
-          "customBookingFields", "bookingFieldsRequest"]));
+          "customBookingFields", "bookingFieldsRequest",
+          // Kampanya çarkının vitrin özeti yalnız sunucu (saveCampaignWheelSettings) tarafından yazılır.
+          "spinWheelPublic"]));
     }
 
     // Public storefront identity is published only after platform moderation.
@@ -669,6 +671,17 @@ service cloud.firestore {
       }
 
       match /loyaltyAccounts/{accountId} {
+        allow read: if canManage(businessId) || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      // Kampanya çarkı: olasılık/stok ayarı ve çevirmeler yalnız sunucu fonksiyonlarıyla yazılır.
+      match /campaignWheel/{docId} {
+        allow read: if canManage(businessId) || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      match /campaignWheelSpins/{spinId} {
         allow read: if canManage(businessId) || staffPermission(businessId, "manageCheckout") || isPlatformAdmin();
         allow write: if false;
       }

@@ -230,6 +230,8 @@ export function BookingWizard(props: Props) {
   const [codeSent, setCodeSent] = useState(false);
   const [codeSentPhone, setCodeSentPhone] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [codeChannel, setCodeChannel] = useState<"whatsapp" | "sms">("sms");
+  const [smsFallbackIn, setSmsFallbackIn] = useState(0);
   const [verifyError, setVerifyError] = useState("");
   const [infoTouched, setInfoTouched] = useState(false);
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -303,6 +305,7 @@ export function BookingWizard(props: Props) {
     startAtMillis: number;
     durationMinutes: number;
     priceLabel: string;
+    campaignPrize: { text: string; code: string | null; estimatedDiscount: number } | null;
   } | null>(null);
 
   useEffect(() => {
@@ -631,22 +634,25 @@ export function BookingWizard(props: Props) {
   }
 
   // ━━━ Phone Verification Handlers ━━━
-  const handleSendCode = useCallback(async () => {
+  const handleSendCode = useCallback(async (channel?: "sms") => {
     if (!phoneValid || sendingCode) return;
     setSendingCode(true);
     setVerifyError("");
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
-      const sendCode = httpsCallable<{ phone: string }, { success: boolean; smsDelivered?: boolean; message?: string }>(functions, "sendVerificationCode");
-      const result = await sendCode({ phone: normalizedCustomerPhone });
-      if (result.data.smsDelivered === false) {
+      const sendCode = httpsCallable<{ phone: string; channel?: "sms" }, { success: boolean; smsDelivered?: boolean; channel?: "whatsapp" | "sms"; message?: string }>(functions, "sendVerificationCode");
+      const result = await sendCode({ phone: normalizedCustomerPhone, ...(channel ? { channel } : {}) });
+      if (result.data.smsDelivered === false && result.data.channel !== "whatsapp") {
         // SMS gitmediyse kod giriş adımına geçilmez; kullanıcı boşuna beklemez.
         toast.error(result.data.message ? t(result.data.message) : t("SMS şu anda iletilemedi. Lütfen birkaç dakika sonra tekrar deneyin."));
       } else {
+        const sentBy = result.data.channel === "whatsapp" ? "whatsapp" : "sms";
         setCodeSent(true);
         setCodeSentPhone(normalizedCustomerPhone);
+        setCodeChannel(sentBy);
         setCountdown(60);
-        toast.success(t("Doğrulama kodu gönderildi!"));
+        setSmsFallbackIn(sentBy === "whatsapp" ? 20 : 0);
+        toast.success(sentBy === "whatsapp" ? t("Doğrulama kodu WhatsApp'a gönderildi!") : t("Doğrulama kodu gönderildi!"));
         window.setTimeout(() => pinRefs.current[0]?.focus(), 60);
       }
     } catch (error: unknown) {
@@ -671,6 +677,13 @@ export function BookingWizard(props: Props) {
     const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
     return () => clearTimeout(timer);
   }, [countdown]);
+
+  // WhatsApp'a giden kod gelmezse 20 sn sonra SMS seçeneği açılır.
+  useEffect(() => {
+    if (smsFallbackIn <= 0) return;
+    const timer = setTimeout(() => setSmsFallbackIn(smsFallbackIn - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [smsFallbackIn]);
 
   function handlePinChange(index: number, value: string) {
     const digits = value.replace(/\D/g, "");
@@ -793,6 +806,7 @@ export function BookingWizard(props: Props) {
         startAtMillis: selectedSlot.startAtMillis,
         durationMinutes: selectedDuration,
         priceLabel: selectedPriceLabel,
+        campaignPrize: createdAppointment.campaignPrize,
       });
       setDirection("forward");
       setStep("success");
@@ -883,6 +897,16 @@ export function BookingWizard(props: Props) {
               <SummaryRow icon={Navigation} label={t("Adres")} value={props.businessAddress} index={3} />
             </div>
             <div className={s.total}><span>{t("Toplam tutar")}</span><b>{successData.priceLabel}</b></div>
+            {successData.campaignPrize && (
+              <p className={s.prizeApplied} role="status">
+                <Sparkles size={16} aria-hidden="true" />
+                <span>
+                  {t("Çark ödülün bu randevuya uygulandı: {prize}", { prize: successData.campaignPrize.text })}
+                  {successData.campaignPrize.estimatedDiscount > 0 ? <> · <b>{t("−{amount} ₺", { amount: successData.campaignPrize.estimatedDiscount.toLocaleString("tr-TR") })}</b></> : null}
+                  <small>{t("İndirim ödeme sırasında işletmede düşülür.")}</small>
+                </span>
+              </p>
+            )}
           </section>
 
           {successData.publicToken && (
@@ -1339,7 +1363,9 @@ export function BookingWizard(props: Props) {
               {phoneVerified ? (
                 t("Harika! Randevu özetine yönlendiriliyorsunuz…")
               ) : (
-                <><b>{maskPhone(customerPhone)}</b> {t("numarasına gönderilen 6 haneli kodu girin.")}</>
+                codeChannel === "whatsapp"
+                  ? <><b>{maskPhone(customerPhone)}</b> {t("numaranın WhatsApp'ına gönderilen 6 haneli kodu girin.")}</>
+                  : <><b>{maskPhone(customerPhone)}</b> {t("numarasına gönderilen 6 haneli kodu girin.")}</>
               )}
             </p>
 
@@ -1377,9 +1403,18 @@ export function BookingWizard(props: Props) {
                   {countdown > 0 ? (
                     <span className={s.countdown}><Clock3 size={15} /> {t("Yeniden gönder")} <b>{t("{count} sn", { count: countdown })}</b></span>
                   ) : (
-                    <button type="button" onClick={handleSendCode} disabled={sendingCode} className={s.pillBtn}>
+                    <button type="button" onClick={() => void handleSendCode()} disabled={sendingCode} className={s.pillBtn}>
                       <Send size={15} /> {codeSent ? t("Kodu tekrar gönder") : t("Kodu gönder")}
                     </button>
+                  )}
+                  {codeSent && codeChannel === "whatsapp" && (
+                    smsFallbackIn > 0 ? (
+                      <span className={s.countdown}><Clock3 size={15} /> {t("WhatsApp gelmezse SMS")} <b>{t("{count} sn", { count: smsFallbackIn })}</b></span>
+                    ) : (
+                      <button type="button" onClick={() => void handleSendCode("sms")} disabled={sendingCode} className={s.pillBtn}>
+                        <Smartphone size={15} /> {t("SMS ile gönder")}
+                      </button>
+                    )
                   )}
                   <button type="button" className={s.pillBtn} onClick={() => jumpTo("info")}><Phone size={15} /> {t("Numarayı değiştir")}</button>
                 </div>

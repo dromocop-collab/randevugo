@@ -43,6 +43,7 @@ import { StaffSection } from "./_storefront/staff-section";
 import { GallerySection } from "./_storefront/gallery-section";
 import { ReviewsSection } from "./_storefront/reviews-section";
 import { InfoSection } from "./_storefront/info-section";
+import { CampaignWheelBanner } from "./_storefront/campaign-wheel-banner";
 import { categoryLabel, computeOpenStatus, liveWaitLabel, formatPrice, istanbulNow, mapsHref, openStatusLabel, telHref, type OpenStatus } from "./_storefront/utils";
 import styles from "./storefront.module.css";
 
@@ -406,6 +407,10 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
             </div>
             <Link href={`/isletme/${slug}/canli-sira`} className={styles.liveBtn}><Zap size={17} aria-hidden="true" /> {t("Sıraya katıl")} <ArrowRight size={17} aria-hidden="true" /></Link>
           </section>
+        )}
+
+        {business.spinWheelPublic && business.spinWheelPublic.slices?.length >= 2 && (
+          <CampaignWheelBanner wheel={business.spinWheelPublic} businessId={business.id} businessName={business.name} businessSlug={slug} />
         )}
 
         {/* ━━━ YAPIŞKAN SEKMELER ━━━ */}

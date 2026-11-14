@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Minus, Plus, ReceiptText, X } from "lucide-react";
 import { toast } from "sonner";
 import { finalizeCheckout } from "@/features/operations/operations-repository";
+import { prizeDiscount } from "@/features/campaign-wheel/wheel-domain";
 import { appointmentPriceLabel, extrasTotal, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
 import { useLocale } from "@/i18n/client";
 import type { Appointment } from "@/types/appointments";
@@ -42,7 +43,14 @@ export function CheckoutTab({ appointments, products, loyalty, rewardProgram, se
   const phoneDigits = (selected?.customerPhone ?? "").replace(/\D/g, "").slice(-10);
   const pointBalance = loyalty.find(item => item.customerPhone.replace(/\D/g, "").slice(-10) === phoneDigits)?.points ?? 0;
   const availablePoints = rewardProgram.enabled && pointBalance >= rewardProgram.minimumRedeemPoints ? pointBalance : 0;
-  const payableBeforePoints = Math.max(0, serviceAmount + productTotal - discount);
+  // Kampanya çarkı ödülü: yalnız hizmet tutarından, elle indirimden sonra kalanla sınırlı (sunucu aynı hesabı yapar).
+  const prize = selected?.campaignPrize ?? null;
+  const prizeLines = selected ? [
+    { serviceId: selected.serviceId ?? null, price: Math.max(0, serviceAmount - extras) },
+    ...(selected.additionalServices ?? []).map((item) => ({ serviceId: (item as { serviceId?: string }).serviceId ?? null, price: Math.max(0, Number(item.price) || 0) })),
+  ] : [];
+  const campaignDiscount = prize ? Math.min(prizeDiscount(prize, prizeLines, serviceAmount), Math.max(0, serviceAmount + productTotal - discount)) : 0;
+  const payableBeforePoints = Math.max(0, serviceAmount + productTotal - discount - campaignDiscount);
   const maxPointsForCheckout = Math.min(availablePoints, Math.floor((payableBeforePoints * rewardProgram.maxRedemptionPercent / 100) / rewardProgram.pointValueTl));
   const pointDiscount = Math.round(pointsUsed * rewardProgram.pointValueTl * 100) / 100;
   const total = Math.max(0, payableBeforePoints - pointDiscount);
@@ -137,6 +145,7 @@ export function CheckoutTab({ appointments, products, loyalty, rewardProgram, se
             <Line label={t("Hizmetler")} value={priceValid || !mustFinalize ? money(serviceAmount) : "—"} />
             <Line label={t("Ürünler")} value={money(productTotal)} />
             <Line label={t("İndirim")} value={`-${money(discount)}`} />
+            {prize ? <Line label={t("Çark ödülü · {prize}{code}", { prize: prize.text, code: prize.code ? ` · ${prize.code}` : "" })} value={`-${money(campaignDiscount)}`} /> : null}
             <Line label={t("Kullanılan puan ({count})", { count: pointsUsed })} value={`-${money(pointDiscount)}`} />
             <div className={o.totalDivider} />
             <Line label={t("Ödenecek toplam")} value={money(total)} strong />

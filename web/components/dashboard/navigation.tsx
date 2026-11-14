@@ -40,6 +40,7 @@ export const DASHBOARD_NAV_ITEMS: NavItem[] = ([
   { href: "/dashboard/asistan", label: tk("İşletme Asistanı"), icon: Bot, group: "operasyon" },
   { href: "/dashboard/analitik", label: tk("Analiz & Büyüme"), icon: ChartNoAxesCombined, group: "buyume" },
   { href: "/dashboard/otomasyonlar", label: tk("Otomasyonlar"), icon: WandSparkles, group: "buyume" },
+  { href: "/dashboard/kampanya-carki", label: tk("Kampanya Çarkı"), short: tk("Çark"), icon: Gift, group: "buyume" },
   { href: "/dashboard/hizmetler", label: tk("Hizmetler"), icon: Scissors, group: "yonetim" },
   { href: "/dashboard/calisanlar", label: tk("Çalışanlar"), icon: UsersRound, group: "yonetim" },
   { href: "/dashboard/calisma-saatleri", label: tk("Çalışma Saatleri"), icon: Clock3, group: "yonetim" },

@@ -44,6 +44,8 @@ import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySumma
 import { SIGNUP_IDLE_MS, advanceSignup, buildInteractivePayload, cancelCommand, defaultWorkingHours, isSignupIntent, outgoingPreview, slugFromName, startSignup, type Outgoing, type SignupData, type SignupStep, type Transition } from "./whatsapp-signup-domain.js";
 import { buildStarterServicePlan, defaultStarterSelections } from "./starter-services-domain.js";
 import { MODERATED_TEXT_FIELDS, moderateFields, parseApprovalSettings, type ApprovalSettings, type ModerationResult } from "./content-moderation-domain.js";
+import { WheelValidationError, normalizeWheelSettings, pickSliceIndex, prizeAppliesToBooking, prizeCode, prizeDiscount, prizeFromSlice, prizeText, publicWheel, spinDocumentId, wheelIsLive, type PricedLine, type WheelPrize, type WheelSettings } from "./campaign-wheel-domain.js";
+import { OTP_TEMPLATE_NAME, otpSendPlan, otpTemplateCreatePayload, otpTemplateMessage } from "./whatsapp-otp-domain.js";
 import { MAX_COMBINED_DURATION_MINUTES, appointmentServiceSummary, combinePriceParts, parseExtraServiceRequests, staffCanProvide } from "./multi-service-domain.js";
 import { type ServicePriceType, AUTO_TRANSLATE_LANGUAGES, appointmentPriceSnapshot, applyServiceVariant, buildServiceTranslation, categoryTranslationSource, needsAutoTranslation, parseTranslationResponse, resolveServiceVariant, serviceDisplayName, serviceNameTranslations, serviceTranslationSource } from "./service-pricing-domain.js";
 initializeApp();
@@ -908,6 +910,11 @@ export const finalizeAppointmentCheckout = onCall(
       const loyaltySnapshot = loyaltyRef ? await tx.get(loyaltyRef) : null;
       const availablePoints = Math.max(0, Math.floor(Number(loyaltySnapshot?.data()?.points ?? 0)));
       if (requestedPoints > availablePoints) throw new HttpsError("failed-precondition", "Müşterinin yeterli ödül puanı yok.");
+      // Randevuya bağlı kampanya çarkı ödülü (yalnız bu randevuya ayrılmışsa düşülür).
+      const appointmentPrize = appointment.campaignPrize && typeof appointment.campaignPrize.spinId === "string" ? appointment.campaignPrize : null;
+      const prizeSpinRef = appointmentPrize ? db.doc(`businesses/${businessId}/campaignWheelSpins/${appointmentPrize.spinId}`) : null;
+      const prizeSpinSnap = prizeSpinRef ? await tx.get(prizeSpinRef) : null;
+      const prizeUsable = Boolean(prizeSpinSnap?.exists && prizeSpinSnap.data()?.status === "reserved" && prizeSpinSnap.data()?.appointmentId === appointmentId);
 
       const productRows: Array<{ productId: string; name: string; quantity: number; unitPrice: number; total: number }> = [];
       const productRefs = normalizedProducts.map((item) => db.doc(`businesses/${businessId}/products/${item.productId}`));
@@ -931,7 +938,18 @@ export const finalizeAppointmentCheckout = onCall(
       const productTotal = productRows.reduce((sum, item) => sum + item.total, 0);
       const subtotal = serviceTotal + productTotal;
       if (discount > subtotal) throw new HttpsError("invalid-argument", "İndirim toplam tutardan fazla olamaz.");
-      const payableBeforePoints = Math.max(0, subtotal - discount);
+      // Çark ödülü yalnız hizmet tutarından düşer (ürünlerden değil), elle indirimden sonra kalan tutarla sınırlı.
+      const primaryLinePrice = Math.max(0, serviceTotal - extrasTotal);
+      const prizeLines: PricedLine[] = [
+        { serviceId: typeof appointment.serviceId === "string" ? appointment.serviceId : null, price: primaryLinePrice },
+        ...(Array.isArray(appointment.additionalServices) ? appointment.additionalServices : []).map((item: Record<string, unknown> | null) => ({
+          serviceId: typeof item?.serviceId === "string" ? item.serviceId : null, price: Math.max(0, Number(item?.price ?? 0) || 0),
+        })),
+      ];
+      const campaignDiscount = prizeUsable && appointmentPrize
+        ? Math.min(prizeDiscount(appointmentPrize as WheelPrize, prizeLines, serviceTotal), Math.max(0, subtotal - discount))
+        : 0;
+      const payableBeforePoints = Math.max(0, Math.round((subtotal - discount - campaignDiscount) * 100) / 100);
       const redemptionLimit = Math.round(payableBeforePoints * rewardProgram.maxRedemptionPercent) / 100;
       const maxRedeemablePoints = Math.floor(redemptionLimit / rewardProgram.pointValueTl);
       if (requestedPoints > maxRedeemablePoints) {
@@ -949,9 +967,13 @@ export const finalizeAppointmentCheckout = onCall(
         appointmentId, customerName: String(appointment.customerName ?? "Müşteri"), customerPhone,
         serviceTotal, productTotal, discount, total, paidAmount, remainingAmount, paymentMethod,
         loyaltyPointsEarned, loyaltyPointsUsed, loyaltyDiscount, rewardProgramSnapshot: rewardProgram,
+        ...(campaignDiscount > 0 || prizeUsable ? { campaignDiscount, campaignPrize: { spinId: appointmentPrize.spinId, code: appointmentPrize.code ?? null, text: String(appointmentPrize.text ?? "") } } : {}),
         products: productRows, createdBy: uid,
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
+      if (prizeUsable && prizeSpinRef) {
+        tx.update(prizeSpinRef, { status: "used", usedAt: FieldValue.serverTimestamp(), discountApplied: campaignDiscount, updatedAt: FieldValue.serverTimestamp() });
+      }
       if (paidAmount > 0) tx.create(financeRef, {
         type: "income", category: "Adisyon", amount: paidAmount, paymentMethod,
         description: `${String(appointment.customerName ?? "Müşteri")} · ${appointmentServiceSummary(appointment.serviceName, appointment.additionalServices, 120) || "Hizmet"}`,
@@ -985,7 +1007,7 @@ export const finalizeAppointmentCheckout = onCall(
           lastVisitAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
       }
-      return { receiptId: receiptRef.id, total, loyaltyPointsEarned };
+      return { receiptId: receiptRef.id, total, loyaltyPointsEarned, campaignDiscount };
     });
     return result;
   }
@@ -4593,6 +4615,16 @@ export const createAppointment = onCall(
     const publicToken = randomUUID();
     const verificationRef = db.doc(`verificationCodes/${customerPhone}`);
 
+    // Kampanya çarkı ödülü: müşterinin bu işletmede kullanılmamış ödülü varsa randevuya otomatik bağlanır.
+    // Hata olursa randevu ödülsüz devam eder (ödül kaybolmaz, sonraki randevuda bağlanır).
+    const prizeLines: PricedLine[] = [
+      { serviceId, price: Math.max(0, Number(primaryPrice.servicePrice) || 0) },
+      ...additionalServices.map((item) => ({ serviceId: String((item as { serviceId?: unknown }).serviceId ?? "") || null, price: Math.max(0, Number((item as { price?: unknown }).price) || 0) })),
+    ];
+    const prizeTotal = prizeLines.reduce((sum, line) => sum + line.price, 0);
+    const prizeCandidate = await findCampaignPrizeForBooking(businessId, customerPhone, prizeLines, prizeTotal)
+      .catch((error) => { logger.warn("Çark ödülü aranamadı", { businessId, error: String(error) }); return null; });
+
     const result = await db.runTransaction(async (tx) => {
       const bookingLock = await tx.get(bookingLockRef);
       {
@@ -4633,8 +4665,21 @@ export const createAppointment = onCall(
       if (!verificationSnap.exists || verification?.verified !== true || !verifiedAt || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
         throw new HttpsError("unauthenticated", "Telefon doğrulaması eksik veya süresi dolmuş.");
       }
+      // Ödül hâlâ kullanılabilir mi (aynı anda iki randevuya bağlanmasın).
+      const prizeSnap = prizeCandidate ? await tx.get(prizeCandidate.doc.ref) : null;
+      const prizeRow = prizeSnap?.exists && prizeSnap.data()?.status === "won" ? prizeSnap.data()! : null;
+      const campaignPrize = prizeRow && prizeCandidate ? {
+        spinId: prizeCandidate.doc.id,
+        code: typeof prizeRow.code === "string" ? prizeRow.code : null,
+        ...(prizeRow.prize as WheelPrize),
+        text: prizeText(prizeRow.prize as WheelPrize),
+        estimatedDiscount: prizeCandidate.estimate,
+      } : null;
 
       const appointmentRef = appointments.doc();
+      if (campaignPrize) {
+        tx.update(prizeCandidate!.doc.ref, { status: "reserved", appointmentId: appointmentRef.id, reservedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      }
       tx.set(bookingLockRef, { revision: Number(bookingLock.data()?.revision ?? 0) + 1,
         updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000) }, { merge: true });
 
@@ -4667,6 +4712,7 @@ export const createAppointment = onCall(
         primaryServiceDurationMinutes: primaryDurationMinutes,
         additionalServices,
         serviceDurationMinutes: durationMinutes,
+        ...(campaignPrize ? { campaignPrize } : {}),
         source: "online",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -4681,13 +4727,14 @@ export const createAppointment = onCall(
       });
       tx.update(verificationRef, { verified: false, consumedAt: FieldValue.serverTimestamp() });
 
-      return appointmentRef.id;
+      return { id: appointmentRef.id, campaignPrize };
     });
 
     return {
       success: true,
-      appointmentId: result,
+      appointmentId: result.id,
       publicToken,
+      campaignPrize: result.campaignPrize ? { text: result.campaignPrize.text, code: result.campaignPrize.code, estimatedDiscount: result.campaignPrize.estimatedDiscount } : null,
     };
   }
 );
@@ -5845,6 +5892,10 @@ export const appointmentAutomationUpdated = onDocumentUpdated(
     if (before.status !== "completed" && after.status === "completed") {
       await scheduleWhatsAppFollowUp(event.params.businessId, event.params.appointmentId, after)
         .catch((error) => logger.warn("Memnuniyet mesajı planlanamadı", { error: String(error) }));
+    }
+    if (before.status !== "cancelled" && after.status === "cancelled" && typeof after.campaignPrize?.spinId === "string") {
+      await releaseCampaignPrize(event.params.businessId, event.params.appointmentId, after.campaignPrize.spinId)
+        .catch((error) => logger.warn("Çark ödülü serbest bırakılamadı", { error: String(error) }));
     }
     if (before.status !== "cancelled" && after.status === "cancelled") {
       await enqueueImmediateAppointmentSms(event.params.businessId, event.params.appointmentId, after, "cancellation");
@@ -8296,6 +8347,224 @@ export const testMutlucellSettings = onCall(
   }
 );
 
+// ── Kampanya çarkı ──
+// Ayar (olasılık/stok): businesses/{id}/campaignWheel/settings — yalnız sunucu yazar, yönetici okur.
+// Vitrin: businesses/{id}.spinWheelPublic — olasılıksız özet (korunan alan).
+// Çevirme: businesses/{id}/campaignWheelSpins/{kampanya}_{telefonÖzeti} — telefon başına bir hak.
+// Ödül randevuda otomatik bağlanır (createAppointment), adisyonda düşülür (finalizeAppointmentCheckout),
+// randevu iptal edilirse ödül yeniden kullanılabilir olur (randevu güncelleme tetikleyicisi).
+
+const wheelSettingsRef = (businessId: string) => db.doc(`businesses/${businessId}/campaignWheel/settings`);
+
+function wheelSettingsFrom(data: FirebaseFirestore.DocumentData | undefined): (WheelSettings & { awarded: Record<string, number>; spins: number; wins: number }) | null {
+  if (!data || !Array.isArray(data.slices)) return null;
+  return {
+    enabled: data.enabled === true,
+    title: String(data.title ?? "Şans çarkı"),
+    subtitle: String(data.subtitle ?? ""),
+    campaignId: String(data.campaignId ?? ""),
+    startsAt: typeof data.startsAt === "number" ? data.startsAt : null,
+    endsAt: typeof data.endsAt === "number" ? data.endsAt : null,
+    prizeValidDays: Number(data.prizeValidDays ?? 30) || 30,
+    slices: data.slices,
+    awarded: data.awarded && typeof data.awarded === "object" ? data.awarded as Record<string, number> : {},
+    spins: Number(data.spins ?? 0) || 0,
+    wins: Number(data.wins ?? 0) || 0,
+  };
+}
+
+function spinRow(doc: FirebaseFirestore.QueryDocumentSnapshot) {
+  const data = doc.data();
+  const millis = (value: unknown) => value instanceof Timestamp ? value.toMillis() : null;
+  return {
+    id: doc.id,
+    campaignId: String(data.campaignId ?? ""),
+    customerName: String(data.customerName ?? ""),
+    phone: String(data.phone ?? ""),
+    prize: data.prize ?? null,
+    prizeText: data.prize ? prizeText(data.prize) : "",
+    code: typeof data.code === "string" ? data.code : null,
+    status: String(data.status ?? ""),
+    appointmentId: typeof data.appointmentId === "string" ? data.appointmentId : null,
+    discountApplied: typeof data.discountApplied === "number" ? data.discountApplied : null,
+    createdAt: millis(data.createdAt),
+    expiresAt: millis(data.expiresAt),
+    usedAt: millis(data.usedAt),
+  };
+}
+
+export const getCampaignWheelSettings = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    const settings = wheelSettingsFrom((await wheelSettingsRef(businessId).get()).data());
+    return { settings };
+  },
+);
+
+export const saveCampaignWheelSettings = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessManager(uid, businessId);
+    burstLimit(`wheel-save:${uid}`, 30, 10 * 60_000);
+    const ref = wheelSettingsRef(businessId);
+    const previous = wheelSettingsFrom((await ref.get()).data());
+    let next: WheelSettings;
+    try {
+      next = normalizeWheelSettings(request.data?.settings, previous, () => `k${Date.now().toString(36)}${randomBytes(3).toString("hex")}`);
+    } catch (error) {
+      if (error instanceof WheelValidationError) throw new HttpsError("invalid-argument", error.message);
+      throw error;
+    }
+    // Ücretsiz hizmet dilimlerinin hizmeti bu işletmede gerçekten var mı; ad sunucudan alınır.
+    const serviceIds = [...new Set(next.slices.filter((slice) => slice.serviceId).map((slice) => slice.serviceId!))];
+    if (serviceIds.length) {
+      const snapshots = await db.getAll(...serviceIds.map((id) => db.doc(`businesses/${businessId}/services/${id}`)));
+      const names = new Map(snapshots.filter((snap) => snap.exists).map((snap) => [snap.id, String(snap.data()?.name ?? "Hizmet")]));
+      for (const slice of next.slices) {
+        if (!slice.serviceId) continue;
+        const name = names.get(slice.serviceId);
+        if (!name) throw new HttpsError("invalid-argument", `"${slice.label}": seçilen hizmet bulunamadı.`);
+        slice.serviceName = name;
+      }
+    }
+    const newCampaign = !previous || previous.campaignId !== next.campaignId;
+    const batch = db.batch();
+    batch.set(ref, {
+      ...next,
+      ...(newCampaign ? { awarded: {}, spins: 0, wins: 0, campaignStartedAt: FieldValue.serverTimestamp() } : {}),
+      updatedAt: FieldValue.serverTimestamp(), updatedBy: uid,
+    }, { merge: !newCampaign });
+    batch.set(db.doc(`businesses/${businessId}`), { spinWheelPublic: publicWheel(next), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await batch.commit();
+    return { settings: wheelSettingsFrom((await ref.get()).data()) };
+  },
+);
+
+export const listCampaignWheelSpins = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    await requireBusinessOperation(uid, businessId, "manageCheckout");
+    const snapshot = await db.collection(`businesses/${businessId}/campaignWheelSpins`).orderBy("createdAt", "desc").limit(200).get();
+    return { spins: snapshot.docs.map(spinRow) };
+  },
+);
+
+/** Müşteri çarkı çevirir. Telefon son 15 dk'da doğrulanmış olmalı (doğrulama tüketilmez; randevuda yeniden kullanılır). */
+export const spinCampaignWheel = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const phone = normalizedPhoneKey(requireString(request.data?.phone, "phone"));
+    const customerName = String(request.data?.customerName ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const ip = clientIpFrom(request.rawRequest) || "unknown";
+    await Promise.all([
+      consumeSecurityLimit(`wheel:ip:hour:${ip}`, 20, 60 * 60_000),
+      consumeSecurityLimit(`wheel:phone:hour:${phone}`, 10, 60 * 60_000),
+    ]);
+    const [businessSnap, verification] = await Promise.all([
+      db.doc(`businesses/${businessId}`).get(),
+      db.doc(`verificationCodes/${phone}`).get(),
+    ]);
+    const business = businessSnap.data();
+    if (!business || business.isPublished !== true || business.isSuspended === true) {
+      throw new HttpsError("failed-precondition", "Bu işletmenin kampanyası şu anda kullanılamıyor.");
+    }
+    const verifiedAt = verification.data()?.verifiedAt;
+    if (verification.data()?.verified !== true || !(verifiedAt instanceof Timestamp) || Date.now() - verifiedAt.toMillis() > 15 * 60_000) {
+      throw new HttpsError("failed-precondition", "Çarkı çevirmek için önce telefonunu doğrula.");
+    }
+
+    const settingsRef = wheelSettingsRef(businessId);
+    const phoneHash = createHash("sha256").update(phone).digest("hex");
+    const now = Date.now();
+    const random = randomInt(0, 1_000_000_000) / 1_000_000_000;
+    const code = prizeCode(randomBytes(8));
+
+    return db.runTransaction(async (tx) => {
+      const settings = wheelSettingsFrom((await tx.get(settingsRef)).data());
+      if (!settings || !wheelIsLive(settings, now)) throw new HttpsError("failed-precondition", "Bu kampanya şu anda aktif değil.");
+      const spinRef = db.doc(`businesses/${businessId}/campaignWheelSpins/${spinDocumentId(settings.campaignId, phoneHash)}`);
+      const existing = await tx.get(spinRef);
+      const loyaltyRef = db.doc(`businesses/${businessId}/loyaltyAccounts/${loyaltyDocumentId(phone)}`);
+      if (existing.exists) {
+        const row = existing.data()!;
+        const sliceIndex = settings.slices.findIndex((slice) => slice.id === row.sliceId);
+        return {
+          alreadySpun: true, sliceIndex: Math.max(0, sliceIndex), sliceId: String(row.sliceId ?? ""),
+          prize: row.prize ?? null, prizeText: row.prize ? prizeText(row.prize) : "", code: row.code ?? null, status: String(row.status ?? ""),
+          expiresAt: row.expiresAt instanceof Timestamp ? row.expiresAt.toMillis() : null,
+        };
+      }
+      const sliceIndex = pickSliceIndex(settings.slices, settings.awarded, random);
+      if (sliceIndex === null) throw new HttpsError("resource-exhausted", "Bu kampanyanın ödülleri tükendi.");
+      const slice = settings.slices[sliceIndex];
+      const prize: WheelPrize = prizeFromSlice(slice);
+      const isWin = prize.type !== "none";
+      const isPoints = prize.type === "points";
+      const expiresAt = isWin && !isPoints ? Timestamp.fromMillis(now + settings.prizeValidDays * 86_400_000) : null;
+      const status = !isWin ? "none" : isPoints ? "points_awarded" : "won";
+
+      tx.create(spinRef, {
+        campaignId: settings.campaignId, businessId, phone, phoneHash: phoneHash.slice(0, 32), customerName,
+        sliceId: slice.id, prize, code: isWin && !isPoints ? code : null, status,
+        appointmentId: null, expiresAt, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      // update: noktalı alan yolu (awarded.<dilim>) iç içe sayaç olarak artar (set+merge bunu düz alan adı sanar).
+      tx.update(settingsRef, {
+        spins: FieldValue.increment(1),
+        ...(isWin ? { wins: FieldValue.increment(1), [`awarded.${slice.id}`]: FieldValue.increment(1) } : {}),
+      });
+      if (isPoints) {
+        tx.set(loyaltyRef, {
+          customerName: customerName || "Müşteri", customerPhone: phone,
+          points: FieldValue.increment(prize.value), lifetimePoints: FieldValue.increment(prize.value),
+          lastEarnedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      return {
+        alreadySpun: false, sliceIndex, sliceId: slice.id, prize, prizeText: prizeText(prize),
+        code: isWin && !isPoints ? code : null, status, expiresAt: expiresAt?.toMillis() ?? null,
+      };
+    });
+  },
+);
+
+/** İptal edilen randevuya ayrılmış ödül yeniden kullanılabilir olur (süresi dolmadıysa). */
+async function releaseCampaignPrize(businessId: string, appointmentId: string, spinId: string) {
+  const ref = db.doc(`businesses/${businessId}/campaignWheelSpins/${spinId}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const row = snap.data();
+    if (!row || row.status !== "reserved" || row.appointmentId !== appointmentId) return;
+    tx.update(ref, { status: "won", appointmentId: null, releasedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  });
+}
+
+/** Randevu için kullanılabilir en iyi çark ödülü (işlem dışı ön okuma; işlemde yeniden doğrulanır). */
+async function findCampaignPrizeForBooking(businessId: string, phone: string, lines: PricedLine[], total: number) {
+  const snapshot = await db.collection(`businesses/${businessId}/campaignWheelSpins`)
+    .where("phone", "==", phone).where("status", "==", "won").limit(10).get();
+  const now = Date.now();
+  const candidates = snapshot.docs
+    .map((doc) => ({ doc, prize: doc.data().prize as WheelPrize, expiresAt: doc.data().expiresAt as Timestamp | null }))
+    .filter((item) => item.prize && (!item.expiresAt || item.expiresAt.toMillis() > now))
+    .filter((item) => prizeAppliesToBooking(item.prize, lines.map((line) => line.serviceId)))
+    .map((item) => ({ ...item, estimate: prizeDiscount(item.prize, lines, total) }))
+    // Fiyatı belli olmayan (teklif) hizmette tutar 0 çıkabilir; yine de bağlanır, adisyonda hesaplanır.
+    .sort((a, b) => b.estimate - a.estimate);
+  return candidates[0] ?? null;
+}
+
 export const sendVerificationCode = onCall(
   {
     region: "europe-west1",
@@ -8329,22 +8598,17 @@ export const sendVerificationCode = onCall(
     const codeDocRef = db.doc(`verificationCodes/${phone}`);
     const existing = await codeDocRef.get();
 
-    // 60 saniyelik tekrar gönderme limiti
-    if (existing.exists) {
-      const lastSent =
-        existing.data()?.sentAt as Timestamp | undefined;
-
-      if (lastSent) {
-        const secondsAgo =
-          (Date.now() - lastSent.toMillis()) / 1000;
-
-        if (secondsAgo < 60) {
-          throw new HttpsError(
-            "resource-exhausted",
-            `Lütfen ${Math.ceil(60 - secondsAgo)} saniye bekleyin.`
-          );
-        }
-      }
+    // Önce WhatsApp (ücretsiz, Meta "authentication" şablonu onaylıysa), olmazsa SMS. İstemci "SMS ile gönder" derse SMS.
+    const whatsappConfig = data.channel === "sms" ? null : await loadWhatsAppConfig().catch(() => null);
+    const lastSent = existing.data()?.sentAt as Timestamp | undefined;
+    const plan = otpSendPlan({
+      requested: data.channel,
+      whatsappReady: Boolean(whatsappConfig && toWhatsAppPhone(phone)),
+      previousProvider: typeof existing.data()?.provider === "string" ? existing.data()!.provider : null,
+      secondsSinceLast: lastSent ? (Date.now() - lastSent.toMillis()) / 1000 : null,
+    });
+    if (plan.waitSeconds > 0) {
+      throw new HttpsError("resource-exhausted", `Lütfen ${plan.waitSeconds} saniye bekleyin.`);
     }
 
     const code = String(randomInt(100000, 1000000));
@@ -8356,6 +8620,38 @@ export const sendVerificationCode = onCall(
     let providerMessageId: string | null = null;
     let smsDelivered = false;
     let smsError: string | null = null;
+    let whatsappDelivered = false;
+
+    if (!isEmulator && plan.channel === "whatsapp" && whatsappConfig) {
+      const to = toWhatsAppPhone(phone)!;
+      try {
+        const response = await fetch(`${whatsappConfig.apiBase}/${whatsappConfig.apiVersion}/${whatsappConfig.phoneNumberId}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${whatsappConfig.accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(otpTemplateMessage(to, code, whatsappConfig.language)),
+          signal: AbortSignal.timeout(10_000),
+        });
+        const body = await response.json().catch(() => null) as { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string } } | null;
+        const messageId = body?.messages?.[0]?.id;
+        if (response.ok && messageId) {
+          whatsappDelivered = true;
+          providerMessageId = messageId;
+        } else {
+          logger.warn("WhatsApp doğrulama kodu gönderilemedi, SMS'e düşülüyor", { status: response.status, code: body?.error?.code, message: shortText(body?.error?.message, 200) });
+        }
+      } catch (error) {
+        logger.warn("WhatsApp doğrulama kodu hatası, SMS'e düşülüyor", { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    if (whatsappDelivered) {
+      await codeDocRef.set({
+        codeHash: otpHash(phone, code), phone, attempts: 0, verified: false,
+        provider: "whatsapp", providerMessageId, smsDelivered: false, smsError: null,
+        sentAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+      });
+      return { success: true, smsDelivered: false, channel: "whatsapp", message: "Doğrulama kodu WhatsApp'a gönderildi." };
+    }
 
     // Emulator'da Mutlucell'e hiç gitme
     if (isEmulator) {
@@ -8419,6 +8715,7 @@ export const sendVerificationCode = onCall(
       return {
         success: true,
         smsDelivered: true,
+        channel: "sms",
         message: "Doğrulama kodu emülatörde oluşturuldu.",
         _devCode: code,
       };
@@ -8428,6 +8725,7 @@ export const sendVerificationCode = onCall(
       return {
         success: true,
         smsDelivered: true,
+        channel: "sms",
         message: "Doğrulama kodu telefonunuza gönderildi.",
       };
     }
@@ -11631,6 +11929,18 @@ export const submitWhatsAppOnboardingTemplates = onCall(
       }).catch(() => null);
       const body = await response?.json().catch(() => null) as { status?: string; error?: { message?: string; error_user_msg?: string } } | null;
       results.push({ name: definition.name, result: response?.ok ? `gönderildi (${body?.status ?? "PENDING"})` : `hata: ${shortText(body?.error?.error_user_msg ?? body?.error?.message ?? `HTTP ${response?.status ?? 0}`, 160)}` });
+    }
+    // Doğrulama kodu (randevu + kampanya çarkı) için authentication şablonu.
+    if (existing.has(OTP_TEMPLATE_NAME)) results.push({ name: OTP_TEMPLATE_NAME, result: "zaten var" });
+    else {
+      const response = await fetch(`${config.apiBase}/${config.apiVersion}/${wabaId}/message_templates`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(otpTemplateCreatePayload(config.language)),
+        signal: AbortSignal.timeout(15_000),
+      }).catch(() => null);
+      const body = await response?.json().catch(() => null) as { status?: string; error?: { message?: string; error_user_msg?: string } } | null;
+      results.push({ name: OTP_TEMPLATE_NAME, result: response?.ok ? `gönderildi (${body?.status ?? "PENDING"})` : `hata: ${shortText(body?.error?.error_user_msg ?? body?.error?.message ?? `HTTP ${response?.status ?? 0}`, 160)}` });
     }
     await db.collection("platformAuditLogs").add({ action: "whatsapp.onboarding_templates_submitted", actorUid: uid, results, createdAt: FieldValue.serverTimestamp() });
     return { results };

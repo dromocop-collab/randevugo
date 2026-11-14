@@ -58,6 +58,18 @@ export interface Appointment extends EntityBase {
   additionalServices?: AppointmentServiceLine[];
   servicePrice?: number;
   serviceDurationMinutes?: number;
+  /** Kampanya çarkı ödülü (online randevuda otomatik bağlanır, adisyonda düşülür). */
+  campaignPrize?: {
+    spinId: string;
+    code: string | null;
+    type: "percent" | "amount" | "free_service" | "points" | "none";
+    value: number;
+    label: string;
+    serviceId: string | null;
+    serviceName: string | null;
+    text: string;
+    estimatedDiscount: number;
+  };
   source?: AppointmentSource;
   checkoutReceiptId?: string;
   paidAmount?: number;
