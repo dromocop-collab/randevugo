@@ -39,6 +39,7 @@ import { LEAD_TEMPLATE_DEFINITION, decideLeadReminder, leadPhone, leadReminderMe
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, META_ACTION_EVENTS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
+import { apnsPresentation } from "./push-domain.js";
 import { AD_GUARD_DEFAULTS, META_ADS_SETTINGS_PATH, META_BREAKDOWN_FIELDS, attributionChannel, buildFunnel, dailyBudgetMinorUnits, evaluateAdGuard, isBreakdownKind, isMetaAdSession, isMetaAttribution, metaDateRange, metaResults, normalizeAdAccountId, normalizeAdGuardSettings, parseMetaInsight, ratio, sanitizeAttribution, summarizeBreakdown, summarizeSignups, type AdGuardSettings, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { SIGNUP_IDLE_MS, advanceSignup, buildInteractivePayload, cancelCommand, defaultWorkingHours, isSignupIntent, outgoingPreview, slugFromName, startSignup, type Outgoing, type SignupData, type SignupStep, type Transition } from "./whatsapp-signup-domain.js";
@@ -560,6 +561,7 @@ async function sendTokenBatches(
 ) {
   let successCount = 0;
   let failureCount = 0;
+  const presentation = apnsPresentation(data);
   for (let offset = 0; offset < tokens.length; offset += 500) {
     const batch = tokens.slice(offset, offset + 500);
     const response = await messaging.sendEachForMulticast({
@@ -575,7 +577,7 @@ async function sendTokenBatches(
         },
       },
       apns: { ...(collapseId ? { headers: { "apns-collapse-id": collapseId } } : {}),
-        payload: { aps: { sound: "default", badge: 1 } } },
+        payload: { aps: { sound: "default", badge: 1, "thread-id": presentation.threadId, "interruption-level": presentation.interruptionLevel } } },
       webpush: {
         notification: { icon: "/icon-192.png", badge: "/icon-192.png", silent: false, ...(collapseId ? { tag: collapseId, renotify: true } : {}) },
       },
@@ -3148,8 +3150,8 @@ export const sendBusinessPush = onCall(
     ];
     const tokens = await tokensForUsers(userIds);
     const result = await sendTokenBatches(tokens, title, body, {
-      kind: "business_announcement", businessId,
-    });
+      kind: "business_announcement", businessId, businessSlug: String(business.slug ?? ""), audience: "customer",
+    }, `announcement-${businessId}-${Date.now()}`);
     await db.collection("notificationLogs").add({
       audience: "business_customers", businessId, businessName: String(business.name ?? "İşletme"),
       title, body, senderUid: uid, recipientDevices: tokens.length, ...result,
