@@ -8599,7 +8599,10 @@ export const sendVerificationCode = onCall(
     const existing = await codeDocRef.get();
 
     // Önce WhatsApp (ücretsiz, Meta "authentication" şablonu onaylıysa), olmazsa SMS. İstemci "SMS ile gönder" derse SMS.
-    const whatsappConfig = data.channel === "sms" ? null : await loadWhatsAppConfig().catch(() => null);
+    // WhatsApp yalnız bunu bilen istemcilere: channel "auto"/"whatsapp". Eski iOS/Android sürümleri channel göndermez ve
+    // yalnız smsDelivered'a bakar; onlara WhatsApp'tan gönderirsek "kod gönderilemedi" der → onlar SMS almaya devam eder.
+    const clientKnowsWhatsApp = data.channel === "auto" || data.channel === "whatsapp";
+    const whatsappConfig = clientKnowsWhatsApp ? await loadWhatsAppConfig().catch(() => null) : null;
     const lastSent = existing.data()?.sentAt as Timestamp | undefined;
     const plan = otpSendPlan({
       requested: data.channel,

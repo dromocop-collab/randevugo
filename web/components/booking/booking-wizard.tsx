@@ -640,8 +640,8 @@ export function BookingWizard(props: Props) {
     setVerifyError("");
     try {
       const functions = getFunctions(getFirebaseApp(), "europe-west1");
-      const sendCode = httpsCallable<{ phone: string; channel?: "sms" }, { success: boolean; smsDelivered?: boolean; channel?: "whatsapp" | "sms"; message?: string }>(functions, "sendVerificationCode");
-      const result = await sendCode({ phone: normalizedCustomerPhone, ...(channel ? { channel } : {}) });
+      const sendCode = httpsCallable<{ phone: string; channel: "sms" | "auto" }, { success: boolean; smsDelivered?: boolean; channel?: "whatsapp" | "sms"; message?: string }>(functions, "sendVerificationCode");
+      const result = await sendCode({ phone: normalizedCustomerPhone, channel: channel ?? "auto" });
       if (result.data.smsDelivered === false && result.data.channel !== "whatsapp") {
         // SMS gitmediyse kod giriş adımına geçilmez; kullanıcı boşuna beklemez.
         toast.error(result.data.message ? t(result.data.message) : t("SMS şu anda iletilemedi. Lütfen birkaç dakika sonra tekrar deneyin."));

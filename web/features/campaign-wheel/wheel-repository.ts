@@ -47,7 +47,7 @@ export const spinCampaignWheel = (input: { businessId: string; phone: string; cu
 export type CodeChannel = "whatsapp" | "sms";
 
 export const sendWheelVerificationCode = (phone: string, channel?: "sms") =>
-  call<{ success: boolean; smsDelivered?: boolean; channel?: CodeChannel; message?: string }>("sendVerificationCode", { phone, ...(channel ? { channel } : {}) });
+  call<{ success: boolean; smsDelivered?: boolean; channel?: CodeChannel; message?: string }>("sendVerificationCode", { phone, channel: channel ?? "auto" });
 
 export const verifyWheelPhoneCode = (phone: string, code: string) =>
   call<{ success: boolean; verified: boolean }>("verifyPhoneCode", { phone, code });
