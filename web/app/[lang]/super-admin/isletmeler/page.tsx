@@ -18,7 +18,7 @@ import {
   DEFAULT_PLATFORM_PLAN_ID, isLegacyPlanId, listPlatformPlansWithSource, planDisplayLabel, type PlatformPlan,
 } from "@/features/subscriptions/platform-plan-repository";
 import {
-  assignBusinessPlan, backfillBusinessGeo, backfillServiceTranslations, getBusinessModeration, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension,
+  assignBusinessPlan, backfillBusinessGeo, backfillServiceTranslations, getBusinessModeration, readBusinessFromServer, reviewBusiness, setBusinessDiscoveryVisibility, setBusinessSuspension, updateBusinessIdentity,
   type ModerationMatch,
 } from "@/features/platform/admin-business-actions";
 import { AutoApprovalPanel, MatchList } from "./auto-approval-panel";
@@ -431,6 +431,11 @@ function BusinessesView({ initialQuery, autoOpen, initialStatus }: { initialQuer
           onSuspend={() => setSuspendTarget(selected)}
           onChangePlan={(planId, grantPeriod) => void changePlan(selected, planId, grantPeriod)}
           onDecide={(decision) => void decide(selected, decision)}
+          onIdentitySaved={async () => {
+            await refreshFromServer(selected.id).catch(() => undefined);
+            // Firma adı tüm şubelerde değişir.
+            if (selected.organizationId) await Promise.all(businesses.filter((item) => item.organizationId === selected.organizationId && item.id !== selected.id).map((item) => refreshFromServer(item.id).catch(() => undefined)));
+          }}
         />
       )}
       {selectedId && !selected && !loading && (
@@ -504,7 +509,7 @@ const SUBSCRIPTION_LABEL: Record<string, { label: string; tone: AdminTone }> = {
 };
 
 function BusinessDetailSheet({
-  biz, plans, branches, busy, onClose, onSelect, onToggleHidden, onSuspend, onChangePlan, onDecide,
+  biz, plans, branches, busy, onClose, onSelect, onToggleHidden, onSuspend, onChangePlan, onDecide, onIdentitySaved,
 }: {
   biz: BusinessItem;
   plans: PlatformPlan[];
@@ -516,6 +521,7 @@ function BusinessDetailSheet({
   onSuspend: () => void;
   onChangePlan: (planId: string, grantPeriod?: "monthly" | "yearly") => void;
   onDecide: (decision: "approved" | "rejected") => void;
+  onIdentitySaved: () => Promise<void>;
 }) {
   const [extra, setExtra] = useState<{ id: string; owner: OwnerInfo; subscription: SubscriptionInfo } | null>(null);
   const [planChoice, setPlanChoice] = useState<{ id: string; plan: string } | null>(null);
@@ -618,6 +624,8 @@ function BusinessDetailSheet({
           {biz.slug && <AdminButton variant="ghost" icon={ExternalLink} href={`/isletme/${biz.slug}`} external>Mağazayı aç</AdminButton>}
         </section>
 
+        <IdentityEditor key={biz.id} biz={biz} disabled={anyBusy} onSaved={onIdentitySaved} />
+
         <h3 className={styles.sectionTitle}>Paket</h3>
         <div className={styles.planRow}>
           <SelectField
@@ -708,5 +716,70 @@ function BusinessDetailSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** Türkçe ad → mağaza adresi önerisi ("Salon Yavuz" → "salon-yavuz"). */
+function suggestSlug(name: string): string {
+  return name.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+}
+
+/** Mağaza adresi + firma adı düzeltme (ör. WhatsApp kaydında soru cümlesi ad sanılmışsa). */
+function IdentityEditor({ biz, disabled, onSaved }: { biz: BusinessItem; disabled: boolean; onSaved: () => Promise<void> }) {
+  const [slug, setSlug] = useState(biz.slug ?? "");
+  const [organization, setOrganization] = useState(biz.organizationName ?? "");
+  const [saving, setSaving] = useState(false);
+  const cleanSlug = slug.trim().toLowerCase();
+  const slugValid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanSlug) && cleanSlug.length >= 3 && cleanSlug.length <= 60;
+  const slugChanged = cleanSlug !== (biz.slug ?? "");
+  const orgChanged = organization.trim() !== (biz.organizationName ?? "") && organization.trim().length >= 2;
+  const suggested = suggestSlug(biz.name);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const result = await updateBusinessIdentity({
+        businessId: biz.id,
+        ...(slugChanged ? { slug: cleanSlug } : {}),
+        ...(orgChanged ? { organizationName: organization.trim() } : {}),
+      });
+      await onSaved();
+      toast.success(result.changed ? "Kaydedildi." : "Değişiklik yok.", { description: slugChanged ? `Yeni adres: seninrandevun.com/isletme/${result.slug} · eski adres buraya yönlenir.` : undefined });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message.replace(/^Firebase:\s*/i, "") : "Kaydedilemedi.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <h3 className={styles.sectionTitle}>Mağaza adresi ve firma adı</h3>
+      <div className={styles.identity}>
+        <label className={styles.identityField}>
+          <span>Mağaza adresi</span>
+          <span className={styles.identityInput}>
+            <small>/isletme/</small>
+            <input value={slug} onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/\s+/g, "-"))} disabled={disabled || saving} spellCheck={false} autoComplete="off" aria-invalid={!slugValid} />
+          </span>
+          {!slugValid && <em>3-60 karakter; küçük harf, rakam ve tire.</em>}
+          {suggested && suggested !== cleanSlug && suggested !== biz.slug && (
+            <button type="button" className={styles.link} onClick={() => setSlug(suggested)} disabled={disabled || saving}>Addan öner: {suggested}</button>
+          )}
+        </label>
+        <label className={styles.identityField}>
+          <span>Firma adı</span>
+          <span className={styles.identityInput}>
+            <input value={organization} onChange={(event) => setOrganization(event.target.value)} disabled={disabled || saving} placeholder={biz.name} />
+          </span>
+          {organization.trim() !== biz.name && (
+            <button type="button" className={styles.link} onClick={() => setOrganization(biz.name)} disabled={disabled || saving}>İşletme adıyla aynı yap: {biz.name}</button>
+          )}
+        </label>
+        <AdminButton variant="primary" loading={saving} disabled={disabled || saving || !slugValid || (!slugChanged && !orgChanged)} onClick={() => void save()}>Kaydet</AdminButton>
+      </div>
+      <p className={styles.hint}>Eski adres silinmez, yeni adrese yönlenir (paylaşılan linkler çalışmaya devam eder). Firma adı firmadaki tüm şubelerde değişir.</p>
+    </>
   );
 }

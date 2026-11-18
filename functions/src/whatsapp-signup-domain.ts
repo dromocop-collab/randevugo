@@ -101,6 +101,19 @@ function backCommand(text: string | null): boolean {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 const short = (value: string, max: number) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
 
+/**
+ * İşletme adı adımında gelen metin aslında bir soru/selam mı? ("sonra ne kadar ücret?", "fiyat nedir", "merhaba")
+ * Öyleyse ad olarak alınmaz; "price" sorusu kısaca cevaplanır, ad yeniden sorulur.
+ */
+export function nameAnswerIntent(text: string): "price" | "question" | "greeting" | null {
+  const value = fold(text).replace(/[!.,]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!value) return null;
+  if (/(^| )(ne kadar|kac para|kac tl|kac lira|ucret|ucreti|ucretli|ucretsiz mi|fiyat|fiyati|fiyatlar|abonelik)( |$)/.test(value)) return "price";
+  if (/^(merhaba|selam|selamlar|slm|mrb|iyi gunler|gunaydin|iyi aksamlar|sa|selamun aleykum|bilgi|bilgi almak istiyorum|kaydol|kayit)$/.test(value)) return "greeting";
+  if (text.trim().endsWith("?") || /(^| )(nasil|neden|nedir|ne zaman|nerede|misiniz|musunuz|miyim|muyum)( |$)/.test(value)) return "question";
+  return null;
+}
+
 function askName(): Outgoing { return { kind: "text", text: "İşletmenin adı ne? ✍️\n(ör. Elif Güzellik Salonu)" }; }
 function askCategory(): Outgoing {
   return {
@@ -191,6 +204,10 @@ export function advanceSignup(state: SignupState, input: SignupInput, context: S
   switch (state.step) {
     case "name": {
       const name = text.replace(/\s+/g, " ").slice(0, 100);
+      const intent = nameAnswerIntent(name);
+      if (intent === "price") return retry("İlk ay tamamen ücretsiz, kredi kartı da istemiyoruz 🙌 Sonrasındaki paketleri seninrandevun.com/fiyatlar adresinde görebilirsin; istediğin zaman iptal edebilirsin.\n\nŞimdi mağazanı açalım:");
+      if (intent === "greeting") return retry("Merhaba! 👋 Mağazanı birkaç soruda açalım.");
+      if (intent === "question") return retry("Sorunu not ettim, kayıttan sonra ekibimiz yardımcı olur 🙂 Önce işletmenin adını yazar mısın?");
       if (name.length < 2 || !/\p{L}/u.test(name)) return retry("İşletme adı en az 2 harf olmalı.");
       if (!context.nameAllowed(name)) return retry("Bu adı kabul edemiyoruz. Lütfen işletmenin gerçek adını yaz.");
       data.name = name;

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import BusinessProfileClient from "./business-profile-client";
 import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { getBusinessBySlugCached } from "@/features/businesses/business-slug-cache";
@@ -11,7 +11,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { LinkCloud } from "@/components/seo/link-cloud";
 import { canonicalBusinessCategory } from "@/lib/business-categories";
 import { categoryDisplayName, isSeoCategory, seoCategory } from "@/lib/seo/categories";
-import { breadcrumbJsonLd, graph, storefrontJsonLd, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
+import { breadcrumbJsonLd, graph, localePath, storefrontJsonLd, webPageJsonLd, type Crumb } from "@/lib/seo/schema";
 import { categoryCounts, getSeoIndex, sortForListing } from "@/lib/seo/seo-data";
 import { absoluteUrl, businessPath } from "@/lib/seo/site";
 import { displayPlace, locative, seoSlug } from "@/lib/seo/text";
@@ -33,6 +33,10 @@ export default async function BusinessProfilePage({ params }: { params: Promise<
   const inPlace = (place: string) => (turkish ? locative(place) : place);
   const business = await getBusinessBySlugCached(slug).catch(() => null);
   if (!business || business.status !== "active" || !business.isPublished) notFound();
+  // Mağaza adresi değiştiyse eski adres (businessSlugs takma adı) yenisine kalıcı yönlenir; eski linkler kırılmaz.
+  let requestedSlug = slug;
+  try { requestedSlug = decodeURIComponent(slug); } catch { /* geçersiz kodlama: olduğu gibi */ }
+  if (business.slug && business.slug !== requestedSlug) permanentRedirect(localePath(businessPath(business.slug), locale));
   const [workingHours, services, staff, reviews, serviceCategories, index] = await Promise.all([
     listBusinessWorkingHours(business.id),
     listBookableServices(business.id),

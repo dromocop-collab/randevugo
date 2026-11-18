@@ -1582,6 +1582,69 @@ export const setBusinessDiscoveryVisibility = onCall(
   }
 );
 
+function previousSlugsOf(data: FirebaseFirestore.DocumentData | undefined): string[] {
+  return Array.isArray(data?.previousSlugs) ? data.previousSlugs.map(String).filter((slug: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)).slice(0, 20) : [];
+}
+
+/**
+ * Süper admin: mağaza adresini (slug) ve/veya firma adını düzeltir (ör. WhatsApp kaydında yanlış alınan ad).
+ * Eski adres silinmez, yeni adrese yönlenen takma ad olur (eski linkler ve paylaşımlar kırılmaz; başkası alamaz).
+ * Firma adı aynı firmadaki tüm şubelerde ve businessOrganizations kaydında güncellenir.
+ */
+export const adminUpdateBusinessIdentity = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const rawSlug = typeof request.data?.slug === "string" ? request.data.slug.trim().toLowerCase() : "";
+    const organizationName = typeof request.data?.organizationName === "string" ? request.data.organizationName.replace(/\s+/g, " ").trim().slice(0, 100) : "";
+    if (rawSlug && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(rawSlug) || rawSlug.length < 3 || rawSlug.length > 60)) {
+      throw new HttpsError("invalid-argument", "Mağaza adresi 3-60 karakter olmalı; yalnız küçük harf, rakam ve tire içerebilir.");
+    }
+    if (request.data?.organizationName !== undefined && organizationName.length < 2) throw new HttpsError("invalid-argument", "Firma adı en az 2 karakter olmalı.");
+    if (!rawSlug && !organizationName) throw new HttpsError("invalid-argument", "Değiştirilecek bir şey yok.");
+    const businessRef = db.doc(`businesses/${businessId}`);
+
+    const result = await db.runTransaction(async (tx) => {
+      const business = await tx.get(businessRef);
+      if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+      const data = business.data()!;
+      const oldSlug = String(data.slug ?? "");
+      const changes: Record<string, unknown> = {};
+      const slugChanged = Boolean(rawSlug && rawSlug !== oldSlug);
+      const newSlugRef = slugChanged ? db.doc(`businessSlugs/${rawSlug}`) : null;
+      const newSlugSnap = newSlugRef ? await tx.get(newSlugRef) : null;
+      if (newSlugSnap?.exists && newSlugSnap.data()?.businessId !== businessId) throw new HttpsError("already-exists", "Bu mağaza adresi başka bir işletmede kullanılıyor.");
+      const organizationId = String(data.organizationId ?? "");
+      const orgChanged = Boolean(organizationName && organizationName !== String(data.organizationName ?? ""));
+      const siblings = orgChanged && organizationId ? await tx.get(db.collection("businesses").where("organizationId", "==", organizationId).limit(30)) : null;
+
+      if (slugChanged) {
+        tx.set(newSlugRef!, { businessId, ownerUid: String(data.ownerUid ?? ""), createdAt: FieldValue.serverTimestamp() });
+        if (oldSlug) tx.set(db.doc(`businessSlugs/${oldSlug}`), { businessId, ownerUid: String(data.ownerUid ?? ""), aliasOf: rawSlug, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        changes.slug = rawSlug;
+        changes.previousSlugs = [...new Set([...previousSlugsOf(data), ...(oldSlug ? [oldSlug] : [])])].filter((slug) => slug !== rawSlug).slice(-20);
+      }
+      if (orgChanged) {
+        changes.organizationName = organizationName;
+        siblings?.docs.filter((doc) => doc.id !== businessId).forEach((doc) => tx.update(doc.ref, { organizationName, updatedAt: FieldValue.serverTimestamp() }));
+        if (organizationId) tx.set(db.doc(`businessOrganizations/${organizationId}`), { name: organizationName, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      if (!Object.keys(changes).length) return { changed: false, slug: oldSlug };
+      tx.update(businessRef, { ...changes, updatedAt: FieldValue.serverTimestamp() });
+      tx.set(db.collection("platformAuditLogs").doc(), {
+        action: "business.identity_updated", entityType: "business", entityId: businessId, businessId,
+        previousValue: { slug: oldSlug, organizationName: data.organizationName ?? null }, newValue: changes,
+        actorUid: uid, createdAt: FieldValue.serverTimestamp(),
+      });
+      return { changed: true, slug: slugChanged ? rawSlug : oldSlug };
+    });
+    return { success: true, businessId, ...result };
+  }
+);
+
 export const setBusinessSuspension = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -2649,6 +2712,8 @@ export const deleteBusinessPermanently = onCall(
     const batch = db.batch();
     const slug = typeof business.data()?.slug === "string" ? String(business.data()?.slug) : "";
     if (slug) batch.delete(db.doc(`businessSlugs/${slug}`));
+    // Adres değiştirildiyse eski adresler (yönlendirme takma adları) da silinir.
+    for (const old of previousSlugsOf(business.data())) batch.delete(db.doc(`businessSlugs/${old}`));
     for (const path of [
       `subscriptions/${businessId}`,
       `subscriptionPurchaseRequests/${businessId}`,
@@ -2904,6 +2969,7 @@ export const deleteMyAccount = onCall(
       await bucket.deleteFiles({ prefix: `businesses/${businessId}/`, force: true });
       await Promise.all([
         slug ? db.doc(`businessSlugs/${slug}`).delete() : Promise.resolve(),
+        ...previousSlugsOf(business.data()).map((old) => db.doc(`businessSlugs/${old}`).delete()),
         db.doc(`businessApprovalRequests/${businessId}`).delete(),
         db.doc(`subscriptions/${businessId}`).delete(),
         deleteRootMatches("categoryRequests", "businessId", businessId),

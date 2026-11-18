@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SIGNUP_CATEGORIES, advanceSignup, buildInteractivePayload, isSignupIntent, parseLocation, slugFromName, startSignup, titleCaseTr,
+  SIGNUP_CATEGORIES, advanceSignup, buildInteractivePayload, isSignupIntent, nameAnswerIntent, parseLocation, slugFromName, startSignup, titleCaseTr,
 } from "../lib/whatsapp-signup-domain.js";
 
 const context = { profileName: "Ayşe Kaya", nameAllowed: (name) => !/siktir/i.test(name) };
@@ -86,4 +86,23 @@ test("kategori metinle de seçilebilir; mağaza adresi; Meta gövdeleri", () => 
   assert.ok(list.interactive.action.sections[0].rows.every((row) => row.title.length <= 24 && row.description.length <= 72));
   const buttons = buildInteractivePayload("905551112233", { kind: "buttons", text: "x", buttons: [{ id: "a", title: "Çok uzun bir düğme başlığı burada" }] });
   assert.ok(buttons.interactive.action.buttons[0].reply.title.length <= 20);
+});
+
+test("işletme adı adımında soru/selam ad sayılmaz (ör. 'sonra ne kadar ücret')", () => {
+  assert.equal(nameAnswerIntent("Sonra ne kadar ücret"), "price");
+  assert.equal(nameAnswerIntent("fiyatı nedir?"), "price");
+  assert.equal(nameAnswerIntent("Merhaba"), "greeting");
+  assert.equal(nameAnswerIntent("nasıl çalışıyor"), "question");
+  assert.equal(nameAnswerIntent("Bu ücretsiz mi?"), "price");
+  for (const real of ["Salon Yavuz", "Studio Mu", "Paket Berber", "Elif Güzellik Salonu", "Kuaför Selin"]) {
+    assert.equal(nameAnswerIntent(real), null, real);
+  }
+  let step = startSignup();
+  step = say(step.state, "Sonra ne kadar ücret");
+  assert.equal(step.state.step, "name");
+  assert.equal(step.state.data.name, undefined);
+  assert.match(step.messages[0].text, /ücretsiz/);
+  step = say(step.state, "Salon Yavuz");
+  assert.equal(step.state.data.name, "Salon Yavuz");
+  assert.equal(step.state.step, "category");
 });

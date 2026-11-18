@@ -37,3 +37,14 @@
 .branch:hover:not(:disabled) { border-color: var(--sa-brand-2); }
 .branch:disabled { cursor: default; background: var(--sa-green-bg); }
 .branch:focus-visible { outline: none; box-shadow: var(--sa-focus); }
+
+/* Mağaza adresi + firma adı düzeltme */
+.identity { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: end; }
+.identityField { display: grid; gap: 5px; min-width: 0; font-size: 12px; font-weight: 700; color: var(--sa-muted); }
+.identityField em { font-style: normal; font-weight: 600; color: var(--sa-red-fg); }
+.identityField button { justify-self: start; font-size: 12px; }
+.identityInput { display: flex; align-items: center; gap: 2px; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--sa-line); border-radius: 12px; background: var(--sa-card); }
+.identityInput small { flex: none; color: var(--sa-faint); font-size: 13px; font-weight: 600; }
+.identityInput input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--sa-ink); font-size: 14px; font-weight: 600; }
+.identityInput:focus-within { border-color: var(--sa-brand-2); box-shadow: var(--sa-focus); }
+.identityInput:has(input[aria-invalid="true"]) { border-color: var(--sa-red-fg); }

@@ -20,6 +20,12 @@ export async function setBusinessDiscoveryVisibility(businessId: string, hidden:
   return result.data;
 }
 
+/** Mağaza adresi (slug) ve/veya firma adını düzeltir; eski adres yenisine yönlenir. */
+export async function updateBusinessIdentity(input: { businessId: string; slug?: string; organizationName?: string }) {
+  const result = await callable<typeof input, { success: boolean; changed: boolean; slug: string }>("adminUpdateBusinessIdentity")(input);
+  return result.data;
+}
+
 export async function setBusinessSuspension(businessId: string, suspended: boolean) {
   const result = await callable<{ businessId: string; suspended: boolean }, { success: boolean; isSuspended: boolean; status: string; changed: boolean }>(
     "setBusinessSuspension",
