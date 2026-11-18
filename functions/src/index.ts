@@ -40,6 +40,7 @@ import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, b
 import { DAILY_SHARDS, EVENT_TTL_MS, META_ACTION_EVENTS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
 import { buildCapiEvent, buildFbc, normalizePixelId, sanitizeFbCookie, sanitizeFbclid, type CapiEventInput } from "./meta-capi-domain.js";
 import { apnsPresentation } from "./push-domain.js";
+import { REFERRAL_BLOCK_TEXT, REFERRAL_SETTINGS_PATH, bonusTrialEnd, normalizeReferralCode, referralCodeInText, normalizeReferralSettings, referralBlockReason, referralCodeFromName, rewardSubscriptionPatch, type ReferralSettings } from "./referral-domain.js";
 import { AD_GUARD_DEFAULTS, META_ADS_SETTINGS_PATH, META_BREAKDOWN_FIELDS, attributionChannel, buildFunnel, dailyBudgetMinorUnits, evaluateAdGuard, isBreakdownKind, isMetaAdSession, isMetaAttribution, metaDateRange, metaResults, normalizeAdAccountId, normalizeAdGuardSettings, parseMetaInsight, ratio, sanitizeAttribution, summarizeBreakdown, summarizeSignups, type AdGuardSettings, type Attribution } from "./ads-domain.js";
 import { bearerWidgetToken, newWidgetToken, widgetAppointments, widgetTodaySummary, widgetTokenId } from "./widget-domain.js";
 import { SIGNUP_IDLE_MS, advanceSignup, buildInteractivePayload, cancelCommand, defaultWorkingHours, isSignupIntent, outgoingPreview, slugFromName, startSignup, type Outgoing, type SignupData, type SignupStep, type Transition } from "./whatsapp-signup-domain.js";
@@ -1280,6 +1281,11 @@ async function createBusinessForOwner(input: {
       { extraWords: approvalSettings.extraWords, allowedWords: approvalSettings.allowedWords }
     );
     const autoApprove = approvalSettings.autoApproveStores && moderation.clean;
+    // Arkadaşını getir: yalnız yeni firmanın ilk mağazasında; kod geçersizse kayıt bozulmaz, sessizce yok sayılır.
+    const referralCode = normalizeReferralCode(data.referralCode);
+    const referralSettings = referralCode ? await loadReferralSettings() : null;
+    let referralRecorded: "pending" | "blocked" | null = null;
+    let referralBonusDays = 0;
     let position = 0;
     let organizationId = "";
     await db.runTransaction(async (transaction) => {
@@ -1335,6 +1341,10 @@ async function createBusinessForOwner(input: {
       if (sourceBusiness && reservedCount >= planBranchLimit) {
         throw new HttpsError("resource-exhausted", `Paketiniz en fazla ${planBranchLimit} şubeye izin veriyor.`);
       }
+      const referralCodeSnap = !sourceBusiness && referralCode && referralSettings?.enabled
+        ? await transaction.get(db.doc(`referralCodes/${referralCode}`)) : null;
+      const referrerBusinessSnap = referralCodeSnap?.exists && typeof referralCodeSnap.data()?.businessId === "string"
+        ? await transaction.get(db.doc(`businesses/${String(referralCodeSnap.data()!.businessId)}`)) : null;
       // Her mağaza (ilki dahil) yayından önce incelenir; otomatik onay açık ve içerik temizse sistem onaylar.
       const needsApproval = !autoApprove;
       transaction.set(accountRef, {
@@ -1411,6 +1421,24 @@ async function createBusinessForOwner(input: {
         updatedAt: FieldValue.serverTimestamp(),
       });
       transaction.set(slugRef, { businessId: businessRef.id, ownerUid: uid, createdAt: FieldValue.serverTimestamp() });
+      if (referralCodeSnap?.exists && referrerBusinessSnap?.exists) {
+        const referrer = referrerBusinessSnap.data()!;
+        const referrerOrganizationId = String(referralCodeSnap.data()?.organizationId ?? referrer.organizationId ?? "");
+        const block = referralBlockReason(
+          { ownerUid: String(referrer.ownerUid ?? ""), organizationId: referrerOrganizationId, phone: String(referrer.phone ?? ""), email: String(referrer.email ?? "") },
+          { ownerUid: uid, organizationId, phone: String(data.phone ?? ""), email: String(data.email ?? "") },
+        );
+        referralRecorded = block ? "blocked" : "pending";
+        referralBonusDays = block ? 0 : referralSettings!.referredBonusDays;
+        transaction.set(db.doc(`referrals/${businessRef.id}`), {
+          code: referralCode, channel: input.onboarding,
+          referredBusinessId: businessRef.id, referredBusinessName: name, referredOrganizationId: organizationId, referredOwnerUid: uid,
+          referrerOrganizationId, referrerBusinessId: referrerBusinessSnap.id, referrerOwnerUid: String(referrer.ownerUid ?? ""),
+          referrerName: String(referrer.organizationName ?? referrer.name ?? ""),
+          status: block ? "blocked" : "pending", reason: block, bonusDays: referralBonusDays,
+          createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
       // Reklam takibi: ilk mağazada kayıt kaynağı (utm_*) ayrı ve istemcinin okuyamadığı belgeye yazılır.
       if (!sourceBusiness) {
         const attribution = sanitizeAttribution(data.attribution);
@@ -1451,7 +1479,8 @@ async function createBusinessForOwner(input: {
         trialDays: NEW_BUSINESS_TRIAL_DAYS,
         trialStartedAt: inheritedSubscription?.data()?.trialStartedAt ?? new Date().toISOString(),
         ...(creatorIsPlatformAdmin ? {} : {
-          trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? new Date(Date.now() + NEW_BUSINESS_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          trialEndsAt: inheritedSubscription?.data()?.trialEndsAt ?? bonusTrialEnd(new Date(Date.now() + NEW_BUSINESS_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(), referralBonusDays),
+          ...(referralBonusDays > 0 ? { referralBonusDays } : {}),
         }),
         // Ücretli (active) merkez aboneliğinin bitiş tarihi şubeye de taşınır; aksi halde
         // erişim kontrolü bitiş tarihi bulamayıp şubeyi ilk randevuda "süresi doldu" sayıyordu.
@@ -1478,7 +1507,7 @@ async function createBusinessForOwner(input: {
       await enrollWhatsAppOnboarding({
         businessId: businessRef.id, businessName: name, slug, phone: data.phone,
         ownerName: input.creatorName,
-        trialEndsAtMs: Date.now() + NEW_BUSINESS_TRIAL_DAYS * 86_400_000, source: "signup",
+        trialEndsAtMs: Date.now() + (NEW_BUSINESS_TRIAL_DAYS + referralBonusDays) * 86_400_000, source: "signup",
         ...(input.onboarding === "whatsapp" ? { skipSteps: ["welcome"] } : {}),
       }).catch((error) => logger.warn("Karşılama akışı başlatılamadı", { businessId: businessRef.id, error: String(error) }));
     }
@@ -1513,11 +1542,251 @@ async function createBusinessForOwner(input: {
         `approval-auto-${businessRef.id}`
       ).catch((error) => logger.warn("Otomatik onay bildirimi gönderilemedi", { error: String(error) }));
     }
+    // Davet: mağaza hemen yayındaysa ödül şimdi; değilse süper admin onayında (reviewBusiness).
+    if (referralRecorded === "pending" && autoApprove) {
+      await settleReferral(businessRef.id).catch((error) => logger.warn("Davet ödülü işlenemedi", { businessId: businessRef.id, error: String(error) }));
+    }
     return autoApprove
       ? { businessId: businessRef.id, organizationId, status: "active", requiresApproval: false, storePosition: position }
       : { businessId: businessRef.id, organizationId, status: "pending_review", requiresApproval: true, storePosition: position };
   }
 }
+
+/* ── Arkadaşını getir (referans) ──────────────────────────────────────────────────────────────────────── */
+
+async function loadReferralSettings(): Promise<ReferralSettings> {
+  return normalizeReferralSettings((await db.doc(REFERRAL_SETTINGS_PATH).get()).data());
+}
+
+/** Firmanın referans kodu (yoksa addan üretip ayırır). */
+async function ensureReferralCode(organizationId: string): Promise<string> {
+  const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
+  const organization = await organizationRef.get();
+  const existing = normalizeReferralCode(organization.data()?.referralCode);
+  if (existing) return existing;
+  const name = String(organization.data()?.name ?? "Senin Randevun");
+  const headquartersId = String(organization.data()?.headquartersBusinessId ?? "");
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = referralCodeFromName(attempt < 4 ? name : "SR", randomBytes(3));
+    const created = await db.runTransaction(async (tx) => {
+      const [org, codeSnap] = await Promise.all([tx.get(organizationRef), tx.get(db.doc(`referralCodes/${code}`))]);
+      const current = normalizeReferralCode(org.data()?.referralCode);
+      if (current) return current;
+      if (codeSnap.exists) return null;
+      tx.create(db.doc(`referralCodes/${code}`), {
+        organizationId, businessId: headquartersId || null, ownerUid: String(org.data()?.ownerUid ?? ""), createdAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(organizationRef, { referralCode: code, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return code;
+    });
+    if (created) return created;
+  }
+  throw new HttpsError("unavailable", "Davet kodu oluşturulamadı, tekrar deneyin.");
+}
+
+/**
+ * Bekleyen daveti sonuçlandırır: davet edilen mağaza yayındaysa davet edenin tüm şubelerine ödül süresi işlenir.
+ * force: süper admin (yıllık sınırı ve "yayında değil" şartını atlar). Tekrar çağrılması güvenli (yalnız "pending").
+ */
+async function settleReferral(businessId: string, options: { force?: boolean; actorUid?: string } = {}): Promise<"rewarded" | "blocked" | "skipped"> {
+  const referralRef = db.doc(`referrals/${businessId}`);
+  const referral = (await referralRef.get()).data();
+  if (!referral || !(referral.status === "pending" || (options.force && referral.status === "blocked"))) return "skipped";
+  const settings = await loadReferralSettings();
+  if (!settings.enabled && !options.force) return "skipped";
+  const referred = (await db.doc(`businesses/${businessId}`).get()).data();
+  if (!options.force && (referred?.status !== "active" || referred?.isPublished !== true)) return "skipped";
+  const organizationId = String(referral.referrerOrganizationId ?? "");
+  if (!organizationId) return "skipped";
+  if (!options.force) {
+    const yearAgo = Date.now() - 365 * 86_400_000;
+    const history = await db.collection("referrals").where("referrerOrganizationId", "==", organizationId).limit(500).get();
+    const rewardedThisYear = history.docs.filter((doc) => doc.data().status === "rewarded" && (doc.data().rewardedAt?.toMillis?.() ?? 0) >= yearAgo).length;
+    if (rewardedThisYear >= settings.yearlyCap) {
+      await referralRef.update({ status: "blocked", reason: "cap", updatedAt: FieldValue.serverTimestamp() });
+      return "blocked";
+    }
+  }
+  const months = settings.rewardMonths;
+  const now = Date.now();
+  const outcome = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(referralRef);
+    const status = fresh.data()?.status;
+    if (!(status === "pending" || (options.force && status === "blocked"))) return null;
+    const branches = await tx.get(db.collection("businesses").where("organizationId", "==", organizationId).limit(30));
+    const subscriptions = branches.empty ? [] : await tx.getAll(...branches.docs.map((branch) => db.doc(`subscriptions/${branch.id}`)));
+    const details: Array<{ businessId: string; kind: string; endsAt: string | null }> = [];
+    branches.docs.forEach((branch, index) => {
+      const result = rewardSubscriptionPatch(subscriptions[index]?.data(), months, now);
+      if (result.kind === "lifetime") { details.push({ businessId: branch.id, kind: "lifetime", endsAt: null }); return; }
+      tx.set(db.doc(`subscriptions/${branch.id}`), {
+        businessId: branch.id, organizationId, ...result.patch,
+        referralMonthsEarned: FieldValue.increment(months), reminders: FieldValue.delete(), expiredAt: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      details.push({ businessId: branch.id, kind: result.kind, endsAt: new Date(result.endsAt).toISOString() });
+    });
+    tx.update(referralRef, {
+      status: "rewarded", reason: null, rewardMonths: months, rewardDetails: details, rewardedAt: FieldValue.serverTimestamp(),
+      ...(options.force ? { forcedBy: options.actorUid ?? "admin" } : {}), updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(db.doc(`businessOrganizations/${organizationId}`), {
+      referralStats: { rewarded: FieldValue.increment(1), monthsEarned: FieldValue.increment(months) }, updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const referrerBusinessId = String(fresh.data()?.referrerBusinessId ?? branches.docs[0]?.id ?? "");
+    if (referrerBusinessId) {
+      tx.set(db.collection(`businesses/${referrerBusinessId}/notifications`).doc(), {
+        type: "referral_reward", title: "Davetin karşılık buldu 🎉",
+        body: `${String(fresh.data()?.referredBusinessName ?? "Davet ettiğin işletme")} Senin Randevun'a katıldı. Hediye olarak ${months} ay hesabına tanımlandı.`,
+        isRead: false, createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    tx.set(db.collection("platformAuditLogs").doc(), {
+      action: "referral.rewarded", businessId, organizationId, months, details, forced: options.force === true,
+      actorUid: options.actorUid ?? "system", createdAt: FieldValue.serverTimestamp(),
+    });
+    return { referrerBusinessId, ownerUid: String(fresh.data()?.referrerOwnerUid ?? ""), referredName: String(fresh.data()?.referredBusinessName ?? "") };
+  });
+  if (!outcome) return "skipped";
+  if (outcome.ownerUid) {
+    // Push metni nötr (iOS'ta abonelik/ödeme ima edilmez): ayrıntı panel bildiriminde.
+    await pushToUsers([outcome.ownerUid], "Davetin karşılık buldu 🎉", `${outcome.referredName} Senin Randevun'a katıldı. Hediyen hesabına tanımlandı.`,
+      { kind: "referral_reward", route: "notifications", audience: "business", businessId: outcome.referrerBusinessId }, `referral-${businessId}`);
+  }
+  return "rewarded";
+}
+
+/** İşletme paneli › Arkadaşını getir: kod, link, ödül kuralı ve davet geçmişi. */
+export const getReferralProgram = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const business = await requireBusinessManager(uid, businessId);
+    const organizationId = String(business.organizationId ?? "");
+    if (!organizationId) throw new HttpsError("failed-precondition", "Firma kaydı bulunamadı.");
+    const [code, settings, history] = await Promise.all([
+      ensureReferralCode(organizationId),
+      loadReferralSettings(),
+      db.collection("referrals").where("referrerOrganizationId", "==", organizationId).limit(300).get(),
+    ]);
+    const millis = (value: unknown) => (value as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null;
+    const rows = history.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id, businessName: String(data.referredBusinessName ?? "İşletme"), status: String(data.status ?? "pending"),
+        reason: typeof data.reason === "string" ? REFERRAL_BLOCK_TEXT[data.reason] ?? null : null,
+        rewardMonths: Number(data.rewardMonths ?? 0) || 0, createdAt: millis(data.createdAt), rewardedAt: millis(data.rewardedAt),
+      };
+    }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    return {
+      code, link: `https://seninrandevun.com/isletmeler/kayit?ref=${code}`,
+      enabled: settings.enabled, rewardMonths: settings.rewardMonths, referredBonusDays: settings.referredBonusDays, yearlyCap: settings.yearlyCap,
+      stats: {
+        invited: rows.length, pending: rows.filter((row) => row.status === "pending").length,
+        rewarded: rows.filter((row) => row.status === "rewarded").length,
+        monthsEarned: rows.reduce((sum, row) => sum + (row.status === "rewarded" ? row.rewardMonths : 0), 0),
+      },
+      referrals: rows,
+    };
+  },
+);
+
+/** Kayıt sayfası: kod geçerli mi, kimin daveti (yalnız işletme adı ve il). */
+export const checkReferralCode = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const ip = clientIpFrom(request.rawRequest) || "unknown";
+    await consumeSecurityLimit(`referral-check:${ip}`, 40, 60 * 60_000);
+    const code = normalizeReferralCode(request.data?.code);
+    const settings = await loadReferralSettings();
+    if (!code || !settings.enabled) return { valid: false, enabled: settings.enabled };
+    const codeSnap = await db.doc(`referralCodes/${code}`).get();
+    const businessId = typeof codeSnap.data()?.businessId === "string" ? String(codeSnap.data()!.businessId) : "";
+    const business = businessId ? (await db.doc(`businesses/${businessId}`).get()).data() : null;
+    if (!business || business.status === "rejected" || business.isSuspended === true) return { valid: false, enabled: true };
+    return {
+      valid: true, enabled: true, code,
+      businessName: String(business.organizationName ?? business.name ?? "Bir işletme").slice(0, 100), city: String(business.city ?? ""),
+      bonusDays: settings.referredBonusDays,
+    };
+  },
+);
+
+/** Süper admin › Davetler: ayarlar + son davetler + en çok davet edenler. */
+export const adminListReferrals = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    const [settings, snapshot] = await Promise.all([loadReferralSettings(), db.collection("referrals").orderBy("createdAt", "desc").limit(400).get()]);
+    const millis = (value: unknown) => (value as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null;
+    const rows = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id, code: String(data.code ?? ""), channel: String(data.channel ?? "signup"), status: String(data.status ?? "pending"),
+        reason: typeof data.reason === "string" ? data.reason : null, reasonText: typeof data.reason === "string" ? REFERRAL_BLOCK_TEXT[data.reason] ?? data.reason : null,
+        referredBusinessId: String(data.referredBusinessId ?? doc.id), referredBusinessName: String(data.referredBusinessName ?? ""),
+        referrerBusinessId: String(data.referrerBusinessId ?? ""), referrerName: String(data.referrerName ?? ""), referrerOrganizationId: String(data.referrerOrganizationId ?? ""),
+        rewardMonths: Number(data.rewardMonths ?? 0) || 0, bonusDays: Number(data.bonusDays ?? 0) || 0,
+        createdAt: millis(data.createdAt), rewardedAt: millis(data.rewardedAt), forced: typeof data.forcedBy === "string",
+      };
+    });
+    const leaders = new Map<string, { organizationId: string; name: string; businessId: string; invited: number; rewarded: number; months: number }>();
+    rows.forEach((row) => {
+      const item = leaders.get(row.referrerOrganizationId) ?? { organizationId: row.referrerOrganizationId, name: row.referrerName, businessId: row.referrerBusinessId, invited: 0, rewarded: 0, months: 0 };
+      item.invited += 1;
+      if (row.status === "rewarded") { item.rewarded += 1; item.months += row.rewardMonths; }
+      leaders.set(row.referrerOrganizationId, item);
+    });
+    return {
+      settings, referrals: rows,
+      leaders: [...leaders.values()].sort((a, b) => b.rewarded - a.rewarded || b.invited - a.invited).slice(0, 20),
+      totals: {
+        invited: rows.length, rewarded: rows.filter((row) => row.status === "rewarded").length, pending: rows.filter((row) => row.status === "pending").length,
+        blocked: rows.filter((row) => row.status === "blocked" || row.status === "rejected").length,
+        monthsGiven: rows.reduce((sum, row) => sum + (row.status === "rewarded" ? row.rewardMonths : 0), 0),
+      },
+    };
+  },
+);
+
+/** Süper admin: program ayarları; ya da tek davet için "ödülü ver" / "reddet". */
+export const adminUpdateReferrals = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    await requirePlatformAdmin(uid, request.auth?.token.email as string | undefined);
+    if (request.data?.settings) {
+      const settings = normalizeReferralSettings(request.data.settings);
+      await db.doc(REFERRAL_SETTINGS_PATH).set({ ...settings, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await db.collection("platformAuditLogs").add({ action: "referral.settings_updated", settings, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+      return { success: true, settings };
+    }
+    const businessId = requireString(request.data?.businessId, "businessId");
+    const action = request.data?.action;
+    if (action === "reward") {
+      const result = await settleReferral(businessId, { force: true, actorUid: uid });
+      if (result !== "rewarded") throw new HttpsError("failed-precondition", "Bu davet için ödül verilemez (zaten sonuçlanmış olabilir).");
+      return { success: true, status: "rewarded" };
+    }
+    if (action === "reject") {
+      const ref = db.doc(`referrals/${businessId}`);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Davet bulunamadı.");
+        if (snap.data()?.status === "rewarded") throw new HttpsError("failed-precondition", "Ödülü verilmiş davet reddedilemez.");
+        tx.update(ref, { status: "rejected", reason: "admin", updatedAt: FieldValue.serverTimestamp() });
+        tx.set(db.collection("platformAuditLogs").doc(), { action: "referral.rejected", businessId, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
+      });
+      return { success: true, status: "rejected" };
+    }
+    throw new HttpsError("invalid-argument", "Geçersiz işlem.");
+  },
+);
 
 export const reviewBusiness = onCall(
   { region: "europe-west1" },
@@ -1549,6 +1818,7 @@ export const reviewBusiness = onCall(
       action: `business.${decision}`, businessId, actorUid: uid, createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+    if (approved) await settleReferral(businessId).catch((error) => logger.warn("Davet ödülü işlenemedi", { businessId, error: String(error) }));
     return { success: true, status: approved ? "active" : "rejected" };
   }
 );
@@ -6875,15 +7145,27 @@ async function handleWhatsAppSignupInbound(cid: string, phone: string, message: 
   if (!active) {
     const settings = (await db.doc(WHATSAPP_SETTINGS_PATH).get()).data() ?? {};
     if ((settings.inbox as Record<string, unknown> | undefined)?.signupEnabled === false) return false;
-    if (!["text", "interactive", "button"].includes(String(message.type)) || !isSignupIntent(input.text, message.fromAd === true)) return false;
+    // "Kaydol SALON7K2" (davet linki) da kayıt başlatır.
+    const invitedCode = input.text ? referralCodeInText(input.text) : null;
+    if (!["text", "interactive", "button"].includes(String(message.type)) || !(isSignupIntent(input.text, message.fromAd === true) || (invitedCode && /\bkayd?ol|davet|kod\b/i.test(input.text ?? "")))) return false;
     const owner = await existingBusinessForPhone(phone);
     if (owner) {
       await sendSignupMessages(cid, phone, [{ kind: "text", text: `Bu numarayla *${owner.name}* zaten kayıtlı 🙂\nPanele giriş: ${SITE}/isletmeler/giris\nYeni şube açmak istersen panelde *Şubeler* bölümünü kullanabilirsin. Başka bir konuda yardım gerekirse buraya yaz.` }]);
       return true;
     }
     const start = startSignup();
+    // Davet kodu geçerliyse oturuma yazılır ve kime ait olduğu söylenir (geçersizse sessizce yok sayılır).
+    let referralCode: string | null = null;
+    if (invitedCode) {
+      const [codeSnap, referralSettings] = await Promise.all([db.doc(`referralCodes/${invitedCode}`).get(), loadReferralSettings()]);
+      const inviter = referralSettings.enabled && typeof codeSnap.data()?.businessId === "string" ? (await db.doc(`businesses/${String(codeSnap.data()!.businessId)}`).get()).data() : null;
+      if (inviter && inviter.status !== "rejected") {
+        referralCode = invitedCode;
+        start.messages.splice(1, 0, { kind: "text", text: `🎁 *${String(inviter.organizationName ?? inviter.name ?? "Bir işletme")}* davetiyle katılıyorsun.${referralSettings.referredBonusDays > 0 ? ` Deneme süresine ${referralSettings.referredBonusDays} gün hediye eklenecek.` : ""}` });
+      }
+    }
     await ref.set({
-      phone, status: "active", step: start.state!.step, data: {}, fromAd: message.fromAd === true, profileName: profileName ?? null,
+      phone, status: "active", step: start.state!.step, data: referralCode ? { referralCode } : {}, fromAd: message.fromAd === true, profileName: profileName ?? null,
       startedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(now + 30 * 86_400_000),
     });
     await sendSignupMessages(cid, phone, start.messages);
@@ -6988,6 +7270,7 @@ async function completeWhatsAppSignup(phone: string, data: SignupData, fromAd: b
           name: data.name, slug, category: data.category, phone: `+${phone}`, email,
           address: data.address ?? `${data.district}, ${data.city}`, city: data.city, district: data.district, description: "",
           workingHours: defaultWorkingHours(), onboardingGoals: [], appointmentManagers: "owner", dailyAppointmentVolume: "0-5", allowOnlineBooking: true,
+          ...(data.referralCode ? { referralCode: data.referralCode } : {}),
           attribution: { source: fromAd ? "meta" : "whatsapp", medium: fromAd ? "paid" : "chat", campaign: fromAd ? "click_to_whatsapp" : "whatsapp_signup", landingPath: "/whatsapp", capturedAt: Date.now() },
         },
       });

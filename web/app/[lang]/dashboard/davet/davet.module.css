@@ -1,0 +1,34 @@
+/* Panel › Arkadaşını Getir. Renkler stüdyo değişkenlerinden (--k-*). */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (min-width: 980px) { .layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); } }
+
+.codeCard { display: grid; justify-items: center; gap: 8px; padding: 22px 16px; border-radius: 22px; text-align: center; color: #fff;
+  background: radial-gradient(60% 60% at 50% 40%, rgb(215 255 112 / 0.22), transparent 70%), radial-gradient(120% 90% at 50% 0%, #1f5c3f 0%, #0b2618 60%, #06150d 100%); }
+.codeCard small { color: #d7ff70; font-size: 11px; font-weight: 850; letter-spacing: 0.14em; }
+.codeCard p { max-width: 38ch; margin: 0; color: rgb(255 255 255 / 0.78); font-size: 13px; line-height: 1.45; }
+.code { display: inline-flex; align-items: center; gap: 12px; padding: 12px 18px; border: 2px dashed rgb(215 255 112 / 0.55); border-radius: 16px; background: rgb(255 255 255 / 0.06); color: #fff; font: inherit; cursor: pointer; transition: transform 0.15s ease, background 0.2s ease; }
+.code span { font-size: clamp(26px, 6vw, 34px); font-weight: 900; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+.code:hover { background: rgb(255 255 255 / 0.1); }
+.code:active { transform: scale(0.98); }
+.code:focus-visible { outline: 2px solid #d7ff70; outline-offset: 3px; }
+
+.linkRow { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--k-line); border-radius: 14px; background: var(--k-field); color: var(--k-muted); }
+.linkRow code { flex: 1; min-width: 0; overflow: hidden; color: var(--k-ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.shareRow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.shareRow > * { flex: 1 1 180px; }
+
+.steps { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: flex-start; gap: 12px; }
+.steps i { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 10px; background: var(--k-tint); color: var(--k-core); font-size: 14px; font-style: normal; font-weight: 850; }
+.steps span { display: grid; gap: 2px; color: var(--k-muted); font-size: 13.5px; line-height: 1.45; }
+.steps b { color: var(--k-ink); font-size: 14.5px; }
+.fine { margin: 14px 0 0; color: var(--k-muted); font-size: 12px; line-height: 1.5; }
+
+.list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--k-line); }
+.list li:last-child { border-bottom: 0; }
+.avatar { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--k-tint); color: var(--k-core); font-weight: 850; }
+.rowMain { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.rowMain b { overflow: hidden; color: var(--k-ink); font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
+.rowMain small { color: var(--k-muted); font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .code { transition: none; } }

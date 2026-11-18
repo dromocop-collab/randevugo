@@ -9,6 +9,8 @@ export type SignupStep = "name" | "category" | "location" | "district" | "addres
 export type SignupData = {
   name?: string; category?: string; categoryLabel?: string; city?: string; district?: string; address?: string;
   addressSkipped?: boolean; ownerName?: string; email?: string;
+  /** Arkadaşını getir: başlangıç mesajındaki davet kodu (sunucu doğrular). */
+  referralCode?: string;
 };
 export type SignupState = { step: SignupStep; data: SignupData };
 export type Button = { id: string; title: string };
@@ -262,7 +264,7 @@ export function advanceSignup(state: SignupState, input: SignupInput, context: S
     }
     case "confirm": {
       if (input.replyId === "confirm_restart" || /^(bastan|bastan yaz|yeniden)$/.test(fold(text))) {
-        return { state: { step: "name", data: {} }, messages: [{ kind: "text", text: "Tamam, baştan alalım. ✏️" }, askName()] };
+        return { state: { step: "name", data: data.referralCode ? { referralCode: data.referralCode } : {} }, messages: [{ kind: "text", text: "Tamam, baştan alalım. ✏️" }, askName()] };
       }
       if (input.replyId === "confirm_yes" || /^(evet|onayla|onayliyorum|tamam|ac|magazami ac)$/.test(fold(text))) {
         return { state, action: "create", messages: [{ kind: "text", text: "Harika! Mağazanı hazırlıyorum, birkaç saniye… ⏳" }] };

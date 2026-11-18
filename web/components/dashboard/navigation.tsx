@@ -11,7 +11,7 @@ import { useLiveOperationsAvailable } from "@/features/live-queue/use-live-opera
 import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-context";
 import { DASHBOARD_ROUTE_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 import {
-  Activity, BellRing, BookOpen, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, ExternalLink, Gift, GitBranch, GraduationCap, Headphones,
+  Activity, BellRing, BookOpen, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, ExternalLink, Gift, GitBranch, GraduationCap, HeartHandshake, Headphones,
   Heart, House, LayoutGrid, Link2, ListChecks, Megaphone, MessageCircle, PanelLeftClose, PanelLeftOpen, Phone, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, ShoppingBag, Sparkles, Star,
   UsersRound, Video, WandSparkles, type LucideIcon,
 } from "lucide-react";
@@ -41,6 +41,7 @@ export const DASHBOARD_NAV_ITEMS: NavItem[] = ([
   { href: "/dashboard/analitik", label: tk("Analiz & Büyüme"), icon: ChartNoAxesCombined, group: "buyume" },
   { href: "/dashboard/otomasyonlar", label: tk("Otomasyonlar"), icon: WandSparkles, group: "buyume" },
   { href: "/dashboard/kampanya-carki", label: tk("Kampanya Çarkı"), short: tk("Çark"), icon: Gift, group: "buyume" },
+  { href: "/dashboard/davet", label: tk("Arkadaşını Getir"), short: tk("Davet"), icon: HeartHandshake, group: "buyume" },
   { href: "/dashboard/hizmetler", label: tk("Hizmetler"), icon: Scissors, group: "yonetim" },
   { href: "/dashboard/calisanlar", label: tk("Çalışanlar"), icon: UsersRound, group: "yonetim" },
   { href: "/dashboard/calisma-saatleri", label: tk("Çalışma Saatleri"), icon: Clock3, group: "yonetim" },

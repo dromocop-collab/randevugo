@@ -20,6 +20,7 @@ import { RoviMascot } from "@/components/brand/rovi-mascot";
 import { StorePreview } from "@/features/businesses/store-preview";
 import { WhatsAppSignupLink } from "@/features/businesses/whatsapp-signup-link";
 import { saveSignupLead } from "@/features/businesses/signup-lead";
+import { ReferralInvite } from "@/features/referral/referral-invite";
 import { previewServices } from "@/features/businesses/service-templates";
 import { isBusinessSlugAvailable } from "@/features/businesses/starter-setup";
 import {
@@ -329,6 +330,7 @@ export function BusinessSignupWizard() {
 
           <div key={step} className={w.step} data-dir={direction}>
             {step === 0 && <>
+              <ReferralInvite compact />
               <StepHeading refEl={headingRef} eyebrow={t("SENİ TANIYALIM")} title={t("İşletmen hangi kategoride?")} text={t("Doğru kategori; hizmet şablonlarını, çalışma saatlerini ve vitrinini sana göre hazırlar.")} />
               <label className={w.search}>
                 <Search size={18} aria-hidden="true" />
@@ -541,6 +543,7 @@ export function BusinessSignupWizard() {
                 <p><b>{draft.name}</b><small>{categoryLabel} · {[draft.district, draft.city].filter(Boolean).join(", ")}</small><small className={w.summaryUrl}>{storeDisplayUrl(finalSlug)}</small></p>
                 <button type="button" onClick={() => goTo(1)}>{t("Düzenle")}</button>
               </div>
+              <ReferralInvite />
               <div className={`${w.register} signup-register-embed`}><RegisterForm accountType="business" embedded /></div>
             </>}
           </div>
