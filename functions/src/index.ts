@@ -1558,6 +1558,49 @@ async function loadReferralSettings(): Promise<ReferralSettings> {
   return normalizeReferralSettings((await db.doc(REFERRAL_SETTINGS_PATH).get()).data());
 }
 
+/**
+ * Firma sistemi öncesi açılmış işletmelerde organizationId yoktur. İlk ihtiyaçta (ör. davet kodu) sahibinin firmasız
+ * işletmelerini tek firmada toplar — yeni şube açılırken createBusinessForOwner'ın yaptığı taşımanın aynısı.
+ */
+async function ensureOrganizationForBusiness(businessId: string): Promise<string> {
+  const businessRef = db.doc(`businesses/${businessId}`);
+  return db.runTransaction(async (tx) => {
+    const business = await tx.get(businessRef);
+    if (!business.exists) throw new HttpsError("not-found", "İşletme bulunamadı.");
+    const existing = String(business.data()?.organizationId ?? "");
+    if (existing) return existing;
+    const ownerUid = String(business.data()?.ownerUid ?? "");
+    if (!ownerUid) throw new HttpsError("failed-precondition", "İşletmenin sahibi bulunamadı.");
+    const accountRef = db.doc(`businessAccounts/${ownerUid}`);
+    const [account, owned] = await Promise.all([tx.get(accountRef), tx.get(db.collection("businesses").where("ownerUid", "==", ownerUid).limit(30))]);
+    const organizationId = String(account.data()?.organizationId ?? "") || db.collection("businessOrganizations").doc().id;
+    const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
+    const organization = await tx.get(organizationRef);
+    const ordered = [...owned.docs].sort((left, right) => Number(left.data().storePosition ?? 999) - Number(right.data().storePosition ?? 999));
+    const headquarters = ordered.find((doc) => doc.data().isHeadquarters === true) ?? ordered.find((doc) => doc.id === businessId) ?? ordered[0]!;
+    const organizationName = String(organization.data()?.name ?? headquarters.data().organizationName ?? headquarters.data().name ?? "İşletme").slice(0, 100);
+    tx.set(organizationRef, {
+      ownerUid, name: organizationName, headquartersBusinessId: String(organization.data()?.headquartersBusinessId ?? headquarters.id),
+      branchCount: Math.max(Number(organization.data()?.branchCount ?? 0), owned.size), status: organization.data()?.status ?? "active",
+      updatedAt: FieldValue.serverTimestamp(), createdAt: organization.data()?.createdAt ?? FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(accountRef, { ownerUid, organizationId, storeCount: Math.max(Number(account.data()?.storeCount ?? 0), owned.size), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    ordered.forEach((doc, index) => {
+      if (doc.data().organizationId && doc.data().organizationId !== organizationId) return; // başka firmadaki şubeye dokunma
+      tx.set(doc.ref, {
+        organizationId, organizationName, headquartersBusinessId: headquarters.id, isHeadquarters: doc.id === headquarters.id,
+        branchNumber: Number(doc.data().branchNumber ?? doc.data().storePosition ?? index + 1),
+        branchCode: String(doc.data().branchCode ?? `SUBE-${String(index + 1).padStart(2, "0")}`), updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+    tx.set(db.collection("platformAuditLogs").doc(), {
+      action: "organization.backfilled", entityType: "businessOrganization", entityId: organizationId, organizationId, businessId,
+      businesses: ordered.map((doc) => doc.id), actorUid: "system", createdAt: FieldValue.serverTimestamp(),
+    });
+    return organizationId;
+  });
+}
+
 /** Firmanın referans kodu (yoksa addan üretip ayırır). */
 async function ensureReferralCode(organizationId: string): Promise<string> {
   const organizationRef = db.doc(`businessOrganizations/${organizationId}`);
@@ -1664,8 +1707,7 @@ export const getReferralProgram = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
     const businessId = requireString(request.data?.businessId, "businessId");
     const business = await requireBusinessManager(uid, businessId);
-    const organizationId = String(business.organizationId ?? "");
-    if (!organizationId) throw new HttpsError("failed-precondition", "Firma kaydı bulunamadı.");
+    const organizationId = String(business.organizationId ?? "") || await ensureOrganizationForBusiness(businessId);
     const [code, settings, history] = await Promise.all([
       ensureReferralCode(organizationId),
       loadReferralSettings(),

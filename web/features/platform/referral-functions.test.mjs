@@ -118,3 +118,19 @@ test("davet akışı uçtan uca", async () => {
   assert.equal(list.settings.enabled, false);
   await assert.rejects(friend.call("getReferralProgram", { businessId: hq.businessId }));
 });
+
+test("firma kaydı olmayan eski işletme: davet kodu açılınca firma otomatik oluşur", async () => {
+  const owner = await client("legacy-owner");
+  await db.doc("businesses/legacy1").set({ name: "yankare Medya", slug: "yankare-medya", ownerUid: owner.uid, status: "active", isPublished: true, storePosition: 1 });
+  await db.doc("businesses/legacy2").set({ name: "yankare Medya 2", slug: "yankare-medya-2", ownerUid: owner.uid, status: "active", isPublished: true, storePosition: 2 });
+  await db.doc("platformPrivateSettings/referrals").set({ enabled: true, rewardMonths: 1, yearlyCap: 12, referredBonusDays: 0 });
+  const program = (await owner.call("getReferralProgram", { businessId: "legacy1" })).data;
+  assert.match(program.code, /^YANKA[A-HJ-NP-Z2-9]{3}$/);
+  const first = (await db.doc("businesses/legacy1").get()).data();
+  const second = (await db.doc("businesses/legacy2").get()).data();
+  assert.ok(first.organizationId);
+  assert.equal(second.organizationId, first.organizationId, "sahibinin firmasız işletmeleri aynı firmada");
+  assert.equal(first.isHeadquarters, true);
+  assert.equal((await db.doc(`businessOrganizations/${first.organizationId}`).get()).data().referralCode, program.code);
+  assert.equal((await owner.call("getReferralProgram", { businessId: "legacy2" })).data.code, program.code);
+});
