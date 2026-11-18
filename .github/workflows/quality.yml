@@ -77,7 +77,8 @@ jobs:
 
   browser-smoke:
     needs: verify
-    runs-on: ubuntu-latest
+    # ubuntu-latest artık 26.04; Playwright 1.58 onu desteklemiyor ("does not support chromium on ubuntu26.04").
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
