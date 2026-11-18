@@ -13,9 +13,16 @@ service firebase.storage {
         request.resource.size < 5 * 1024 * 1024;
     }
 
-    // İşletme vitrin görselleri yalnızca sahip/admin/müdür tarafından değiştirilebilir.
+    // Süper admin (Firestore kurallarındaki isPlatformAdmin ile aynı): destek modunda işletme adına görsel yükleyebilir.
+    function isPlatformAdmin() {
+      return signedIn() &&
+        ((request.auth.token.email == "cihatwin@gmail.com" && request.auth.token.email_verified == true) ||
+         firestore.exists(/databases/(default)/documents/platformAdmins/$(request.auth.uid)));
+    }
+
+    // İşletme vitrin görselleri yalnızca sahip/admin/müdür (ya da destek modundaki süper admin) tarafından değiştirilebilir.
     function canManageBusiness(businessId) {
-      return signedIn() && (
+      return isPlatformAdmin() || signedIn() && (
         firestore.get(/databases/(default)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid ||
         (firestore.exists(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid)) &&
          firestore.get(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid)).data.role in ["owner", "admin", "manager"])
@@ -23,7 +30,7 @@ service firebase.storage {
     }
 
     function isBusinessMember(businessId) {
-      return signedIn() &&
+      return isPlatformAdmin() || signedIn() &&
         firestore.exists(/databases/(default)/documents/businesses/$(businessId)/members/$(request.auth.uid));
     }
 
