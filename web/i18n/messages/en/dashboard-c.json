@@ -661,5 +661,14 @@
   "Yıllık davet ödülü sınırına ulaşıldı.": "Yearly referral reward limit reached.",
   "Davet programı kapalı.": "Referral program is closed.",
   "İşletme yayına girmedi.": "The business hasn't gone live.",
-  "Süper admin reddetti.": "Rejected by the platform admin."
+  "Süper admin reddetti.": "Rejected by the platform admin.",
+  "Personel saatleri işletme saatine eşitlendi. Müşteriler artık tüm saatleri görüyor.": "Staff hours now match your business hours. Customers can see every slot.",
+  "Personel saatleri güncellenemedi.": "Couldn't update staff hours.",
+  "Çalışma saatleri kaydedildi. Bazı personellerin saati daha dar; aşağıdaki uyarıdan eşitleyin.": "Working hours saved. Some staff have shorter hours; match them from the notice below.",
+  "Bazı saatlerde müşteriler randevu alamıyor": "Customers can't book some of your open hours",
+  "Personel saatlerini eşitle": "Match staff hours",
+  "Randevu saatleri personelin çalışma saatine göre açılır. Şu personellerin saati işletme saatinden dar:": "Booking slots follow each staff member's hours. These staff have shorter hours than your business:",
+  "{name}: {staff} (işletme {business})": "{name}: {staff} (business {business})",
+  "Önce değişiklikleri kaydedin.": "Save your changes first.",
+  "Eşitleyince personelin çalıştığı günlerde saati işletme saatiyle aynı olur; izin günleri değişmez.": "Matching sets their hours to your business hours on the days they work; days off stay the same."
 }

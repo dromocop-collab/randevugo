@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CalendarDays, CalendarOff, CalendarPlus, Check, Clock3, Copy, Plus, RotateCcw, Save, Trash2, TriangleAlert } from "lucide-react";
+import { CalendarDays, CalendarOff, CalendarPlus, Check, Clock3, Copy, Plus, RotateCcw, Save, Trash2, TriangleAlert, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useBusiness } from "@/hooks/use-business";
 import { useIntlLocale, useT } from "@/i18n/client";
@@ -14,8 +14,11 @@ import {
   deleteSpecialDay,
 } from "@/features/businesses/business-repository";
 import type { DaySchedule } from "@/types/business";
+import type { Staff } from "@/types/staff";
+import { listStaff, updateStaff } from "@/features/staff/staff-repository";
+import { alignStaffHours, staffHoursGaps } from "@/features/staff/staff-hours-sync";
 import {
-  Badge, Button, DashPage, EmptyState, Field, Input, PageHeader, Panel, SegmentedControl, Sheet, Skeleton, SkeletonList,
+  Badge, Button, Callout, DashPage, EmptyState, Field, Input, PageHeader, Panel, SegmentedControl, Sheet, Skeleton, SkeletonList,
 } from "@/components/dashboard/ui";
 import { cx, useConfirm, useUnsavedWarning, ws } from "../_workspace/kit";
 import { DAY_NAMES, DAY_SHORT, DayCard, ORDERED_DAYS, cleanSchedule, copySchedule, dayError, formatDuration, fromMinutes, toMinutes, workMinutes } from "../_workspace/week-editor";
@@ -77,6 +80,8 @@ export default function WorkingHoursPage() {
   const [specialView, setSpecialView] = useState<"upcoming" | "past">("upcoming");
   const [showSpecialSheet, setShowSpecialSheet] = useState(false);
   const [specialBusy, setSpecialBusy] = useState(false);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [aligning, setAligning] = useState(false);
   const { confirm, dialog } = useConfirm();
 
   // Özel gün formu
@@ -105,6 +110,8 @@ export default function WorkingHoursPage() {
       }
       setSpecialDays(sd);
       setLoading(false);
+      // Personel listesi yalnız uyarı için; okunamazsa sayfa yine çalışır.
+      listStaff(businessId, true).then((rows) => { if (!cancelled) setStaffList(rows); }).catch(() => undefined);
     }).catch(() => {
       if (!cancelled) {
         setLoading(false);
@@ -131,6 +138,24 @@ export default function WorkingHoursPage() {
     const to = Math.min(24 * 60, Math.ceil(max / 60) * 60 + 60);
     return { from, to, span: Math.max(60, to - from) };
   }, [errors, hours]);
+
+  // Randevu saatleri işletme ve personel saatinin kesişimidir; dar kalan personel akşam randevularını kapatır.
+  const staffGaps = useMemo(() => staffHoursGaps(savedHours, staffList), [savedHours, staffList]);
+
+  async function alignStaffToBusiness() {
+    if (!businessId || !staffGaps.length) return;
+    setAligning(true);
+    try {
+      const targets = staffList.filter((member) => staffGaps.some((gap) => gap.staffId === member.id));
+      await Promise.all(targets.map((member) => updateStaff(businessId, member.id, { workingHours: alignStaffHours(member.workingHours, savedHours) })));
+      setStaffList((prev) => prev.map((member) => targets.some((item) => item.id === member.id) ? { ...member, workingHours: alignStaffHours(member.workingHours, savedHours) } : member));
+      toast.success(t("Personel saatleri işletme saatine eşitlendi. Müşteriler artık tüm saatleri görüyor."));
+    } catch {
+      toast.error(t("Personel saatleri güncellenemedi."));
+    } finally {
+      setAligning(false);
+    }
+  }
 
   const sortedSpecialDays = useMemo(() => {
     const today = todayKey();
@@ -184,7 +209,11 @@ export default function WorkingHoursPage() {
     try {
       await updateWorkingHours(businessId, cleanSchedule(hours));
       setSavedHours(hours);
-      toast.success(t("Çalışma saatleri kaydedildi. Müşteriler yeni saatleri görüyor."));
+      if (staffHoursGaps(cleanSchedule(hours), staffList).length) {
+        toast.warning(t("Çalışma saatleri kaydedildi. Bazı personellerin saati daha dar; aşağıdaki uyarıdan eşitleyin."));
+      } else {
+        toast.success(t("Çalışma saatleri kaydedildi. Müşteriler yeni saatleri görüyor."));
+      }
     } catch {
       toast.error(t("Kaydetme başarısız. Bağlantınızı kontrol edip yeniden deneyin."));
     } finally {
@@ -265,6 +294,28 @@ export default function WorkingHoursPage() {
           <Badge tone="neutral" icon={CalendarOff}>{t("{count} yaklaşan özel gün", { count: sortedSpecialDays.upcoming.length })}</Badge>
         </>}
       />
+
+      {staffGaps.length > 0 && (
+        <Callout
+          tone="amber"
+          icon={Users}
+          title={t("Bazı saatlerde müşteriler randevu alamıyor")}
+          action={<Button variant="primary" icon={Check} loading={aligning} disabled={hasChanges} onClick={() => void alignStaffToBusiness()}>{t("Personel saatlerini eşitle")}</Button>}
+        >
+          <span>{t("Randevu saatleri personelin çalışma saatine göre açılır. Şu personellerin saati işletme saatinden dar:")}</span>
+          <ul>
+            {staffGaps.map((gap) => {
+              const first = gap.days[0];
+              return (
+                <li key={gap.staffId}>
+                  {t("{name}: {staff} (işletme {business})", { name: gap.name, staff: `${first.staffStart}–${first.staffEnd}`, business: `${first.businessStart}–${first.businessEnd}` })}
+                </li>
+              );
+            })}
+          </ul>
+          <span>{hasChanges ? t("Önce değişiklikleri kaydedin.") : t("Eşitleyince personelin çalıştığı günlerde saati işletme saatiyle aynı olur; izin günleri değişmez.")}</span>
+        </Callout>
+      )}
 
       {/* Haftalık görünüm */}
       <Panel title={t("Haftanız bir bakışta")} description={t("Çubuklar çalışma aralığını, taralı alan molayı gösterir. Bir güne dokunup düzenleyin.")} icon={CalendarDays}>

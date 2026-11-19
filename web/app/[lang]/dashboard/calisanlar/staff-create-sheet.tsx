@@ -5,6 +5,7 @@ import { CheckCircle2, MailCheck, RefreshCw, TriangleAlert, UserPlus, UserRound 
 import { toast } from "sonner";
 import { Button, Callout, Field, FormGrid, Input, Sheet } from "@/components/dashboard/ui";
 import { createStaff, linkStaffAccount, updateStaff } from "@/features/staff/staff-repository";
+import { listBusinessWorkingHours } from "@/features/businesses/business-repository";
 import { firstErrorMessage, staffCreateSchema } from "@/lib/validation/schemas";
 import type { DaySchedule } from "@/types/business";
 import type { Service } from "@/types/service";
@@ -72,6 +73,16 @@ export function StaffCreateSheet({ open, businessId, categories, services, nextS
 
     setBusy(true);
     try {
+      // Yeni personel işletmenin kendi saatleriyle başlar; sabit 09–19 akşam randevularını kapatıyordu.
+      const businessHours = await listBusinessWorkingHours(businessId).catch(() => [] as DaySchedule[]);
+      const workingHours = businessHours.length
+        ? ORDERED_DAYS.map((day) => {
+          const own = businessHours.find((item) => item.day === day);
+          if (!own) return defaultHours.find((item) => item.day === day)!;
+          const { day: ownDay, isOpen, start, end, breakStart, breakEnd } = own;
+          return { day: ownDay, isOpen, start, end, ...(breakStart && breakEnd ? { breakStart, breakEnd } : {}) };
+        })
+        : defaultHours;
       const created = await createStaff(businessId, {
         fullName: safeName,
         photoUrl: "",
@@ -85,7 +96,7 @@ export function StaffCreateSheet({ open, businessId, categories, services, nextS
         permissions: { manageOwnCalendar: true, viewCustomers: false, manageAppointments: false, manageCheckout: false, manageCatalog: false, managePackages: false, manageFinance: false },
         isActive: true,
         serviceIds: matchingServiceIds,
-        workingHours: defaultHours,
+        workingHours,
         leaveDates: [],
         appointmentCapacity: 1,
       });
