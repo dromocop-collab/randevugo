@@ -18,6 +18,7 @@ import { listServices } from "@/features/services/service-repository";
 import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice } from "@/features/services/service-pricing";
 import { FinalPriceDialog } from "@/components/dashboard/final-price-dialog";
 import { AppointmentCustomFields } from "@/features/booking-fields/appointment-custom-fields";
+import { AppointmentMomentBadges, AppointmentMomentsPanel } from "@/components/dashboard/appointment-moments";
 import { millisToZonedDateTime, zonedDateTimeToMillis } from "@/lib/time/zoned";
 import { userFacingError } from "@/lib/errors/user-facing-error";
 import { APPOINTMENTS_CHANGED_EVENT, openQuickAppointment } from "@/components/dashboard/dashboard-events";
@@ -302,7 +303,7 @@ export default function AppointmentsPage() {
     { key: "customer", header: t("Müşteri"), primary: true, cell: (item) => <span className={styles.customer}><span className={styles.avatar} aria-hidden>{item.customerName.charAt(0).toLocaleUpperCase("tr-TR")}</span><span className="min-w-0"><b>{item.customerName}</b>{canViewCustomerContact && item.customerPhone && <small>{item.customerPhone}</small>}</span></span> },
     { key: "service", header: t("Hizmet"), cell: (item) => <span className={styles.service}>{localizedAppointmentServiceName(item, locale) || "—"}{(item.additionalServices?.length ?? 0) > 0 && <Badge size="sm" tone="green">{t("+{count} ek", { count: item.additionalServices?.length ?? 0 })}</Badge>}</span> },
     { key: "staff", header: t("Çalışan"), cell: (item) => item.staffName || <span className={styles.muted}>{t("Atanmamış")}</span> },
-    { key: "status", header: t("Durum"), cell: (item) => <StatusPill status={item.status} size="sm" /> },
+    { key: "status", header: t("Durum"), cell: (item) => <span className={styles.statusCell}><StatusPill status={item.status} size="sm" /><AppointmentMomentBadges appointment={item} /></span> },
     { key: "price", header: t("Tutar"), align: "right", cell: (item) => hasPrice(item) ? <span className={styles.service}><b className={styles.price}>{appointmentPriceLabel(item, t, money)}</b>{needsFinalPrice(item) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}</span> : <span className={styles.muted}>—</span> },
   ];
 
@@ -368,7 +369,7 @@ export default function AppointmentsPage() {
               <span className={styles.cardMain}>
                 <b>{item.customerName}</b>
                 <small>{servicesOf(item, locale) || t("Hizmet")}{item.staffName ? ` · ${item.staffName}` : ""}</small>
-                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" />{hasPrice(item) ? <span className={styles.service}>{needsFinalPrice(item) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}<em>{appointmentPriceLabel(item, t, money)}</em></span> : null}</span>
+                <span className={styles.cardFoot}><StatusPill status={item.status} size="sm" /><AppointmentMomentBadges appointment={item} />{hasPrice(item) ? <span className={styles.service}>{needsFinalPrice(item) && <Badge size="sm" tone="amber">{t("Fiyat bekliyor")}</Badge>}<em>{appointmentPriceLabel(item, t, money)}</em></span> : null}</span>
               </span>
             </span>
           )}
@@ -387,7 +388,7 @@ export default function AppointmentsPage() {
         onClose={() => setSelectedId(null)}
         placement="side"
         title={sel?.customerName ?? ""}
-        description={sel ? <span className={styles.sheetMeta}><StatusPill status={sel.status} />{new Date(sel.startAt).toDateString() === new Date().toDateString() && <Badge tone="blue" size="sm">{t("Bugün")}</Badge>}</span> : undefined}
+        description={sel ? <span className={styles.sheetMeta}><StatusPill status={sel.status} />{new Date(sel.startAt).toDateString() === new Date().toDateString() && <Badge tone="blue" size="sm">{t("Bugün")}</Badge>}<AppointmentMomentBadges appointment={sel} /></span> : undefined}
         footer={sel && canManageStatus && selOpen ? <>
           {sel.status === "pending" && <Button variant="primary" icon={BadgeCheck} loading={selBusy} onClick={() => void handleStatusChange(sel, "confirmed")}>{t("Onayla")}</Button>}
           <Button variant={sel.status === "pending" ? "secondary" : "primary"} icon={Check} loading={selBusy} onClick={() => void handleStatusChange(sel, "completed")}>{t("Tamamlandı")}</Button>
@@ -415,6 +416,7 @@ export default function AppointmentsPage() {
                 <div>{sel.additionalServices?.map((service) => <Badge key={service.serviceId} tone="green">{service.name} · {t("{minutes} dk", { minutes: service.durationMinutes })} · {money(service.price)}</Badge>)}</div>
               </div>
             )}
+            <AppointmentMomentsPanel businessId={businessId ?? ""} appointment={sel} canManage={canManageStatus} />
             {sel.notes && <div className={styles.note}><small>{t("Randevu notu")}</small><p>{sel.notes}</p></div>}
             <AppointmentCustomFields values={sel.customFields} />
 

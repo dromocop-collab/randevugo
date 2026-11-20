@@ -2,6 +2,7 @@
 
 import Link from "@/i18n/link";
 import { StatusPill } from "@/components/dashboard/ui";
+import { AppointmentMomentBadges } from "@/components/dashboard/appointment-moments";
 import { cn } from "@/lib/utils/cn";
 import { useIntlLocale, useT } from "@/i18n/client";
 import type { Appointment } from "@/types/appointments";
@@ -36,6 +37,7 @@ export function TodayTimeline({ items, now }: { items: Appointment[]; now: numbe
               </span>
               <span className={styles.tlStatus}>
                 {inProgress ? <span className={styles.liveTag}>{t("Şu an")}</span> : index === nextIndex ? <span className={styles.nextTag}>{t("Sıradaki")}</span> : null}
+                <AppointmentMomentBadges appointment={item} />
                 <StatusPill status={item.status} size="sm" />
               </span>
             </Link>

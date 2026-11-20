@@ -34,7 +34,7 @@ export const GROUPS = {
     "getAvailableDates", "joinWaitlist", "createAppointment", "createDashboardAppointment", "updateAppointmentServices", "updateDashboardAppointment",
     "claimGuestAppointments", "getAppointmentByPublicToken", "appointmentPass", "sendAppointmentPushReminders", "appointmentCreated",
     "appointmentAutomationUpdated", "waitlistAutomationCreated", "testBusinessAutomation", "getBookingFieldSettings", "submitBookingFieldRequest",
-    "reviewBookingFieldRequest", "updateBookingFieldSettings",
+    "reviewBookingFieldRequest", "updateBookingFieldSettings", "reportAppointmentArrival", "setAppointmentBusinessDelay", "getBusinessBusyHours",
   ],
   isletme: [
     "createBusiness", "saveSignupLead", "submitBusinessSuggestion", "reviewBusiness", "getBusinessApprovalSettings", "updateBusinessApprovalSettings", "checkModerationText", "setBusinessDiscoveryVisibility", "adminUpdateBusinessIdentity", "getReferralProgram", "checkReferralCode", "adminListReferrals", "adminUpdateReferrals", "setBusinessSuspension", "submitBusinessProfileChange",

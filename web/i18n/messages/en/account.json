@@ -615,5 +615,12 @@
   "Hesabını oluştur; hemen ardından hizmetlerini ve saatlerini hazır şablonlarla tek ekranda tamamlayacaksın.": "Create your account, then finish your services and hours on one screen with ready-made templates.",
   "Tarayıcın bu giriş yöntemini engelledi. E-posta ile devam et ya da sayfayı Safari / Chrome'da aç.": "Your browser blocked this sign-in method. Continue with email or open the page in Safari / Chrome.",
   "Giriş penceresi engellendi. Tekrar dene ya da e-posta ile devam et.": "The sign-in window was blocked. Try again or continue with email.",
-  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir; kaydın yarıda kalırsa tamamlaman için de buradan ulaşabiliriz. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp; if your sign-up is left unfinished we may also reach you here to help complete it. Reply STOP to opt out."
+  "Kurulum ipuçları ve hesap bildirimleri bu numaraya WhatsApp'tan gelir; kaydın yarıda kalırsa tamamlaman için de buradan ulaşabiliriz. İstemezsen DUR yazman yeterli.": "Setup tips and account notices are sent to this number on WhatsApp; if your sign-up is left unfinished we may also reach you here to help complete it. Reply STOP to opt out.",
+  "Aynısını ayarla": "Book the same",
+  "Bir sonraki zamanını biz hatırladık": "We remembered your next visit",
+  "Genelde {count} günde bir · tahmini {date}": "Usually every {count} days · around {date}",
+  "KİŞİSEL RİTMİN": "YOUR RHYTHM",
+  "Tam zamanı": "Right on time",
+  "Yarın zamanı": "Due tomorrow",
+  "{count} gün gecikti": "{count} days overdue"
 }

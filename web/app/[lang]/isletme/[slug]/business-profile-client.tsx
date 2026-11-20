@@ -44,6 +44,7 @@ import { GallerySection } from "./_storefront/gallery-section";
 import { ReviewsSection } from "./_storefront/reviews-section";
 import { InfoSection } from "./_storefront/info-section";
 import { CampaignWheelBanner } from "./_storefront/campaign-wheel-banner";
+import { BusyHoursSection } from "./_storefront/busy-hours-section";
 import { categoryLabel, computeOpenStatus, liveWaitLabel, formatPrice, istanbulNow, mapsHref, openStatusLabel, telHref, type OpenStatus } from "./_storefront/utils";
 import styles from "./storefront.module.css";
 
@@ -478,6 +479,7 @@ export default function BusinessProfileClient({ initialBusiness, initialWorkingH
                 <div><small>{t("İLETİŞİM & KONUM")}</small><h2 id="bilgi-title">{t("Bilgi")}</h2></div>
               </header>
               <InfoSection business={business} workingHours={workingHours} today={today} />
+              <BusyHoursSection businessId={business.id} workingHours={workingHours} today={today} nowHour={nowMillis === null ? null : Math.floor(istanbulNow(nowMillis).minutes / 60)} bookingHref={bookingHref} />
             </section>
           </div>
 

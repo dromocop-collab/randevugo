@@ -670,5 +670,22 @@
   "Randevu saatleri personelin çalışma saatine göre açılır. Şu personellerin saati işletme saatinden dar:": "Booking slots follow each staff member's hours. These staff have shorter hours than your business:",
   "{name}: {staff} (işletme {business})": "{name}: {staff} (business {business})",
   "Önce değişiklikleri kaydedin.": "Save your changes first.",
-  "Eşitleyince personelin çalıştığı günlerde saati işletme saatiyle aynı olur; izin günleri değişmez.": "Matching sets their hours to your business hours on the days they work; days off stay the same."
+  "Eşitleyince personelin çalıştığı günlerde saati işletme saatiyle aynı olur; izin günleri değişmez.": "Matching sets their hours to your business hours on the days they work; days off stay the same.",
+  "+{count} dk": "+{count} min",
+  "Aynı uzmanın bugün bu saatten sonraki randevuları": "Same staff member's later appointments today",
+  "Biletinden bildirdi{time}.": "Shared from their ticket{time}.",
+  "Biz +{count} dk": "We're +{count} min",
+  "Gecikme bildirilemedi. Lütfen tekrar deneyin.": "Couldn't share the delay. Please try again.",
+  "Gecikme kaldırıldı.": "Delay cleared.",
+  "Gecikme süresi": "Delay",
+  "Gecikmeli misiniz?": "Running late?",
+  "Müşteri biletinde görür, boşuna erken gelip beklemez.": "The customer sees it on their ticket and won't wait around.",
+  "Müşteri yolda": "Customer is on the way",
+  "Müşteri ~{count} dk gecikecek": "Customer will be ~{count} min late",
+  "Müşteriye {minutes} dk gecikme bildirildi.": "Customer told about a {minutes} min delay.",
+  "Sonraki randevulara da yansıt": "Apply to later appointments too",
+  "Tahmini varış {time}.": "Expected arrival {time}.",
+  "Zamanında": "On time",
+  "{count} randevuya {minutes} dk gecikme bildirildi.": "{minutes} min delay shared with {count} appointments.",
+  "{name} · bugün bu saatten sonraki randevular": "{name} · later appointments today"
 }

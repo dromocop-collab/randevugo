@@ -1,0 +1,15 @@
+.wrap { display: grid; gap: 10px; }
+.delayBox {
+  display: grid; gap: 12px; padding: 14px;
+  border: 1px solid var(--dui-line, rgb(0 0 0 / 0.08)); border-radius: 16px;
+  background: var(--dui-card-2);
+}
+.delayHead { display: flex; gap: 10px; align-items: flex-start; }
+.delayHead b { display: block; font-size: 14px; }
+.delayHead small { display: block; margin-top: 2px; color: var(--dui-muted, #64748b); font-size: 12.5px; line-height: 1.4; }
+.delayIcon {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px;
+  background: color-mix(in srgb, #8b5cf6 14%, transparent); color: #7c3aed;
+}
+:global(:root[data-theme="dark"]) .delayIcon { color: #c4b5fd; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }

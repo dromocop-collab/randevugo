@@ -1,0 +1,44 @@
+/* Kişisel ritim kartı — account.module.css .page değişkenlerini (--a-*) kullanır. */
+.wrap {
+  display: grid; gap: 12px; margin-top: 14px; padding: 16px;
+  border: 1px solid var(--a-line); border-radius: 22px;
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--a-lime) 20%, transparent), transparent 60%), var(--a-card);
+  box-shadow: var(--a-shadow);
+}
+.head { display: flex; align-items: center; gap: 12px; }
+.head small { display: block; color: var(--a-accent); font-size: 11px; font-weight: 850; letter-spacing: 0.09em; }
+.head h3 { margin: 2px 0 0; font-size: 16px; font-weight: 780; }
+.icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--a-green); color: var(--a-lime); }
+.list { display: grid; gap: 8px; }
+.item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid var(--a-line); border-radius: 16px; background: var(--a-card);
+  animation: rhythmIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i) * 70ms);
+}
+.itemDue { border-color: color-mix(in srgb, var(--a-green-2) 40%, transparent); }
+.ring {
+  --deg: calc(var(--p) * 360deg);
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: conic-gradient(var(--a-green-2) var(--deg), var(--a-soft) 0);
+}
+.ring i { width: 28px; height: 28px; border-radius: 50%; background: var(--a-card); }
+.body { min-width: 0; }
+.body b, .body span, .body small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.body b { font-size: 14.5px; font-weight: 780; }
+.body span { color: var(--a-muted); font-size: 13px; }
+.body small { margin-top: 2px; color: var(--a-faint); font-size: 12px; }
+.side { display: grid; justify-items: end; gap: 6px; }
+.side em { font-style: normal; color: var(--a-muted); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.whenDue { color: var(--a-accent) !important; }
+.book {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px;
+  border-radius: 999px; background: var(--a-green); color: #fff; font-size: 13px; font-weight: 800; text-decoration: none; white-space: nowrap;
+}
+.book:hover { background: var(--a-green-2); }
+@media (max-width: 520px) {
+  .item { grid-template-columns: auto minmax(0, 1fr); }
+  .side { grid-column: 1 / -1; grid-template-columns: 1fr auto; align-items: center; justify-items: start; }
+  .side .book { justify-self: end; }
+}
+@keyframes rhythmIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .item { animation: none; } }

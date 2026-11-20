@@ -28,6 +28,8 @@ import { appointmentPriceLabel, localizedAppointmentServiceName, needsFinalPrice
 import { extraLinePriceLabel } from "@/features/services/multi-service";
 import { useDateFnsLocale } from "@/i18n/date";
 import { tk, type TFunction } from "@/i18n/config";
+import { arrivalPhase } from "@/features/appointments/moments-domain";
+import { ArrivalCard, BusinessDelayBanner } from "./arrival-card";
 import styles from "./ticket.module.css";
 
 type BusinessInfo = { name:string; address:string; phone:string; slug:string; logoUrl:string };
@@ -70,6 +72,7 @@ export default function AppointmentDetailPage() {
   const [cancelReason,setCancelReason] = useState("");
   const [cancelBusy,setCancelBusy] = useState(false);
   const closeReschedule = useCallback(()=>setRescheduleOpen(false),[]);
+  const refresh = useCallback(()=>setReloadKey(key=>key+1),[]);
 
   useEffect(()=>{
     const token=params.publicToken; if(!token)return; let cancelled=false;
@@ -98,6 +101,17 @@ export default function AppointmentDetailPage() {
     return()=>{cancelled=true};
   },[params.publicToken,reloadKey]);
 
+
+  // Varış penceresinde bilet canlı kalsın: işletmenin gecikme bildirimi ve kalan süre kendiliğinden güncellenir.
+  const startMsForPhase=appointment?new Date(appointment.startAt).getTime():NaN;
+  // maxArrivalUpdates yalnız güncel sunucudan gelir: fonksiyonlar yayınlanmadan kart görünmez.
+  const phase=appointment&&typeof appointment.maxArrivalUpdates==="number"?arrivalPhase(appointment.status,startMsForPhase,now):"hidden";
+  useEffect(()=>{
+    if(phase==="hidden")return;
+    const tick=window.setInterval(()=>setNow(Date.now()),30_000);
+    const poll=phase==="open"?window.setInterval(()=>{if(document.visibilityState==="visible")setReloadKey(key=>key+1)},60_000):0;
+    return()=>{window.clearInterval(tick);if(poll)window.clearInterval(poll)};
+  },[phase]);
 
   async function confirmReschedule(slot:AvailableAppointmentSlot){
     // Hata RescheduleDialog içinde gösterilir.
@@ -172,6 +186,7 @@ export default function AppointmentDetailPage() {
     <Link href={back.href} className={styles.back}><ArrowLeft size={16}/> {back.label}</Link>
     <div className={styles.layout}>
       <div className={styles.column}>
+        {(upcomingActive||phase!=="hidden")&&startValid&&appointment.businessDelay&&appointment.businessDelay.minutes>0?<BusinessDelayBanner delay={appointment.businessDelay} startMs={start.getTime()}/>:null}
         <article className={`${styles.ticket} ${cancelled?styles.ticketCancelled:""}`} aria-label={t("Randevu bileti")}>
           <header className={styles.ticketTop}>
             <div className={styles.grid} aria-hidden="true"/>
@@ -211,6 +226,8 @@ export default function AppointmentDetailPage() {
             {shortCode&&<div className={styles.code}><small>{t("RANDEVU KODU")}</small><b>{shortCode}</b></div>}
           </div>
         </article>
+
+        {phase!=="hidden"&&<ArrivalCard publicToken={params.publicToken} phase={phase} arrival={appointment.arrival??null} updatesLeft={Math.max(0,(appointment.maxArrivalUpdates??6)-(appointment.arrivalUpdates??0))} startMs={start.getTime()} onChanged={refresh}/>}
 
         {showSaveToAccount&&<Link href={SAVE_TO_ACCOUNT_HREF} onClick={()=>addGuestBooking({publicToken:params.publicToken,businessId:appointment.businessId??"",appointmentId:appointment.id??""})} className={styles.saveCard}>
           <i><UserRound size={20}/></i><span><small>{t("HESABIMA KAYDET")}</small>{t("Giriş yapın, bu randevu Randevularım listenize eklensin.")}</span><ArrowRight size={18}/>

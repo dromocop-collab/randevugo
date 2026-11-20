@@ -81,6 +81,12 @@ export interface Appointment extends EntityBase {
   lastRescheduledBy?: "customer" | "business";
   /** İşletmenin onaylı ek randevu alanlarına verilen yanıtlar. */
   customFields?: AppointmentCustomFieldValue[];
+  /** Müşterinin biletten paylaştığı varış durumu (yalnız sunucu yazar). */
+  arrival?: { status: "on_the_way" | "late"; delayMinutes: number; updatedAt?: string | null };
+  /** İşletmenin bildirdiği gecikme (dk; yalnız sunucu yazar). */
+  businessDelay?: { minutes: number; updatedAt?: string | null };
+  arrivalUpdates?: number;
+  maxArrivalUpdates?: number;
 }
 
 export interface AppointmentCustomFieldValue {

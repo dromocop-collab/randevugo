@@ -23,6 +23,7 @@ import { LAST_MINUTE_WINDOW_HOURS, alertCoversSlot, isNewAlertMatch, liveModuleE
 import { evaluateSubscriptionAccess, legacyTrialWindow } from "./subscription-domain.js";
 import { FieldValidationError, sanitizeCustomFields, validateCustomFieldValues, type CustomBookingField } from "./booking-fields-domain.js";
 import { SITE_ORIGIN, buildAppointmentIcs, buildWalletPassJson, type PassAppointment } from "./appointment-pass-domain.js";
+import { BUSY_CACHE_MS, BUSY_WEEKS, MAX_ARRIVAL_UPDATES, arrivalPushText, arrivalWindow, businessDelayPushText, cascadeTargets, computeBusyHours, normalizeArrivalInput, normalizeBusinessDelay } from "./appointment-moments-domain.js";
 import { buildPkpass } from "./pkpass-signer.js";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -5677,6 +5678,7 @@ export const getAppointmentByPublicToken = onCall(
         staffId: typeof appointment.staffId === "string" ? appointment.staffId : "",
         rescheduleCount: policy.rescheduleCount,
         customFields: Array.isArray(appointment.customFields) ? appointment.customFields : [],
+        ...publicArrivalFields(appointment),
       },
       policy: {
         canCancel: policy.canCancel,
@@ -12560,4 +12562,171 @@ export const startWhatsAppOnboardingForBusiness = onCall(
     await db.collection("platformAuditLogs").add({ action: "whatsapp.onboarding_started", businessId, actorUid: uid, createdAt: FieldValue.serverTimestamp() });
     return { success: true };
   },
+);
+
+
+// ── Randevu anı: varış durumu, işletme gecikmesi, sakin saatler (appointment-moments-domain.ts) ──
+
+function momentIso(value: unknown): string | null {
+  return value instanceof Timestamp ? value.toDate().toISOString() : null;
+}
+
+/** Bilet sayfasına giden varış/gecikme alanları (yalnız durum ve dakika; kimlik bilgisi yok). */
+function publicArrivalFields(appointment: FirebaseFirestore.DocumentData) {
+  const arrival = appointment.arrival as Record<string, unknown> | undefined;
+  const delay = appointment.businessDelay as Record<string, unknown> | undefined;
+  return {
+    ...(arrival && ["on_the_way", "late"].includes(String(arrival.status)) ? {
+      arrival: { status: String(arrival.status), delayMinutes: Math.max(0, numberOr(arrival.delayMinutes, 0)), updatedAt: momentIso(arrival.updatedAt) },
+    } : {}),
+    ...(delay && numberOr(delay.minutes, 0) > 0 ? {
+      businessDelay: { minutes: numberOr(delay.minutes, 0), updatedAt: momentIso(delay.updatedAt) },
+    } : {}),
+    arrivalUpdates: Math.max(0, numberOr(appointment.arrivalUpdates, 0)),
+    maxArrivalUpdates: MAX_ARRIVAL_UPDATES,
+  };
+}
+
+function appointmentClock(value: unknown, timeZone: string): string {
+  if (!(value instanceof Timestamp)) return "";
+  try {
+    return new Intl.DateTimeFormat("tr-TR", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(value.toDate());
+  } catch {
+    return new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false }).format(value.toDate());
+  }
+}
+
+/** Müşteri biletten "Yoldayım" / "X dk gecikeceğim" der (publicToken yeterli; misafir dahil). İşletmeye push gider. */
+export const reportAppointmentArrival = onCall(
+  publicCallableOptions,
+  async (request) => {
+    const input = normalizeArrivalInput(request.data ?? {});
+    if (!input) throw new HttpsError("invalid-argument", "Geçersiz varış bilgisi.");
+    await consumeSecurityLimit(`appointment-arrival:ip:hour:${clientIpFrom(request.rawRequest)}`, 30, 60 * 60_000);
+    const { token, businessId, appointmentId } = await resolvePublicAppointmentToken(request.data?.publicToken);
+    const ref = db.doc(`businesses/${businessId}/appointments/${appointmentId}`);
+    const appointment = await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(ref);
+      const data = snapshot.data();
+      if (!data || data.publicToken !== token) throw new HttpsError("not-found", "Randevu kaydı bulunamadı.");
+      const startMs = data.startAt instanceof Timestamp ? data.startAt.toMillis() : 0;
+      const window = arrivalWindow(data.status, startMs, Date.now());
+      if (!window.open) {
+        throw new HttpsError("failed-precondition", window.reason === "too_early"
+          ? "Varış bilgisi randevudan en erken 3 saat önce paylaşılabilir."
+          : "Bu randevu için artık varış bilgisi paylaşılamaz.");
+      }
+      const updates = Math.max(0, numberOr(data.arrivalUpdates, 0));
+      if (updates >= MAX_ARRIVAL_UPDATES) throw new HttpsError("resource-exhausted", "Bu randevu için en fazla 6 kez varış bilgisi paylaşılabilir.");
+      tx.update(ref, {
+        arrival: input.status === "clear" ? FieldValue.delete() : {
+          status: input.status, delayMinutes: input.delayMinutes, updatedAt: FieldValue.serverTimestamp(),
+        },
+        arrivalUpdates: updates + 1,
+      });
+      return data;
+    });
+    const business = (await db.doc(`businesses/${businessId}`).get()).data() ?? {};
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    const text = arrivalPushText(input, String(appointment.customerName ?? ""), appointmentClock(appointment.startAt, timeZone));
+    if (text) {
+      const staffId = typeof appointment.staffId === "string" && appointment.staffId ? appointment.staffId : null;
+      const kind = input.status === "late" ? "appointment_customer_late" : "appointment_on_the_way";
+      const ids = await businessRecipientIds(businessId, business, staffId);
+      await pushToUsers(ids.filter((id) => id !== appointment.customerId), text.title, text.body,
+        { businessId, appointmentId, route: "appointment", kind, audience: "business" }, `${appointmentId}-arrival`);
+    }
+    return { success: true, status: input.status, delayMinutes: input.delayMinutes };
+  }
+);
+
+/**
+ * İşletme "X dk gecikmeliyiz" der (0 = gecikme yok). cascade: aynı uzmanın bugünkü sonraki aktif randevularına da yazılır.
+ * Hesabı olan müşterilere push gider; misafirler biletinde görür.
+ */
+export const setAppointmentBusinessDelay = onCall(
+  protectedCallableOptions,
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oturum bulunamadı.");
+    const data = request.data ?? {};
+    const businessId = requireString(data.businessId, "businessId");
+    const appointmentId = requireString(data.appointmentId, "appointmentId");
+    const minutes = normalizeBusinessDelay(data.minutes);
+    if (minutes === null) throw new HttpsError("invalid-argument", "Gecikme süresi geçersiz.");
+    const business = await requireBusinessOperation(uid, businessId, "manageAppointments");
+    const ownStaffId = await staffScopeFor(uid, businessId, business);
+    const anchorSnap = await db.doc(`businesses/${businessId}/appointments/${appointmentId}`).get();
+    const anchor = anchorSnap.data();
+    if (!anchor) throw new HttpsError("not-found", "Randevu bulunamadı.");
+    const anchorStaff = typeof anchor.staffId === "string" ? anchor.staffId : "";
+    if (ownStaffId && anchorStaff !== ownStaffId) throw new HttpsError("permission-denied", "Yalnız kendi randevularınızda gecikme bildirebilirsiniz.");
+    if (!["pending", "confirmed"].includes(String(anchor.status))) throw new HttpsError("failed-precondition", "Yalnız aktif randevularda gecikme bildirilebilir.");
+    const anchorStart = anchor.startAt instanceof Timestamp ? anchor.startAt.toMillis() : 0;
+    const anchorEnd = anchor.endAt instanceof Timestamp ? anchor.endAt.toMillis() : anchorStart;
+    const now = Date.now();
+    if (anchorEnd < now - 30 * 60_000) throw new HttpsError("failed-precondition", "Bitmiş randevuda gecikme bildirilemez.");
+    if (anchorStart > now + 24 * 60 * 60_000) throw new HttpsError("failed-precondition", "Gecikme yalnız önümüzdeki 24 saatteki randevular için bildirilebilir.");
+    await consumeSecurityLimit(`business-delay:${businessId}:hour`, 120, 60 * 60_000);
+
+    const targets: Array<{ id: string; data: FirebaseFirestore.DocumentData }> = [{ id: appointmentId, data: anchor }];
+    if (data.cascade === true && anchorStaff) {
+      const dayEnd = anchorStart + 16 * 60 * 60_000;
+      const later = await db.collection(`businesses/${businessId}/appointments`)
+        .where("staffId", "==", anchorStaff)
+        .where("startAt", ">", Timestamp.fromMillis(anchorStart))
+        .where("startAt", "<", Timestamp.fromMillis(dayEnd))
+        .limit(40).get();
+      const rows = later.docs.map((doc) => ({ id: doc.id, staffId: doc.data().staffId, status: doc.data().status, startMs: (doc.data().startAt as Timestamp).toMillis(), data: doc.data() }));
+      cascadeTargets(rows, { id: appointmentId, staffId: anchorStaff, startMs: anchorStart }, dayEnd).forEach((row) => targets.push({ id: row.id, data: row.data }));
+    }
+    const batch = db.batch();
+    for (const target of targets) {
+      batch.update(db.doc(`businesses/${businessId}/appointments/${target.id}`), {
+        businessDelay: minutes > 0 ? { minutes, updatedAt: FieldValue.serverTimestamp(), byUid: uid } : FieldValue.delete(),
+      });
+    }
+    await batch.commit();
+    const timeZone = typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul";
+    await Promise.all(targets.map((target) => {
+      const customerId = typeof target.data.customerId === "string" ? target.data.customerId : "";
+      const previous = numberOr((target.data.businessDelay as Record<string, unknown> | undefined)?.minutes, 0);
+      if (!customerId || customerId.startsWith("guest_") || previous === minutes) return Promise.resolve();
+      const text = businessDelayPushText(minutes, String(business.name ?? ""), appointmentClock(target.data.startAt, timeZone));
+      return pushToUsers([customerId], text.title, text.body,
+        { businessId, appointmentId: target.id, route: "appointment", kind: "appointment_business_delay", audience: "customer" }, `${target.id}-delay`);
+    }));
+    return { success: true, minutes, updated: targets.length };
+  }
+);
+
+/** Vitrin "Ne zaman gelsem?" haritası: son 8 haftanın göreli yoğunluğu (ham sayı yok), 12 saat önbellekli. */
+export const getBusinessBusyHours = onCall(
+  publicCallableOptions,
+  async (request) => {
+    burstLimit(`busy-hours:${clientIpFrom(request.rawRequest)}`, 60, 10 * 60_000);
+    const businessId = requireString(request.data?.businessId, "businessId");
+    if (!/^[A-Za-z0-9_-]{4,64}$/.test(businessId)) throw new HttpsError("invalid-argument", "İşletme geçersiz.");
+    const cacheRef = db.doc(`businessInsights/${businessId}`);
+    const cached = (await cacheRef.get()).data()?.busyHours as Record<string, unknown> | undefined;
+    const computedAt = cached?.computedAt instanceof Timestamp ? cached.computedAt.toMillis() : 0;
+    if (cached && Date.now() - computedAt < BUSY_CACHE_MS && typeof cached.gridJson === "string") {
+      return { grid: JSON.parse(cached.gridJson), sample: numberOr(cached.sample, 0), weeks: numberOr(cached.weeks, BUSY_WEEKS), enough: cached.enough === true, computedAt: new Date(computedAt).toISOString() };
+    }
+    const business = (await db.doc(`businesses/${businessId}`).get()).data();
+    if (!business || business.isPublished === false || business.status === "suspended") throw new HttpsError("not-found", "İşletme bulunamadı.");
+    const now = Date.now();
+    const snapshot = await db.collection(`businesses/${businessId}/appointments`)
+      .where("startAt", ">=", Timestamp.fromMillis(now - BUSY_WEEKS * 7 * 86_400_000))
+      .where("startAt", "<", Timestamp.fromMillis(now))
+      .select("startAt", "endAt", "status")
+      .limit(4_000).get();
+    const result = computeBusyHours(snapshot.docs.map((doc) => ({
+      startMs: doc.data().startAt instanceof Timestamp ? doc.data().startAt.toMillis() : 0,
+      endMs: doc.data().endAt instanceof Timestamp ? doc.data().endAt.toMillis() : 0,
+      status: doc.data().status,
+    })), typeof business.timeZone === "string" ? business.timeZone : "Europe/Istanbul");
+    await cacheRef.set({ busyHours: { gridJson: JSON.stringify(result.grid), sample: result.sample, weeks: result.weeks, enough: result.enough, computedAt: FieldValue.serverTimestamp() } }, { merge: true });
+    return { ...result, computedAt: new Date(now).toISOString() };
+  }
 );

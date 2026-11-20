@@ -27,7 +27,7 @@
 .cardMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .cardMain > b { font-size: 15px; font-weight: 750; color: var(--dui-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cardMain > small { font-size: 12.5px; color: var(--dui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .cardFoot em { font-style: normal; font-size: 13px; font-weight: 800; color: var(--dui-ink); font-variant-numeric: tabular-nums; }
 
 /* Detay */
@@ -77,3 +77,4 @@
 .serviceButtons { display: flex; justify-content: flex-end; gap: 8px; }
 .serviceButtons > * { flex: 1 1 auto; }
 @media (min-width: 768px) { .serviceButtons > * { flex: 0 0 auto; } }
+.statusCell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
