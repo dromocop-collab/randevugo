@@ -18,19 +18,30 @@ export async function uploadFile(
 }
 
 /**
- * Upload a business image (logo, cover, or gallery).
+ * İşletme görseli (logo, kapak, galeri).
+ * Her yükleme BENZERSİZ ada gider: eskiden logo/kapak sabit "logo.jpg"ye yazılıyordu ve onay beklerken
+ * yayındaki görselin dosyası da değişiyordu (moderasyon atlanıyordu). Ayrıca tarayıcıda küçültülür:
+ * logo 512 kare, kapak en uzun kenar 1920, galeri 1600 (webp, olmazsa jpeg).
  */
 export async function uploadBusinessImage(
   businessId: string,
   type: "logo" | "cover" | "gallery",
   file: File
 ): Promise<string> {
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const fileName = type === "gallery"
-    ? `${type}_${Date.now()}.${ext}`
-    : `${type}.${ext}`;
-  const path = `businesses/${businessId}/public/${fileName}`;
-  return uploadFile(path, file);
+  let blob: Blob = file;
+  try {
+    blob = type === "logo" ? await squareImageBlob(file, 512, 0.86) : await fitImageBlob(file, type === "cover" ? 1920 : 1600, 0.84);
+  } catch {
+    // Çözülemeyen biçimde (ör. eski tarayıcıda HEIC) orijinal dosya gider; boyut sınırı Storage kuralında.
+  }
+  const ext = blob.type === "image/webp" ? "webp" : blob.type === "image/png" ? "png" : "jpg";
+  const fileName = `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const storageRef = ref(storage, `businesses/${businessId}/public/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, blob, {
+    contentType: blob.type || "image/jpeg",
+    cacheControl: "public, max-age=31536000, immutable",
+  });
+  return getDownloadURL(snapshot.ref);
 }
 
 /** Upload a public staff profile photo. */
@@ -88,6 +99,35 @@ async function loadImage(file: File): Promise<{ source: CanvasImageSource; width
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+/** En boy oranını koruyarak en uzun kenarı `maxSide` piksele indirir (büyütmez). */
+async function fitImageBlob(file: File, maxSide: number, quality: number): Promise<Blob> {
+  const image = await loadImage(file);
+  try {
+    const longest = Math.max(image.width, image.height);
+    if (!longest) throw new Error("image-decode");
+    const ratio = Math.min(1, maxSide / longest);
+    const width = Math.round(image.width * ratio);
+    const height = Math.round(image.height * ratio);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("canvas-unavailable");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image.source, 0, 0, width, height);
+    const webp = await canvasToBlob(canvas, "image/webp", quality);
+    if (webp && webp.type === "image/webp") return webp;
+    const jpeg = await canvasToBlob(canvas, "image/jpeg", quality);
+    if (!jpeg) throw new Error("image-encode");
+    return jpeg;
+  } finally {
+    image.release();
+  }
 }
 
 /** Görseli ortadan kare kırpar ve en fazla `size` piksele küçültür. */

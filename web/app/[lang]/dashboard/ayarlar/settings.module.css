@@ -141,6 +141,8 @@
 .galleryItem { position: relative; margin: 0; overflow: hidden; aspect-ratio: 1; border-radius: 15px; background: var(--k-soft); }
 .galleryItem img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s var(--k-ease); }
 .galleryItem:hover img { transform: scale(1.04); }
+.galleryItem[data-pending="true"] { outline: 2px dashed var(--k-accent, #f59e0b); outline-offset: -2px; }
+.galleryItem[data-pending="true"]::after { content: ""; position: absolute; inset: auto 6px 6px auto; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 0 3px rgba(255,255,255,.8); }
 .galleryItem button {
   position: absolute;
   top: 6px;

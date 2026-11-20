@@ -100,6 +100,10 @@ export default function SettingsPage() {
   const intl = useIntlLocale();
   const { businessId } = useBusiness();
   const [business, setBusiness] = useState<Business | null>(null);
+  // Onaya gönderilmiş ama henüz yayında olmayan galeri. Art arda eklemede/silmede bir öncekinin
+  // kaybolmaması için taban bu olur (sunucu bekleyen isteği alan alan birleştirir; galeriyi bütün olarak değiştirir).
+  const [pendingGallery, setPendingGallery] = useState<string[] | null>(null);
+  const galleryBase = pendingGallery ?? business?.galleryUrls ?? [];
   const [instagramOpen, setInstagramOpen] = useState(false);
   const closeInstagram = useCallback(() => setInstagramOpen(false), []);
   const [loading, setLoading] = useState(true);
@@ -318,10 +322,11 @@ export default function SettingsPage() {
 
   async function removeGalleryImage() {
     if (!businessId || !galleryToRemove) return;
-    const updated = (business?.galleryUrls ?? []).filter((item) => item !== galleryToRemove);
+    const updated = galleryBase.filter((item) => item !== galleryToRemove);
     setRemovingGallery(true);
     try {
       await submitBusinessProfileChange(businessId, { galleryUrls: updated });
+      setPendingGallery(updated);
       setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
       toast.success(t("Galeri değişikliği onaya gönderildi."));
       setGalleryToRemove(null);
@@ -536,28 +541,28 @@ export default function SettingsPage() {
                   />
                 </div>
               </Panel>
-              <Panel title={t("Galeri")} icon={Images} description={t("{count} fotoğraf · İşletmenizin içinden gerçek kareler ekleyin.", { count: business?.galleryUrls?.length ?? 0 })}>
+              <Panel title={t("Galeri")} icon={Images} description={t("{count} fotoğraf · İşletmenizin içinden gerçek kareler ekleyin.", { count: galleryBase.length })}>
                 <div className={st.gallery}>
-                  {(business?.galleryUrls ?? []).map((url, i) => (
-                    <figure key={url} className={st.galleryItem}>
+                  {galleryBase.map((url, i) => (
+                    <figure key={url} className={st.galleryItem} data-pending={business?.galleryUrls?.includes(url) ? undefined : "true"}>
                       <Image src={url} alt={t("Galeri {number}", { number: i + 1 })} width={240} height={180} />
                       <button type="button" aria-label={t("Galeri {number} görselini kaldır", { number: i + 1 })} onClick={() => setGalleryToRemove(url)}><Trash2 size={15} aria-hidden /></button>
                     </figure>
                   ))}
-                  <div className={st.galleryAdd}>
+                  {galleryBase.length < 12 ? <div className={st.galleryAdd}>
                     <ImageUploader
                       label=""
                       shape="square"
                       uploadFn={(file) => uploadBusinessImage(businessId!, "gallery", file)}
                       onUpload={async (url) => {
-                        const current = business?.galleryUrls ?? [];
-                        const updated = [...current, url];
+                        const updated = [...galleryBase, url].slice(0, 12);
                         await submitBusinessProfileChange(businessId!, { galleryUrls: updated });
+                        setPendingGallery(updated);
                         setBusiness((prev) => prev ? { ...prev, profileReviewStatus: "pending" } : prev);
                         toast.success(t("Galeri görseli onaya gönderildi."));
                       }}
                     />
-                  </div>
+                  </div> : <p className={st.footnote}>{t("Galeride en fazla 12 görsel olabilir.")}</p>}
                 </div>
               </Panel>
             </>
