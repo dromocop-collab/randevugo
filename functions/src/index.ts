@@ -5120,6 +5120,26 @@ export const createAppointment = onCall(
   }
 );
 
+/**
+ * Panelden açılan randevunun müşteri alanları: telefon (isteğe bağlı, Türkiye), not, müşteriye mesaj tercihi.
+ * Numara işletmenin müşteri kartında kayıtlı bir hesaba bağlıysa randevu o hesaba bağlanır (uygulamasında görünür).
+ */
+async function dashboardCustomerInput(businessId: string, data: Record<string, unknown>) {
+  const rawPhone = typeof data.customerPhone === "string" ? data.customerPhone.trim() : "";
+  const customerPhone = rawPhone ? normalizedPhoneKey(rawPhone) : null;
+  const notes = typeof data.notes === "string" && data.notes.trim() ? data.notes.trim().slice(0, 1000) : null;
+  const customerNotify = data.notifyCustomer !== false;
+  let linkedUserId: string | null = null;
+  let cardName = "";
+  if (customerPhone) {
+    const card = (await db.doc(`businesses/${businessId}/customers/${customerDocumentId(customerPhone)}`).get()).data();
+    const userId = typeof card?.userId === "string" ? card.userId.trim() : "";
+    if (userId && !/^(guest|dashboard|deleted)_/.test(userId)) linkedUserId = userId;
+    if (typeof card?.fullName === "string" && !isGeneratedCustomerName(card.fullName)) cardName = card.fullName.trim().slice(0, 80);
+  }
+  return { customerPhone, notes, customerNotify, linkedUserId, cardName };
+}
+
 export const createDashboardAppointment = onCall(
   protectedCallableOptions,
   async (request) => {
@@ -5134,12 +5154,15 @@ export const createDashboardAppointment = onCall(
       throw new HttpsError("invalid-argument", "Randevu saati zorunludur.");
     }
 
+    const contact = await dashboardCustomerInput(businessId, data);
     const customerName = typeof data.customerName === "string" && data.customerName.trim()
       ? data.customerName.trim().slice(0, 80)
-      : "Rezerve saat";
+      : contact.cardName || "Rezerve saat";
     const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
     const ownStaffId = await staffScopeFor(uid, businessId, business);
     const requestedStaffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
+    // Telefonlu randevuda müşteriye bilet bağlantısı (Yoldayım, iptal/erteleme) gider.
+    const publicToken = contact.customerPhone ? randomUUID() : null;
     // Çalışan yalnızca kendi takvimine randevu ekleyebilir.
     if (ownStaffId && requestedStaffId && requestedStaffId !== ownStaffId) {
       throw new HttpsError("permission-denied", "Yalnızca kendi takviminize randevu ekleyebilirsiniz.");
@@ -5200,15 +5223,17 @@ export const createDashboardAppointment = onCall(
         businessId,
         staffId,
         serviceId,
-        customerId: `dashboard_${appointmentRef.id}`,
+        customerId: contact.linkedUserId ?? `dashboard_${appointmentRef.id}`,
         customerName,
-        customerPhone: null,
+        customerPhone: contact.customerPhone,
         customerEmail: null,
         startAt,
         endAt,
         status: "confirmed",
         paymentStatus: "unpaid",
-        notes: null,
+        notes: contact.notes,
+        ...(contact.customerPhone && !contact.customerNotify ? { customerNotify: false } : {}),
+        ...(publicToken ? { publicToken } : {}),
         serviceName: service ? serviceDisplayName(String(service.name ?? ""), chosen.variant) : "",
         staffName: staff ? String(staff.fullName ?? "") : "",
         ...(service ? appointmentPriceSnapshot(service, chosen.variant) : { servicePrice: 0 }),
@@ -5222,10 +5247,13 @@ export const createDashboardAppointment = onCall(
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (publicToken) {
+        tx.set(db.doc(`appointmentTokens/${publicToken}`), { businessId, appointmentId: appointmentRef.id, createdAt: FieldValue.serverTimestamp() });
+      }
       return appointmentRef.id;
     });
 
-    return { success: true, appointmentId };
+    return { success: true, appointmentId, publicToken, linkedAccount: Boolean(contact.linkedUserId) };
   },
 );
 
@@ -5352,8 +5380,11 @@ export const updateDashboardAppointment = onCall(
     if (typeof data.startAtMillis !== "number" || !Number.isFinite(data.startAtMillis)) {
       throw new HttpsError("invalid-argument", "Randevu tarihi ve saati zorunludur.");
     }
+    // Eski istemciler telefon/not göndermez: o zaman mevcut değerlere dokunulmaz.
+    const contactProvided = "customerPhone" in data || "notes" in data;
+    const contact = contactProvided ? await dashboardCustomerInput(businessId, data) : null;
     const customerName = typeof data.customerName === "string" && data.customerName.trim()
-      ? data.customerName.trim().slice(0, 80) : "Rezerve saat";
+      ? data.customerName.trim().slice(0, 80) : contact?.cardName || "Rezerve saat";
     const serviceId = typeof data.serviceId === "string" ? data.serviceId.trim() : "";
     const ownStaffId = await staffScopeFor(uid, businessId, business);
     const requestedStaffId = typeof data.staffId === "string" ? data.staffId.trim() : "";
@@ -5423,7 +5454,26 @@ export const updateDashboardAppointment = onCall(
         updatedAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(dayEndMs + 7 * 86_400_000),
       }, { merge: true });
+      // Telefon yalnız panelden açılmış randevularda değiştirilir (online müşterinin doğrulanmış numarası korunur).
+      const isDashboard = String(currentData.source ?? "") === "dashboard";
+      const contactFields: Record<string, unknown> = {};
+      if (contact) {
+        contactFields.notes = contact.notes;
+        if (isDashboard) {
+          contactFields.customerPhone = contact.customerPhone;
+          contactFields.customerNotify = contact.customerPhone && !contact.customerNotify ? false : FieldValue.delete();
+          const currentCustomerId = String(currentData.customerId ?? "");
+          if (contact.linkedUserId) contactFields.customerId = contact.linkedUserId;
+          else if (!currentCustomerId.startsWith("dashboard_")) contactFields.customerId = `dashboard_${appointmentId}`;
+          if (contact.customerPhone && !currentData.publicToken) {
+            const token = randomUUID();
+            contactFields.publicToken = token;
+            tx.set(db.doc(`appointmentTokens/${token}`), { businessId, appointmentId, createdAt: FieldValue.serverTimestamp() });
+          }
+        }
+      }
       tx.update(appointmentRef, {
+        ...contactFields,
         customerName, serviceId, staffId, startAt, endAt,
         serviceName: service ? serviceDisplayName(String(service.name ?? ""), chosenVariant) : "",
         staffName: staff ? String(staff.fullName ?? "") : "",
@@ -6236,7 +6286,8 @@ export const appointmentCreated = onDocumentCreated(
       fullName: customerName,
       phone,
       email: customerEmail,
-      userId: appointment.customerId ?? null,
+      // Panel/misafir randevusunun yapay kimliği müşteri kartına hesap diye yazılmasın.
+      userId: typeof appointment.customerId === "string" && !/^(guest|dashboard|deleted)_/.test(appointment.customerId) ? appointment.customerId : null,
       incrementAppointments: true,
     });
 
@@ -6791,7 +6842,7 @@ async function enqueueAppointmentSmsJobs(
 ) {
   const phone = typeof appointment.customerPhone === "string" ? appointment.customerPhone : "";
   const startAt = appointment.startAt as Timestamp | undefined;
-  if (!phone || !startAt) return;
+  if (!phone || !startAt || appointment.customerNotify === false) return;
 
   const base = {
     businessId,
@@ -8074,6 +8125,11 @@ async function processAppointmentSmsJob(ref: FirebaseFirestore.DocumentReference
       return;
     }
     const appointment = appointmentSnapshot.data()!;
+    // İşletme "müşteriye mesaj gönderme" dediyse (panelden açılan randevu) hiçbir SMS/WhatsApp gitmez.
+    if (appointment.customerNotify === false) {
+      await ref.delete();
+      return;
+    }
     const appointmentStatus = String(appointment.status);
     const allowedStatus = type === "cancellation"
       ? appointmentStatus === "cancelled"

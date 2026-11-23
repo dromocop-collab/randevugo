@@ -37,6 +37,8 @@ export interface Appointment extends EntityBase {
   paymentStatus: PaymentStatus;
   notes?: string;
   publicToken?: string;
+  /** false: panelden açılmış randevuda müşteriye SMS/WhatsApp gönderilmez. */
+  customerNotify?: boolean;
   serviceName?: string;
   /** Hizmet adının randevu anındaki dil karşılıkları (ör. { en: "Haircut · Long hair" }). */
   serviceNameTranslations?: Partial<Record<string, string>>;
@@ -121,6 +123,19 @@ export interface DashboardAppointmentCreateInput {
   /** Seçenekli hizmette seçilen seçenek. */
   variantId?: string;
   staffId?: string;
+  /** Müşteri telefonu (Türkiye); verilirse müşteri kartı oluşur, onay/hatırlatma gider. */
+  customerPhone?: string;
+  /** İşletmenin randevu notu (müşteriye gösterilmez). */
+  notes?: string;
+  /** false: telefon kayıtlı ama müşteriye SMS/WhatsApp gönderilmez. */
+  notifyCustomer?: boolean;
+}
+
+export interface DashboardAppointmentCreateResult {
+  appointmentId: string;
+  publicToken: string | null;
+  /** Numara uygulama hesabı olan bir müşteriye ait; randevu onun hesabında da görünür. */
+  linkedAccount: boolean;
 }
 
 export interface DashboardAppointmentUpdateInput extends DashboardAppointmentCreateInput {

@@ -11,3 +11,65 @@
 }
 .dayChip:focus-visible { outline: none; box-shadow: var(--dui-focus); }
 .dayChipActive { border-color: var(--dui-core); background: var(--dui-core); color: var(--dui-on-core); }
+
+/* Boş saatler */
+.freeTimes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -4px; }
+.freeLabel { width: 100%; font-size: 12px; font-weight: 700; color: var(--dui-muted); }
+.timeChip {
+  min-height: 34px; padding: 0 12px;
+  border: 1px solid var(--dui-line-strong); border-radius: 10px;
+  background: var(--dui-card); color: var(--dui-ink);
+  font: inherit; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: border-color 140ms var(--dui-ease), background 140ms var(--dui-ease);
+}
+.timeChip:hover { border-color: var(--dui-core); }
+.timeChip:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+.timeChipActive { border-color: var(--dui-core); background: var(--dui-accent-bg); color: var(--dui-accent-ink); }
+.muted { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--dui-muted); }
+
+/* Müşteri */
+.customer { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--dui-line); border-radius: var(--dui-radius); background: var(--dui-card-2); }
+.customer legend { padding: 0 6px; margin-left: -6px; font-size: 13px; font-weight: 700; color: var(--dui-ink); }
+.suggestWrap { position: relative; min-width: 0; }
+.suggest {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px);
+  margin: 0; padding: 4px; list-style: none;
+  border: 1px solid var(--dui-line-strong); border-radius: 12px;
+  background: var(--dui-card); box-shadow: var(--dui-shadow-lift);
+  max-height: 260px; overflow-y: auto;
+}
+.suggestRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 8px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--dui-ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.suggestRow:hover, .suggestRow:focus-visible { outline: none; background: var(--dui-hover); }
+.suggestText { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.suggestText b, .knownText b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestText small, .knownText small { font-size: 12px; color: var(--dui-muted); font-variant-numeric: tabular-nums; }
+.avatar {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--dui-accent-bg); color: var(--dui-accent-ink); font-size: 14px; font-weight: 800;
+}
+.knownCard { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--dui-line); border-radius: 12px; background: var(--dui-card); }
+.knownText { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.knownTags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.knownNote { font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.phoneRow { display: flex; gap: 6px; align-items: stretch; }
+.phoneRow > input { flex: 1; min-width: 0; }
+.iconButton {
+  display: grid; place-items: center; flex: none; width: 40px; min-height: 40px;
+  border: 1px solid var(--dui-line-strong); border-radius: 10px;
+  background: var(--dui-card); color: var(--dui-ink-2); cursor: pointer;
+}
+.iconButton:hover { border-color: var(--dui-core); color: var(--dui-core); }
+.iconButton:focus-visible { outline: none; box-shadow: var(--dui-focus); }
+
+/* Not */
+.addNote {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border: 1px dashed var(--dui-line-strong); border-radius: 999px; background: transparent; color: var(--dui-ink-2);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.addNote:hover { border-color: var(--dui-core); color: var(--dui-core); }
+.addNote:focus-visible { outline: none; box-shadow: var(--dui-focus); }
