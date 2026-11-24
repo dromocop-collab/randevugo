@@ -29,11 +29,11 @@
 .closed { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px); }
 .cell { background: var(--soft); transition: transform 0.15s; }
 .cell:hover { transform: scale(1.12); }
-[data-level="0"] { background: color-mix(in srgb, var(--green-2) 8%, var(--card)); }
-[data-level="1"] { background: color-mix(in srgb, var(--green-2) 26%, var(--card)); }
-[data-level="2"] { background: color-mix(in srgb, var(--amber) 45%, var(--card)); }
-[data-level="3"] { background: color-mix(in srgb, #f97316 70%, var(--card)); }
-[data-level="4"] { background: var(--rose); }
+.cell[data-level="0"], .legend i[data-level="0"] { background: color-mix(in srgb, var(--green-2) 8%, var(--card)); }
+.cell[data-level="1"], .legend i[data-level="1"] { background: color-mix(in srgb, var(--green-2) 26%, var(--card)); }
+.cell[data-level="2"], .legend i[data-level="2"] { background: color-mix(in srgb, var(--amber) 45%, var(--card)); }
+.cell[data-level="3"], .legend i[data-level="3"] { background: color-mix(in srgb, #f97316 70%, var(--card)); }
+.cell[data-level="4"], .legend i[data-level="4"] { background: var(--rose); }
 .rowToday .cell { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green-2) 30%, transparent); }
 .cellNow { outline: 2px solid var(--ink); outline-offset: 1px; }
 
