@@ -409,7 +409,7 @@ export function MarketingHeader() {
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: tk("Keşfet"), links: [[tk("Tüm mağazalar"), "/kesfet"], [tk("Kategoriler"), "/kategoriler"], [tk("Şimdi müsait"), "/simdi-musait"], [tk("Canlı sıra"), "/siram"], [tk("Online randevu"), "/online-randevu"], [tk("Mobil uygulama"), "/mobil-uygulama"]] },
   { title: tk("İşletmeler"), links: [[tk("İşletmeler için"), "/isletmeler"], [tk("Özellikler"), "/ozellikler"], [tk("Fiyatlar"), "/fiyatlar"], [tk("Ücretsiz kayıt"), "/isletmeler/kayit"], [tk("İşletme girişi"), "/isletmeler/giris"], [tk("İşletme yardımı"), "/isletmeler/yardim"]] },
-  { title: "SeninRandevun", links: [[tk("Hakkımızda"), "/hakkimizda"], [tk("İletişim"), "/iletisim"], [tk("Müşteri yardımı"), "/yardim-merkezi"], [tk("Randevularım"), "/hesabim"], [tk("Güvenlik"), "/guvenlik"]] },
+  { title: "SeninRandevun", links: [[tk("Hakkımızda"), "/hakkimizda"], [tk("İletişim"), "/iletisim"], [tk("Müşteri yardımı"), "/yardim-merkezi"], [tk("İstek & öneri"), "/istekler"], [tk("Randevularım"), "/hesabim"], [tk("Güvenlik"), "/guvenlik"]] },
   { title: tk("Yasal"), links: [[tk("KVKK"), "/kvkk"], [tk("Gizlilik"), "/gizlilik"], [tk("Hesap silme"), "/hesap-silme"], [tk("Kullanım koşulları"), "/kullanim-kosullari"], [tk("Mesafeli satış"), "/mesafeli-satis-sozlesmesi"], [tk("Ön bilgilendirme"), "/on-bilgilendirme-formu"], [tk("İptal ve iade"), "/iptal-ve-iade"], [tk("Teslimat ve ifa"), "/teslimat-ve-ifa"], [tk("Çerez politikası"), "/cerez-politikasi"]] },
 ];
 

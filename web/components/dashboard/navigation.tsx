@@ -12,7 +12,7 @@ import { useSubscriptionPlan } from "@/features/subscriptions/subscription-plan-
 import { DASHBOARD_ROUTE_ENTITLEMENTS, type SubscriptionEntitlement } from "@/constants/subscription-entitlements";
 import {
   Activity, BellRing, BookOpen, Bot, CalendarDays, ChartNoAxesCombined, CircleUserRound, Clock3, CreditCard, ExternalLink, Gift, GitBranch, GraduationCap, HeartHandshake, Headphones,
-  Heart, House, LayoutGrid, Link2, ListChecks, Megaphone, MessageCircle, PanelLeftClose, PanelLeftOpen, Phone, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, ShoppingBag, Sparkles, Star,
+  Heart, House, LayoutGrid, Lightbulb, Link2, ListChecks, Megaphone, MessageCircle, PanelLeftClose, PanelLeftOpen, Phone, Plus, ReceiptText, Scissors, Settings2, ShieldCheck, ShoppingBag, Sparkles, Star,
   UsersRound, Video, WandSparkles, type LucideIcon,
 } from "lucide-react";
 import { useDashboardDesign } from "@/features/dashboard-design/dashboard-design-context";
@@ -48,6 +48,7 @@ export const DASHBOARD_NAV_ITEMS: NavItem[] = ([
   { href: "/dashboard/subeler", label: tk("Şubeler"), icon: GitBranch, group: "yonetim" },
   { href: "/dashboard/yorumlar", label: tk("Yorumlar"), icon: Star, group: "yonetim" },
   { href: "/dashboard/destek", label: tk("Destek"), icon: Headphones, group: "sistem" },
+  { href: "/dashboard/istekler", label: tk("İstek & Öneri"), short: tk("İstekler"), icon: Lightbulb, group: "sistem" },
   { href: "/dashboard/abonelik", label: tk("Abonelik"), icon: CreditCard, group: "sistem" },
   { href: "/dashboard/ayarlar", label: tk("Ayarlar"), icon: Settings2, group: "sistem" },
   { href: "/hesabim", label: tk("Müşteri Modu"), icon: CircleUserRound, group: "sistem" },
@@ -92,7 +93,7 @@ function visibleItems(showLiveOperations: boolean, canOpenOperations: boolean, a
   return navItems.filter((item) => (item.href !== "/dashboard/canli-operasyon" || showLiveOperations) &&
     (item.href !== "/dashboard/operasyon" || canOpenOperations) &&
     (!item.entitlement || canUse(item.entitlement)) &&
-    (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/hesabim", ...(access?.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href)));
+    (access?.role !== "staff" || ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/dashboard/istekler", "/hesabim", ...(access?.permissions.viewCustomers ? ["/dashboard/musteriler"] : []), ...(canOpenOperations ? ["/dashboard/operasyon"] : [])].includes(item.href)));
 }
 
 /** Sidebar, alt menü ve "Daha fazla" sayfasının ortak, yetki/paket filtreli menüsü. */

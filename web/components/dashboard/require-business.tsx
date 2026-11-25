@@ -25,7 +25,7 @@ export function RequireBusiness({ children }: { children: ReactNode }) {
   const { loading, businesses, businessId, access } = useBusiness();
   const pathname = usePathname();
   const router = useRouter();
-  const staffAllowed = ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek"];
+  const staffAllowed = ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/dashboard/istekler"];
   if (access?.permissions.viewCustomers) staffAllowed.push("/dashboard/musteriler");
 
   useEffect(() => {

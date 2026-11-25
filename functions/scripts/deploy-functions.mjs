@@ -45,7 +45,7 @@ export const GROUPS = {
   ],
   bildirim: [
     "registerPushToken", "unregisterPushToken", "deleteMyAccount", "sendPlatformPush", "getPlatformPushOperations", "sendAdminTestPush", "sendBusinessPush",
-    "createBusinessSupportTicket", "submitPublicSupportRequest", "adminSupportTicketCreated", "adminSupportMessageCreated", "adminBusinessCreated",
+    "createBusinessSupportTicket", "submitPublicSupportRequest", "submitFeatureRequest", "voteFeatureRequest", "featureRequestCreated", "featureRequestUpdated", "adminSupportTicketCreated", "adminSupportMessageCreated", "adminBusinessCreated",
     "adminApprovalBusinessStore", "adminApprovalProfileChange", "adminApprovalCategory", "adminPlatformAlertCreated",
     "cleanupExpiredOperationalData", "assistantChat", "getAssistantHistory", "clearAssistantHistory", "issueWidgetToken", "revokeWidgetToken", "businessWidgetFeed", "serviceAutoTranslate", "serviceCategoryAutoTranslate", "backfillServiceTranslations",
   ],

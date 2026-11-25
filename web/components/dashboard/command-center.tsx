@@ -13,7 +13,7 @@ import { dashTokensClassName } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils/cn";
 import {
   Activity, BarChart3, BellRing, Bot, CalendarDays, CalendarPlus, Clipboard, Clock3, CornerDownLeft, CreditCard, Headphones, House,
-  LayoutPanelTop, ListChecks, Palette, Plus, ReceiptText, Scissors, Search, Settings2, Share2, Star, UserPlus, UsersRound, WandSparkles, X,
+  LayoutPanelTop, Lightbulb, ListChecks, Palette, Plus, ReceiptText, Scissors, Search, Settings2, Share2, Star, UserPlus, UsersRound, WandSparkles, X,
 } from "lucide-react";
 import { useT } from "@/i18n/client";
 import { tk } from "@/i18n/config";
@@ -31,7 +31,7 @@ type PaletteCommand = {
   run: () => void | Promise<void>;
 };
 
-const STAFF_BASE = ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek"];
+const STAFF_BASE = ["/dashboard/takvim", "/dashboard/randevular", "/dashboard/destek", "/dashboard/istekler"];
 
 export function DashboardCommandCenter() {
   const t = useT();
@@ -82,6 +82,7 @@ export function DashboardCommandCenter() {
     { id: "reviews", label: tk("Yorumlar"), description: tk("Müşteri değerlendirmelerini yönet"), group: tk("Sayfalar"), icon: Star, keywords: tk("yorum puan değerlendirme"), href: "/dashboard/yorumlar", run: go("/dashboard/yorumlar") },
     { id: "subscription", label: tk("Abonelik"), description: tk("Paketinizi ve ödemeleri yönetin"), group: tk("Sayfalar"), icon: CreditCard, keywords: tk("abonelik paket ödeme fatura"), href: "/dashboard/abonelik", run: go("/dashboard/abonelik") },
     { id: "support", label: tk("Destek"), description: tk("Ekibimize yazın"), group: tk("Sayfalar"), icon: Headphones, keywords: tk("destek yardım talep"), href: "/dashboard/destek", run: go("/dashboard/destek") },
+    { id: "feature-requests", label: tk("İstek & Öneri"), description: tk("Özellik iste, fikirlere oy ver"), group: tk("Sayfalar"), icon: Lightbulb, keywords: tk("istek öneri fikir özellik yol haritası oy"), href: "/dashboard/istekler", run: go("/dashboard/istekler") },
     { id: "settings", label: tk("İşletme ayarları"), description: tk("Profil ve çalışma ayarlarını düzenle"), group: tk("Sayfalar"), icon: Settings2, keywords: tk("ayar profil işletme logo"), href: "/dashboard/ayarlar", run: go("/dashboard/ayarlar") },
     { id: "appearance", label: tk("Görünüm stüdyosunu aç"), description: tk("Renk, yoğunluk ve hareketi değiştir"), group: tk("Kişiselleştirme"), icon: Palette, keywords: tk("tema renk görünüm atmosfer koyu"), run: () => { window.dispatchEvent(new Event("sr-dashboard-open-appearance")); } },
     { id: "layout", label: tk("Ana paneli düzenle"), description: tk("Bugün ekranındaki modülleri sırala veya gizle"), group: tk("Kişiselleştirme"), icon: LayoutPanelTop, keywords: tk("panel kart modül düzen gizle"), run: () => { window.dispatchEvent(new Event("sr-dashboard-open-layout")); } },

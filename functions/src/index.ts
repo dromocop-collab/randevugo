@@ -36,6 +36,7 @@ import { appointmentTransitionTriggers, automationRuleMatches, automationVariabl
 import { RECOMMENDED_PLATFORM_PLANS, TRIAL_PLAN_ID, recommendedPlanPatch, DEFAULT_PLATFORM_PLAN_ID, defaultPlatformPlan, statusAfterUnsuspend, statusBeforeSuspending } from "./platform-admin-domain.js";
 import { DEFAULT_AUTO_REPLY, INBOX_MEDIA_MAX_BYTES, conversationId, extractIncomingMessages, formatInboxPhone, inboxPreview, mediaExtension, messageDocId, renderAutoReply, sanitizeQuickReplies, shouldAutoReply, windowState, type IncomingMessage } from "./whatsapp-inbox-domain.js";
 import { parseBusinessSuggestion } from "./business-suggestion-domain.js";
+import { authorLabel, authorUpdateNotice, parseFeatureRequest, toggleVote, type FeatureRequestAudience } from "./feature-request-domain.js";
 import { LEAD_TEMPLATE_DEFINITION, decideLeadReminder, leadPhone, leadReminderMessage, parseLeadInput, parseLeadSettings, renderLeadReminderText, LEAD_REMINDER_DELAY_MS } from "./signup-lead-domain.js";
 import { ONBOARDING_STEPS, ONBOARDING_TEMPLATE_DEFINITIONS, SKIP_REASON_LABEL, buildOnboardingMessage, decideStep, greetingName, joinTurkish, missingSetupItems, nextDueAt, optCommand, parseOnboardingSettings, planOnboarding, renderOnboardingText, stepByKey, templateCreatePayload, welcomeSmsText, type OnboardingParams, type OnboardingState, type OnboardingStepKey } from "./onboarding-whatsapp-domain.js";
 import { DAILY_SHARDS, EVENT_TTL_MS, META_ACTION_EVENTS, appendTrail, buildJourneys, parseTrackedAction, LIVE_WINDOW_MS, SESSION_GAP_MS, VIEW_DEDUP_MS, classifySource, dayRange, isBotUserAgent, istanbulParts, mapKey, mergeAggregates, normalizeTrackedPath, pageTypeOf, parseUserAgent, percentChange, topEntries, visitorIdFor } from "./analytics-domain.js";
@@ -5773,7 +5774,7 @@ async function platformAdminUserIds(): Promise<string[]> {
 const ADMIN_ROUTE_URL: Record<string, string> = {
   admin_support: "/super-admin/destek", admin_businesses: "/super-admin/isletmeler", admin_moderation: "/super-admin/moderasyon",
   admin_alerts: "/super-admin/uyarilar", admin_booking_fields: "/super-admin/randevu-alanlari", admin_subscriptions: "/super-admin/abonelikler",
-  admin_whatsapp: "/super-admin/whatsapp-gelen", admin_approvals: "/super-admin/moderasyon",
+  admin_whatsapp: "/super-admin/whatsapp-gelen", admin_approvals: "/super-admin/moderasyon", admin_feature_requests: "/super-admin/istekler",
 };
 
 async function notifyPlatformAdmins(title: string, body: string, data: Record<string, string>, collapseId: string, excludeUid?: string) {
@@ -7909,6 +7910,125 @@ export const submitBusinessSuggestion = onCall(
       });
     });
     return { ok: true };
+  },
+);
+
+// ── İstek & öneri panosu ──
+// featureRequests/{id}: herkese açık alanlar (yayında olanları herkes, kendi isteğini yazarı okur). Yazmalar yalnız buradan.
+// featureRequestContacts/{id}: ad/iletişim/işletme (yalnız yönetici). featureRequestVotes/{uid}: kullanıcının oyladığı istekler.
+
+/** İstek gönder: oturum açık değilse de olur (ziyaretçi), IP ve hesap başına sınırlı. */
+export const submitFeatureRequest = onCall(
+  { ...publicCallableOptions, memory: "256MiB", maxInstances: 10 },
+  async (request) => {
+    const parsed = parseFeatureRequest(request.data);
+    if (!parsed.ok) throw new HttpsError("invalid-argument", parsed.error);
+    const input = parsed.value;
+    const uid = request.auth?.uid ?? null;
+    const ip = clientIpFrom(request.rawRequest as unknown as { headers: Record<string, unknown>; ip?: string });
+    await consumeSecurityLimit(`feature-request:ip:${ip}`, 8, 60 * 60_000);
+    if (uid) await consumeSecurityLimit(`feature-request:uid:${uid}`, 10, 24 * 60 * 60_000);
+    if (!uid && !input.contact && !input.name) throw new HttpsError("invalid-argument", "Sana dönebilmemiz için adını ya da iletişim bilgini yaz veya giriş yap.");
+
+    let audience: FeatureRequestAudience = uid ? "customer" : "guest";
+    let businessName: string | null = null;
+    let businessCategory: string | null = null;
+    if (uid && input.businessId) {
+      const [business, member] = await Promise.all([
+        db.doc(`businesses/${input.businessId}`).get(),
+        db.doc(`businesses/${input.businessId}/members/${uid}`).get(),
+      ]);
+      if (business.exists && (business.data()?.ownerUid === uid || member.exists)) {
+        audience = "business";
+        businessName = shortText(business.data()?.name ?? "", 80) || null;
+        businessCategory = typeof business.data()?.category === "string" ? business.data()!.category : null;
+      }
+    }
+    let name = input.name;
+    let email: string | null = null;
+    if (uid) {
+      const user = await getAuth().getUser(uid).catch(() => null);
+      name = name || user?.displayName || "";
+      email = user?.email ?? null;
+    }
+
+    const ref = db.collection("featureRequests").doc();
+    const now = FieldValue.serverTimestamp();
+    const batch = db.batch();
+    batch.set(ref, {
+      title: input.title, details: input.details, kind: input.kind, audience,
+      authorLabel: authorLabel(name, audience), authorUid: uid, businessCategory,
+      status: "new", public: false, votes: uid ? 1 : 0, adminReply: null,
+      createdAt: now, updatedAt: now, statusChangedAt: now,
+    });
+    batch.set(db.doc(`featureRequestContacts/${ref.id}`), {
+      name: name || null, contact: input.contact || null, email, uid, businessId: audience === "business" ? input.businessId : null,
+      businessName, page: input.page || null, createdAt: now,
+    });
+    if (uid) {
+      const voteRef = db.doc(`featureRequestVotes/${uid}`);
+      const votes = await voteRef.get();
+      batch.set(voteRef, { ids: toggleVote(votes.data()?.ids, ref.id).ids, updatedAt: now }, { merge: true });
+    }
+    await batch.commit();
+    return { ok: true, id: ref.id };
+  },
+);
+
+/** Oy ver / geri al (oturum gerekli). Yalnız panoda yayında olan isteklere ya da kendi isteğine. */
+export const voteFeatureRequest = onCall(
+  { ...protectedCallableOptions, memory: "256MiB", maxInstances: 10 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Oy vermek için giriş yap.");
+    const requestId = String(request.data?.requestId ?? "");
+    if (!/^[A-Za-z0-9]{10,40}$/.test(requestId)) throw new HttpsError("invalid-argument", "İstek bulunamadı.");
+    await consumeSecurityLimit(`feature-vote:${uid}`, 120, 60 * 60_000);
+    const ref = db.doc(`featureRequests/${requestId}`);
+    const voteRef = db.doc(`featureRequestVotes/${uid}`);
+    return db.runTransaction(async (tx) => {
+      const [item, votes] = await Promise.all([tx.get(ref), tx.get(voteRef)]);
+      if (!item.exists || (item.data()?.public !== true && item.data()?.authorUid !== uid)) throw new HttpsError("not-found", "İstek bulunamadı.");
+      if (["done", "declined"].includes(String(item.data()?.status))) throw new HttpsError("failed-precondition", "Bu istek kapandı, oy alınmıyor.");
+      const next = toggleVote(votes.data()?.ids, requestId);
+      const current = Math.max(0, Number(item.data()?.votes ?? 0));
+      const count = Math.max(0, current + (next.voted ? 1 : -1));
+      tx.set(voteRef, { ids: next.ids, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.update(ref, { votes: count });
+      return { voted: next.voted, votes: count };
+    });
+  },
+);
+
+export const featureRequestCreated = onDocumentCreated(
+  { document: "featureRequests/{requestId}", region: "europe-west1" },
+  async (event) => {
+    const item = event.data?.data();
+    if (!item) return;
+    const who = item.audience === "business" ? "İşletme" : item.audience === "customer" ? "Müşteri" : "Ziyaretçi";
+    const kind = item.kind === "bug" ? "🐞 Hata bildirimi" : item.kind === "improvement" ? "🛠️ İyileştirme" : "💡 Yeni istek";
+    await notifyPlatformAdmins(
+      `${kind} · ${who}`,
+      shortText(`${item.authorLabel ?? ""}: ${item.title}`, 160),
+      { route: "admin_feature_requests", requestId: event.params.requestId },
+      `feature-${event.params.requestId}`,
+      typeof item.authorUid === "string" ? item.authorUid : undefined,
+    );
+  },
+);
+
+/** Durum değişince ya da ekip yanıt yazınca isteği gönderene push. */
+export const featureRequestUpdated = onDocumentUpdated(
+  { document: "featureRequests/{requestId}", region: "europe-west1" },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const uid = typeof after?.authorUid === "string" ? after.authorUid : null;
+    if (!uid) return;
+    const notice = authorUpdateNotice(before, after);
+    if (!notice) return;
+    const url = after?.audience === "business" ? "/dashboard/istekler?benim=1" : "/istekler?benim=1";
+    await pushToUsers([uid], notice.title, notice.body, { kind: "feature_request", requestId: event.params.requestId, url }, `feature-${event.params.requestId}`);
   },
 );
 

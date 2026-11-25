@@ -758,6 +758,29 @@ service cloud.firestore {
 
     // Ziyaretçi analitiği › canlı ziyaretçiler (IP yok; belge kimliği geri çözülemeyen özet). Yalnız süper admin okur.
     // Müşterinin önerdiği işletmeler (submitBusinessSuggestion yazar). Yönetici okur; yalnız takip durumunu değiştirir.
+    // İstek & öneri panosu. Oluşturma ve oy yalnız callable'dan (submitFeatureRequest, voteFeatureRequest).
+    // Yayındaki istekleri herkes, kendi isteğini yazarı okur; yönetici durum/yanıt/yayın alanlarını değiştirir.
+    match /featureRequests/{requestId} {
+      allow read: if resource.data.public == true
+        || (isAuthenticated() && resource.data.authorUid == uid())
+        || isPlatformAdmin();
+      allow update: if isPlatformAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "public", "adminReply", "adminNote", "title", "details", "kind", "updatedAt", "statusChangedAt", "handledBy"])
+        && request.resource.data.status in ["new", "reviewing", "planned", "in_progress", "done", "declined"]
+        && request.resource.data.public is bool
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120;
+      allow delete: if isPlatformAdmin();
+      allow create: if false;
+    }
+    match /featureRequestContacts/{requestId} {
+      allow read, delete: if isPlatformAdmin();
+      allow create, update: if false;
+    }
+    match /featureRequestVotes/{voterId} {
+      allow read: if isAuthenticated() && voterId == uid();
+      allow write: if false;
+    }
+
     match /businessSuggestions/{suggestionId} {
       allow read: if isPlatformAdmin();
       allow update: if isPlatformAdmin()

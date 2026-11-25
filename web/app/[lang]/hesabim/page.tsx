@@ -9,7 +9,7 @@ import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, quer
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { updateProfile } from "firebase/auth";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LifeBuoy, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, Navigation, PackageCheck, RotateCcw, Search, ShieldCheck, Star, Store, TicketCheck, Trash2, UserRound, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, BadgeCheck, BellRing, BriefcaseBusiness, CalendarClock, CalendarDays, CalendarPlus, Check, ChevronRight, CircleUserRound, Clock3, Coins, Compass, Crown, ExternalLink, Fingerprint, Gift, Heart, History, KeyRound, LayoutDashboard, LifeBuoy, LoaderCircle, LockKeyhole, LogOut, MapPin, MessageCircleMore, Navigation, PackageCheck, RotateCcw, Search, ShieldCheck, Star, Store, TicketCheck, Trash2, UserRound, X, Lightbulb } from "lucide-react";
 import { getDb } from "@/lib/firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -425,6 +425,7 @@ export default function CustomerAccountPage() {
             <Link href="/kesfet" className={s.heroBtn}><CalendarPlus size={17}/> {t("Yeni randevu al")}</Link>
             {activeBusiness&&<Link href="/dashboard" className={s.heroBtnGhost}><BriefcaseBusiness size={17}/> {t("İşletme paneli")}</Link>}
             <SupportRequestModal audience="customer" triggerLabel={t("Yardım")} triggerClassName={s.helpBtn}/>
+            <Link href="/istekler" className={s.helpBtn}><Lightbulb size={16}/> {t("İstek & öneri")}</Link>
           </div>
           <div className={s.stats}>
             <button type="button" className={s.stat} onClick={()=>{setFilter("upcoming");selectTab("appointments")}}><b>{loading?"–":upcoming.length}</b><small>{t("Yaklaşan")}</small></button>
