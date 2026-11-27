@@ -147,6 +147,10 @@ export default function VisitorAnalyticsPage() {
               <Funnel title="İşletme kazanımı" steps={data.funnels.business} />
               <Funnel title="Meta reklamından" steps={data.funnels.ads} icon={Megaphone} />
               {data.funnels.signupSteps ? <Funnel title="Kayıt adımları (nerede bırakılıyor)" steps={data.funnels.signupSteps} icon={UserPlus} /> : null}
+              {data.funnels.signupForm ? <>
+                <Funnel title="İşletme bilgisi formu" steps={data.funnels.signupForm.steps} icon={UserPlus} />
+                <Blockers steps={data.funnels.signupForm.blockers} />
+              </> : null}
               <Funnel title="Müşteri randevusu" steps={data.funnels.booking} />
             </Card>
           </div>
@@ -333,6 +337,24 @@ function Funnel({ title, steps, icon: Icon = Filter }: { title: string; steps: F
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** "Devam et"e basıp geçemeyenin ilk takıldığı alan (basış başına bir kez, oturum başına alan başına bir kez). */
+function Blockers({ steps }: { steps: FunnelStep[] }) {
+  const total = steps.reduce((sum, step) => sum + (step.value ?? 0), 0);
+  const sorted = [...steps].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  return (
+    <div className={c.funnel}>
+      <b className={c.funnelTitle}><Filter size={13} aria-hidden /> Formda takılan alan</b>
+      {total === 0 ? <span className={c.funnelLabel}>Henüz veri yok</span> : sorted.map((step) => (
+        <div key={step.key} className={c.funnelStep}>
+          <span className={c.funnelLabel}>{step.label}<em>%{Math.round(((step.value ?? 0) / total) * 100)}</em></span>
+          <span className={c.funnelBar}><i style={{ width: `${Math.max(3, ((step.value ?? 0) / total) * 100)}%` }} /></span>
+          <b>{fmt(step.value ?? 0)}</b>
+        </div>
+      ))}
     </div>
   );
 }

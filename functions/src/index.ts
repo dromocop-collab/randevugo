@@ -11973,6 +11973,18 @@ export const getVisitorAnalytics = onCall(
           { key: "onboarding:3", label: "Kurulumun son adımı", value: totals.byAction["onboarding:3"] ?? 0 },
           { key: "signup", label: "İşletme oluşturdu", value: signups },
         ],
+        // İşletme bilgisi formu: açtı → "Devam et"e bastı → geçti; ve geçemeyenin ilk takıldığı alan.
+        signupForm: {
+          steps: [
+            { key: "signup:1", label: "Formu açtı", value: totals.byAction["signup:1"] ?? 0 },
+            { key: "signup:1:submit", label: "Devam et'e bastı", value: totals.byAction["signup:1:submit"] ?? 0 },
+            { key: "signup:2", label: "Formu geçti", value: totals.byAction["signup:2"] ?? 0 },
+          ],
+          blockers: ([
+            ["name", "İşletme adı"], ["slug", "Randevu adresi"], ["taken", "Adres alınmış"],
+            ["city", "Şehir"], ["district", "İlçe"], ["phone", "Cep telefonu"],
+          ] as const).map(([field, label]) => ({ key: field, label, value: totals.byAction[`signup:1:invalid:${field}`] ?? 0 })),
+        },
         booking: [
           { key: "storefront", label: "İşletme sayfası", value: totals.typeVisitors.storefront ?? 0 },
           { key: "booking", label: "Randevu ekranı", value: totals.typeVisitors.booking ?? 0 },

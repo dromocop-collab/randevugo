@@ -244,6 +244,9 @@ export const TRACKED_ACTIONS = [
   "signup:account", "signup:error", "signup:verified",
   // "WhatsApp'tan kaydol" tıklaması (Meta Contact olayı).
   "signup:whatsapp",
+  // İşletme bilgisi formu (adım 2): "Devam et"e basıldı / geçemedi (ilk hatalı alan). Nerede takıldığını ölçer.
+  "signup:1:submit", "signup:1:invalid:name", "signup:1:invalid:slug", "signup:1:invalid:taken",
+  "signup:1:invalid:city", "signup:1:invalid:district", "signup:1:invalid:phone",
   "onboarding:0", "onboarding:1", "onboarding:2", "onboarding:3",
 ] as const;
 export type TrackedAction = (typeof TRACKED_ACTIONS)[number];

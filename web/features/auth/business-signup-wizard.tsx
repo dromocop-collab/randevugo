@@ -102,6 +102,19 @@ function businessStepValid(draft: Draft) {
   );
 }
 
+type BusinessBlocker = "name" | "slug" | "taken" | "city" | "district" | "phone";
+
+/** İşletme bilgisi formunda (ekrandaki sırayla) ilk hatalı alan; hepsi doğruysa null. */
+function firstBusinessBlocker(draft: Draft, slugTaken: boolean): BusinessBlocker | null {
+  if ((draft.name?.trim().length ?? 0) < 2) return "name";
+  if (!isValidSlug(finalizeSlug(draft.slug ?? ""))) return "slug";
+  if (slugTaken) return "taken";
+  if ((draft.city?.trim().length ?? 0) < 2) return "city";
+  if ((draft.district?.trim().length ?? 0) < 2) return "district";
+  if (!isValidMobilePhone(draft.phone ?? "")) return "phone";
+  return null;
+}
+
 function stepValid(index: number, draft: Draft) {
   if (index === 0) return Boolean(draft.category) && (draft.category !== "diger" || (draft.customCategory?.trim().length ?? 0) >= 2);
   if (index === 1) return businessStepValid(draft);
@@ -225,7 +238,17 @@ export function BusinessSignupWizard() {
   function submitBusiness(event: FormEvent) {
     event.preventDefault();
     setTouched(true);
-    if (!businessStepValid(draft) || slugTaken) return;
+    trackAction("signup:1:submit");
+    const blocker = firstBusinessBlocker(draft, slugTaken);
+    if (blocker) {
+      // Telefonda hatalı alan çoğu zaman ekran dışında (alt düğmenin altında / yukarıda) kalıyor: oraya götür ki
+      // "Devam et"e basınca hiçbir şey olmuyor sanılmasın. Hangi alanda takıldığı süper admin › Analitik'te sayılır.
+      trackAction(`signup:1:invalid:${blocker}`);
+      const field = document.getElementById(ids[blocker === "taken" ? "slug" : blocker]);
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+      field?.focus({ preventScroll: true });
+      return;
+    }
     update({ slug: finalSlug, city: canonicalCity(draft.city ?? "") });
     saveSignupLead({ ...draft, city: canonicalCity(draft.city ?? "") });
     setTouched(false);
