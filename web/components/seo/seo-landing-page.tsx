@@ -36,16 +36,16 @@ export interface SeoLandingPageProps {
 }
 
 const CATEGORY_IMAGES: Record<string, string> = {
-  kuafor: "/images/categories/kuafor.png",
-  berber: "/images/categories/berber.png",
-  guzellik: "/images/categories/guzellik.png",
-  spa: "/images/categories/spa.png",
-  nail: "/images/categories/nail.png",
-  spor: "/images/categories/spor.png",
-  saglik: "/images/categories/saglik.png",
-  danismanlik: "/images/categories/danismanlik.png",
-  veteriner: "/images/categories/veteriner.png",
-  yazilim: "/images/categories/yazilim.png",
+  kuafor: "/images/categories/kuafor.webp",
+  berber: "/images/categories/berber.webp",
+  guzellik: "/images/categories/guzellik.webp",
+  spa: "/images/categories/spa.webp",
+  nail: "/images/categories/nail.webp",
+  spor: "/images/categories/spor.webp",
+  saglik: "/images/categories/saglik.webp",
+  danismanlik: "/images/categories/danismanlik.webp",
+  veteriner: "/images/categories/veteriner.webp",
+  yazilim: "/images/categories/yazilim.webp",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -89,7 +89,7 @@ export async function SeoLandingPage({ pathname, eyebrow, title: titleSource, de
   const title = t(titleSource);
   const description = t(descriptionSource);
   const faq = faqSource.map((item) => ({ question: t(item.question), answer: t(item.answer) }));
-  const image = CATEGORY_IMAGES[category] ?? "/images/booking-flow-hero.png";
+  const image = CATEGORY_IMAGES[category] ?? "/images/booking-flow-hero.webp";
   const categoryLabel = t(CATEGORY_LABELS[category] ?? tk("Online randevu"));
   const discoveryHref = category ? `/kesfet?category=${category}` : "/kesfet";
   const known = seoCategory(category);

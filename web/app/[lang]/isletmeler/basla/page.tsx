@@ -64,7 +64,7 @@ export default async function AdLandingPage() {
     <div className={`${base.page} ${s.page}`}>
       <header className={s.top}>
         <div className={`${base.wrap} ${s.topInner}`}>
-          <Link href="/" className={s.brand} aria-label={t("SeninRandevun ana sayfa")}><Image src="/logo.png" alt="" width={30} height={30} priority /> SeninRandevun</Link>
+          <Link href="/" className={s.brand} aria-label={t("SeninRandevun ana sayfa")}><Image src="/logo.webp" alt="" width={30} height={30} priority /> SeninRandevun</Link>
           <a className={s.call} href={phoneHref}><Phone size={14} aria-hidden="true" /> {t("Bizi ara")}</a>
         </div>
       </header>

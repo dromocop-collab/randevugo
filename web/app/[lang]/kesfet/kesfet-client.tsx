@@ -57,19 +57,19 @@ const DEFAULT_CATEGORIES: DiscoveryCategory[] = [
 ];
 
 const CATEGORY_VISUALS: Record<string, string> = {
-  kuafor: "/images/categories/kuafor.png",
-  berber: "/images/categories/berber.png",
-  guzellik: "/images/categories/guzellik.png",
-  spa: "/images/categories/spa.png",
-  nail: "/images/categories/nail.png",
-  spor: "/images/categories/spor.png",
-  saglik: "/images/categories/saglik.png",
-  danismanlik: "/images/categories/danismanlik.png",
-  veteriner: "/images/categories/veteriner.png",
-  yazilim: "/images/categories/yazilim.png",
-  egitim: "/images/categories/egitim-v2.png",
-  servis: "/images/categories/servis-v2.png",
-  diger: "/images/categories/diger-v2.png",
+  kuafor: "/images/categories/kuafor.webp",
+  berber: "/images/categories/berber.webp",
+  guzellik: "/images/categories/guzellik.webp",
+  spa: "/images/categories/spa.webp",
+  nail: "/images/categories/nail.webp",
+  spor: "/images/categories/spor.webp",
+  saglik: "/images/categories/saglik.webp",
+  danismanlik: "/images/categories/danismanlik.webp",
+  veteriner: "/images/categories/veteriner.webp",
+  yazilim: "/images/categories/yazilim.webp",
+  egitim: "/images/categories/egitim-v2.webp",
+  servis: "/images/categories/servis-v2.webp",
+  diger: "/images/categories/diger-v2.webp",
 };
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [

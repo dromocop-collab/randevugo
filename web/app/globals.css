@@ -6356,7 +6356,7 @@ a {
 
 /* Generated brand artwork shared by home and pricing */
 .trial-section {
-  background-image: linear-gradient(90deg, rgba(11, 107, 69, .97) 0%, rgba(11, 107, 69, .9) 46%, rgba(11, 107, 69, .36) 100%), url('/images/booking-flow-hero.png');
+  background-image: linear-gradient(90deg, rgba(11, 107, 69, .97) 0%, rgba(11, 107, 69, .9) 46%, rgba(11, 107, 69, .36) 100%), url('/images/booking-flow-hero.webp');
   background-position: center, center;
   background-size: cover
 }
@@ -6373,7 +6373,7 @@ a {
   position: absolute;
   z-index: -2;
   inset: 18px -12vw 0;
-  background: url('/images/booking-flow-hero.png') center/cover;
+  background: url('/images/booking-flow-hero.webp') center/cover;
   border-radius: 42px;
   opacity: .2;
   filter: saturate(.8)
@@ -8245,7 +8245,7 @@ body:has(.compare-dock) .support-popup { bottom:calc(max(18px,env(safe-area-inse
   position: absolute;
   z-index: -3;
   inset: 0;
-  background: url('/images/business-platform-hero.png') center/cover
+  background: url('/images/business-platform-hero.webp') center/cover
 }
 
 .business-hero-overlay {

@@ -91,7 +91,7 @@ export default function BookingPage() {
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.brand}>
-          <Image src="/logo.png" alt="" width={30} height={30} />
+          <Image src="/logo.webp" alt="" width={30} height={30} />
           SeninRandevun
         </Link>
         <Link href={`/isletme/${params.slug}`} className={styles.back}>

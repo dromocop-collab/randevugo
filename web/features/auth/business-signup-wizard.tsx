@@ -299,7 +299,7 @@ export function BusinessSignupWizard() {
     <main className={w.stage}>
       <div className={w.blobs} aria-hidden="true"><i /><i /><i /></div>
       <header className={w.header}>
-        <Link href="/" aria-label={t("SeninRandevun ana sayfa")} className={w.brand}><Image src="/logo.png" alt="" width={40} height={40} /><b>Senin<span>Randevun</span></b></Link>
+        <Link href="/" aria-label={t("SeninRandevun ana sayfa")} className={w.brand}><Image src="/logo.webp" alt="" width={40} height={40} /><b>Senin<span>Randevun</span></b></Link>
         <div className={w.headerBadges}><small>{t("İLK AY ÜCRETSİZ")}</small><span><BadgeCheck size={15} aria-hidden="true" /> {t("Kredi kartı gerekmez")}</span></div>
       </header>
 
@@ -329,7 +329,7 @@ export function BusinessSignupWizard() {
 
         <div className={w.main}>
           <div className={w.mobileTop}>
-            <Link href="/" aria-label={t("SeninRandevun ana sayfa")}><Image src="/logo.png" alt="" width={32} height={32} /><b>SeninRandevun</b></Link>
+            <Link href="/" aria-label={t("SeninRandevun ana sayfa")}><Image src="/logo.webp" alt="" width={32} height={32} /><b>SeninRandevun</b></Link>
             <span>{step + 1}/{STEPS.length} · {remaining}</span>
           </div>
           <div className={w.progress} role="progressbar" aria-label={t("Kurulum ilerlemesi")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={t("{total} adımdan {current}. adım, {remaining}", { total: STEPS.length, current: step + 1, remaining })}><i style={{ width: `${progress}%` }} /></div>

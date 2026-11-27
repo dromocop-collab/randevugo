@@ -225,7 +225,7 @@ export function MarketingHeader() {
       <header className={`marketing-header ${styles.header}`} data-scrolled={scrolled ? "true" : "false"}>
         <div className={styles.bar}>
           <Link href="/" className={styles.brand} aria-label={t("SeninRandevun ana sayfa")}>
-            <Image src="/logo.png" alt="" width={38} height={38} className={styles.brandMark} priority />
+            <Image src="/logo.webp" alt="" width={38} height={38} className={styles.brandMark} priority />
             <span className={styles.brandText}>Senin<span>Randevun</span></span>
           </Link>
 
@@ -285,7 +285,7 @@ export function MarketingHeader() {
           <div ref={sheetRef} id="mobile-customer-menu" className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby={titleId}>
             <div className={styles.sheetHead}>
               <Link href="/" className={styles.brand} onClick={closeMenu} aria-label={t("SeninRandevun ana sayfa")}>
-                <Image src="/logo.png" alt="" width={34} height={34} className={styles.brandMark} />
+                <Image src="/logo.webp" alt="" width={34} height={34} className={styles.brandMark} />
                 <span className={styles.brandText}>Senin<span>Randevun</span></span>
               </Link>
               <div className={styles.sheetHeadActions}>
@@ -460,7 +460,7 @@ export function MarketingFooter() {
         <div className={styles.footerGrid}>
           <div className={styles.footerBrand}>
             <Link href="/" className={styles.brand} aria-label={t("SeninRandevun ana sayfa")}>
-              <Image src="/logo.png" alt="" width={36} height={36} className={styles.brandMark} />
+              <Image src="/logo.webp" alt="" width={36} height={36} className={styles.brandMark} />
               <span className={styles.brandText}>Senin<span>Randevun</span></span>
             </Link>
             <p>{t("Yakınındaki iyi hizmetleri keşfet, sana uygun saati seç ve randevunu anında al.")}</p>

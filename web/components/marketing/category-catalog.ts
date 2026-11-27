@@ -19,21 +19,21 @@ export type CatalogCategory = {
 };
 
 export const CATEGORY_CATALOG: readonly CatalogCategory[] = [
-  { slug: "kuafor", label: tk("Kuaför"), emoji: "💇", description: tk("Kesim, renklendirme ve saç bakımı"), image: "/images/categories/kuafor.png", landing: "/kuafor-randevu", accent: "#1f7a4a" },
-  { slug: "berber", label: tk("Berber"), emoji: "💈", description: tk("Saç, sakal ve modern erkek bakımı"), image: "/images/categories/berber.png", landing: "/berber-randevu", accent: "#2563eb" },
-  { slug: "guzellik", label: tk("Güzellik Merkezi"), emoji: "💅", description: tk("Cilt bakımı ve güzellik ritüelleri"), image: "/images/categories/guzellik.png", landing: "/guzellik-merkezi-randevu", accent: "#db2777" },
-  { slug: "spa", label: tk("Spa & Masaj"), emoji: "🧖", description: tk("Rahatlama, masaj ve yenilenme"), image: "/images/categories/spa.png", landing: "/spa-randevu", accent: "#b7791f" },
-  { slug: "nail", label: tk("Nail Studio"), emoji: "💎", description: tk("Manikür, pedikür ve nail art"), image: "/images/categories/nail.png", landing: "/nail-studio-randevu", accent: "#7c3aed" },
-  { slug: "spor", label: tk("Spor & PT"), emoji: "🏋️", description: tk("Kişisel antrenman, pilates ve fitness"), image: "/images/categories/spor.png", landing: "/spor-randevu", accent: "#65a30d" },
-  { slug: "saglik", label: tk("Sağlık"), emoji: "🩺", description: tk("Klinik, fizyoterapi ve diyetisyen"), image: "/images/categories/saglik.png", landing: "/saglik-randevu", accent: "#0891b2" },
-  { slug: "danismanlik", label: tk("Danışmanlık"), emoji: "📋", description: tk("Terapi, koçluk ve uzman görüşmesi"), image: "/images/categories/danismanlik.png", landing: "/danismanlik-randevu", accent: "#d97706" },
-  { slug: "veteriner", label: tk("Veteriner"), emoji: "🐾", description: tk("Dostların için güvenilir bakım"), image: "/images/categories/veteriner.png", landing: "/veteriner-randevu", accent: "#e11d48" },
-  { slug: "yazilim", label: tk("Yazılım & Web"), emoji: "💻", description: tk("Web, mobil ve dijital çözümler"), image: "/images/categories/yazilim.png", landing: "/yazilim-web-randevu", accent: "#4f46e5" },
-  { slug: "egitim", label: tk("Eğitim"), emoji: "📚", description: tk("Kurs, özel ders ve atölyeler"), image: "/images/categories/egitim-v2.png", accent: "#0d9488" },
-  { slug: "servis", label: tk("Servis & Teknik"), emoji: "🔧", description: tk("Tamir, bakım ve teknik servis"), image: "/images/categories/servis-v2.png", accent: "#475569" },
+  { slug: "kuafor", label: tk("Kuaför"), emoji: "💇", description: tk("Kesim, renklendirme ve saç bakımı"), image: "/images/categories/kuafor.webp", landing: "/kuafor-randevu", accent: "#1f7a4a" },
+  { slug: "berber", label: tk("Berber"), emoji: "💈", description: tk("Saç, sakal ve modern erkek bakımı"), image: "/images/categories/berber.webp", landing: "/berber-randevu", accent: "#2563eb" },
+  { slug: "guzellik", label: tk("Güzellik Merkezi"), emoji: "💅", description: tk("Cilt bakımı ve güzellik ritüelleri"), image: "/images/categories/guzellik.webp", landing: "/guzellik-merkezi-randevu", accent: "#db2777" },
+  { slug: "spa", label: tk("Spa & Masaj"), emoji: "🧖", description: tk("Rahatlama, masaj ve yenilenme"), image: "/images/categories/spa.webp", landing: "/spa-randevu", accent: "#b7791f" },
+  { slug: "nail", label: tk("Nail Studio"), emoji: "💎", description: tk("Manikür, pedikür ve nail art"), image: "/images/categories/nail.webp", landing: "/nail-studio-randevu", accent: "#7c3aed" },
+  { slug: "spor", label: tk("Spor & PT"), emoji: "🏋️", description: tk("Kişisel antrenman, pilates ve fitness"), image: "/images/categories/spor.webp", landing: "/spor-randevu", accent: "#65a30d" },
+  { slug: "saglik", label: tk("Sağlık"), emoji: "🩺", description: tk("Klinik, fizyoterapi ve diyetisyen"), image: "/images/categories/saglik.webp", landing: "/saglik-randevu", accent: "#0891b2" },
+  { slug: "danismanlik", label: tk("Danışmanlık"), emoji: "📋", description: tk("Terapi, koçluk ve uzman görüşmesi"), image: "/images/categories/danismanlik.webp", landing: "/danismanlik-randevu", accent: "#d97706" },
+  { slug: "veteriner", label: tk("Veteriner"), emoji: "🐾", description: tk("Dostların için güvenilir bakım"), image: "/images/categories/veteriner.webp", landing: "/veteriner-randevu", accent: "#e11d48" },
+  { slug: "yazilim", label: tk("Yazılım & Web"), emoji: "💻", description: tk("Web, mobil ve dijital çözümler"), image: "/images/categories/yazilim.webp", landing: "/yazilim-web-randevu", accent: "#4f46e5" },
+  { slug: "egitim", label: tk("Eğitim"), emoji: "📚", description: tk("Kurs, özel ders ve atölyeler"), image: "/images/categories/egitim-v2.webp", accent: "#0d9488" },
+  { slug: "servis", label: tk("Servis & Teknik"), emoji: "🔧", description: tk("Tamir, bakım ve teknik servis"), image: "/images/categories/servis-v2.webp", accent: "#475569" },
 ];
 
-export const FALLBACK_CATEGORY_IMAGE = "/images/categories/diger-v2.png";
+export const FALLBACK_CATEGORY_IMAGE = "/images/categories/diger-v2.webp";
 
 // Yönetici veya işletmenin eklediği özel kategoriler için isimden en yakın görsel (ör. "Yazılım – Web – Video" → yazılım).
 // i18n-ignore — aşağıdaki desenler Türkçe veri eşleştirir, görünen metin değildir.

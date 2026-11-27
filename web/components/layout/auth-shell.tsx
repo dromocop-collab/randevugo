@@ -121,7 +121,7 @@ export function AuthShell({ eyebrow, title, subtitle, children, variant = "busin
         <div className="relative">
           {/* Logo */}
           <Link href="/" className="inline-flex items-center gap-2.5 group">
-            <Image src="/logo.png" alt="SeninRandevun" width={40} height={40} className="rounded-xl shadow-lg transition group-hover:scale-105" />
+            <Image src="/logo.webp" alt="SeninRandevun" width={40} height={40} className="rounded-xl shadow-lg transition group-hover:scale-105" />
             <span className="text-lg font-extrabold tracking-tight text-[var(--text-1)]">
               Senin<span className="text-[var(--accent)]">Randevun</span>
             </span>

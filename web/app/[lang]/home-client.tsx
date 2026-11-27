@@ -18,16 +18,16 @@ import { tk } from "@/i18n/config";
 export type HomeCategory = { slug: string; label: string; emoji: string; tone: string; image?: string; description?: string };
 
 export const DEFAULT_CATEGORIES: HomeCategory[] = [
-  { slug: "kuafor", label: tk("Kuaför"), emoji: "✦", tone: "mint", image: "/images/categories/kuafor.png", description: tk("Kesim, renklendirme ve bakım") },
-  { slug: "berber", label: tk("Berber"), emoji: "✂", tone: "blue", image: "/images/categories/berber.png", description: tk("Saç, sakal ve modern bakım") },
-  { slug: "guzellik", label: tk("Güzellik"), emoji: "◇", tone: "rose", image: "/images/categories/guzellik.png", description: tk("Cilt bakımı ve güzellik ritüelleri") },
-  { slug: "spa", label: tk("Spa & Masaj"), emoji: "◌", tone: "sand", image: "/images/categories/spa.png", description: tk("Rahatlama ve yenilenme") },
-  { slug: "nail", label: tk("Nail Studio"), emoji: "◆", tone: "violet", image: "/images/categories/nail.png", description: tk("Manikür, pedikür ve nail art") },
-  { slug: "spor", label: tk("Spor & PT"), emoji: "↗", tone: "lime", image: "/images/categories/spor.png", description: tk("Sana özel antrenman planları") },
-  { slug: "saglik", label: tk("Sağlık"), emoji: "+", tone: "cyan", image: "/images/categories/saglik.png", description: tk("Uzman sağlık hizmetleri") },
-  { slug: "danismanlik", label: tk("Danışmanlık"), emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.png", description: tk("Doğru uzmanla yeni bir adım") },
-  { slug: "veteriner", label: tk("Veteriner"), emoji: "♥", tone: "coral", image: "/images/categories/veteriner.png", description: tk("Dostların için güvenilir bakım") },
-  { slug: "yazilim", label: tk("Yazılım"), emoji: "</>", tone: "blue", image: "/images/categories/yazilim.png", description: tk("Web, mobil ve dijital çözümler") },
+  { slug: "kuafor", label: tk("Kuaför"), emoji: "✦", tone: "mint", image: "/images/categories/kuafor.webp", description: tk("Kesim, renklendirme ve bakım") },
+  { slug: "berber", label: tk("Berber"), emoji: "✂", tone: "blue", image: "/images/categories/berber.webp", description: tk("Saç, sakal ve modern bakım") },
+  { slug: "guzellik", label: tk("Güzellik"), emoji: "◇", tone: "rose", image: "/images/categories/guzellik.webp", description: tk("Cilt bakımı ve güzellik ritüelleri") },
+  { slug: "spa", label: tk("Spa & Masaj"), emoji: "◌", tone: "sand", image: "/images/categories/spa.webp", description: tk("Rahatlama ve yenilenme") },
+  { slug: "nail", label: tk("Nail Studio"), emoji: "◆", tone: "violet", image: "/images/categories/nail.webp", description: tk("Manikür, pedikür ve nail art") },
+  { slug: "spor", label: tk("Spor & PT"), emoji: "↗", tone: "lime", image: "/images/categories/spor.webp", description: tk("Sana özel antrenman planları") },
+  { slug: "saglik", label: tk("Sağlık"), emoji: "+", tone: "cyan", image: "/images/categories/saglik.webp", description: tk("Uzman sağlık hizmetleri") },
+  { slug: "danismanlik", label: tk("Danışmanlık"), emoji: "◎", tone: "amber", image: "/images/categories/danismanlik.webp", description: tk("Doğru uzmanla yeni bir adım") },
+  { slug: "veteriner", label: tk("Veteriner"), emoji: "♥", tone: "coral", image: "/images/categories/veteriner.webp", description: tk("Dostların için güvenilir bakım") },
+  { slug: "yazilim", label: tk("Yazılım"), emoji: "</>", tone: "blue", image: "/images/categories/yazilim.webp", description: tk("Web, mobil ve dijital çözümler") },
 ];
 
 /** Gerçek, yayında olan işletmelerden türetilen sayılar (sahte istatistik yok). */

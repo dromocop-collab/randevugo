@@ -36,7 +36,7 @@ export function BrandPageLoader({
           <span className="brand-loader-orbit-dot dot-two" />
           <span className="brand-loader-orbit-dot dot-three" />
           <span className="brand-loader-cube">
-            <span className="brand-loader-face face-front"><Image src="/logo.png" alt="" width={72} height={72} priority /></span>
+            <span className="brand-loader-face face-front"><Image src="/logo.webp" alt="" width={72} height={72} priority /></span>
             <span className="brand-loader-face face-back" />
             <span className="brand-loader-face face-left" />
             <span className="brand-loader-face face-right" />

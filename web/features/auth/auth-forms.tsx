@@ -495,7 +495,7 @@ export function AuthScreen({ variant = "customer", mode, children }: { variant?:
   const TopIcon = topLink.icon;
   const brand = (
     <Link href="/" className={s.brand} aria-label={t("SeninRandevun ana sayfa")}>
-      <Image src="/logo.png" alt="" width={34} height={34} />
+      <Image src="/logo.webp" alt="" width={34} height={34} />
       <b>Senin<span>Randevun</span></b>
     </Link>
   );

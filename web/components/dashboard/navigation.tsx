@@ -129,7 +129,7 @@ export function DashboardSidebar({ collapsed, onToggle }: { collapsed: boolean; 
   return (
     <aside className={styles.sidebar} aria-label={t("İşletme menüsü")}>
       <Link href="/dashboard" className={styles.brand} title={activeBusiness?.name ?? "SeninRandevun"}>
-        <Image src="/logo.png" alt="" width={36} height={36} className={styles.brandLogo} />
+        <Image src="/logo.webp" alt="" width={36} height={36} className={styles.brandLogo} />
         <span className={styles.brandText}>
           <small>{t("İşletme paneli")}</small>
           <b>{activeBusiness?.name ?? "SeninRandevun"}</b>
